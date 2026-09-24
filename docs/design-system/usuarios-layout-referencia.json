@@ -1,0 +1,60 @@
+{
+  "screen": "admin/usuarios",
+  "status": "approved-reference",
+  "purpose": "Fonte de verdade visual para a tela de Usuários e para a padronização gradual das demais telas administrativas.",
+  "shell": {
+    "centralContainer": {
+      "background": "#FFFFFF",
+      "radius": 22,
+      "paddingPx": 8,
+      "implementation": "O conteúdo interno começa 8 px depois da borda do container. Não adicionar uma segunda margem no banner ou em painéis sobrepostos.",
+      "internalScroll": {
+        "track": "#EAF0FA",
+        "thumb": "linear-gradient(180deg, #6137F5 0%, #D600A8 100%)",
+        "widthPx": 6,
+        "radius": 999
+      }
+    },
+    "banner": {
+      "heightPx": 70,
+      "gradient": "linear-gradient(100deg, #051B43 0%, #31206F 48%, #D10078 100%)",
+      "title": "Usuários",
+      "subtitle": "Gerencie todos os usuários da plataforma e mantenha sua equipe sempre produtiva."
+    },
+    "profileOverlay": {
+      "rule": "O painel de perfil é aberto dentro da área interna do centralContainer e deve herdar o respiro de 8 px já existente.",
+      "forbidden": "Não usar mx, mt ou padding adicional no cabeçalho do perfil; isso cria uma margem dupla."
+    }
+  },
+  "metrics": {
+    "layout": "single horizontal strip with subtle vertical separators",
+    "icon": { "shape": "circle", "sizePx": 56, "style": "colored SVG, pale matching background" },
+    "items": [
+      { "label": "TOTAL DE USUÁRIOS", "color": "blue", "icon": "Users" },
+      { "label": "USUÁRIOS ATIVOS", "color": "green", "icon": "Activity" },
+      { "label": "ADMINISTRADORES", "color": "violet", "icon": "Shield" },
+      { "label": "ATIVOS 90 DIAS", "color": "orange", "icon": "Clock" }
+    ]
+  },
+  "toolbar": {
+    "heightPx": 64,
+    "singleLine": true,
+    "elements": ["search", "status-tabs", "filter", "result-count", "pagination", "list-card-toggle"]
+  },
+  "list": {
+    "defaultView": "list",
+    "rowHeightPx": 56,
+    "backgrounds": ["#FFFFFF", "#F5F8FC"],
+    "hover": "#EAF2FF",
+    "columns": ["Usuário", "Contato", "Tipo / Função", "Conta vinculada", "Status", "Último acesso", "Ações"],
+    "forbiddenColumns": ["ID"],
+    "oneLineFields": ["Tipo / Função", "Conta vinculada", "Status", "Último acesso"],
+    "contactIcons": {
+      "phone": "blue SVG",
+      "whatsapp": "green branded SVG",
+      "hover": "scale 1.10 + translateY(-2px)"
+    },
+    "actions": "Only an ellipsis trigger. Entire remaining row opens the user profile.",
+    "menu": ["Ver perfil", "Editar usuário", "Gerenciar permissões", "separator", "Desativar usuário"]
+  }
+}

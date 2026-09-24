@@ -235,9 +235,50 @@ describe("Rodízio de ofertas de tarefa", () => {
     assert.ok(next && next.nomade_id !== offer!.nomade_id);
   });
 
+  it("7b. Quem expira volta na segunda volta; na terceira recebe oferta obrigatória e é atribuído ao vencer o prazo", async () => {
+    const task = await mkTask();
+    const n = await mkNomad();
+    await advanceRotation(task.id);
+    let offer = await prisma.taskOffer.findFirstOrThrow({ where: { project_task_id: task.id, status: "pendente" } });
+    await prisma.taskOffer.update({ where: { id: offer.id }, data: { expires_at: new Date(Date.now() - 1) } });
+    await advanceRotation(task.id);
+    offer = await prisma.taskOffer.findFirstOrThrow({ where: { project_task_id: task.id, status: "pendente" } });
+    assert.equal(offer.rotation_round, 2, "retorna na segunda volta pois não recusou");
+    await prisma.taskOffer.update({ where: { id: offer.id }, data: { expires_at: new Date(Date.now() - 1) } });
+    await advanceRotation(task.id);
+    offer = await prisma.taskOffer.findFirstOrThrow({ where: { project_task_id: task.id, status: "pendente" } });
+    assert.equal(offer.rotation_round, 3);
+    assert.equal(offer.is_mandatory, true);
+    await prisma.taskOffer.update({ where: { id: offer.id }, data: { expires_at: new Date(Date.now() - 1) } });
+    await advanceRotation(task.id);
+    const assigned = await prisma.projectTask.findUniqueOrThrow({ where: { id: task.id } });
+    assert.equal(assigned.nomade_responsavel_id, n.nomade.id);
+    assert.equal(assigned.status, "EM_EXECUCAO");
+  });
+
+  it("7c. Recusa da oferta obrigatória segue a fila/escalonamento e alerta o Líder", async () => {
+    const lead = await mkLeaderUser();
+    const task = await mkTask({ liderId: lead.id });
+    const n = await mkNomad();
+    for (let round = 1; round <= 2; round++) {
+      const pending = await advanceRotation(task.id);
+      const offer = await prisma.taskOffer.findUniqueOrThrow({ where: { id: pending.offerId! } });
+      await prisma.taskOffer.update({ where: { id: offer.id }, data: { expires_at: new Date(Date.now() - 1) } });
+      await advanceRotation(task.id);
+    }
+    const mandatory = await prisma.taskOffer.findFirstOrThrow({ where: { project_task_id: task.id, status: "pendente", is_mandatory: true } });
+    await declineOffer(mandatory.id, n.user.id, "não consigo assumir");
+    const alert = await prisma.systemAlert.findFirst({ where: { type: "task.mandatory_offer_declined", entity_id: task.id, user_id: lead.id } });
+    assert.ok(alert, "Líder recebe o alerta da recusa obrigatória");
+    assert.match(alert!.message, /seguirá para o próximo/i);
+  });
+
   it("8. Aceite atribui a tarefa pelo fluxo oficial + histórico + cancela outras", async () => {
     const task = await mkTask();
     const n = await mkNomad();
+    const stage = await prisma.projectTaskStage.create({
+      data: { project_task_id: task.id, titulo: "Execução pelo nômade", ordem: 1, status: "AGUARDANDO_EXECUTOR", executor_type: "nomad" },
+    });
     await advanceRotation(task.id);
     const offer = await prisma.taskOffer.findFirst({ where: { project_task_id: task.id, status: "pendente" } });
     const r = await acceptOffer(offer!.id, n.user.id);
@@ -246,6 +287,9 @@ describe("Rodízio de ofertas de tarefa", () => {
     assert.equal(t!.nomade_responsavel_id, n.nomade.id);
     assert.equal(t!.status, "EM_EXECUCAO");
     assert.equal(t!.rotation_episode_key, null);
+    const stageAfter = await prisma.projectTaskStage.findUniqueOrThrow({ where: { id: stage.id } });
+    assert.equal(stageAfter.status, "EM_ANDAMENTO", "aceite inicia a etapa que aguardava executor");
+    assert.equal(stageAfter.nomade_id, n.nomade.id, "a etapa fica com o nômade que aceitou");
     const acc = await prisma.taskOffer.findUnique({ where: { id: offer!.id } });
     assert.equal(acc!.status, "aceita");
     const hist = await prisma.taskAssignmentHistory.findFirst({ where: { project_task_id: task.id, criterio: "rodizio" } });

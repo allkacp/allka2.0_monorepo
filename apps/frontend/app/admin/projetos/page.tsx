@@ -187,7 +187,8 @@ export default function AdminProjetosPage({
   const showPartnerReferrals = scope === "agency" && !!partner?.profile;
   const [projectsTab, setProjectsTab] = useState<"mine" | "indicados">("mine");
   const [partnerRefSearch, setPartnerRefSearch] = useState("");
-  const [partnerRefStatusFilter, setPartnerRefStatusFilter] = useState<string>("all");
+  const [partnerRefStatusFilter, setPartnerRefStatusFilter] =
+    useState<string>("all");
   const [partnerRefCurrentPage, setPartnerRefCurrentPage] = useState(1);
   const [partnerRefItemsPerPage, setPartnerRefItemsPerPage] = useItemsPerPage(
     "agencia-projetos-indicados",
@@ -237,18 +238,39 @@ export default function AdminProjetosPage({
     (s: number, p: any) => s + (p.commissionGenerated ?? 0),
     0,
   );
-  const partnerRefStatusConfig: Record<string, { label: string; color: string; icon: any }> = {
-    active: { label: "Ativo", color: "bg-emerald-100 text-emerald-700", icon: Clock },
-    completed: { label: "Concluído", color: "bg-slate-100 text-slate-600", icon: CheckCircle2 },
-    cancelled: { label: "Cancelado", color: "bg-red-100 text-red-700", icon: XCircle },
+  const partnerRefStatusConfig: Record<
+    string,
+    { label: string; color: string; icon: any }
+  > = {
+    active: {
+      label: "Ativo",
+      color: "bg-emerald-100 text-emerald-700",
+      icon: Clock,
+    },
+    completed: {
+      label: "Concluído",
+      color: "bg-slate-100 text-slate-600",
+      icon: CheckCircle2,
+    },
+    cancelled: {
+      label: "Cancelado",
+      color: "bg-red-100 text-red-700",
+      icon: XCircle,
+    },
   };
-  const partnerRefCommStatusConfig: Record<string, { label: string; color: string }> = {
+  const partnerRefCommStatusConfig: Record<
+    string,
+    { label: string; color: string }
+  > = {
     pending: { label: "Pendente", color: "bg-amber-100 text-amber-700" },
     confirmed: { label: "Confirmado", color: "bg-blue-100 text-blue-700" },
     paid: { label: "Pago", color: "bg-emerald-100 text-emerald-700" },
   };
   function fmtPartnerRefBRL(n: number) {
-    return (n ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    return (n ?? 0).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
   }
   function fmtPartnerRefDate(s: string) {
     if (!s) return "—";
@@ -430,7 +452,6 @@ export default function AdminProjetosPage({
   // sidebar / header measurements for filter modal
   const { sidebarWidth } = useSidebar();
   const { headerHeight, footerHeight } = useAppFrameMetrics();
-  
 
   useEffect(() => {
     if (!showPendingModal) return;
@@ -451,8 +472,12 @@ export default function AdminProjetosPage({
 
   // ── Vínculo (escopo novo agency_id/company_id/partner_id) — exclusivo do Admin ──
   const [linkPanelOpen, setLinkPanelOpen] = useState(false);
-  const [linkPanelProject, setLinkPanelProject] = useState<FrontendProject | null>(null);
-  const [linkForm, setLinkForm] = useState<{ type: "none" | "agency" | "company" | "partner"; id: string }>({ type: "none", id: "" });
+  const [linkPanelProject, setLinkPanelProject] =
+    useState<FrontendProject | null>(null);
+  const [linkForm, setLinkForm] = useState<{
+    type: "none" | "agency" | "company" | "partner";
+    id: string;
+  }>({ type: "none", id: "" });
   const [linkSaving, setLinkSaving] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [linkOptions, setLinkOptions] = useState<{
@@ -471,9 +496,18 @@ export default function AdminProjetosPage({
           apiClient.getPartners({ limit: "200" }),
         ]);
         setLinkOptions({
-          agency: ((ag as any).data || []).map((a: any) => ({ id: a.id, name: a.name })),
-          company: ((co as any).data || []).map((c: any) => ({ id: c.id, name: c.name })),
-          partner: ((pa as any).data || []).map((p: any) => ({ id: p.id, name: p.user?.name || p.user?.email || p.id })),
+          agency: ((ag as any).data || []).map((a: any) => ({
+            id: a.id,
+            name: a.name,
+          })),
+          company: ((co as any).data || []).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+          })),
+          partner: ((pa as any).data || []).map((p: any) => ({
+            id: p.id,
+            name: p.user?.name || p.user?.email || p.id,
+          })),
         });
       } catch (err) {
         console.error("[AdminProjetos] Failed to load link options:", err);
@@ -482,7 +516,13 @@ export default function AdminProjetosPage({
   }, [scope]);
 
   const currentLinkOptions =
-    linkForm.type === "agency" ? linkOptions.agency : linkForm.type === "company" ? linkOptions.company : linkForm.type === "partner" ? linkOptions.partner : [];
+    linkForm.type === "agency"
+      ? linkOptions.agency
+      : linkForm.type === "company"
+        ? linkOptions.company
+        : linkForm.type === "partner"
+          ? linkOptions.partner
+          : [];
 
   function openLinkPanel(project: FrontendProject) {
     setLinkPanelProject(project);
@@ -497,7 +537,9 @@ export default function AdminProjetosPage({
   async function saveLink() {
     if (!linkPanelProject) return;
     if (linkForm.type !== "none" && !linkForm.id) {
-      setLinkError("Selecione qual Agency/Company/Partner este projeto pertence, ou marque \"Sem vínculo\"");
+      setLinkError(
+        'Selecione qual Agency/Company/Partner este projeto pertence, ou marque "Sem vínculo"',
+      );
       return;
     }
     setLinkSaving(true);
@@ -630,7 +672,11 @@ export default function AdminProjetosPage({
     client: { field: "client", type: "text" },
     agency: { field: "agency", type: "text" },
     type: { field: "type", type: "text" },
-    status: { field: "status", type: "status", filterValues: uniqueProjectStatuses },
+    status: {
+      field: "status",
+      type: "status",
+      filterValues: uniqueProjectStatuses,
+    },
     progress: { field: "progress", type: "number" },
     budget: { field: "budget", type: "number" },
     team: { field: "team", type: "number" },
@@ -769,7 +815,10 @@ export default function AdminProjetosPage({
   const totalPages = Math.ceil(totalProjects / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const sortedProjects = useMemo(() => sortData(filteredProjects), [sortData, filteredProjects]);
+  const sortedProjects = useMemo(
+    () => sortData(filteredProjects),
+    [sortData, filteredProjects],
+  );
   const paginatedProjects = sortedProjects.slice(startIndex, endIndex);
 
   // Reset to page 1 when filters change
@@ -1203,7 +1252,9 @@ export default function AdminProjetosPage({
     setSelectedProject(project);
     setModalMode("edit");
     setModalOpen(true);
-    navigate(`${projectRouteBase}/${project.seq ?? project.id}`, { replace: true });
+    navigate(`${projectRouteBase}/${project.seq ?? project.id}`, {
+      replace: true,
+    });
   };
 
   const handleViewProject = (project: FrontendProject) => {
@@ -1211,7 +1262,9 @@ export default function AdminProjetosPage({
     setModalMode("view");
     setModalOpen(true);
     if (project.id)
-      navigate(`${projectRouteBase}/${project.seq ?? project.id}`, { replace: true });
+      navigate(`${projectRouteBase}/${project.seq ?? project.id}`, {
+        replace: true,
+      });
   };
 
   // ── Deep-link: open project from URL param or legacy location.state ────────
@@ -1383,7 +1436,8 @@ export default function AdminProjetosPage({
     );
     toast({
       title: "Projeto arquivado",
-      description: "O projeto saiu da lista de ativos e ficou disponível em Arquivados.",
+      description:
+        "O projeto saiu da lista de ativos e ficou disponível em Arquivados.",
     });
     setProjectToArchive(null);
     setArchiveReason("");
@@ -1469,8 +1523,7 @@ export default function AdminProjetosPage({
       );
       setDraftPanelCommissions(
         linkedProducts.reduce((acc: Record<string, number>, item: any) => {
-          acc[String(item.product_id ?? item.id)] =
-            item.comissao_snapshot ?? 0;
+          acc[String(item.product_id ?? item.id)] = item.comissao_snapshot ?? 0;
           return acc;
         }, {}),
       );
@@ -1555,7 +1608,11 @@ export default function AdminProjetosPage({
       };
       const onMove = (ev: MouseEvent) => {
         if (!dragState.current) return;
-        const { col: dragCol, startX: dragStartX, startW: dragStartW } = dragState.current;
+        const {
+          col: dragCol,
+          startX: dragStartX,
+          startW: dragStartW,
+        } = dragState.current;
         const delta = ev.clientX - dragStartX;
         setColWidths((prev) => ({
           ...prev,
@@ -1608,18 +1665,29 @@ export default function AdminProjetosPage({
       </button>
       {getPageNumbers().map((pg, i) =>
         pg === "..." ? (
-          <span key={`dots-${i}`} className="text-xs text-slate-300 px-0.5">·</span>
+          <span key={`dots-${i}`} className="text-xs text-slate-300 px-0.5">
+            ·
+          </span>
         ) : (
           <button
             key={i}
             onClick={() => setCurrentPage(Number(pg))}
-            title={pg === currentPage ? "Página atual" : `Ir para a página ${pg}`}
+            title={
+              pg === currentPage ? "Página atual" : `Ir para a página ${pg}`
+            }
             className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-bold transition-colors ${
               pg === currentPage
                 ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
                 : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
             }`}
-            style={pg === currentPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+            style={
+              pg === currentPage
+                ? {
+                    background:
+                      "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                  }
+                : undefined
+            }
           >
             {pg}
           </button>
@@ -1643,7 +1711,9 @@ export default function AdminProjetosPage({
                 max={totalPages}
                 value={pageJumpValue}
                 onChange={(e) => setPageJumpValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitPageJump();
+                }}
                 placeholder="Pág."
                 aria-label="Ir para a página"
                 className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -1655,13 +1725,20 @@ export default function AdminProjetosPage({
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{
+                    background:
+                      "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                  }}
                 />
-                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
+                  Ir
+                </span>
               </button>
             </div>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+          <TooltipContent side="bottom">
+            Ir diretamente para uma página
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>
@@ -1675,13 +1752,18 @@ export default function AdminProjetosPage({
             {filteredProjects.length !== projectsData.length ? (
               <>
                 de{" "}
-                <span className="font-semibold text-blue-500">{filteredProjects.length}</span>{" "}
-                de {projectsData.length} projeto{projectsData.length !== 1 ? "s" : ""}
+                <span className="font-semibold text-blue-500">
+                  {filteredProjects.length}
+                </span>{" "}
+                de {projectsData.length} projeto
+                {projectsData.length !== 1 ? "s" : ""}
               </>
             ) : (
               <>
                 de{" "}
-                <span className="font-semibold text-slate-600 dark:text-slate-300">{projectsData.length}</span>{" "}
+                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                  {projectsData.length}
+                </span>{" "}
                 projeto{projectsData.length !== 1 ? "s" : ""}
               </>
             )}
@@ -1814,3416 +1896,3778 @@ export default function AdminProjetosPage({
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
-      <div className="shrink-0 -mb-[11px]">
-      <StandardPageBanner
-        icon={FolderOpen}
-        title="Gestão de Projetos"
-        description="Centralize, acompanhe e otimize todos os seus projetos em um só lugar."
-        actions={
-          <>
-            <div className="bg-white rounded-lg">
-              <ExportButton pageRef={pageRef} filename="projetos" />
-            </div>
-            <PinToTrayButton id="page-projetos" label="Gestão de Projetos" icon={FolderOpen} path="/admin/projetos" />
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setShowProjectCreate(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                  >
-                    <Plus className="h-3.5 w-3.5 shrink-0" />
-                    Novo Projeto
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Criar novo projeto</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </>
-        }
-      />
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      {showPartnerReferrals && (
-        <div className="flex items-center gap-1.5 mb-4">
-          <button
-            onClick={() => setProjectsTab("mine")}
-            className={`px-3.5 py-1.5 text-xs rounded-full font-semibold transition-colors ${
-              projectsTab === "mine"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
-            }`}
-          >
-            Meus Projetos
-          </button>
-          <button
-            onClick={() => setProjectsTab("indicados")}
-            className={`px-3.5 py-1.5 text-xs rounded-full font-semibold transition-colors ${
-              projectsTab === "indicados"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
-            }`}
-          >
-            Projetos Indicados
-          </button>
+      <div className="relative h-full min-h-0 flex flex-col" ref={pageRef}>
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={FolderOpen}
+            title="Gestão de Projetos"
+            description="Centralize, acompanhe e otimize todos os seus projetos em um só lugar."
+            contentClassName="lg:h-[65px]"
+            actions={
+              <>
+                <div className="bg-white rounded-lg">
+                  <ExportButton pageRef={pageRef} filename="projetos" />
+                </div>
+                <PinToTrayButton
+                  id="page-projetos"
+                  label="Gestão de Projetos"
+                  icon={FolderOpen}
+                  path="/admin/projetos"
+                />
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setShowProjectCreate(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                        Novo Projeto
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Criar novo projeto
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
+            }
+          />
         </div>
-      )}
 
-      {showPartnerReferrals && projectsTab === "indicados" && (
-        <div className="space-y-5 mb-5">
-          {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
-                Total de Projetos
-              </p>
-              <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">
-                {partnerRefProjects.length}
-              </p>
-            </div>
-            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
-                Valor Total
-              </p>
-              <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">
-                {fmtPartnerRefBRL(partnerRefTotalValue)}
-              </p>
-            </div>
-            <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
-                Comissões Geradas
-              </p>
-              <p className="text-2xl font-bold text-emerald-600 mt-1">
-                {fmtPartnerRefBRL(partnerRefTotalCommission)}
-              </p>
-            </div>
-          </div>
-
-          {/* Filters + Items per page */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative w-64">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-              <Input
-                placeholder="Buscar projeto ou empresa..."
-                value={partnerRefSearch}
-                onChange={(e) => {
-                  setPartnerRefSearch(e.target.value);
-                  setPartnerRefCurrentPage(1);
-                }}
-                className="pl-8 h-8 text-sm"
-              />
-            </div>
-            {(["all", "active", "completed", "cancelled"] as const).map((s) => (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {showPartnerReferrals && (
+            <div className="flex items-center gap-1.5 mb-4">
               <button
-                key={s}
-                onClick={() => {
-                  setPartnerRefStatusFilter(s);
-                  setPartnerRefCurrentPage(1);
-                }}
-                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-                  partnerRefStatusFilter === s
+                onClick={() => setProjectsTab("mine")}
+                className={`px-3.5 py-1.5 text-xs rounded-full font-semibold transition-colors ${
+                  projectsTab === "mine"
                     ? "bg-blue-600 text-white shadow-sm"
                     : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
                 }`}
               >
-                {s === "all"
-                  ? "Todos"
-                  : s === "active"
-                    ? "Ativos"
-                    : s === "completed"
-                      ? "Concluídos"
-                      : "Cancelados"}
+                Meus Projetos
               </button>
-            ))}
-            <div className="ml-auto flex items-center gap-2 shrink-0">
-              <ItemsPerPageSelect
-                value={partnerRefItemsPerPage.toString()}
-                onValueChange={(v) => {
-                  setPartnerRefItemsPerPage(Number(v));
-                  setPartnerRefCurrentPage(1);
-                }}
-                variant="top"
-              />
-              {partnerRefTotalItems > 0 && (
-                <span className="text-xs text-slate-400 whitespace-nowrap">
-                  {partnerRefTotalItems} projeto{partnerRefTotalItems !== 1 ? "s" : ""}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto allka-table-scroll">
-              <table className="tabela-cartao w-full text-sm min-w-150">
-                <thead>
-                  <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-28">
-                      ID
-                    </th>
-                    <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Projeto"
-                        field="projectName"
-                        type="text"
-                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
-                        sortDir={partnerRefSortDir}
-                        onSort={partnerRefHandleSort}
-                      />
-                    </th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Empresa"
-                        field="companyName"
-                        type="text"
-                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
-                        sortDir={partnerRefSortDir}
-                        onSort={partnerRefHandleSort}
-                      />
-                    </th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Categoria"
-                        field="serviceCategory"
-                        type="status"
-                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
-                        sortDir={partnerRefSortDir}
-                        onSort={partnerRefHandleSort}
-                        columnFilters={partnerRefColumnFilters}
-                        onFilter={partnerRefToggleColumnFilter}
-                        onClearFilter={partnerRefClearColumnFilter}
-                        filterValues={[
-                          "Branding",
-                          "Social Media",
-                          "Produção de Vídeo",
-                          "Conteúdo",
-                        ]}
-                      />
-                    </th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Valor"
-                        field="projectValue"
-                        type="number"
-                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
-                        sortDir={partnerRefSortDir}
-                        onSort={partnerRefHandleSort}
-                      />
-                    </th>
-                    <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Comissão"
-                        field="commissionGenerated"
-                        type="number"
-                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
-                        sortDir={partnerRefSortDir}
-                        onSort={partnerRefHandleSort}
-                      />
-                    </th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Status"
-                        field="status"
-                        type="status"
-                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
-                        sortDir={partnerRefSortDir}
-                        onSort={partnerRefHandleSort}
-                        columnFilters={partnerRefColumnFilters}
-                        onFilter={partnerRefToggleColumnFilter}
-                        onClearFilter={partnerRefClearColumnFilter}
-                        filterValues={["active", "completed", "cancelled"]}
-                      />
-                    </th>
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <SortableHeader
-                        label="Contratado"
-                        field="startDate"
-                        type="date"
-                        sortKey={partnerRefSortKey ? String(partnerRefSortKey) : null}
-                        sortDir={partnerRefSortDir}
-                        onSort={partnerRefHandleSort}
-                      />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {partnerRefPaginated.map((p: any, idx: number) => {
-                    const sc = partnerRefStatusConfig[p.status] ?? {
-                      label: p.status ?? "—",
-                      color: "bg-slate-100 text-slate-600",
-                      icon: FolderOpen,
-                    };
-                    const cc = partnerRefCommStatusConfig[p.commissionStatus] ?? {
-                      label: p.commissionStatus ?? "—",
-                      color: "bg-slate-100 text-slate-600",
-                    };
-                    return (
-                      <tr
-                        key={p.id}
-                        className={idx % 2 === 1 ? "bg-slate-50/50 dark:bg-slate-900/30" : ""}
-                      >
-                        <td data-rotulo="ID" className="px-4 py-3" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                          <span className="font-mono text-xs text-slate-400">
-                            proj_{(p as any).seq ?? "?"}
-                          </span>
-                        </td>
-                        <td data-rotulo="Projeto" className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200">
-                          {p.projectName}
-                        </td>
-                        <td data-rotulo="Empresa" className="px-4 py-3 text-slate-500 dark:text-slate-400">
-                          {p.companyName}
-                        </td>
-                        <td data-rotulo="Categoria" className="px-4 py-3 text-slate-400 text-xs">
-                          {p.serviceCategory}
-                        </td>
-                        <td data-rotulo="Valor" className="px-4 py-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">
-                          {fmtPartnerRefBRL(p.projectValue)}
-                        </td>
-                        <td data-rotulo="Comissão" className="px-4 py-3 text-right">
-                          <span className="tabular-nums font-semibold text-emerald-600">
-                            {fmtPartnerRefBRL(p.commissionGenerated)}
-                          </span>
-                          <span className={`ml-2 text-[10px] px-1 py-0.5 rounded font-semibold ${cc.color}`}>
-                            {cc.label}
-                          </span>
-                        </td>
-                        <td data-rotulo="Status" className="px-4 py-3">
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${sc.color}`}>
-                            {sc.label}
-                          </span>
-                        </td>
-                        <td data-rotulo="Contratado" className="px-4 py-3 text-xs text-slate-400">
-                          {fmtPartnerRefDate(p.contractedAt)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {partnerRefFiltered.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-5 py-10 text-center text-sm text-slate-400">
-                        <FolderOpen className="h-8 w-8 mx-auto text-slate-300 mb-2" />
-                        Nenhum projeto encontrado
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Pagination */}
-          {partnerRefTotalPages > 1 && (
-            <div className="flex items-center justify-between">
               <button
-                onClick={() => setPartnerRefCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={partnerRefSafeCurrentPage === 1}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                onClick={() => setProjectsTab("indicados")}
+                className={`px-3.5 py-1.5 text-xs rounded-full font-semibold transition-colors ${
+                  projectsTab === "indicados"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
+                }`}
               >
-                <ChevronLeft className="h-4 w-4" />
-                Anterior
-              </button>
-              <span className="text-sm text-slate-500">
-                Página {partnerRefSafeCurrentPage} de {partnerRefTotalPages}
-              </span>
-              <button
-                onClick={() => setPartnerRefCurrentPage((p) => Math.min(partnerRefTotalPages, p + 1))}
-                disabled={partnerRefSafeCurrentPage === partnerRefTotalPages}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Próxima
-                <ChevronRight className="h-4 w-4" />
+                Projetos Indicados
               </button>
             </div>
           )}
-        </div>
-      )}
 
-      <div
-        className={
-          showPartnerReferrals && projectsTab === "indicados"
-            ? "hidden"
-            : "space-y-5"
-        }
-      >
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-blue-500 to-blue-700 dark:from-blue-800 dark:to-blue-950 border-2 border-blue-300/70 dark:border-blue-800/70 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">
-              Total de Projetos
-            </p>
-            <div className="bg-white/20 rounded-md p-1">
-              <FolderOpen className="h-4 w-4 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none">
-            {stats.totalProjects}
-          </p>
-        </div>
-        <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-emerald-500 to-teal-600 dark:from-emerald-800 dark:to-teal-900 border-2 border-emerald-300/70 dark:border-emerald-800/70 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">
-              Em Andamento
-            </p>
-            <div className="bg-white/20 rounded-md p-1">
-              <Zap className="h-4 w-4 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none">
-            {stats.activeProjects}
-          </p>
-        </div>
-        <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-violet-500 to-purple-700 dark:from-violet-800 dark:to-purple-950 border-2 border-violet-300/70 dark:border-violet-800/70 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">
-              Concluídos
-            </p>
-            <div className="bg-white/20 rounded-md p-1">
-              <TrendingUp className="h-4 w-4 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none">
-            {stats.completedProjects}
-          </p>
-        </div>
-        <div className="relative rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-orange-500 to-rose-600 dark:from-orange-800 dark:to-rose-900 border-2 border-orange-300/70 dark:border-orange-800/70 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">
-              MRR
-            </p>
-            <div className="bg-white/20 rounded-md p-1">
-              <DollarSign className="h-4 w-4 text-white" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none">
-            R$ {(stats.mrr / 1000).toFixed(0)}k
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <Accordion type="single" collapsible className="mb-1">
-          <AccordionItem
-            value="stats"
-            className="border rounded-lg bg-blue-50 border-blue-200"
-          >
-            <AccordionTrigger className="text-sm font-semibold hover:no-underline px-4 py-3 hover:bg-slate-50 rounded-t-lg transition-colors">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-blue-600" />
-                <span className="text-blue-900">Estatísticas e Métricas</span>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="pt-2 px-4 pb-4">
-              {/* Period filter */}
-              <div className="mb-4">
-                <AdvancedDateFilter
-                  dateRange={dateRange}
-                  onDateChange={setDateRange}
-                  leadFilter={filterFromLead}
-                  onLeadFilterChange={setFilterFromLead}
-                  onExport={handleExport}
-                  onReset={() => {
-                    setDateRange(undefined);
-                  }}
-                  isLoading={false}
-                />
-              </div>
-
-              {/* ── Row 1: 4 KPI cards ── */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
-                {/* Projetos Totais */}
-                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-blue-500 to-blue-700 px-4 py-3.5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
-                        Projetos Totais
-                      </p>
-                      <p className="text-[2rem] font-black text-white leading-none">
-                        {stats.totalProjects}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1.5 text-white/70 text-[11px]">
-                        <span className="bg-white/20 rounded px-1.5 py-0.5">
-                          {stats.activeProjects} ativos
-                        </span>
-                        <span className="bg-white/20 rounded px-1.5 py-0.5">
-                          {stats.completedProjects} concl.
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
-                      <div className="bg-white/20 rounded-lg p-1.5">
-                        <FolderOpen className="h-4 w-4 text-white" />
-                      </div>
-                      <div className="w-16 h-8">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={stats.sparklines.projects}
-                            margin={{ top: 1, right: 0, left: 0, bottom: 1 }}
-                          >
-                            <Area
-                              type="monotone"
-                              dataKey="v"
-                              stroke="rgba(255,255,255,0.8)"
-                              strokeWidth={1.5}
-                              fill="rgba(255,255,255,0.15)"
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* MRR */}
-                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 px-4 py-3.5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
-                        MRR
-                      </p>
-                      <p className="text-[2rem] font-black text-white leading-none">
-                        R${(stats.mrr / 1000).toFixed(0)}k
-                      </p>
-                      <div className="flex items-center gap-1 mt-1.5">
-                        <Zap className="h-3 w-3 text-white/80" />
-                        <span className="text-xs font-bold text-white/80">
-                          {stats.activeProjects} em andamento
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
-                      <div className="bg-white/20 rounded-lg p-1.5">
-                        <Repeat className="h-4 w-4 text-white" />
-                      </div>
-                      <div className="w-16 h-8">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={stats.sparklines.mrr}
-                            margin={{ top: 1, right: 0, left: 0, bottom: 1 }}
-                          >
-                            <Area
-                              type="monotone"
-                              dataKey="v"
-                              stroke="rgba(255,255,255,0.8)"
-                              strokeWidth={1.5}
-                              fill="rgba(255,255,255,0.15)"
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Avulsos Ativos */}
-                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-violet-500 to-purple-700 px-4 py-3.5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
-                        Avulsos Ativos
-                      </p>
-                      <p className="text-[2rem] font-black text-white leading-none">
-                        {stats.avulsosAtivos}
-                      </p>
-                      <div className="flex items-center gap-1 mt-1.5">
-                        <ArrowDownRight className="h-3 w-3 text-white/80" />
-                        <span className="text-xs font-bold text-white/80">
-                          {stats.avulsosGrowth}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
-                      <div className="bg-white/20 rounded-lg p-1.5">
-                        <Clock className="h-4 w-4 text-white" />
-                      </div>
-                      <div className="w-16 h-8">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={stats.sparklines.avulsos}
-                            margin={{ top: 1, right: 0, left: 0, bottom: 1 }}
-                          >
-                            <Area
-                              type="monotone"
-                              dataKey="v"
-                              stroke="rgba(255,255,255,0.8)"
-                              strokeWidth={1.5}
-                              fill="rgba(255,255,255,0.15)"
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Churn */}
-                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-red-500 to-red-700 px-4 py-3.5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
-                        Churn
-                      </p>
-                      <p className="text-[2rem] font-black text-white leading-none">
-                        {stats.churnProjects}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1.5 text-white/70 text-[11px]">
-                        <span>{stats.churnRate}%</span>
-                        <span>•</span>
-                        <span>R$ {(stats.churnValue / 1000).toFixed(0)}k</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
-                      <div className="bg-white/20 rounded-lg p-1.5">
-                        <XCircle className="h-4 w-4 text-white" />
-                      </div>
-                      <div className="w-16 h-8">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={stats.sparklines.churn}
-                            margin={{ top: 1, right: 0, left: 0, bottom: 1 }}
-                          >
-                            <Area
-                              type="monotone"
-                              dataKey="v"
-                              stroke="rgba(255,255,255,0.8)"
-                              strokeWidth={1.5}
-                              fill="rgba(255,255,255,0.15)"
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ── Row 2: 4 cards ── */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
-                {/* Inadimplência */}
-                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-rose-500 to-rose-700 px-4 py-3.5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
-                        Inadimplência
-                      </p>
-                      <p className="text-[2rem] font-black text-white leading-none">
-                        {stats.overdueProjects}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1.5 text-white/70 text-[11px]">
-                        <span>
-                          R$ {(stats.overdueValue / 1000).toFixed(0)}k
-                        </span>
-                        <span>•</span>
-                        <span className="flex items-center gap-0.5">
-                          <ArrowDownRight className="h-3 w-3" />
-                          {Math.abs(stats.overdueGrowth)}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
-                      <div className="bg-white/20 rounded-lg p-1.5">
-                        <AlertTriangle className="h-4 w-4 text-white" />
-                      </div>
-                      <div className="w-16 h-8">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={stats.sparklines.overdue}
-                            margin={{ top: 1, right: 0, left: 0, bottom: 1 }}
-                          >
-                            <Area
-                              type="monotone"
-                              dataKey="v"
-                              stroke="rgba(255,255,255,0.8)"
-                              strokeWidth={1.5}
-                              fill="rgba(255,255,255,0.15)"
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Receitas */}
-                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-emerald-500 to-emerald-700 px-4 py-3.5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
-                        Receitas
-                      </p>
-                      <p className="text-[2rem] font-black text-white leading-none">
-                        R${(stats.totalRevenue / 1000).toFixed(0)}k
-                      </p>
-                      <div className="flex items-center gap-1 mt-1.5">
-                        <ArrowUpRight className="h-3 w-3 text-white/80" />
-                        <span className="text-xs font-bold text-white/80">
-                          +{stats.revenueGrowth}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
-                      <div className="bg-white/20 rounded-lg p-1.5">
-                        <DollarSign className="h-4 w-4 text-white" />
-                      </div>
-                      <div className="w-16 h-8">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart
-                            data={stats.sparklines.revenue}
-                            margin={{ top: 1, right: 0, left: 0, bottom: 1 }}
-                          >
-                            <Area
-                              type="monotone"
-                              dataKey="v"
-                              stroke="rgba(255,255,255,0.8)"
-                              strokeWidth={1.5}
-                              fill="rgba(255,255,255,0.15)"
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tipos de Projetos */}
-                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-indigo-500 to-indigo-700 px-4 py-3.5">
-                  <div className="flex items-start justify-between mb-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
-                      Tipos de Projetos
-                    </p>
-                    <div className="bg-white/20 rounded-lg p-1.5">
-                      <Briefcase className="h-4 w-4 text-white" />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    {[
-                      {
-                        label: "Company",
-                        count: stats.companyProjects,
-                        growth: stats.companyGrowth,
-                        icon: Building2,
-                      },
-                      {
-                        label: "Agency",
-                        count: stats.agencyProjects,
-                        growth: stats.agencyGrowth,
-                        icon: Users,
-                      },
-                      {
-                        label: "Squad",
-                        count: stats.squadProjects,
-                        growth: stats.squadGrowth,
-                        icon: Zap,
-                      },
-                    ].map(({ label, count, growth, icon: Icon }) => (
-                      <div
-                        key={label}
-                        className="flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <Icon className="h-3 w-3 text-white/70" />
-                          <span className="text-xs font-medium text-white">
-                            {label}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-white">
-                            {count}
-                          </span>
-                          <span className="text-[10px] text-white/70 flex items-center gap-0.5">
-                            <ArrowUpRight className="h-2.5 w-2.5" />
-                            {growth}%
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Negócios em Potencial */}
-                <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 px-4 py-3.5">
-                  <div className="flex items-start justify-between mb-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
-                      Negócios Potencial
-                    </p>
-                    <div className="bg-white/20 rounded-lg p-1.5">
-                      <TrendingUp className="h-4 w-4 text-white" />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    {[
-                      {
-                        label: "Rascunho",
-                        value: stats.draftValue,
-                        growth: stats.draftGrowth,
-                      },
-                      {
-                        label: "Negociação",
-                        value: stats.negotiationValue,
-                        growth: stats.negotiationGrowth,
-                      },
-                      {
-                        label: "Ag. Pagamento",
-                        value: stats.awaitingPaymentValue,
-                        growth: stats.awaitingPaymentGrowth,
-                      },
-                    ].map(({ label, value, growth }) => (
-                      <div
-                        key={label}
-                        className="flex items-center justify-between"
-                      >
-                        <span className="text-xs font-medium text-white">
-                          {label}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-white">
-                            R$ {(value / 1000).toFixed(0)}k
-                          </span>
-                          <span className="text-[10px] text-white/70 flex items-center gap-0.5">
-                            <ArrowUpRight className="h-2.5 w-2.5" />
-                            {growth}%
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-
-        {/* ── Draft / Awaiting-Payment Banner (compact) ── */}
-        {(() => {
-          const pendingProjects = projectsData.filter(
-            (p) =>
-              p.status === "draft" ||
-              p.status === "awaiting-payment" ||
-              p.status === "pending-approval",
-          );
-          if (pendingProjects.length === 0) return null;
-
-          const PREVIEW_LIMIT = 3;
-          const previewItems = pendingProjects.slice(0, PREVIEW_LIMIT);
-
-          const statusLabel = (s: string) =>
-            s === "awaiting-payment" ? "Ag. Pagamento"
-            : s === "pending-approval" ? "Ag. Aprovação"
-            : "Rascunho";
-
-          const statusBadge = (s: string) =>
-            s === "awaiting-payment"
-              ? "bg-cyan-50 text-cyan-700 border-cyan-200"
-              : s === "pending-approval"
-              ? "bg-amber-50 text-amber-700 border-amber-200"
-              : "bg-slate-50 text-slate-600 border-slate-200";
-
-          const avatarGradient = (s: string) =>
-            s === "awaiting-payment"
-              ? "linear-gradient(135deg,#0891b2,#6d28d9)"
-              : s === "pending-approval"
-              ? "linear-gradient(135deg,#d97706,#b45309)"
-              : "linear-gradient(135deg,#475569,#94a3b8)";
-
-          const filteredPending = pendingProjects.filter((p) => {
-            if (!pendingPanelSearch) return true;
-            const q = pendingPanelSearch.toLowerCase();
-            return (
-              p.name?.toLowerCase().includes(q) ||
-              p.client?.toLowerCase().includes(q)
-            );
-          });
-
-          return (
-            <>
-              {/* ── Compact banner ── */}
-              <div className="rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 to-white px-4 py-3 shadow-sm">
-                {/* Header row */}
-                <div className="flex items-center gap-2.5 mb-2.5">
-                  <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-sm">
-                    <AlertTriangle className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-amber-900 leading-tight">
-                      {pendingProjects.length === 1 ? "1 projeto pendente" : `${pendingProjects.length} projetos pendentes`}
-                    </p>
-                    <p className="text-[11px] text-amber-600/80">Precisam de ação para avançar</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {pendingProjects.length > PREVIEW_LIMIT && (
-                      <span className="text-[11px] font-medium text-amber-600">
-                        +{pendingProjects.length - PREVIEW_LIMIT} restantes
-                      </span>
-                    )}
-                    <button
-                      onClick={() => setShowPendingModal(true)}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 bg-amber-100/80 hover:bg-amber-200 px-3 py-1.5 rounded-lg border border-amber-200 transition-colors"
-                    >
-                      Ver todos ({pendingProjects.length})
-                      <ArrowRight className="h-3 w-3" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Compact cards – 3 em linha */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {previewItems.map((project) => (
-                    <div
-                      key={project.id}
-                      className="flex flex-col gap-2 bg-white rounded-lg border border-slate-100 px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] min-w-0"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          className="h-7 w-7 rounded-md flex items-center justify-center shrink-0 text-white text-[11px] font-bold"
-                          style={{ background: avatarGradient(project.status) }}
-                        >
-                          {(project.name ?? "P")[0].toUpperCase()}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-slate-800 truncate leading-tight">{project.name}</p>
-                          <p className="text-[10px] text-slate-500 truncate">{project.client}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge(project.status)}`}>
-                          {statusLabel(project.status)}
-                        </span>
-                        {project.status === "draft" ? (
-                          <Button size="sm" className="h-6 px-2.5 text-[11px] bg-violet-600 hover:bg-violet-700 text-white shrink-0" onClick={() => handleContinueDraft(project)}>
-                            Continuar
-                          </Button>
-                        ) : project.status === "pending-approval" ? (
-                          <Button size="sm" className="h-6 px-2.5 text-[11px] bg-amber-500 hover:bg-amber-600 text-white shrink-0" onClick={() => handleGoToPayment(project)}>
-                            Aprovar
-                          </Button>
-                        ) : (
-                          <Button size="sm" className="h-6 px-2.5 text-[11px] bg-cyan-600 hover:bg-cyan-700 text-white shrink-0" onClick={() => handleGoToPayment(project)}>
-                            Pagar
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── Slide-over: todos os projetos pendentes ── */}
-              <EmbeddedSlideScreen
-                open={showPendingModal}
-                onClose={() => { setShowPendingModal(false); setPendingPanelSearch(""); }}
-                hideHeader
-                pin={{
-                  id: "projetos-pendentes",
-                  label: "Projetos pendentes",
-                  icon: AlertTriangle,
-                  path: "/admin/projetos",
-                  activateKey: "pendentes",
-                }}
-                footer={
-                  <p className="text-xs text-slate-400 text-center w-full">
-                    {filteredPending.length === pendingProjects.length
-                      ? `${pendingProjects.length} projeto${pendingProjects.length !== 1 ? "s" : ""} pendente${pendingProjects.length !== 1 ? "s" : ""}`
-                      : `${filteredPending.length} de ${pendingProjects.length} projetos pendentes`}
+          {showPartnerReferrals && projectsTab === "indicados" && (
+            <div className="space-y-5 mb-5">
+              {/* Stats */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
+                    Total de Projetos
                   </p>
-                }
-              >
-                <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
-                  {/* Panel header — gradiente da sidebar */}
-                  <div
-                    className="shrink-0 px-6 pt-6 pb-4"
-                    style={{ background: "linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)" }}
+                  <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">
+                    {partnerRefProjects.length}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
+                    Valor Total
+                  </p>
+                  <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1">
+                    {fmtPartnerRefBRL(partnerRefTotalValue)}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 shadow-sm">
+                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide">
+                    Comissões Geradas
+                  </p>
+                  <p className="text-2xl font-bold text-emerald-600 mt-1">
+                    {fmtPartnerRefBRL(partnerRefTotalCommission)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Filters + Items per page */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative w-64">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <Input
+                    placeholder="Buscar projeto ou empresa..."
+                    value={partnerRefSearch}
+                    onChange={(e) => {
+                      setPartnerRefSearch(e.target.value);
+                      setPartnerRefCurrentPage(1);
+                    }}
+                    className="pl-8 h-8 text-sm"
+                  />
+                </div>
+                {(["all", "active", "completed", "cancelled"] as const).map(
+                  (s) => (
+                    <button
+                      key={s}
+                      onClick={() => {
+                        setPartnerRefStatusFilter(s);
+                        setPartnerRefCurrentPage(1);
+                      }}
+                      className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                        partnerRefStatusFilter === s
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300"
+                      }`}
+                    >
+                      {s === "all"
+                        ? "Todos"
+                        : s === "active"
+                          ? "Ativos"
+                          : s === "completed"
+                            ? "Concluídos"
+                            : "Cancelados"}
+                    </button>
+                  ),
+                )}
+                <div className="ml-auto flex items-center gap-2 shrink-0">
+                  <ItemsPerPageSelect
+                    value={partnerRefItemsPerPage.toString()}
+                    onValueChange={(v) => {
+                      setPartnerRefItemsPerPage(Number(v));
+                      setPartnerRefCurrentPage(1);
+                    }}
+                    variant="top"
+                  />
+                  {partnerRefTotalItems > 0 && (
+                    <span className="text-xs text-slate-400 whitespace-nowrap">
+                      {partnerRefTotalItems} projeto
+                      {partnerRefTotalItems !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto allka-table-scroll">
+                  <table className="tabela-cartao w-full text-sm min-w-150">
+                    <thead>
+                      <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60">
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-28">
+                          ID
+                        </th>
+                        <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          <SortableHeader
+                            label="Projeto"
+                            field="projectName"
+                            type="text"
+                            sortKey={
+                              partnerRefSortKey
+                                ? String(partnerRefSortKey)
+                                : null
+                            }
+                            sortDir={partnerRefSortDir}
+                            onSort={partnerRefHandleSort}
+                          />
+                        </th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          <SortableHeader
+                            label="Empresa"
+                            field="companyName"
+                            type="text"
+                            sortKey={
+                              partnerRefSortKey
+                                ? String(partnerRefSortKey)
+                                : null
+                            }
+                            sortDir={partnerRefSortDir}
+                            onSort={partnerRefHandleSort}
+                          />
+                        </th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          <SortableHeader
+                            label="Categoria"
+                            field="serviceCategory"
+                            type="status"
+                            sortKey={
+                              partnerRefSortKey
+                                ? String(partnerRefSortKey)
+                                : null
+                            }
+                            sortDir={partnerRefSortDir}
+                            onSort={partnerRefHandleSort}
+                            columnFilters={partnerRefColumnFilters}
+                            onFilter={partnerRefToggleColumnFilter}
+                            onClearFilter={partnerRefClearColumnFilter}
+                            filterValues={[
+                              "Branding",
+                              "Social Media",
+                              "Produção de Vídeo",
+                              "Conteúdo",
+                            ]}
+                          />
+                        </th>
+                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          <SortableHeader
+                            label="Valor"
+                            field="projectValue"
+                            type="number"
+                            sortKey={
+                              partnerRefSortKey
+                                ? String(partnerRefSortKey)
+                                : null
+                            }
+                            sortDir={partnerRefSortDir}
+                            onSort={partnerRefHandleSort}
+                          />
+                        </th>
+                        <th className="text-right px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          <SortableHeader
+                            label="Comissão"
+                            field="commissionGenerated"
+                            type="number"
+                            sortKey={
+                              partnerRefSortKey
+                                ? String(partnerRefSortKey)
+                                : null
+                            }
+                            sortDir={partnerRefSortDir}
+                            onSort={partnerRefHandleSort}
+                          />
+                        </th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          <SortableHeader
+                            label="Status"
+                            field="status"
+                            type="status"
+                            sortKey={
+                              partnerRefSortKey
+                                ? String(partnerRefSortKey)
+                                : null
+                            }
+                            sortDir={partnerRefSortDir}
+                            onSort={partnerRefHandleSort}
+                            columnFilters={partnerRefColumnFilters}
+                            onFilter={partnerRefToggleColumnFilter}
+                            onClearFilter={partnerRefClearColumnFilter}
+                            filterValues={["active", "completed", "cancelled"]}
+                          />
+                        </th>
+                        <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          <SortableHeader
+                            label="Contratado"
+                            field="startDate"
+                            type="date"
+                            sortKey={
+                              partnerRefSortKey
+                                ? String(partnerRefSortKey)
+                                : null
+                            }
+                            sortDir={partnerRefSortDir}
+                            onSort={partnerRefHandleSort}
+                          />
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {partnerRefPaginated.map((p: any, idx: number) => {
+                        const sc = partnerRefStatusConfig[p.status] ?? {
+                          label: p.status ?? "—",
+                          color: "bg-slate-100 text-slate-600",
+                          icon: FolderOpen,
+                        };
+                        const cc = partnerRefCommStatusConfig[
+                          p.commissionStatus
+                        ] ?? {
+                          label: p.commissionStatus ?? "—",
+                          color: "bg-slate-100 text-slate-600",
+                        };
+                        return (
+                          <tr
+                            key={p.id}
+                            className={
+                              idx % 2 === 1
+                                ? "bg-slate-50/50 dark:bg-slate-900/30"
+                                : ""
+                            }
+                          >
+                            <td
+                              data-rotulo="ID"
+                              className="px-4 py-3"
+                              style={{
+                                borderRight: "1px solid rgba(148,163,184,0.15)",
+                              }}
+                            >
+                              <span className="font-mono text-xs text-slate-400">
+                                proj_{(p as any).seq ?? "?"}
+                              </span>
+                            </td>
+                            <td
+                              data-rotulo="Projeto"
+                              className="px-5 py-3 font-medium text-slate-700 dark:text-slate-200"
+                            >
+                              {p.projectName}
+                            </td>
+                            <td
+                              data-rotulo="Empresa"
+                              className="px-4 py-3 text-slate-500 dark:text-slate-400"
+                            >
+                              {p.companyName}
+                            </td>
+                            <td
+                              data-rotulo="Categoria"
+                              className="px-4 py-3 text-slate-400 text-xs"
+                            >
+                              {p.serviceCategory}
+                            </td>
+                            <td
+                              data-rotulo="Valor"
+                              className="px-4 py-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200"
+                            >
+                              {fmtPartnerRefBRL(p.projectValue)}
+                            </td>
+                            <td
+                              data-rotulo="Comissão"
+                              className="px-4 py-3 text-right"
+                            >
+                              <span className="tabular-nums font-semibold text-emerald-600">
+                                {fmtPartnerRefBRL(p.commissionGenerated)}
+                              </span>
+                              <span
+                                className={`ml-2 text-[10px] px-1 py-0.5 rounded font-semibold ${cc.color}`}
+                              >
+                                {cc.label}
+                              </span>
+                            </td>
+                            <td data-rotulo="Status" className="px-4 py-3">
+                              <span
+                                className={`text-xs px-1.5 py-0.5 rounded font-semibold ${sc.color}`}
+                              >
+                                {sc.label}
+                              </span>
+                            </td>
+                            <td
+                              data-rotulo="Contratado"
+                              className="px-4 py-3 text-xs text-slate-400"
+                            >
+                              {fmtPartnerRefDate(p.contractedAt)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {partnerRefFiltered.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={8}
+                            className="px-5 py-10 text-center text-sm text-slate-400"
+                          >
+                            <FolderOpen className="h-8 w-8 mx-auto text-slate-300 mb-2" />
+                            Nenhum projeto encontrado
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Pagination */}
+              {partnerRefTotalPages > 1 && (
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() =>
+                      setPartnerRefCurrentPage((p) => Math.max(1, p - 1))
+                    }
+                    disabled={partnerRefSafeCurrentPage === 1}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                   >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
-                          <AlertTriangle className="h-5 w-5 text-amber-300" />
-                        </div>
-                        <div>
-                          <h2 className="text-base font-bold text-white">Projetos pendentes</h2>
-                          <p className="text-xs text-white/55 mt-0.5">
-                            {pendingProjects.length === 1 ? "1 projeto precisa" : `${pendingProjects.length} projetos precisam`} de ação
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => { setShowPendingModal(false); setPendingPanelSearch(""); }}
-                        className="h-8 w-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0 mt-0.5"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </button>
+                  <span className="text-sm text-slate-500">
+                    Página {partnerRefSafeCurrentPage} de {partnerRefTotalPages}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setPartnerRefCurrentPage((p) =>
+                        Math.min(partnerRefTotalPages, p + 1),
+                      )
+                    }
+                    disabled={
+                      partnerRefSafeCurrentPage === partnerRefTotalPages
+                    }
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div
+            className={
+              showPartnerReferrals && projectsTab === "indicados"
+                ? "hidden"
+                : "space-y-0"
+            }
+          >
+            {/* Stats Cards */}
+            <div className="mt-[5px] mb-[5px] grid grid-cols-2 gap-3 lg:h-[65px] lg:grid-cols-4">
+              <div className="relative h-full rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-blue-500 to-blue-700 dark:from-blue-800 dark:to-blue-950 border-2 border-blue-300/70 dark:border-blue-800/70 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    Total de Projetos
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <FolderOpen className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none">
+                  {stats.totalProjects}
+                </p>
+              </div>
+              <div className="relative h-full rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-emerald-500 to-teal-600 dark:from-emerald-800 dark:to-teal-900 border-2 border-emerald-300/70 dark:border-emerald-800/70 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    Em Andamento
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <Zap className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none">
+                  {stats.activeProjects}
+                </p>
+              </div>
+              <div className="relative h-full rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-violet-500 to-purple-700 dark:from-violet-800 dark:to-purple-950 border-2 border-violet-300/70 dark:border-violet-800/70 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    Concluídos
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <TrendingUp className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none">
+                  {stats.completedProjects}
+                </p>
+              </div>
+              <div className="relative h-full rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-orange-500 to-rose-600 dark:from-orange-800 dark:to-rose-900 border-2 border-orange-300/70 dark:border-orange-800/70 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    MRR
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <DollarSign className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none">
+                  R$ {(stats.mrr / 1000).toFixed(0)}k
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <Accordion type="single" collapsible className="mb-1">
+                <AccordionItem
+                  value="stats"
+                  className="border rounded-lg bg-blue-50 border-blue-200"
+                >
+                  <AccordionTrigger className="text-sm font-semibold hover:no-underline px-4 py-3 hover:bg-slate-50 rounded-t-lg transition-colors">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-5 w-5 text-blue-600" />
+                      <span className="text-blue-900">
+                        Estatísticas e Métricas
+                      </span>
                     </div>
-                    <p className="text-xs text-white/40 mb-4 leading-relaxed">
-                      Projetos em rascunho, aguardando pagamento ou aprovação precisam de ação para avançar.
-                    </p>
-                    {/* Search */}
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/35 pointer-events-none" />
-                      <input
-                        type="text"
-                        placeholder="Buscar por nome ou cliente..."
-                        value={pendingPanelSearch}
-                        onChange={(e) => setPendingPanelSearch(e.target.value)}
-                        className="w-full h-9 pl-9 pr-3 bg-white/10 border border-white/15 rounded-lg text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-white/35 focus:bg-white/15 transition-colors"
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-2 px-4 pb-4">
+                    {/* Period filter */}
+                    <div className="mb-4">
+                      <AdvancedDateFilter
+                        dateRange={dateRange}
+                        onDateChange={setDateRange}
+                        leadFilter={filterFromLead}
+                        onLeadFilterChange={setFilterFromLead}
+                        onExport={handleExport}
+                        onReset={() => {
+                          setDateRange(undefined);
+                        }}
+                        isLoading={false}
                       />
                     </div>
-                  </div>
 
-                  {/* Panel body — branco */}
-                  <div className="flex-1 overflow-y-auto bg-white">
-                    {filteredPending.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-                        <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                          <Search className="h-5 w-5 text-slate-400" />
+                    {/* ── Row 1: 4 KPI cards ── */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+                      {/* Projetos Totais */}
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-blue-500 to-blue-700 px-4 py-3.5">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
+                              Projetos Totais
+                            </p>
+                            <p className="text-[2rem] font-black text-white leading-none">
+                              {stats.totalProjects}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1.5 text-white/70 text-[11px]">
+                              <span className="bg-white/20 rounded px-1.5 py-0.5">
+                                {stats.activeProjects} ativos
+                              </span>
+                              <span className="bg-white/20 rounded px-1.5 py-0.5">
+                                {stats.completedProjects} concl.
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                            <div className="bg-white/20 rounded-lg p-1.5">
+                              <FolderOpen className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="w-16 h-8">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart
+                                  data={stats.sparklines.projects}
+                                  margin={{
+                                    top: 1,
+                                    right: 0,
+                                    left: 0,
+                                    bottom: 1,
+                                  }}
+                                >
+                                  <Area
+                                    type="monotone"
+                                    dataKey="v"
+                                    stroke="rgba(255,255,255,0.8)"
+                                    strokeWidth={1.5}
+                                    fill="rgba(255,255,255,0.15)"
+                                    dot={false}
+                                    isAnimationActive={false}
+                                  />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-sm font-medium text-slate-600">Nenhum resultado</p>
-                        <p className="text-xs text-slate-400 mt-1">Tente um nome ou cliente diferente</p>
                       </div>
-                    ) : (
-                      <div className="p-4 flex flex-col gap-2">
-                        {filteredPending.map((project) => (
+
+                      {/* MRR */}
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 px-4 py-3.5">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
+                              MRR
+                            </p>
+                            <p className="text-[2rem] font-black text-white leading-none">
+                              R${(stats.mrr / 1000).toFixed(0)}k
+                            </p>
+                            <div className="flex items-center gap-1 mt-1.5">
+                              <Zap className="h-3 w-3 text-white/80" />
+                              <span className="text-xs font-bold text-white/80">
+                                {stats.activeProjects} em andamento
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                            <div className="bg-white/20 rounded-lg p-1.5">
+                              <Repeat className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="w-16 h-8">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart
+                                  data={stats.sparklines.mrr}
+                                  margin={{
+                                    top: 1,
+                                    right: 0,
+                                    left: 0,
+                                    bottom: 1,
+                                  }}
+                                >
+                                  <Area
+                                    type="monotone"
+                                    dataKey="v"
+                                    stroke="rgba(255,255,255,0.8)"
+                                    strokeWidth={1.5}
+                                    fill="rgba(255,255,255,0.15)"
+                                    dot={false}
+                                    isAnimationActive={false}
+                                  />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Avulsos Ativos */}
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-violet-500 to-purple-700 px-4 py-3.5">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
+                              Avulsos Ativos
+                            </p>
+                            <p className="text-[2rem] font-black text-white leading-none">
+                              {stats.avulsosAtivos}
+                            </p>
+                            <div className="flex items-center gap-1 mt-1.5">
+                              <ArrowDownRight className="h-3 w-3 text-white/80" />
+                              <span className="text-xs font-bold text-white/80">
+                                {stats.avulsosGrowth}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                            <div className="bg-white/20 rounded-lg p-1.5">
+                              <Clock className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="w-16 h-8">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart
+                                  data={stats.sparklines.avulsos}
+                                  margin={{
+                                    top: 1,
+                                    right: 0,
+                                    left: 0,
+                                    bottom: 1,
+                                  }}
+                                >
+                                  <Area
+                                    type="monotone"
+                                    dataKey="v"
+                                    stroke="rgba(255,255,255,0.8)"
+                                    strokeWidth={1.5}
+                                    fill="rgba(255,255,255,0.15)"
+                                    dot={false}
+                                    isAnimationActive={false}
+                                  />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Churn */}
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-red-500 to-red-700 px-4 py-3.5">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
+                              Churn
+                            </p>
+                            <p className="text-[2rem] font-black text-white leading-none">
+                              {stats.churnProjects}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1.5 text-white/70 text-[11px]">
+                              <span>{stats.churnRate}%</span>
+                              <span>•</span>
+                              <span>
+                                R$ {(stats.churnValue / 1000).toFixed(0)}k
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                            <div className="bg-white/20 rounded-lg p-1.5">
+                              <XCircle className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="w-16 h-8">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart
+                                  data={stats.sparklines.churn}
+                                  margin={{
+                                    top: 1,
+                                    right: 0,
+                                    left: 0,
+                                    bottom: 1,
+                                  }}
+                                >
+                                  <Area
+                                    type="monotone"
+                                    dataKey="v"
+                                    stroke="rgba(255,255,255,0.8)"
+                                    strokeWidth={1.5}
+                                    fill="rgba(255,255,255,0.15)"
+                                    dot={false}
+                                    isAnimationActive={false}
+                                  />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Row 2: 4 cards ── */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mb-2">
+                      {/* Inadimplência */}
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-rose-500 to-rose-700 px-4 py-3.5">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
+                              Inadimplência
+                            </p>
+                            <p className="text-[2rem] font-black text-white leading-none">
+                              {stats.overdueProjects}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1.5 text-white/70 text-[11px]">
+                              <span>
+                                R$ {(stats.overdueValue / 1000).toFixed(0)}k
+                              </span>
+                              <span>•</span>
+                              <span className="flex items-center gap-0.5">
+                                <ArrowDownRight className="h-3 w-3" />
+                                {Math.abs(stats.overdueGrowth)}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                            <div className="bg-white/20 rounded-lg p-1.5">
+                              <AlertTriangle className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="w-16 h-8">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart
+                                  data={stats.sparklines.overdue}
+                                  margin={{
+                                    top: 1,
+                                    right: 0,
+                                    left: 0,
+                                    bottom: 1,
+                                  }}
+                                >
+                                  <Area
+                                    type="monotone"
+                                    dataKey="v"
+                                    stroke="rgba(255,255,255,0.8)"
+                                    strokeWidth={1.5}
+                                    fill="rgba(255,255,255,0.15)"
+                                    dot={false}
+                                    isAnimationActive={false}
+                                  />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Receitas */}
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-emerald-500 to-emerald-700 px-4 py-3.5">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-0.5">
+                              Receitas
+                            </p>
+                            <p className="text-[2rem] font-black text-white leading-none">
+                              R${(stats.totalRevenue / 1000).toFixed(0)}k
+                            </p>
+                            <div className="flex items-center gap-1 mt-1.5">
+                              <ArrowUpRight className="h-3 w-3 text-white/80" />
+                              <span className="text-xs font-bold text-white/80">
+                                +{stats.revenueGrowth}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2 ml-2 shrink-0">
+                            <div className="bg-white/20 rounded-lg p-1.5">
+                              <DollarSign className="h-4 w-4 text-white" />
+                            </div>
+                            <div className="w-16 h-8">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart
+                                  data={stats.sparklines.revenue}
+                                  margin={{
+                                    top: 1,
+                                    right: 0,
+                                    left: 0,
+                                    bottom: 1,
+                                  }}
+                                >
+                                  <Area
+                                    type="monotone"
+                                    dataKey="v"
+                                    stroke="rgba(255,255,255,0.8)"
+                                    strokeWidth={1.5}
+                                    fill="rgba(255,255,255,0.15)"
+                                    dot={false}
+                                    isAnimationActive={false}
+                                  />
+                                </AreaChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Tipos de Projetos */}
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-indigo-500 to-indigo-700 px-4 py-3.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
+                            Tipos de Projetos
+                          </p>
+                          <div className="bg-white/20 rounded-lg p-1.5">
+                            <Briefcase className="h-4 w-4 text-white" />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          {[
+                            {
+                              label: "Company",
+                              count: stats.companyProjects,
+                              growth: stats.companyGrowth,
+                              icon: Building2,
+                            },
+                            {
+                              label: "Agency",
+                              count: stats.agencyProjects,
+                              growth: stats.agencyGrowth,
+                              icon: Users,
+                            },
+                            {
+                              label: "Squad",
+                              count: stats.squadProjects,
+                              growth: stats.squadGrowth,
+                              icon: Zap,
+                            },
+                          ].map(({ label, count, growth, icon: Icon }) => (
+                            <div
+                              key={label}
+                              className="flex items-center justify-between"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <Icon className="h-3 w-3 text-white/70" />
+                                <span className="text-xs font-medium text-white">
+                                  {label}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-white">
+                                  {count}
+                                </span>
+                                <span className="text-[10px] text-white/70 flex items-center gap-0.5">
+                                  <ArrowUpRight className="h-2.5 w-2.5" />
+                                  {growth}%
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Negócios em Potencial */}
+                      <div className="relative rounded-xl overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 px-4 py-3.5">
+                        <div className="flex items-start justify-between mb-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-white/60">
+                            Negócios Potencial
+                          </p>
+                          <div className="bg-white/20 rounded-lg p-1.5">
+                            <TrendingUp className="h-4 w-4 text-white" />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          {[
+                            {
+                              label: "Rascunho",
+                              value: stats.draftValue,
+                              growth: stats.draftGrowth,
+                            },
+                            {
+                              label: "Negociação",
+                              value: stats.negotiationValue,
+                              growth: stats.negotiationGrowth,
+                            },
+                            {
+                              label: "Ag. Pagamento",
+                              value: stats.awaitingPaymentValue,
+                              growth: stats.awaitingPaymentGrowth,
+                            },
+                          ].map(({ label, value, growth }) => (
+                            <div
+                              key={label}
+                              className="flex items-center justify-between"
+                            >
+                              <span className="text-xs font-medium text-white">
+                                {label}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-white">
+                                  R$ {(value / 1000).toFixed(0)}k
+                                </span>
+                                <span className="text-[10px] text-white/70 flex items-center gap-0.5">
+                                  <ArrowUpRight className="h-2.5 w-2.5" />
+                                  {growth}%
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+
+              {/* ── Draft / Awaiting-Payment Banner (compact) ── */}
+              {(() => {
+                const pendingProjects = projectsData.filter(
+                  (p) =>
+                    p.status === "draft" ||
+                    p.status === "awaiting-payment" ||
+                    p.status === "pending-approval",
+                );
+                if (pendingProjects.length === 0) return null;
+
+                const PREVIEW_LIMIT = 3;
+                const previewItems = pendingProjects.slice(0, PREVIEW_LIMIT);
+
+                const statusLabel = (s: string) =>
+                  s === "awaiting-payment"
+                    ? "Ag. Pagamento"
+                    : s === "pending-approval"
+                      ? "Ag. Aprovação"
+                      : "Rascunho";
+
+                const statusBadge = (s: string) =>
+                  s === "awaiting-payment"
+                    ? "bg-cyan-50 text-cyan-700 border-cyan-200"
+                    : s === "pending-approval"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-slate-50 text-slate-600 border-slate-200";
+
+                const avatarGradient = (s: string) =>
+                  s === "awaiting-payment"
+                    ? "linear-gradient(135deg,#0891b2,#6d28d9)"
+                    : s === "pending-approval"
+                      ? "linear-gradient(135deg,#d97706,#b45309)"
+                      : "linear-gradient(135deg,#475569,#94a3b8)";
+
+                const filteredPending = pendingProjects.filter((p) => {
+                  if (!pendingPanelSearch) return true;
+                  const q = pendingPanelSearch.toLowerCase();
+                  return (
+                    p.name?.toLowerCase().includes(q) ||
+                    p.client?.toLowerCase().includes(q)
+                  );
+                });
+
+                return (
+                  <>
+                    {/* ── Compact banner ── */}
+                    <div className="rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 to-white px-4 py-3 shadow-sm">
+                      {/* Header row */}
+                      <div className="flex items-center gap-2.5 mb-2.5">
+                        <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-sm">
+                          <AlertTriangle className="h-3.5 w-3.5 text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-amber-900 leading-tight">
+                            {pendingProjects.length === 1
+                              ? "1 projeto pendente"
+                              : `${pendingProjects.length} projetos pendentes`}
+                          </p>
+                          <p className="text-[11px] text-amber-600/80">
+                            Precisam de ação para avançar
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {pendingProjects.length > PREVIEW_LIMIT && (
+                            <span className="text-[11px] font-medium text-amber-600">
+                              +{pendingProjects.length - PREVIEW_LIMIT}{" "}
+                              restantes
+                            </span>
+                          )}
+                          <button
+                            onClick={() => setShowPendingModal(true)}
+                            className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:text-amber-900 bg-amber-100/80 hover:bg-amber-200 px-3 py-1.5 rounded-lg border border-amber-200 transition-colors"
+                          >
+                            Ver todos ({pendingProjects.length})
+                            <ArrowRight className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Compact cards – 3 em linha */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {previewItems.map((project) => (
                           <div
                             key={project.id}
-                            className="flex items-center gap-3 bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 hover:border-slate-200 hover:shadow-md transition-all"
+                            className="flex flex-col gap-2 bg-white rounded-lg border border-slate-100 px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] min-w-0"
                           >
-                            <div
-                              className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-white text-sm font-bold shadow-sm"
-                              style={{ background: avatarGradient(project.status) }}
-                            >
-                              {(project.name ?? "P")[0].toUpperCase()}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div
+                                className="h-7 w-7 rounded-md flex items-center justify-center shrink-0 text-white text-[11px] font-bold"
+                                style={{
+                                  background: avatarGradient(project.status),
+                                }}
+                              >
+                                {(project.name ?? "P")[0].toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-slate-800 truncate leading-tight">
+                                  {project.name}
+                                </p>
+                                <p className="text-[10px] text-slate-500 truncate">
+                                  {project.client}
+                                </p>
+                              </div>
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-semibold text-slate-800 truncate">{project.name}</p>
-                              <p className="text-xs text-slate-500 truncate">{project.client}</p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border hidden sm:inline-flex ${statusBadge(project.status)}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span
+                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge(project.status)}`}
+                              >
                                 {statusLabel(project.status)}
                               </span>
                               {project.status === "draft" ? (
                                 <Button
                                   size="sm"
-                                  className="h-8 px-3 text-xs bg-violet-600 hover:bg-violet-700 text-white"
-                                  onClick={() => { setShowPendingModal(false); setPendingPanelSearch(""); handleContinueDraft(project); }}
+                                  className="h-6 px-2.5 text-[11px] bg-violet-600 hover:bg-violet-700 text-white shrink-0"
+                                  onClick={() => handleContinueDraft(project)}
                                 >
-                                  Continuar <ArrowRight className="h-3 w-3 ml-1" />
+                                  Continuar
                                 </Button>
                               ) : project.status === "pending-approval" ? (
                                 <Button
                                   size="sm"
-                                  className="h-8 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white"
-                                  onClick={() => { setShowPendingModal(false); setPendingPanelSearch(""); handleGoToPayment(project); }}
+                                  className="h-6 px-2.5 text-[11px] bg-amber-500 hover:bg-amber-600 text-white shrink-0"
+                                  onClick={() => handleGoToPayment(project)}
                                 >
-                                  Aprovar <ArrowRight className="h-3 w-3 ml-1" />
+                                  Aprovar
                                 </Button>
                               ) : (
                                 <Button
                                   size="sm"
-                                  className="h-8 px-3 text-xs bg-cyan-600 hover:bg-cyan-700 text-white"
-                                  onClick={() => { setShowPendingModal(false); setPendingPanelSearch(""); handleGoToPayment(project); }}
+                                  className="h-6 px-2.5 text-[11px] bg-cyan-600 hover:bg-cyan-700 text-white shrink-0"
+                                  onClick={() => handleGoToPayment(project)}
                                 >
-                                  Pagar Agora <CreditCard className="h-3 w-3 ml-1" />
+                                  Pagar
                                 </Button>
                               )}
                             </div>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                </div>
-              </EmbeddedSlideScreen>
-            </>
-          );
-        })()}
-
-        {/* ── View toggle ── */}
-        {viewMode === "accordion" ? (
-          <>
-            <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
-              {/* Row 1 — view mode tabs + search + icon toolbar buttons */}
-              <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
-                <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
-                  <Button
-                    size="sm"
-                    variant={(viewMode as string) === "accordion" ? "default" : "ghost"}
-                    onClick={() => setViewMode("accordion")}
-                    className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      (viewMode as string) === "accordion"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
-                        : "hover:bg-background"
-                    }`}
-                  >
-                    <List className="h-3 w-3 mr-1" />
-                    Lista
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={(viewMode as string) === "kanban" ? "default" : "ghost"}
-                    onClick={() => setViewMode("kanban")}
-                    className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      (viewMode as string) === "kanban"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
-                        : "hover:bg-background"
-                    }`}
-                  >
-                    <LayoutGrid className="h-3 w-3 mr-1" />
-                    Kanban
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={(viewMode as string) === "planner" ? "default" : "ghost"}
-                    onClick={() => setViewMode("planner")}
-                    className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      (viewMode as string) === "planner"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
-                        : "hover:bg-background"
-                    }`}
-                  >
-                    <LayoutDashboard className="h-3 w-3 mr-1" />
-                    Planejador
-                  </Button>
-                </div>
-
-                <div className="relative flex-1 min-w-[220px] max-w-sm">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar projeto, cliente..."
-                    value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    className="pl-8 h-9 text-sm w-full"
-                  />
-                </div>
-
-                <div className="ml-auto flex items-center gap-2">
-                  <IconToolbarButton
-                    icon={Filter}
-                    tooltip={activeFilterCount > 0 ? `Filtros (${activeFilterCount} ativos)` : "Filtros"}
-                    onClick={() => setIsFilterModalOpen(true)}
-                  />
-                  <IconToolbarButton
-                    icon={Settings2}
-                    tooltip="Configurar colunas"
-                    onClick={() => setColConfigOpen(true)}
-                  />
-                </div>
-                <StandardModalDialog
-                  open={colConfigOpen}
-                  onClose={() => setColConfigOpen(false)}
-                  title="Configurar colunas"
-                  subtitle="Escolha quais colunas aparecem na tabela"
-                >
-                  <div className="p-5 flex-1 overflow-y-auto space-y-2">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                        Colunas visíveis
-                      </p>
-                      <button
-                        onClick={() => setVisibleCols(ALL_COLS)}
-                        className="text-[10px] text-blue-600 hover:underline"
-                      >
-                        Mostrar todas
-                      </button>
                     </div>
-                    {ALL_COLS.map((col) => (
-                      <label
-                        key={col}
-                        className="flex items-center gap-2 text-sm cursor-pointer py-1"
-                      >
-                        <Checkbox
-                          checked={visibleCols.includes(col)}
-                          onCheckedChange={(checked) => {
-                            setVisibleCols((prev) =>
-                              checked
-                                ? [...prev, col]
-                                : prev.filter((c) => c !== col),
-                            );
+
+                    {/* ── Slide-over: todos os projetos pendentes ── */}
+                    <EmbeddedSlideScreen
+                      open={showPendingModal}
+                      onClose={() => {
+                        setShowPendingModal(false);
+                        setPendingPanelSearch("");
+                      }}
+                      hideHeader
+                      pin={{
+                        id: "projetos-pendentes",
+                        label: "Projetos pendentes",
+                        icon: AlertTriangle,
+                        path: "/admin/projetos",
+                        activateKey: "pendentes",
+                      }}
+                      footer={
+                        <p className="text-xs text-slate-400 text-center w-full">
+                          {filteredPending.length === pendingProjects.length
+                            ? `${pendingProjects.length} projeto${pendingProjects.length !== 1 ? "s" : ""} pendente${pendingProjects.length !== 1 ? "s" : ""}`
+                            : `${filteredPending.length} de ${pendingProjects.length} projetos pendentes`}
+                        </p>
+                      }
+                    >
+                      <div className="flex flex-col flex-1 min-h-0 overflow-hidden w-full">
+                        {/* Panel header — gradiente da sidebar */}
+                        <div
+                          className="shrink-0 px-6 pt-6 pb-4"
+                          style={{
+                            background:
+                              "linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)",
                           }}
-                          className="h-3.5 w-3.5"
+                        >
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="h-10 w-10 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center shrink-0">
+                                <AlertTriangle className="h-5 w-5 text-amber-300" />
+                              </div>
+                              <div>
+                                <h2 className="text-base font-bold text-white">
+                                  Projetos pendentes
+                                </h2>
+                                <p className="text-xs text-white/55 mt-0.5">
+                                  {pendingProjects.length === 1
+                                    ? "1 projeto precisa"
+                                    : `${pendingProjects.length} projetos precisam`}{" "}
+                                  de ação
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setShowPendingModal(false);
+                                setPendingPanelSearch("");
+                              }}
+                              className="h-8 w-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors shrink-0 mt-0.5"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                          <p className="text-xs text-white/40 mb-4 leading-relaxed">
+                            Projetos em rascunho, aguardando pagamento ou
+                            aprovação precisam de ação para avançar.
+                          </p>
+                          {/* Search */}
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/35 pointer-events-none" />
+                            <input
+                              type="text"
+                              placeholder="Buscar por nome ou cliente..."
+                              value={pendingPanelSearch}
+                              onChange={(e) =>
+                                setPendingPanelSearch(e.target.value)
+                              }
+                              className="w-full h-9 pl-9 pr-3 bg-white/10 border border-white/15 rounded-lg text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-white/35 focus:bg-white/15 transition-colors"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Panel body — branco */}
+                        <div className="flex-1 overflow-y-auto bg-white">
+                          {filteredPending.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+                              <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                                <Search className="h-5 w-5 text-slate-400" />
+                              </div>
+                              <p className="text-sm font-medium text-slate-600">
+                                Nenhum resultado
+                              </p>
+                              <p className="text-xs text-slate-400 mt-1">
+                                Tente um nome ou cliente diferente
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="p-4 flex flex-col gap-2">
+                              {filteredPending.map((project) => (
+                                <div
+                                  key={project.id}
+                                  className="flex items-center gap-3 bg-white rounded-xl border border-slate-100 shadow-sm px-4 py-3 hover:border-slate-200 hover:shadow-md transition-all"
+                                >
+                                  <div
+                                    className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0 text-white text-sm font-bold shadow-sm"
+                                    style={{
+                                      background: avatarGradient(
+                                        project.status,
+                                      ),
+                                    }}
+                                  >
+                                    {(project.name ?? "P")[0].toUpperCase()}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold text-slate-800 truncate">
+                                      {project.name}
+                                    </p>
+                                    <p className="text-xs text-slate-500 truncate">
+                                      {project.client}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span
+                                      className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border hidden sm:inline-flex ${statusBadge(project.status)}`}
+                                    >
+                                      {statusLabel(project.status)}
+                                    </span>
+                                    {project.status === "draft" ? (
+                                      <Button
+                                        size="sm"
+                                        className="h-8 px-3 text-xs bg-violet-600 hover:bg-violet-700 text-white"
+                                        onClick={() => {
+                                          setShowPendingModal(false);
+                                          setPendingPanelSearch("");
+                                          handleContinueDraft(project);
+                                        }}
+                                      >
+                                        Continuar{" "}
+                                        <ArrowRight className="h-3 w-3 ml-1" />
+                                      </Button>
+                                    ) : project.status ===
+                                      "pending-approval" ? (
+                                      <Button
+                                        size="sm"
+                                        className="h-8 px-3 text-xs bg-amber-500 hover:bg-amber-600 text-white"
+                                        onClick={() => {
+                                          setShowPendingModal(false);
+                                          setPendingPanelSearch("");
+                                          handleGoToPayment(project);
+                                        }}
+                                      >
+                                        Aprovar{" "}
+                                        <ArrowRight className="h-3 w-3 ml-1" />
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        className="h-8 px-3 text-xs bg-cyan-600 hover:bg-cyan-700 text-white"
+                                        onClick={() => {
+                                          setShowPendingModal(false);
+                                          setPendingPanelSearch("");
+                                          handleGoToPayment(project);
+                                        }}
+                                      >
+                                        Pagar Agora{" "}
+                                        <CreditCard className="h-3 w-3 ml-1" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </EmbeddedSlideScreen>
+                  </>
+                );
+              })()}
+
+              {/* ── View toggle ── */}
+              {viewMode === "accordion" ? (
+                <>
+                  <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+                    {/* Row 1 — view mode tabs + search + icon toolbar buttons */}
+                    <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+                      <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
+                        <Button
+                          size="sm"
+                          variant={
+                            (viewMode as string) === "accordion"
+                              ? "default"
+                              : "ghost"
+                          }
+                          onClick={() => setViewMode("accordion")}
+                          className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                            (viewMode as string) === "accordion"
+                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              : "hover:bg-background"
+                          }`}
+                        >
+                          <List className="h-3 w-3 mr-1" />
+                          Lista
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={
+                            (viewMode as string) === "kanban"
+                              ? "default"
+                              : "ghost"
+                          }
+                          onClick={() => setViewMode("kanban")}
+                          className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                            (viewMode as string) === "kanban"
+                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              : "hover:bg-background"
+                          }`}
+                        >
+                          <LayoutGrid className="h-3 w-3 mr-1" />
+                          Kanban
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={
+                            (viewMode as string) === "planner"
+                              ? "default"
+                              : "ghost"
+                          }
+                          onClick={() => setViewMode("planner")}
+                          className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                            (viewMode as string) === "planner"
+                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              : "hover:bg-background"
+                          }`}
+                        >
+                          <LayoutDashboard className="h-3 w-3 mr-1" />
+                          Planejador
+                        </Button>
+                      </div>
+
+                      <div className="relative flex-1 min-w-[220px] max-w-sm">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Buscar projeto, cliente..."
+                          value={searchTerm}
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setCurrentPage(1);
+                          }}
+                          className="pl-8 h-9 text-sm w-full"
                         />
-                        {COL_LABELS[col]}
-                      </label>
-                    ))}
-                  </div>
-                </StandardModalDialog>
-              </div>
+                      </div>
 
-              {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
-              <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
-                <div className="flex items-center gap-3">
-                  <ItemsPerPageSelect
-                    value={itemsPerPage.toString()}
-                    onValueChange={(v) => {
-                      setItemsPerPage(Number(v));
-                      setCurrentPage(1);
-                    }}
-                    variant="top"
-                  />
-                  <CountText side="bottom" />
-                </div>
+                      <div className="ml-auto flex items-center gap-2">
+                        <IconToolbarButton
+                          icon={Filter}
+                          tooltip={
+                            activeFilterCount > 0
+                              ? `Filtros (${activeFilterCount} ativos)`
+                              : "Filtros"
+                          }
+                          onClick={() => setIsFilterModalOpen(true)}
+                        />
+                        <IconToolbarButton
+                          icon={Settings2}
+                          tooltip="Configurar colunas"
+                          onClick={() => setColConfigOpen(true)}
+                        />
+                      </div>
+                      <StandardModalDialog
+                        open={colConfigOpen}
+                        onClose={() => setColConfigOpen(false)}
+                        title="Configurar colunas"
+                        subtitle="Escolha quais colunas aparecem na tabela"
+                      >
+                        <div className="p-5 flex-1 overflow-y-auto space-y-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                              Colunas visíveis
+                            </p>
+                            <button
+                              onClick={() => setVisibleCols(ALL_COLS)}
+                              className="text-[10px] text-blue-600 hover:underline"
+                            >
+                              Mostrar todas
+                            </button>
+                          </div>
+                          {ALL_COLS.map((col) => (
+                            <label
+                              key={col}
+                              className="flex items-center gap-2 text-sm cursor-pointer py-1"
+                            >
+                              <Checkbox
+                                checked={visibleCols.includes(col)}
+                                onCheckedChange={(checked) => {
+                                  setVisibleCols((prev) =>
+                                    checked
+                                      ? [...prev, col]
+                                      : prev.filter((c) => c !== col),
+                                  );
+                                }}
+                                className="h-3.5 w-3.5"
+                              />
+                              {COL_LABELS[col]}
+                            </label>
+                          ))}
+                        </div>
+                      </StandardModalDialog>
+                    </div>
 
-                {hasHorizontalOverflow && (
-                  <div
-                    ref={topScrollRef}
-                    onScroll={handleTopBarScroll}
-                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-                    style={{ height: 12 }}
-                  >
-                    <div style={{ minWidth: 1400, height: 1 }} />
-                  </div>
-                )}
+                    {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+                      <div className="flex items-center gap-3">
+                        <ItemsPerPageSelect
+                          value={itemsPerPage.toString()}
+                          onValueChange={(v) => {
+                            setItemsPerPage(Number(v));
+                            setCurrentPage(1);
+                          }}
+                          variant="top"
+                        />
+                        <CountText side="bottom" />
+                      </div>
 
-                {totalPages > 1 && <PaginationControls />}
-              </div>
+                      {hasHorizontalOverflow && (
+                        <div
+                          ref={topScrollRef}
+                          onScroll={handleTopBarScroll}
+                          title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                          className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                          style={{ height: 12 }}
+                        >
+                          <div style={{ minWidth: 1400, height: 1 }} />
+                        </div>
+                      )}
 
-              {/* ── Table ── */}
-              <div
-                ref={tableScrollRef}
-                onScroll={handleTableScroll}
-                className="overflow-x-auto allka-table-scroll-body"
-              >
-                <table
-                  className="tabela-cartao w-full text-xs"
-                  style={{
-                    tableLayout: "fixed",
-                    minWidth: visibleCols.reduce(
-                      (acc, col) => acc + (colWidths[col] ?? 120),
-                      80,
-                    ),
-                  }}
-                >
-                  <colgroup>
-                    {/* actions col — pinned left */}
-                    <col style={{ width: 99 }} />
-                    {visibleCols.map((col) => (
-                      <col
-                        key={col}
+                      {totalPages > 1 && <PaginationControls />}
+                    </div>
+
+                    {/* ── Table ── */}
+                    <div
+                      ref={tableScrollRef}
+                      onScroll={handleTableScroll}
+                      className="overflow-x-auto allka-table-scroll-body"
+                    >
+                      <table
+                        className="tabela-cartao w-full text-xs"
                         style={{
-                          width:
-                            colWidths[col] ?? DEFAULT_COL_WIDTHS[col] ?? 120,
-                        }}
-                      />
-                    ))}
-                  </colgroup>
-                  <thead>
-                    <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
-                      <th
-                        className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
-                        style={{
-                          position: "sticky",
-                          left: 0,
-                          top: 0,
-                          zIndex: 3,
-                          minWidth: 99,
-                          background: "var(--table-head)",
-                          boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
-                          borderRight: "1px solid rgba(100,116,139,0.18)",
+                          tableLayout: "fixed",
+                          minWidth: visibleCols.reduce(
+                            (acc, col) => acc + (colWidths[col] ?? 120),
+                            80,
+                          ),
                         }}
                       >
-                        Ações
-                      </th>
-                      {visibleCols.map((col) => {
-                        const headerConfig = SORTABLE_COLUMN_CONFIG[col];
-
-                        return (
-                          <th
-                            key={col}
-                            className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
-                            style={{
-                              paddingLeft: 20,
-                              paddingRight: 20,
-                              textAlign: "left",
-                              borderRight: "1px solid rgba(148,163,184,0.25)",
-                              position: "sticky",
-                              top: 0,
-                              zIndex: 2,
-                              background: "var(--table-head)",
-                              boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
-                            }}
-                          >
-                            <div className="inline-flex items-center gap-1">
-                              {headerConfig ? (
-                                <SortableHeader
-                                  label={COL_LABELS[col]}
-                                  field={String(headerConfig.field)}
-                                  type={headerConfig.type}
-                                  sortKey={sortKey ? String(sortKey) : null}
-                                  sortDir={sortDir}
-                                  onSort={handleSort}
-                                  columnFilters={headerConfig.filterValues ? columnFilters : undefined}
-                                  onFilter={headerConfig.filterValues ? toggleColumnFilter : undefined}
-                                  onClearFilter={headerConfig.filterValues ? clearColumnFilter : undefined}
-                                  filterValues={headerConfig.filterValues}
-                                />
-                              ) : (
-                                COL_LABELS[col]
-                              )}
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs max-w-[200px]">{COL_INFO[col]}</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                            <span
-                              className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
-                              style={{ transform: "translateX(50%)" }}
-                              onMouseDown={(e) => onResizeMouseDown(col, e)}
-                            >
-                              <span className="h-4 w-px bg-slate-300 group-hover:bg-blue-400 transition-colors" />
-                            </span>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedProjects.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={visibleCols.length + 1}
-                          className="py-12 text-center text-slate-400"
-                        >
-                          <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                          <p className="text-sm font-medium">
-                            Nenhum projeto encontrado
-                          </p>
-                          {activeFilterCount > 0 && (
-                            <button
-                              onClick={clearAllFilters}
-                              className="mt-2 text-xs text-blue-600 hover:underline"
-                            >
-                              Limpar filtros
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ) : (
-                      paginatedProjects.map((project, rowIdx) => (
-                        <TooltipProvider key={project.id} delayDuration={300}>
-                          <tr
-                            className={`group transition-colors cursor-pointer ${
-                              rowIdx % 2 === 0
-                                ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                                : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                            }`}
-                            onClick={() => handleViewProject(project)}
-                          >
-                            {/* Actions — pinned left, matching admin/empresas */}
-                            <td
-                              className={`px-2 py-2 transition-colors ${
-                                rowIdx % 2 === 0
-                                  ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                                  : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                              }`}
+                        <colgroup>
+                          {/* actions col — pinned left */}
+                          <col style={{ width: 99 }} />
+                          {visibleCols.map((col) => (
+                            <col
+                              key={col}
+                              style={{
+                                width:
+                                  colWidths[col] ??
+                                  DEFAULT_COL_WIDTHS[col] ??
+                                  120,
+                              }}
+                            />
+                          ))}
+                        </colgroup>
+                        <thead>
+                          <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                            <th
+                              className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
                               style={{
                                 position: "sticky",
                                 left: 0,
-                                zIndex: 1,
+                                top: 0,
+                                zIndex: 3,
                                 minWidth: 99,
+                                background: "var(--table-head)",
+                                boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                                 borderRight: "1px solid rgba(100,116,139,0.18)",
                               }}
-                              onClick={(e) => e.stopPropagation()}
                             >
-                              <div className="flex items-center justify-center gap-1">
-                                {project.isArchived ? (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                          handleViewProject(project)
+                              Ações
+                            </th>
+                            {visibleCols.map((col) => {
+                              const headerConfig = SORTABLE_COLUMN_CONFIG[col];
+
+                              return (
+                                <th
+                                  key={col}
+                                  className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
+                                  style={{
+                                    paddingLeft: 20,
+                                    paddingRight: 20,
+                                    textAlign: "left",
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.25)",
+                                    position: "sticky",
+                                    top: 0,
+                                    zIndex: 2,
+                                    background: "var(--table-head)",
+                                    boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
+                                  }}
+                                >
+                                  <div className="inline-flex items-center gap-1">
+                                    {headerConfig ? (
+                                      <SortableHeader
+                                        label={COL_LABELS[col]}
+                                        field={String(headerConfig.field)}
+                                        type={headerConfig.type}
+                                        sortKey={
+                                          sortKey ? String(sortKey) : null
                                         }
-                                        className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                      >
-                                        <Eye className="h-3.5 w-3.5" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="text-xs">
-                                      Visualizar (arquivado)
-                                    </TooltipContent>
-                                  </Tooltip>
-                                ) : project.status === "draft" ? (
-                                  <>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleContinueDraft(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <ArrowRight className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Continuar rascunho
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleStartCancelProject(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Descartar
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </>
-                                ) : project.status === "awaiting-payment" ? (
-                                  <>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleGoToPayment(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <CreditCard className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Ir para Pagamento
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleViewProject(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Eye className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Visualizar
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleEditProject(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Pencil className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Editar projeto
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleStartCancelProject(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Cancelar
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleStartArchiveProject(project)
-                                          }
-                                          aria-label={`Arquivar projeto — ${project.name}`}
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-slate-700 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Archive className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Arquivar projeto
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleViewProject(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Eye className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Visualizar
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleEditProject(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Pencil className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Editar projeto
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleCloneProject(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-emerald-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Copy className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Duplicar
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleStartCancelProject(project)
-                                          }
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Cancelar
-                                      </TooltipContent>
-                                    </Tooltip>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          onClick={() =>
-                                            handleStartArchiveProject(project)
-                                          }
-                                          aria-label={`Arquivar projeto — ${project.name}`}
-                                          className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-slate-700 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                        >
-                                          <Archive className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs">
-                                        Arquivar projeto
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-
-                            {/* ID */}
-                            {visibleCols.includes("id") && (
-                              <td data-rotulo="#"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="font-mono text-[11px] text-slate-400 tracking-wide">
-                                    proj_{project.seq ?? "?"}
-                                  </span>
-                                  <LegacyIdBadge
-                                    legacyId={(project as any).legacy_id}
-                                    entidade="projeto"
-                                  />
-                                </div>
-                              </td>
-                            )}
-
-                            {/* Projeto */}
-                            {visibleCols.includes("name") && (
-                              <td data-rotulo="Projeto"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
-                                    style={{
-                                      background:
-                                        "linear-gradient(135deg, #3b82f6, #6366f1)",
-                                    }}
-                                  >
-                                    {project.name
-                                      .trim()
-                                      .split(" ")
-                                      .slice(0, 2)
-                                      .map((w) => w[0])
-                                      .join("")
-                                      .toUpperCase()}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <p className="font-semibold text-sm text-slate-900 truncate">
-                                        {project.name}
-                                      </p>
-                                      {project.hasOwner === false && (
-                                        <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
-                                          Sem responsável
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-slate-400 truncate">
-                                      {project.consultant || project.agency || "—"}
-                                    </p>
-                                  </div>
-                                </div>
-                              </td>
-                            )}
-
-                            {/* Cliente */}
-                            {visibleCols.includes("client") && (
-                              <td data-rotulo="Cliente"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
-                                  <span className="text-xs text-blue-600 font-medium truncate">
-                                    {project.client}
-                                  </span>
-                                </div>
-                              </td>
-                            )}
-
-                            {/* Conta responsável */}
-                            {visibleCols.includes("owner") && (
-                              <td data-rotulo="Conta responsável"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <div className="flex flex-col gap-0.5 min-w-0">
-                                    <span className="text-xs text-slate-700 font-medium truncate">
-                                      {project.ownerName || "—"}
-                                    </span>
-                                    {project.ownerType && (
-                                      <span
-                                        className={`inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none uppercase tracking-wide ${
-                                          project.ownerType === "agency"
-                                            ? "bg-orange-100 text-orange-700"
-                                            : project.ownerType === "partner"
-                                              ? "bg-purple-100 text-purple-700"
-                                              : "bg-blue-100 text-blue-700"
-                                        }`}
-                                      >
-                                        {project.ownerType === "agency"
-                                          ? "Agency"
-                                          : project.ownerType === "partner"
-                                            ? "Partner"
-                                            : "Company"}
-                                      </span>
+                                        sortDir={sortDir}
+                                        onSort={handleSort}
+                                        columnFilters={
+                                          headerConfig.filterValues
+                                            ? columnFilters
+                                            : undefined
+                                        }
+                                        onFilter={
+                                          headerConfig.filterValues
+                                            ? toggleColumnFilter
+                                            : undefined
+                                        }
+                                        onClearFilter={
+                                          headerConfig.filterValues
+                                            ? clearColumnFilter
+                                            : undefined
+                                        }
+                                        filterValues={headerConfig.filterValues}
+                                      />
+                                    ) : (
+                                      COL_LABELS[col]
                                     )}
-                                    {!project.ownerType && (
-                                      <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-100 text-amber-700">
-                                        Sem dono
-                                      </span>
-                                    )}
-                                  </div>
-                                  {scope === "admin" && (
-                                    <TooltipProvider delayDuration={400}>
+                                    <TooltipProvider>
                                       <Tooltip>
                                         <TooltipTrigger asChild>
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              openLinkPanel(project);
-                                            }}
-                                            className="shrink-0 h-5 w-5 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] transition-all"
-                                          >
-                                            <Link2 className="h-3 w-3" />
-                                          </button>
+                                          <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">
+                                            ⓘ
+                                          </span>
                                         </TooltipTrigger>
-                                        <TooltipContent side="top" className="text-xs">Alterar vínculo</TooltipContent>
+                                        <TooltipContent className="text-xs max-w-[200px]">
+                                          {COL_INFO[col]}
+                                        </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
-                                  )}
-                                </div>
-                              </td>
-                            )}
-
-                            {/* Empresa (agency/company/nomad) */}
-                            {visibleCols.includes("agency") && (
-                              <td data-rotulo="Empresa"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <Briefcase className="h-3 w-3 text-slate-400 shrink-0" />
-                                  <div className="flex flex-col min-w-0">
-                                    <span className="text-xs text-slate-600 truncate">
-                                      {project.agency}
-                                    </span>
-                                    {project.companyType && (
-                                      <span
-                                        className={`mt-0.5 inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[10px] font-medium leading-none ${
-                                          project.companyType === "agency"
-                                            ? "bg-orange-100 text-orange-700"
-                                            : project.companyType === "nomad"
-                                              ? "bg-teal-100 text-teal-700"
-                                              : "bg-blue-100 text-blue-700"
-                                        }`}
-                                      >
-                                        {project.companyType === "agency"
-                                          ? "Agency"
-                                          : project.companyType === "nomad"
-                                            ? "Nomad"
-                                            : "Company"}
-                                      </span>
-                                    )}
                                   </div>
-                                </div>
-                              </td>
-                            )}
-
-                            {/* Tipo */}
-                            {visibleCols.includes("type") && (
-                              <td data-rotulo="Tipo"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-slate-50 text-slate-700 border-slate-200 whitespace-nowrap">
-                                  {project.type}
-                                </span>
-                              </td>
-                            )}
-
-                            {/* Status */}
-                            {visibleCols.includes("status") && (
-                              <td data-rotulo="Status"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div className="flex flex-col items-start gap-1">
-                                  {getStatusBadge(project.status)}
-                                  {project.isArchived && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-600 border border-slate-300 whitespace-nowrap cursor-help">
-                                          <Archive className="h-2.5 w-2.5" />
-                                          Arquivado
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent className="text-xs max-w-[260px]">
-                                        <p>
-                                          <strong>Motivo:</strong>{" "}
-                                          {project.archiveReason || "—"}
-                                        </p>
-                                        <p>
-                                          <strong>Em:</strong>{" "}
-                                          {project.archivedAtDate || "—"}
-                                        </p>
-                                        <p>
-                                          <strong>Por:</strong>{" "}
-                                          {project.archivedByName || "—"}
-                                        </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  )}
-                                </div>
-                              </td>
-                            )}
-
-                            {/* Progresso */}
-                            {visibleCols.includes("progress") && (
-                              <td data-rotulo="Progresso"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className="flex-1 h-1.5 rounded-full bg-slate-200 min-w-[40px]">
-                                    <div
-                                      className="h-1.5 rounded-full bg-blue-500"
-                                      style={{ width: `${project.progress}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-[10px] font-bold text-slate-500 shrink-0 w-7 text-right">
-                                    {project.progress}%
+                                  <span
+                                    className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
+                                    style={{ transform: "translateX(50%)" }}
+                                    onMouseDown={(e) =>
+                                      onResizeMouseDown(col, e)
+                                    }
+                                  >
+                                    <span className="h-4 w-px bg-slate-300 group-hover:bg-blue-400 transition-colors" />
                                   </span>
-                                </div>
-                              </td>
-                            )}
-
-                            {/* Orçamento */}
-                            {visibleCols.includes("budget") && (
-                              <td data-rotulo="Orçamento"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <DollarSign className="h-3 w-3 text-slate-400 shrink-0" />
-                                  <span className="text-xs font-semibold text-slate-900">
-                                    R$ {project.budget.toLocaleString("pt-BR")}
-                                  </span>
-                                </div>
-                              </td>
-                            )}
-
-                            {/* Equipe */}
-                            {visibleCols.includes("team") && (
-                              <td data-rotulo="Equipe"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <Users className="h-3 w-3 text-slate-400 shrink-0" />
-                                  <span className="text-xs text-slate-600">
-                                    {project.team}
-                                  </span>
-                                </div>
-                              </td>
-                            )}
-
-                            {/* Criação */}
-                            {visibleCols.includes("created") && (
-                              <td data-rotulo="Criação"
-                                className="px-5 py-3.5"
-                                style={{
-                                  borderRight:
-                                    "1px solid rgba(148,163,184,0.15)",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div className="flex items-center gap-1.5 cursor-default">
-                                      <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
-                                      <span className="text-xs text-slate-500">
-                                        {project.createdDate}
-                                      </span>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs max-w-[240px]">
-                                    {(() => {
-                                      try {
-                                        const d = new Date(
-                                          project.createdAt || "",
-                                        );
-                                        return `Criado em ${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
-                                      } catch {
-                                        return project.createdDate || "–";
-                                      }
-                                    })()}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </td>
-                            )}
-
+                                </th>
+                              );
+                            })}
                           </tr>
-                        </TooltipProvider>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                        </thead>
+                        <tbody>
+                          {paginatedProjects.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={visibleCols.length + 1}
+                                className="py-12 text-center text-slate-400"
+                              >
+                                <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                                <p className="text-sm font-medium">
+                                  Nenhum projeto encontrado
+                                </p>
+                                {activeFilterCount > 0 && (
+                                  <button
+                                    onClick={clearAllFilters}
+                                    className="mt-2 text-xs text-blue-600 hover:underline"
+                                  >
+                                    Limpar filtros
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ) : (
+                            paginatedProjects.map((project, rowIdx) => (
+                              <TooltipProvider
+                                key={project.id}
+                                delayDuration={300}
+                              >
+                                <tr
+                                  className={`group transition-colors cursor-pointer ${
+                                    rowIdx % 2 === 0
+                                      ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                      : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                  }`}
+                                  onClick={() => handleViewProject(project)}
+                                >
+                                  {/* Actions — pinned left, matching admin/empresas */}
+                                  <td
+                                    className={`px-2 py-2 transition-colors ${
+                                      rowIdx % 2 === 0
+                                        ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                        : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                    }`}
+                                    style={{
+                                      position: "sticky",
+                                      left: 0,
+                                      zIndex: 1,
+                                      minWidth: 99,
+                                      borderRight:
+                                        "1px solid rgba(100,116,139,0.18)",
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="flex items-center justify-center gap-1">
+                                      {project.isArchived ? (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() =>
+                                                handleViewProject(project)
+                                              }
+                                              className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                            >
+                                              <Eye className="h-3.5 w-3.5" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="text-xs">
+                                            Visualizar (arquivado)
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      ) : project.status === "draft" ? (
+                                        <>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleContinueDraft(project)
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <ArrowRight className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Continuar rascunho
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleStartCancelProject(
+                                                    project,
+                                                  )
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Descartar
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </>
+                                      ) : project.status ===
+                                        "awaiting-payment" ? (
+                                        <>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleGoToPayment(project)
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <CreditCard className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Ir para Pagamento
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleViewProject(project)
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Eye className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Visualizar
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleEditProject(project)
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Editar projeto
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleStartCancelProject(
+                                                    project,
+                                                  )
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Cancelar
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleStartArchiveProject(
+                                                    project,
+                                                  )
+                                                }
+                                                aria-label={`Arquivar projeto — ${project.name}`}
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-slate-700 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Archive className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Arquivar projeto
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleViewProject(project)
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Eye className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Visualizar
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleEditProject(project)
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Pencil className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Editar projeto
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleCloneProject(project)
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-emerald-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Copy className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Duplicar
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleStartCancelProject(
+                                                    project,
+                                                  )
+                                                }
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Trash2 className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Cancelar
+                                            </TooltipContent>
+                                          </Tooltip>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                  handleStartArchiveProject(
+                                                    project,
+                                                  )
+                                                }
+                                                aria-label={`Arquivar projeto — ${project.name}`}
+                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-slate-700 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                              >
+                                                <Archive className="h-3.5 w-3.5" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs">
+                                              Arquivar projeto
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </>
+                                      )}
+                                    </div>
+                                  </td>
 
-              {/* Row 3 — bottom mirror of row 2 */}
-              {filteredProjects.length > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
-                  <div className="flex items-center gap-3">
-                    <ItemsPerPageSelect
-                      value={itemsPerPage.toString()}
-                      onValueChange={(v) => {
-                        setItemsPerPage(Number(v));
-                        setCurrentPage(1);
-                      }}
-                      variant="bottom"
-                    />
-                    <CountText side="top" />
-                  </div>
+                                  {/* ID */}
+                                  {visibleCols.includes("id") && (
+                                    <td
+                                      data-rotulo="#"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="font-mono text-[11px] text-slate-400 tracking-wide">
+                                          proj_{project.seq ?? "?"}
+                                        </span>
+                                        <LegacyIdBadge
+                                          legacyId={(project as any).legacy_id}
+                                          entidade="projeto"
+                                        />
+                                      </div>
+                                    </td>
+                                  )}
 
-                  {hasHorizontalOverflow && (
-                    <div
-                      ref={bottomScrollRef}
-                      onScroll={handleBottomBarScroll}
-                      title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                      className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-                      style={{ height: 12 }}
-                    >
-                      <div style={{ minWidth: 1400, height: 1 }} />
+                                  {/* Projeto */}
+                                  {visibleCols.includes("name") && (
+                                    <td
+                                      data-rotulo="Projeto"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div
+                                          className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
+                                          style={{
+                                            background:
+                                              "linear-gradient(135deg, #3b82f6, #6366f1)",
+                                          }}
+                                        >
+                                          {project.name
+                                            .trim()
+                                            .split(" ")
+                                            .slice(0, 2)
+                                            .map((w) => w[0])
+                                            .join("")
+                                            .toUpperCase()}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-1.5">
+                                            <p className="font-semibold text-sm text-slate-900 truncate">
+                                              {project.name}
+                                            </p>
+                                            {project.hasOwner === false && (
+                                              <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                                                Sem responsável
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p className="text-xs text-slate-400 truncate">
+                                            {project.consultant ||
+                                              project.agency ||
+                                              "—"}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    </td>
+                                  )}
+
+                                  {/* Cliente */}
+                                  {visibleCols.includes("client") && (
+                                    <td
+                                      data-rotulo="Cliente"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        <Building2 className="h-3 w-3 text-slate-400 shrink-0" />
+                                        <span className="text-xs text-blue-600 font-medium truncate">
+                                          {project.client}
+                                        </span>
+                                      </div>
+                                    </td>
+                                  )}
+
+                                  {/* Conta responsável */}
+                                  {visibleCols.includes("owner") && (
+                                    <td
+                                      data-rotulo="Conta responsável"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="flex flex-col gap-0.5 min-w-0">
+                                          <span className="text-xs text-slate-700 font-medium truncate">
+                                            {project.ownerName || "—"}
+                                          </span>
+                                          {project.ownerType && (
+                                            <span
+                                              className={`inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none uppercase tracking-wide ${
+                                                project.ownerType === "agency"
+                                                  ? "bg-orange-100 text-orange-700"
+                                                  : project.ownerType ===
+                                                      "partner"
+                                                    ? "bg-purple-100 text-purple-700"
+                                                    : "bg-blue-100 text-blue-700"
+                                              }`}
+                                            >
+                                              {project.ownerType === "agency"
+                                                ? "Agency"
+                                                : project.ownerType ===
+                                                    "partner"
+                                                  ? "Partner"
+                                                  : "Company"}
+                                            </span>
+                                          )}
+                                          {!project.ownerType && (
+                                            <span className="inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[9px] font-bold leading-none bg-amber-100 text-amber-700">
+                                              Sem dono
+                                            </span>
+                                          )}
+                                        </div>
+                                        {scope === "admin" && (
+                                          <TooltipProvider delayDuration={400}>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openLinkPanel(project);
+                                                  }}
+                                                  className="shrink-0 h-5 w-5 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] transition-all"
+                                                >
+                                                  <Link2 className="h-3 w-3" />
+                                                </button>
+                                              </TooltipTrigger>
+                                              <TooltipContent
+                                                side="top"
+                                                className="text-xs"
+                                              >
+                                                Alterar vínculo
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        )}
+                                      </div>
+                                    </td>
+                                  )}
+
+                                  {/* Empresa (agency/company/nomad) */}
+                                  {visibleCols.includes("agency") && (
+                                    <td
+                                      data-rotulo="Empresa"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        <Briefcase className="h-3 w-3 text-slate-400 shrink-0" />
+                                        <div className="flex flex-col min-w-0">
+                                          <span className="text-xs text-slate-600 truncate">
+                                            {project.agency}
+                                          </span>
+                                          {project.companyType && (
+                                            <span
+                                              className={`mt-0.5 inline-flex w-fit items-center px-1.5 py-0.5 rounded text-[10px] font-medium leading-none ${
+                                                project.companyType === "agency"
+                                                  ? "bg-orange-100 text-orange-700"
+                                                  : project.companyType ===
+                                                      "nomad"
+                                                    ? "bg-teal-100 text-teal-700"
+                                                    : "bg-blue-100 text-blue-700"
+                                              }`}
+                                            >
+                                              {project.companyType === "agency"
+                                                ? "Agency"
+                                                : project.companyType ===
+                                                    "nomad"
+                                                  ? "Nomad"
+                                                  : "Company"}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </td>
+                                  )}
+
+                                  {/* Tipo */}
+                                  {visibleCols.includes("type") && (
+                                    <td
+                                      data-rotulo="Tipo"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border bg-slate-50 text-slate-700 border-slate-200 whitespace-nowrap">
+                                        {project.type}
+                                      </span>
+                                    </td>
+                                  )}
+
+                                  {/* Status */}
+                                  {visibleCols.includes("status") && (
+                                    <td
+                                      data-rotulo="Status"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <div className="flex flex-col items-start gap-1">
+                                        {getStatusBadge(project.status)}
+                                        {project.isArchived && (
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-200 text-slate-600 border border-slate-300 whitespace-nowrap cursor-help">
+                                                <Archive className="h-2.5 w-2.5" />
+                                                Arquivado
+                                              </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent className="text-xs max-w-[260px]">
+                                              <p>
+                                                <strong>Motivo:</strong>{" "}
+                                                {project.archiveReason || "—"}
+                                              </p>
+                                              <p>
+                                                <strong>Em:</strong>{" "}
+                                                {project.archivedAtDate || "—"}
+                                              </p>
+                                              <p>
+                                                <strong>Por:</strong>{" "}
+                                                {project.archivedByName || "—"}
+                                              </p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        )}
+                                      </div>
+                                    </td>
+                                  )}
+
+                                  {/* Progresso */}
+                                  {visibleCols.includes("progress") && (
+                                    <td
+                                      data-rotulo="Progresso"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <div className="flex-1 h-1.5 rounded-full bg-slate-200 min-w-[40px]">
+                                          <div
+                                            className="h-1.5 rounded-full bg-blue-500"
+                                            style={{
+                                              width: `${project.progress}%`,
+                                            }}
+                                          />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-slate-500 shrink-0 w-7 text-right">
+                                          {project.progress}%
+                                        </span>
+                                      </div>
+                                    </td>
+                                  )}
+
+                                  {/* Orçamento */}
+                                  {visibleCols.includes("budget") && (
+                                    <td
+                                      data-rotulo="Orçamento"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        <DollarSign className="h-3 w-3 text-slate-400 shrink-0" />
+                                        <span className="text-xs font-semibold text-slate-900">
+                                          R${" "}
+                                          {project.budget.toLocaleString(
+                                            "pt-BR",
+                                          )}
+                                        </span>
+                                      </div>
+                                    </td>
+                                  )}
+
+                                  {/* Equipe */}
+                                  {visibleCols.includes("team") && (
+                                    <td
+                                      data-rotulo="Equipe"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        <Users className="h-3 w-3 text-slate-400 shrink-0" />
+                                        <span className="text-xs text-slate-600">
+                                          {project.team}
+                                        </span>
+                                      </div>
+                                    </td>
+                                  )}
+
+                                  {/* Criação */}
+                                  {visibleCols.includes("created") && (
+                                    <td
+                                      data-rotulo="Criação"
+                                      className="px-5 py-3.5"
+                                      style={{
+                                        borderRight:
+                                          "1px solid rgba(148,163,184,0.15)",
+                                        overflow: "hidden",
+                                      }}
+                                    >
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <div className="flex items-center gap-1.5 cursor-default">
+                                            <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                                            <span className="text-xs text-slate-500">
+                                              {project.createdDate}
+                                            </span>
+                                          </div>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs max-w-[240px]">
+                                          {(() => {
+                                            try {
+                                              const d = new Date(
+                                                project.createdAt || "",
+                                              );
+                                              return `Criado em ${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+                                            } catch {
+                                              return project.createdDate || "–";
+                                            }
+                                          })()}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </td>
+                                  )}
+                                </tr>
+                              </TooltipProvider>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
                     </div>
-                  )}
 
-                  {totalPages > 1 && <PaginationControls />}
-                </div>
-              )}
-            </div>
+                    {/* Row 3 — bottom mirror of row 2 */}
+                    {filteredProjects.length > 0 && (
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+                        <div className="flex items-center gap-3">
+                          <ItemsPerPageSelect
+                            value={itemsPerPage.toString()}
+                            onValueChange={(v) => {
+                              setItemsPerPage(Number(v));
+                              setCurrentPage(1);
+                            }}
+                            variant="bottom"
+                          />
+                          <CountText side="top" />
+                        </div>
 
-            {/* ── Advanced Filters Modal ── */}
-            <StandardModalDialog
-              open={isFilterModalOpen}
-              onClose={() => setIsFilterModalOpen(false)}
-              title="Filtros Avançados"
-              subtitle="Configure os filtros para refinar os resultados"
-              footer={
-                <div className="flex items-center justify-between gap-2 w-full">
-                  <button
-                    onClick={clearAllFilters}
-                    className="text-xs text-slate-500 hover:text-slate-700 hover:underline"
-                  >
-                    Limpar filtros
-                  </button>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 text-xs"
-                      onClick={() => setIsFilterModalOpen(false)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="h-8 text-xs btn-brand"
-                      onClick={() => {
-                        setCurrentPage(1);
-                        setIsFilterModalOpen(false);
-                      }}
-                    >
-                      Aplicar Filtros
-                    </Button>
-                  </div>
-                </div>
-              }
-            >
-                  {/* Modal body */}
-                  <div className="flex flex-1 min-h-0">
-                    {/* Left: Saved filters */}
-                    <div className="w-44 flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50">
-                      <div className="px-3 py-2.5 border-b border-slate-100">
-                        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                          Filtros Salvos
-                        </p>
-                      </div>
-                      <div className="flex-1 overflow-y-auto py-1">
-                        {savedFilters.length === 0 ? (
-                          <p className="text-[11px] text-slate-400 text-center py-4 px-2">
-                            Nenhum filtro salvo
-                          </p>
-                        ) : (
-                          savedFilters.map((sf, idx) => (
-                            <div
-                              key={sf.id}
-                              draggable
-                              onDragStart={() => setFilterDragIdx(idx)}
-                              onDragOver={(e) => {
-                                e.preventDefault();
-                                setFilterDragOverIdx(idx);
-                              }}
-                              onDrop={() => {
-                                if (
-                                  filterDragIdx === null ||
-                                  filterDragIdx === idx
-                                )
-                                  return;
-                                const arr = [...savedFilters];
-                                const [item] = arr.splice(filterDragIdx, 1);
-                                arr.splice(idx, 0, item);
-                                setSavedFilters(arr);
-                                setFilterDragIdx(null);
-                                setFilterDragOverIdx(null);
-                              }}
-                              onDragEnd={() => {
-                                setFilterDragIdx(null);
-                                setFilterDragOverIdx(null);
-                              }}
-                              className={`flex items-center gap-1.5 px-2.5 py-2 mx-1 rounded-lg mb-0.5 cursor-pointer text-xs transition-colors ${
-                                activeFilterId === sf.id
-                                  ? "bg-blue-100 text-blue-700 font-semibold"
-                                  : "hover:bg-slate-100 text-slate-600"
-                              } ${filterDragOverIdx === idx ? "ring-1 ring-blue-300" : ""}`}
-                              onClick={() => {
-                                setActiveFilterId(sf.id);
-                                // Apply saved filter
-                                const f = sf.filters;
-                                if (f.status !== undefined)
-                                  setFilterStatus(f.status);
-                                if (f.type !== undefined) setFilterType(f.type);
-                                if (f.company !== undefined)
-                                  setFilterCompany(f.company);
-                                if (f.agency !== undefined)
-                                  setFilterAgency(f.agency);
-                                if (f.valueRange !== undefined)
-                                  setFilterValueRange(f.valueRange);
-                                if (f.paymentStatus !== undefined)
-                                  setFilterPaymentStatus(f.paymentStatus);
-                                if (f.fromLead !== undefined)
-                                  setFilterFromLead(f.fromLead);
-                                if (f.consultant !== undefined)
-                                  setFilterConsultant(f.consultant);
-                                if (f.priceMin !== undefined)
-                                  setFilterPriceMin(f.priceMin);
-                                if (f.priceMax !== undefined)
-                                  setFilterPriceMax(f.priceMax);
-                                if (f.tasksMin !== undefined)
-                                  setFilterTasksMin(f.tasksMin);
-                                if (f.tasksMax !== undefined)
-                                  setFilterTasksMax(f.tasksMax);
-                              }}
-                            >
-                              <GripVertical className="h-3 w-3 text-slate-300 flex-shrink-0" />
-                              <span className="flex-1 truncate">{sf.name}</span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSavedFilters((prev) =>
-                                    prev.filter((s) => s.id !== sf.id),
-                                  );
-                                  if (activeFilterId === sf.id)
-                                    setActiveFilterId(null);
-                                }}
-                                className="h-4 w-4 flex items-center justify-center rounded hover:bg-red-100 text-slate-300 hover:text-red-500 flex-shrink-0"
-                              >
-                                <X className="h-2.5 w-2.5" />
-                              </button>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                      {/* Save filter */}
-                      <div className="p-2 border-t border-slate-100">
-                        {isSavingFilter ? (
-                          <div className="space-y-1.5">
-                            <Input
-                              value={savedFilterName}
-                              onChange={(e) =>
-                                setSavedFilterName(e.target.value)
-                              }
-                              placeholder="Nome do filtro"
-                              className="h-7 text-xs"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (
-                                  e.key === "Enter" &&
-                                  savedFilterName.trim()
-                                ) {
-                                  const newFilter = {
-                                    id: Date.now().toString(),
-                                    name: savedFilterName,
-                                    filters: {
-                                      status: filterStatus,
-                                      type: filterType,
-                                      company: filterCompany,
-                                      agency: filterAgency,
-                                      valueRange: filterValueRange,
-                                      paymentStatus: filterPaymentStatus,
-                                      fromLead: filterFromLead,
-                                      consultant: filterConsultant,
-                                      priceMin: filterPriceMin,
-                                      priceMax: filterPriceMax,
-                                      tasksMin: filterTasksMin,
-                                      tasksMax: filterTasksMax,
-                                    },
-                                  };
-                                  setSavedFilters((prev) => [
-                                    ...prev,
-                                    newFilter,
-                                  ]);
-                                  setSavedFilterName("");
-                                  setIsSavingFilter(false);
-                                }
-                              }}
-                            />
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                className="flex-1 h-6 text-[10px] btn-brand"
-                                onClick={() => {
-                                  if (!savedFilterName.trim()) return;
-                                  const newFilter = {
-                                    id: Date.now().toString(),
-                                    name: savedFilterName,
-                                    filters: {
-                                      status: filterStatus,
-                                      type: filterType,
-                                      company: filterCompany,
-                                      agency: filterAgency,
-                                      valueRange: filterValueRange,
-                                      paymentStatus: filterPaymentStatus,
-                                      fromLead: filterFromLead,
-                                      consultant: filterConsultant,
-                                      priceMin: filterPriceMin,
-                                      priceMax: filterPriceMax,
-                                      tasksMin: filterTasksMin,
-                                      tasksMax: filterTasksMax,
-                                    },
-                                  };
-                                  setSavedFilters((prev) => [
-                                    ...prev,
-                                    newFilter,
-                                  ]);
-                                  setSavedFilterName("");
-                                  setIsSavingFilter(false);
-                                }}
-                              >
-                                <Save className="h-2.5 w-2.5 mr-1" />
-                                Salvar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-6 text-[10px]"
-                                onClick={() => {
-                                  setIsSavingFilter(false);
-                                  setSavedFilterName("");
-                                }}
-                              >
-                                <X className="h-2.5 w-2.5" />
-                              </Button>
-                            </div>
+                        {hasHorizontalOverflow && (
+                          <div
+                            ref={bottomScrollRef}
+                            onScroll={handleBottomBarScroll}
+                            title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                            className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                            style={{ height: 12 }}
+                          >
+                            <div style={{ minWidth: 1400, height: 1 }} />
                           </div>
-                        ) : (
+                        )}
+
+                        {totalPages > 1 && <PaginationControls />}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Advanced Filters Modal ── */}
+                  <StandardModalDialog
+                    open={isFilterModalOpen}
+                    onClose={() => setIsFilterModalOpen(false)}
+                    title="Filtros Avançados"
+                    subtitle="Configure os filtros para refinar os resultados"
+                    footer={
+                      <div className="flex items-center justify-between gap-2 w-full">
+                        <button
+                          onClick={clearAllFilters}
+                          className="text-xs text-slate-500 hover:text-slate-700 hover:underline"
+                        >
+                          Limpar filtros
+                        </button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs"
+                            onClick={() => setIsFilterModalOpen(false)}
+                          >
+                            Cancelar
+                          </Button>
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="w-full h-7 text-[10px] text-slate-500"
-                            onClick={() => setIsSavingFilter(true)}
+                            className="h-8 text-xs btn-brand"
+                            onClick={() => {
+                              setCurrentPage(1);
+                              setIsFilterModalOpen(false);
+                            }}
                           >
-                            + Salvar filtro atual
+                            Aplicar Filtros
                           </Button>
-                        )}
+                        </div>
                       </div>
-                    </div>
-
-                    {/* Right: filter fields */}
-                    <div className="flex-1 min-h-0 flex flex-col relative">
-                      {/* Field-picker dropdown */}
-                      {showFieldPicker && (
-                        <div
-                          className="absolute top-10 left-3 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 w-[520px] animate-in fade-in zoom-in-95 duration-150"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                              Campos disponíveis
+                    }
+                  >
+                    {/* Modal body */}
+                    <div className="flex flex-1 min-h-0">
+                      {/* Left: Saved filters */}
+                      <div className="w-44 flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50">
+                        <div className="px-3 py-2.5 border-b border-slate-100">
+                          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+                            Filtros Salvos
+                          </p>
+                        </div>
+                        <div className="flex-1 overflow-y-auto py-1">
+                          {savedFilters.length === 0 ? (
+                            <p className="text-[11px] text-slate-400 text-center py-4 px-2">
+                              Nenhum filtro salvo
                             </p>
-                            <div className="flex items-center gap-3">
+                          ) : (
+                            savedFilters.map((sf, idx) => (
+                              <div
+                                key={sf.id}
+                                draggable
+                                onDragStart={() => setFilterDragIdx(idx)}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  setFilterDragOverIdx(idx);
+                                }}
+                                onDrop={() => {
+                                  if (
+                                    filterDragIdx === null ||
+                                    filterDragIdx === idx
+                                  )
+                                    return;
+                                  const arr = [...savedFilters];
+                                  const [item] = arr.splice(filterDragIdx, 1);
+                                  arr.splice(idx, 0, item);
+                                  setSavedFilters(arr);
+                                  setFilterDragIdx(null);
+                                  setFilterDragOverIdx(null);
+                                }}
+                                onDragEnd={() => {
+                                  setFilterDragIdx(null);
+                                  setFilterDragOverIdx(null);
+                                }}
+                                className={`flex items-center gap-1.5 px-2.5 py-2 mx-1 rounded-lg mb-0.5 cursor-pointer text-xs transition-colors ${
+                                  activeFilterId === sf.id
+                                    ? "bg-blue-100 text-blue-700 font-semibold"
+                                    : "hover:bg-slate-100 text-slate-600"
+                                } ${filterDragOverIdx === idx ? "ring-1 ring-blue-300" : ""}`}
+                                onClick={() => {
+                                  setActiveFilterId(sf.id);
+                                  // Apply saved filter
+                                  const f = sf.filters;
+                                  if (f.status !== undefined)
+                                    setFilterStatus(f.status);
+                                  if (f.type !== undefined)
+                                    setFilterType(f.type);
+                                  if (f.company !== undefined)
+                                    setFilterCompany(f.company);
+                                  if (f.agency !== undefined)
+                                    setFilterAgency(f.agency);
+                                  if (f.valueRange !== undefined)
+                                    setFilterValueRange(f.valueRange);
+                                  if (f.paymentStatus !== undefined)
+                                    setFilterPaymentStatus(f.paymentStatus);
+                                  if (f.fromLead !== undefined)
+                                    setFilterFromLead(f.fromLead);
+                                  if (f.consultant !== undefined)
+                                    setFilterConsultant(f.consultant);
+                                  if (f.priceMin !== undefined)
+                                    setFilterPriceMin(f.priceMin);
+                                  if (f.priceMax !== undefined)
+                                    setFilterPriceMax(f.priceMax);
+                                  if (f.tasksMin !== undefined)
+                                    setFilterTasksMin(f.tasksMin);
+                                  if (f.tasksMax !== undefined)
+                                    setFilterTasksMax(f.tasksMax);
+                                }}
+                              >
+                                <GripVertical className="h-3 w-3 text-slate-300 flex-shrink-0" />
+                                <span className="flex-1 truncate">
+                                  {sf.name}
+                                </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSavedFilters((prev) =>
+                                      prev.filter((s) => s.id !== sf.id),
+                                    );
+                                    if (activeFilterId === sf.id)
+                                      setActiveFilterId(null);
+                                  }}
+                                  className="h-4 w-4 flex items-center justify-center rounded hover:bg-red-100 text-slate-300 hover:text-red-500 flex-shrink-0"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        {/* Save filter */}
+                        <div className="p-2 border-t border-slate-100">
+                          {isSavingFilter ? (
+                            <div className="space-y-1.5">
+                              <Input
+                                value={savedFilterName}
+                                onChange={(e) =>
+                                  setSavedFilterName(e.target.value)
+                                }
+                                placeholder="Nome do filtro"
+                                className="h-7 text-xs"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (
+                                    e.key === "Enter" &&
+                                    savedFilterName.trim()
+                                  ) {
+                                    const newFilter = {
+                                      id: Date.now().toString(),
+                                      name: savedFilterName,
+                                      filters: {
+                                        status: filterStatus,
+                                        type: filterType,
+                                        company: filterCompany,
+                                        agency: filterAgency,
+                                        valueRange: filterValueRange,
+                                        paymentStatus: filterPaymentStatus,
+                                        fromLead: filterFromLead,
+                                        consultant: filterConsultant,
+                                        priceMin: filterPriceMin,
+                                        priceMax: filterPriceMax,
+                                        tasksMin: filterTasksMin,
+                                        tasksMax: filterTasksMax,
+                                      },
+                                    };
+                                    setSavedFilters((prev) => [
+                                      ...prev,
+                                      newFilter,
+                                    ]);
+                                    setSavedFilterName("");
+                                    setIsSavingFilter(false);
+                                  }
+                                }}
+                              />
+                              <div className="flex gap-1">
+                                <Button
+                                  size="sm"
+                                  className="flex-1 h-6 text-[10px] btn-brand"
+                                  onClick={() => {
+                                    if (!savedFilterName.trim()) return;
+                                    const newFilter = {
+                                      id: Date.now().toString(),
+                                      name: savedFilterName,
+                                      filters: {
+                                        status: filterStatus,
+                                        type: filterType,
+                                        company: filterCompany,
+                                        agency: filterAgency,
+                                        valueRange: filterValueRange,
+                                        paymentStatus: filterPaymentStatus,
+                                        fromLead: filterFromLead,
+                                        consultant: filterConsultant,
+                                        priceMin: filterPriceMin,
+                                        priceMax: filterPriceMax,
+                                        tasksMin: filterTasksMin,
+                                        tasksMax: filterTasksMax,
+                                      },
+                                    };
+                                    setSavedFilters((prev) => [
+                                      ...prev,
+                                      newFilter,
+                                    ]);
+                                    setSavedFilterName("");
+                                    setIsSavingFilter(false);
+                                  }}
+                                >
+                                  <Save className="h-2.5 w-2.5 mr-1" />
+                                  Salvar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px]"
+                                  onClick={() => {
+                                    setIsSavingFilter(false);
+                                    setSavedFilterName("");
+                                  }}
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full h-7 text-[10px] text-slate-500"
+                              onClick={() => setIsSavingFilter(true)}
+                            >
+                              + Salvar filtro atual
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right: filter fields */}
+                      <div className="flex-1 min-h-0 flex flex-col relative">
+                        {/* Field-picker dropdown */}
+                        {showFieldPicker && (
+                          <div
+                            className="absolute top-10 left-3 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-4 w-[520px] animate-in fade-in zoom-in-95 duration-150"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                Campos disponíveis
+                              </p>
+                              <div className="flex items-center gap-3">
+                                <button
+                                  onClick={() =>
+                                    setVisibleFields(
+                                      allFilterFields.map((f) => f.id),
+                                    )
+                                  }
+                                  className="text-[11px] text-blue-500 hover:text-blue-700 font-medium transition-colors"
+                                >
+                                  Selecionar todos
+                                </button>
+                                <button
+                                  onClick={() => setVisibleFields([])}
+                                  className="text-[11px] text-slate-400 hover:text-red-500 transition-colors"
+                                >
+                                  Limpar
+                                </button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                              {allFilterFields.map((field) => {
+                                const checked = visibleFields.includes(
+                                  field.id,
+                                );
+                                return (
+                                  <label
+                                    key={field.id}
+                                    className="flex items-center gap-2 py-1 cursor-pointer group"
+                                  >
+                                    <div
+                                      onClick={() =>
+                                        setVisibleFields(
+                                          checked
+                                            ? visibleFields.filter(
+                                                (f) => f !== field.id,
+                                              )
+                                            : [...visibleFields, field.id],
+                                        )
+                                      }
+                                      className={`w-4 h-4 rounded flex items-center justify-center border-2 transition-colors flex-shrink-0 ${
+                                        checked
+                                          ? "bg-blue-500 border-blue-500"
+                                          : "border-slate-300 dark:border-slate-600 group-hover:border-blue-400"
+                                      }`}
+                                    >
+                                      {checked && (
+                                        <svg
+                                          viewBox="0 0 10 8"
+                                          className="w-2.5 h-2.5 text-white fill-none stroke-current stroke-[2]"
+                                        >
+                                          <path
+                                            d="M1 4l3 3 5-6"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                        </svg>
+                                      )}
+                                    </div>
+                                    <span className="text-[12px] text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors select-none">
+                                      {field.label}
+                                    </span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                               <button
                                 onClick={() =>
                                   setVisibleFields(
                                     allFilterFields.map((f) => f.id),
                                   )
                                 }
-                                className="text-[11px] text-blue-500 hover:text-blue-700 font-medium transition-colors"
+                                className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                               >
-                                Selecionar todos
+                                Recuperar campos padrão
                               </button>
                               <button
-                                onClick={() => setVisibleFields([])}
-                                className="text-[11px] text-slate-400 hover:text-red-500 transition-colors"
+                                onClick={() => setShowFieldPicker(false)}
+                                className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand"
                               >
-                                Limpar
+                                Confirmar
                               </button>
                             </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                            {allFilterFields.map((field) => {
-                              const checked = visibleFields.includes(field.id);
-                              return (
-                                <label
-                                  key={field.id}
-                                  className="flex items-center gap-2 py-1 cursor-pointer group"
-                                >
-                                  <div
-                                    onClick={() =>
-                                      setVisibleFields(
-                                        checked
-                                          ? visibleFields.filter(
-                                              (f) => f !== field.id,
-                                            )
-                                          : [...visibleFields, field.id],
-                                      )
-                                    }
-                                    className={`w-4 h-4 rounded flex items-center justify-center border-2 transition-colors flex-shrink-0 ${
-                                      checked
-                                        ? "bg-blue-500 border-blue-500"
-                                        : "border-slate-300 dark:border-slate-600 group-hover:border-blue-400"
-                                    }`}
-                                  >
-                                    {checked && (
-                                      <svg
-                                        viewBox="0 0 10 8"
-                                        className="w-2.5 h-2.5 text-white fill-none stroke-current stroke-[2]"
-                                      >
-                                        <path
-                                          d="M1 4l3 3 5-6"
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                        />
-                                      </svg>
-                                    )}
-                                  </div>
-                                  <span className="text-[12px] text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white transition-colors select-none">
-                                    {field.label}
-                                  </span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                            <button
-                              onClick={() =>
-                                setVisibleFields(
-                                  allFilterFields.map((f) => f.id),
-                                )
-                              }
-                              className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                            >
-                              Recuperar campos padrão
-                            </button>
+                        )}
+
+                        {/* "Adicionar campo" link bar */}
+                        <div className="flex items-center gap-3 px-4 pt-2.5 pb-2 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
+                          <button
+                            onClick={() => setShowFieldPicker(!showFieldPicker)}
+                            className={`text-[12px] font-medium transition-colors ${showFieldPicker ? "text-blue-600" : "text-blue-500 hover:text-blue-700"}`}
+                          >
+                            + Adicionar campo
+                          </button>
+                          {visibleFields.length > 0 && (
+                            <span className="text-[11px] text-slate-400">
+                              {visibleFields.length} campo
+                              {visibleFields.length !== 1 ? "s" : ""} ativo
+                              {visibleFields.length !== 1 ? "s" : ""}
+                            </span>
+                          )}
+                          {showFieldPicker && (
                             <button
                               onClick={() => setShowFieldPicker(false)}
-                              className="h-7 px-3 rounded-md text-[11px] font-medium btn-brand"
+                              className="ml-auto text-slate-400 hover:text-slate-600 transition-colors"
                             >
-                              Confirmar
+                              <X className="h-3.5 w-3.5" />
                             </button>
-                          </div>
+                          )}
                         </div>
-                      )}
 
-                      {/* "Adicionar campo" link bar */}
-                      <div className="flex items-center gap-3 px-4 pt-2.5 pb-2 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
-                        <button
-                          onClick={() => setShowFieldPicker(!showFieldPicker)}
-                          className={`text-[12px] font-medium transition-colors ${showFieldPicker ? "text-blue-600" : "text-blue-500 hover:text-blue-700"}`}
-                        >
-                          + Adicionar campo
-                        </button>
-                        {visibleFields.length > 0 && (
-                          <span className="text-[11px] text-slate-400">
-                            {visibleFields.length} campo
-                            {visibleFields.length !== 1 ? "s" : ""} ativo
-                            {visibleFields.length !== 1 ? "s" : ""}
-                          </span>
-                        )}
-                        {showFieldPicker && (
-                          <button
-                            onClick={() => setShowFieldPicker(false)}
-                            className="ml-auto text-slate-400 hover:text-slate-600 transition-colors"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
+                        {/* Filter fields (scrollable) */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                          {/* Identificação */}
+                          {["buscar", "empresa", "agencia", "consultor"].some(
+                            (id) => visibleFields.includes(id),
+                          ) && (
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                                Identificação
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {visibleFields.includes("buscar") && (
+                                  <div>
+                                    <label className="text-xs text-slate-500 mb-1 block">
+                                      Buscar
+                                    </label>
+                                    <div className="relative">
+                                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                      <Input
+                                        value={searchTerm}
+                                        onChange={(e) =>
+                                          setSearchTerm(e.target.value)
+                                        }
+                                        placeholder="Projeto, cliente..."
+                                        className="pl-8 h-8 text-xs"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                                {visibleFields.includes("empresa") && (
+                                  <div>
+                                    <label className="text-xs text-slate-500 mb-1 block">
+                                      Empresa / Cliente
+                                    </label>
+                                    <select
+                                      value={filterCompany}
+                                      onChange={(e) =>
+                                        setFilterCompany(e.target.value)
+                                      }
+                                      className="w-full h-8 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
+                                    >
+                                      <option value="all">Todos</option>
+                                      {uniqueCompanies.map((c) => (
+                                        <option key={c} value={c}>
+                                          {c}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                                {visibleFields.includes("agencia") && (
+                                  <div>
+                                    <label className="text-xs text-slate-500 mb-1 block">
+                                      Agência
+                                    </label>
+                                    <select
+                                      value={filterAgency}
+                                      onChange={(e) =>
+                                        setFilterAgency(e.target.value)
+                                      }
+                                      className="w-full h-8 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
+                                    >
+                                      <option value="all">Todas</option>
+                                      {uniqueAgencies.map((a) => (
+                                        <option key={a} value={a}>
+                                          {a}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                                {visibleFields.includes("consultor") && (
+                                  <div className="col-span-2">
+                                    <label className="text-xs text-slate-500 mb-1 block">
+                                      Responsável / Consultor
+                                    </label>
+                                    <select
+                                      value={filterConsultant}
+                                      onChange={(e) =>
+                                        setFilterConsultant(e.target.value)
+                                      }
+                                      className="w-full h-8 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
+                                    >
+                                      <option value="all">
+                                        Todos os responsáveis
+                                      </option>
+                                      {uniqueConsultants.map((c) => (
+                                        <option key={c} value={c}>
+                                          {c}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
 
-                      {/* Filter fields (scrollable) */}
-                      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                        {/* Identificação */}
-                        {["buscar", "empresa", "agencia", "consultor"].some(
-                          (id) => visibleFields.includes(id),
-                        ) && (
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                              Identificação
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {visibleFields.includes("buscar") && (
+                          {/* Tipo e Status */}
+                          {["status", "tipo"].some((id) =>
+                            visibleFields.includes(id),
+                          ) && (
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                                Tipo · Status
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {visibleFields.includes("status") && (
+                                  <div>
+                                    <label className="text-xs text-slate-500 mb-1 block">
+                                      Status
+                                    </label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {[
+                                        { value: "all", label: "Todos" },
+                                        { value: "draft", label: "Rascunho" },
+                                        {
+                                          value: "pending-approval",
+                                          label: "Ag. Aprovação",
+                                        },
+                                        {
+                                          value: "negotiation",
+                                          label: "Negociação",
+                                        },
+                                        {
+                                          value: "awaiting-payment",
+                                          label: "Ag. Pagto",
+                                        },
+                                        {
+                                          value: "planning",
+                                          label: "Planejamento",
+                                        },
+                                        {
+                                          value: "in-progress",
+                                          label: "Em Andamento",
+                                        },
+                                        {
+                                          value: "completed",
+                                          label: "Concluído",
+                                        },
+                                        {
+                                          value: "cancelled",
+                                          label: "Cancelado",
+                                        },
+                                        {
+                                          value: "archived",
+                                          label: "Arquivados",
+                                        },
+                                      ].map(({ value, label }) => (
+                                        <button
+                                          key={value}
+                                          onClick={() => setFilterStatus(value)}
+                                          className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                                            filterStatus === value
+                                              ? "bg-blue-600 text-white border-blue-600"
+                                              : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                                          }`}
+                                        >
+                                          {label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {visibleFields.includes("tipo") && (
+                                  <div>
+                                    <label className="text-xs text-slate-500 mb-1 block">
+                                      Tipo
+                                    </label>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {[
+                                        { value: "all", label: "Todos" },
+                                        { value: "recurring", label: "MRR" },
+                                        { value: "one-time", label: "Avulso" },
+                                      ].map(({ value, label }) => (
+                                        <button
+                                          key={value}
+                                          onClick={() => setFilterType(value)}
+                                          className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                                            filterType === value
+                                              ? "bg-blue-600 text-white border-blue-600"
+                                              : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                                          }`}
+                                        >
+                                          {label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {/* Lead e Pagamento */}
+                          {["origem", "pagamento"].some((id) =>
+                            visibleFields.includes(id),
+                          ) && (
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                                Lead · Pagamento
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {visibleFields.includes("origem") && (
+                                  <div>
+                                    <label className="text-xs text-slate-500 mb-1 block">
+                                      Origem
+                                    </label>
+                                    <div className="flex gap-1.5">
+                                      {(
+                                        [
+                                          { value: "all", label: "Todos" },
+                                          { value: "lead", label: "De Lead" },
+                                          {
+                                            value: "non-lead",
+                                            label: "Outros",
+                                          },
+                                        ] as const
+                                      ).map(({ value, label }) => (
+                                        <button
+                                          key={value}
+                                          onClick={() =>
+                                            setFilterFromLead(value)
+                                          }
+                                          className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                                            filterFromLead === value
+                                              ? "bg-amber-500 text-white border-amber-500"
+                                              : "bg-white text-slate-600 border-slate-200 hover:border-amber-300"
+                                          }`}
+                                        >
+                                          {label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                                {visibleFields.includes("pagamento") && (
+                                  <div>
+                                    <label className="text-xs text-slate-500 mb-1 block">
+                                      Pagamento
+                                    </label>
+                                    <div className="flex gap-1.5">
+                                      {[
+                                        { value: "all", label: "Todos" },
+                                        { value: "paid", label: "Em dia" },
+                                        {
+                                          value: "overdue",
+                                          label: "Inadimplente",
+                                        },
+                                      ].map(({ value, label }) => (
+                                        <button
+                                          key={value}
+                                          onClick={() =>
+                                            setFilterPaymentStatus(value)
+                                          }
+                                          className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                                            filterPaymentStatus === value
+                                              ? "bg-blue-600 text-white border-blue-600"
+                                              : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
+                                          }`}
+                                        >
+                                          {label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Valores */}
+                          {visibleFields.includes("preco") && (
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                                Faixa de Valor (R$)
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
                                 <div>
                                   <label className="text-xs text-slate-500 mb-1 block">
-                                    Buscar
+                                    Valor mínimo
                                   </label>
                                   <div className="relative">
-                                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium">
+                                      R$
+                                    </span>
                                     <Input
-                                      value={searchTerm}
+                                      type="number"
+                                      min="0"
+                                      value={filterPriceMin}
                                       onChange={(e) =>
-                                        setSearchTerm(e.target.value)
+                                        setFilterPriceMin(e.target.value)
                                       }
-                                      placeholder="Projeto, cliente..."
-                                      className="pl-8 h-8 text-xs"
+                                      placeholder="0"
+                                      className="pl-7 h-8 text-xs"
                                     />
                                   </div>
                                 </div>
-                              )}
-                              {visibleFields.includes("empresa") && (
                                 <div>
                                   <label className="text-xs text-slate-500 mb-1 block">
-                                    Empresa / Cliente
+                                    Valor máximo
                                   </label>
-                                  <select
-                                    value={filterCompany}
-                                    onChange={(e) =>
-                                      setFilterCompany(e.target.value)
-                                    }
-                                    className="w-full h-8 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
-                                  >
-                                    <option value="all">Todos</option>
-                                    {uniqueCompanies.map((c) => (
-                                      <option key={c} value={c}>
-                                        {c}
-                                      </option>
-                                    ))}
-                                  </select>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium">
+                                      R$
+                                    </span>
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      value={filterPriceMax}
+                                      onChange={(e) =>
+                                        setFilterPriceMax(e.target.value)
+                                      }
+                                      placeholder="sem limite"
+                                      className="pl-7 h-8 text-xs"
+                                    />
+                                  </div>
                                 </div>
-                              )}
-                              {visibleFields.includes("agencia") && (
-                                <div>
-                                  <label className="text-xs text-slate-500 mb-1 block">
-                                    Agência
-                                  </label>
-                                  <select
-                                    value={filterAgency}
-                                    onChange={(e) =>
-                                      setFilterAgency(e.target.value)
-                                    }
-                                    className="w-full h-8 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
+                              </div>
+                              {(filterPriceMin !== "" ||
+                                filterPriceMax !== "") && (
+                                <div className="mt-1.5 flex items-center justify-between">
+                                  <p className="text-[10px] text-slate-400">
+                                    {filterPriceMin !== "" &&
+                                    filterPriceMax !== ""
+                                      ? `R$ ${Number(filterPriceMin).toLocaleString("pt-BR")} – R$ ${Number(filterPriceMax).toLocaleString("pt-BR")}`
+                                      : filterPriceMin !== ""
+                                        ? `A partir de R$ ${Number(filterPriceMin).toLocaleString("pt-BR")}`
+                                        : `Até R$ ${Number(filterPriceMax).toLocaleString("pt-BR")}`}
+                                  </p>
+                                  <button
+                                    onClick={() => {
+                                      setFilterPriceMin("");
+                                      setFilterPriceMax("");
+                                    }}
+                                    className="text-[10px] text-red-400 hover:underline"
                                   >
-                                    <option value="all">Todas</option>
-                                    {uniqueAgencies.map((a) => (
-                                      <option key={a} value={a}>
-                                        {a}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                              )}
-                              {visibleFields.includes("consultor") && (
-                                <div className="col-span-2">
-                                  <label className="text-xs text-slate-500 mb-1 block">
-                                    Responsável / Consultor
-                                  </label>
-                                  <select
-                                    value={filterConsultant}
-                                    onChange={(e) =>
-                                      setFilterConsultant(e.target.value)
-                                    }
-                                    className="w-full h-8 px-2 py-1 text-xs border border-slate-200 rounded-md bg-white"
-                                  >
-                                    <option value="all">
-                                      Todos os responsáveis
-                                    </option>
-                                    {uniqueConsultants.map((c) => (
-                                      <option key={c} value={c}>
-                                        {c}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    Limpar
+                                  </button>
                                 </div>
                               )}
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Tipo e Status */}
-                        {["status", "tipo"].some((id) =>
-                          visibleFields.includes(id),
-                        ) && (
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                              Tipo · Status
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {visibleFields.includes("status") && (
+                          {/* Volume de Tarefas */}
+                          {visibleFields.includes("tarefas") && (
+                            <div>
+                              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                                Volume de Tarefas
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
                                 <div>
                                   <label className="text-xs text-slate-500 mb-1 block">
-                                    Status
+                                    Mínimo de tarefas
                                   </label>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {[
-                                      { value: "all", label: "Todos" },
-                                      { value: "draft", label: "Rascunho" },
-                                      {
-                                        value: "pending-approval",
-                                        label: "Ag. Aprovação",
-                                      },
-                                      {
-                                        value: "negotiation",
-                                        label: "Negociação",
-                                      },
-                                      {
-                                        value: "awaiting-payment",
-                                        label: "Ag. Pagto",
-                                      },
-                                      {
-                                        value: "planning",
-                                        label: "Planejamento",
-                                      },
-                                      {
-                                        value: "in-progress",
-                                        label: "Em Andamento",
-                                      },
-                                      {
-                                        value: "completed",
-                                        label: "Concluído",
-                                      },
-                                      {
-                                        value: "cancelled",
-                                        label: "Cancelado",
-                                      },
-                                      {
-                                        value: "archived",
-                                        label: "Arquivados",
-                                      },
-                                    ].map(({ value, label }) => (
-                                      <button
-                                        key={value}
-                                        onClick={() => setFilterStatus(value)}
-                                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
-                                          filterStatus === value
-                                            ? "bg-blue-600 text-white border-blue-600"
-                                            : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
-                                        }`}
-                                      >
-                                        {label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {visibleFields.includes("tipo") && (
-                                <div>
-                                  <label className="text-xs text-slate-500 mb-1 block">
-                                    Tipo
-                                  </label>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {[
-                                      { value: "all", label: "Todos" },
-                                      { value: "recurring", label: "MRR" },
-                                      { value: "one-time", label: "Avulso" },
-                                    ].map(({ value, label }) => (
-                                      <button
-                                        key={value}
-                                        onClick={() => setFilterType(value)}
-                                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
-                                          filterType === value
-                                            ? "bg-blue-600 text-white border-blue-600"
-                                            : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
-                                        }`}
-                                      >
-                                        {label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        {/* Lead e Pagamento */}
-                        {["origem", "pagamento"].some((id) =>
-                          visibleFields.includes(id),
-                        ) && (
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                              Lead · Pagamento
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {visibleFields.includes("origem") && (
-                                <div>
-                                  <label className="text-xs text-slate-500 mb-1 block">
-                                    Origem
-                                  </label>
-                                  <div className="flex gap-1.5">
-                                    {([
-                                      { value: "all", label: "Todos" },
-                                      { value: "lead", label: "De Lead" },
-                                      { value: "non-lead", label: "Outros" },
-                                    ] as const).map(({ value, label }) => (
-                                      <button
-                                        key={value}
-                                        onClick={() => setFilterFromLead(value)}
-                                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
-                                          filterFromLead === value
-                                            ? "bg-amber-500 text-white border-amber-500"
-                                            : "bg-white text-slate-600 border-slate-200 hover:border-amber-300"
-                                        }`}
-                                      >
-                                        {label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {visibleFields.includes("pagamento") && (
-                                <div>
-                                  <label className="text-xs text-slate-500 mb-1 block">
-                                    Pagamento
-                                  </label>
-                                  <div className="flex gap-1.5">
-                                    {[
-                                      { value: "all", label: "Todos" },
-                                      { value: "paid", label: "Em dia" },
-                                      {
-                                        value: "overdue",
-                                        label: "Inadimplente",
-                                      },
-                                    ].map(({ value, label }) => (
-                                      <button
-                                        key={value}
-                                        onClick={() =>
-                                          setFilterPaymentStatus(value)
-                                        }
-                                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
-                                          filterPaymentStatus === value
-                                            ? "bg-blue-600 text-white border-blue-600"
-                                            : "bg-white text-slate-600 border-slate-200 hover:border-blue-300"
-                                        }`}
-                                      >
-                                        {label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Valores */}
-                        {visibleFields.includes("preco") && (
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                              Faixa de Valor (R$)
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="text-xs text-slate-500 mb-1 block">
-                                  Valor mínimo
-                                </label>
-                                <div className="relative">
-                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium">
-                                    R$
-                                  </span>
                                   <Input
                                     type="number"
                                     min="0"
-                                    value={filterPriceMin}
+                                    value={filterTasksMin}
                                     onChange={(e) =>
-                                      setFilterPriceMin(e.target.value)
+                                      setFilterTasksMin(e.target.value)
                                     }
                                     placeholder="0"
-                                    className="pl-7 h-8 text-xs"
+                                    className="h-8 text-xs"
                                   />
                                 </div>
-                              </div>
-                              <div>
-                                <label className="text-xs text-slate-500 mb-1 block">
-                                  Valor máximo
-                                </label>
-                                <div className="relative">
-                                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-medium">
-                                    R$
-                                  </span>
+                                <div>
+                                  <label className="text-xs text-slate-500 mb-1 block">
+                                    Máximo de tarefas
+                                  </label>
                                   <Input
                                     type="number"
                                     min="0"
-                                    value={filterPriceMax}
+                                    value={filterTasksMax}
                                     onChange={(e) =>
-                                      setFilterPriceMax(e.target.value)
+                                      setFilterTasksMax(e.target.value)
                                     }
                                     placeholder="sem limite"
-                                    className="pl-7 h-8 text-xs"
+                                    className="h-8 text-xs"
                                   />
                                 </div>
                               </div>
+                              {(filterTasksMin !== "" ||
+                                filterTasksMax !== "") && (
+                                <div className="mt-1.5 flex items-center justify-between">
+                                  <p className="text-[10px] text-slate-400">
+                                    {filterTasksMin !== "" &&
+                                    filterTasksMax !== ""
+                                      ? `${filterTasksMin} – ${filterTasksMax} tarefas`
+                                      : filterTasksMin !== ""
+                                        ? `A partir de ${filterTasksMin} tarefas`
+                                        : `Até ${filterTasksMax} tarefas`}
+                                  </p>
+                                  <button
+                                    onClick={() => {
+                                      setFilterTasksMin("");
+                                      setFilterTasksMax("");
+                                    }}
+                                    className="text-[10px] text-red-400 hover:underline"
+                                  >
+                                    Limpar
+                                  </button>
+                                </div>
+                              )}
                             </div>
-                            {(filterPriceMin !== "" ||
-                              filterPriceMax !== "") && (
-                              <div className="mt-1.5 flex items-center justify-between">
-                                <p className="text-[10px] text-slate-400">
-                                  {filterPriceMin !== "" &&
-                                  filterPriceMax !== ""
-                                    ? `R$ ${Number(filterPriceMin).toLocaleString("pt-BR")} – R$ ${Number(filterPriceMax).toLocaleString("pt-BR")}`
-                                    : filterPriceMin !== ""
-                                      ? `A partir de R$ ${Number(filterPriceMin).toLocaleString("pt-BR")}`
-                                      : `Até R$ ${Number(filterPriceMax).toLocaleString("pt-BR")}`}
-                                </p>
-                                <button
-                                  onClick={() => {
-                                    setFilterPriceMin("");
-                                    setFilterPriceMax("");
-                                  }}
-                                  className="text-[10px] text-red-400 hover:underline"
-                                >
-                                  Limpar
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Volume de Tarefas */}
-                        {visibleFields.includes("tarefas") && (
-                          <div>
-                            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                              Volume de Tarefas
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="text-xs text-slate-500 mb-1 block">
-                                  Mínimo de tarefas
-                                </label>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  value={filterTasksMin}
-                                  onChange={(e) =>
-                                    setFilterTasksMin(e.target.value)
-                                  }
-                                  placeholder="0"
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-xs text-slate-500 mb-1 block">
-                                  Máximo de tarefas
-                                </label>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  value={filterTasksMax}
-                                  onChange={(e) =>
-                                    setFilterTasksMax(e.target.value)
-                                  }
-                                  placeholder="sem limite"
-                                  className="h-8 text-xs"
-                                />
-                              </div>
-                            </div>
-                            {(filterTasksMin !== "" ||
-                              filterTasksMax !== "") && (
-                              <div className="mt-1.5 flex items-center justify-between">
-                                <p className="text-[10px] text-slate-400">
-                                  {filterTasksMin !== "" &&
-                                  filterTasksMax !== ""
-                                    ? `${filterTasksMin} – ${filterTasksMax} tarefas`
-                                    : filterTasksMin !== ""
-                                      ? `A partir de ${filterTasksMin} tarefas`
-                                      : `Até ${filterTasksMax} tarefas`}
-                                </p>
-                                <button
-                                  onClick={() => {
-                                    setFilterTasksMin("");
-                                    setFilterTasksMax("");
-                                  }}
-                                  className="text-[10px] text-red-400 hover:underline"
-                                >
-                                  Limpar
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {visibleFields.length === 0 && (
-                          <div className="flex flex-col items-center justify-center py-10 text-center">
-                            <p className="text-xs text-slate-400">
-                              Nenhum campo ativo.
-                              <br />
-                              Clique em{" "}
-                              <span className="text-blue-500">
-                                + Adicionar campo
-                              </span>{" "}
-                              para configurar.
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Results count */}
-                        <div className="pt-2 border-t border-slate-100">
-                          <p className="text-xs text-slate-500">
-                            <span className="font-semibold text-slate-900">
-                              {filteredProjects.length}
-                            </span>{" "}
-                            projeto{filteredProjects.length !== 1 ? "s" : ""}{" "}
-                            encontrado{filteredProjects.length !== 1 ? "s" : ""}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-            </StandardModalDialog>
-          </>
-        ) : (
-          <div className="flex-1 overflow-auto flex flex-col">
-            {/* Toolbar for kanban/planner views */}
-            <Card className="border border-slate-200/70 shadow-sm overflow-hidden mb-3 shrink-0">
-              <div className="flex items-center gap-3 px-5 py-3.5 bg-slate-50/60">
-                {/* View mode tabs */}
-                <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
-                  <Button
-                    size="sm"
-                    variant={(viewMode as string) === "accordion" ? "default" : "ghost"}
-                    onClick={() => setViewMode("accordion")}
-                    className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      (viewMode as string) === "accordion"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
-                        : "hover:bg-background"
-                    }`}
-                  >
-                    <List className="h-3 w-3 mr-1" />
-                    Lista
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={(viewMode as string) === "kanban" ? "default" : "ghost"}
-                    onClick={() => setViewMode("kanban")}
-                    className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      (viewMode as string) === "kanban"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
-                        : "hover:bg-background"
-                    }`}
-                  >
-                    <LayoutGrid className="h-3 w-3 mr-1" />
-                    Kanban
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={(viewMode as string) === "planner" ? "default" : "ghost"}
-                    onClick={() => setViewMode("planner")}
-                    className={`h-7 px-2.5 rounded-md transition-all text-xs ${
-                      (viewMode as string) === "planner"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
-                        : "hover:bg-background"
-                    }`}
-                  >
-                    <LayoutDashboard className="h-3 w-3 mr-1" />
-                    Planejador
-                  </Button>
-                </div>
-                {viewMode === "kanban" && (
-                  <Button
-                    onClick={handleAddColumn}
-                    size="sm"
-                    className="h-7 text-xs px-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-sm"
-                  >
-                    <Plus className="h-3 w-3 mr-1" />
-                    Nova Coluna
-                  </Button>
-                )}
-              </div>
-            </Card>
-
-            {viewMode === "kanban" && (
-              <div className="py-2 pb-0">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                >
-                  <div className="flex gap-2 overflow-x-auto">
-                    <SortableContext
-                      items={kanbanColumns.map((col) => col.id)}
-                      strategy={horizontalListSortingStrategy}
-                    >
-                      {kanbanColumns.map((column) => (
-                        <KanbanColumn
-                          key={column.id}
-                          column={column}
-                          projects={filteredProjects.filter(
-                            (p) => p.status === column.id,
                           )}
-                          onEdit={() => handleEditColumn(column)}
-                          onDelete={() => handleDeleteColumn(column.id)}
-                          onViewProject={handleViewProject}
-                          onEditProject={handleEditProject}
-                        />
-                      ))}
-                    </SortableContext>
-                  </div>
 
-                  <DragOverlay>
-                    {activeId && activeType === "column" && (
-                      <div className="w-52 opacity-80">
-                        {kanbanColumns.find((col) => col.id === activeId) && (
-                          <div
-                            className={`${kanbanColumns.find((col) => col.id === activeId)?.color} text-white rounded-t-lg px-3 py-2`}
-                          >
-                            <h3 className="font-bold text-xs">
-                              {
-                                kanbanColumns.find((col) => col.id === activeId)
-                                  ?.label
-                              }
-                            </h3>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {activeId && activeType === "card" && (
-                      <div className="w-52 opacity-80">
-                        <Card className="p-2 bg-white border-2 border-blue-500">
-                          <div className="text-xs font-semibold">
-                            Movendo projeto...
-                          </div>
-                        </Card>
-                      </div>
-                    )}
-                  </DragOverlay>
-                </DndContext>
-
-                {/* Column Create/Edit Dialog */}
-                <Dialog
-                  open={showColumnDialog}
-                  onOpenChange={setShowColumnDialog}
-                >
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>
-                        {editingColumn ? "Editar Coluna" : "Nova Coluna"}
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="column-name">Nome da Coluna</Label>
-                        <Input
-                          id="column-name"
-                          value={newColumnName}
-                          onChange={(e) => setNewColumnName(e.target.value)}
-                          placeholder="Ex: Em Aprovação"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Cor da Coluna</Label>
-                        <div className="grid grid-cols-5 gap-2">
-                          {availableColors.map((color) => (
-                            <button
-                              key={color.value}
-                              onClick={() => setNewColumnColor(color.value)}
-                              className={`h-10 rounded-md ${color.value} ${
-                                newColumnColor === color.value
-                                  ? "ring-2 ring-offset-2 ring-black"
-                                  : ""
-                              }`}
-                              title={color.label}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowColumnDialog(false)}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button onClick={handleSaveColumn}>Salvar</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                <Dialog
-                  open={showDeleteColumnDialog}
-                  onOpenChange={setShowDeleteColumnDialog}
-                >
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Excluir Coluna</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <p className="text-sm text-muted-foreground">
-                        Remover a coluna{" "}
-                        <span className="font-semibold text-foreground">
-                          {kanbanColumns.find((col) => col.id === columnToDelete)?.label ?? "selecionada"}
-                        </span>{" "}
-                        deste quadro? Ela some da visualização por status — os
-                        projetos não são excluídos.
-                      </p>
-
-                      {columnToDelete &&
-                        projectsData.filter((p) => p.status === columnToDelete)
-                          .length > 0 && (
-                          <div className="space-y-3">
-                            <div className="rounded-md bg-yellow-50 p-3 border border-yellow-200">
-                              <p className="text-sm text-yellow-800">
-                                Esta coluna contém{" "}
-                                {
-                                  projectsData.filter(
-                                    (p) => p.status === columnToDelete,
-                                  ).length
-                                }{" "}
-                                projeto(s). Selecione para qual coluna os
-                                projetos serão movidos:
+                          {visibleFields.length === 0 && (
+                            <div className="flex flex-col items-center justify-center py-10 text-center">
+                              <p className="text-xs text-slate-400">
+                                Nenhum campo ativo.
+                                <br />
+                                Clique em{" "}
+                                <span className="text-blue-500">
+                                  + Adicionar campo
+                                </span>{" "}
+                                para configurar.
                               </p>
                             </div>
+                          )}
 
+                          {/* Results count */}
+                          <div className="pt-2 border-t border-slate-100">
+                            <p className="text-xs text-slate-500">
+                              <span className="font-semibold text-slate-900">
+                                {filteredProjects.length}
+                              </span>{" "}
+                              projeto{filteredProjects.length !== 1 ? "s" : ""}{" "}
+                              encontrado
+                              {filteredProjects.length !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </StandardModalDialog>
+                </>
+              ) : (
+                <div className="flex-1 overflow-auto flex flex-col">
+                  {/* Toolbar for kanban/planner views */}
+                  <Card className="border border-slate-200/70 shadow-sm overflow-hidden mb-3 shrink-0">
+                    <div className="flex items-center gap-3 px-5 py-3.5 bg-slate-50/60">
+                      {/* View mode tabs */}
+                      <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
+                        <Button
+                          size="sm"
+                          variant={
+                            (viewMode as string) === "accordion"
+                              ? "default"
+                              : "ghost"
+                          }
+                          onClick={() => setViewMode("accordion")}
+                          className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                            (viewMode as string) === "accordion"
+                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              : "hover:bg-background"
+                          }`}
+                        >
+                          <List className="h-3 w-3 mr-1" />
+                          Lista
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={
+                            (viewMode as string) === "kanban"
+                              ? "default"
+                              : "ghost"
+                          }
+                          onClick={() => setViewMode("kanban")}
+                          className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                            (viewMode as string) === "kanban"
+                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              : "hover:bg-background"
+                          }`}
+                        >
+                          <LayoutGrid className="h-3 w-3 mr-1" />
+                          Kanban
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={
+                            (viewMode as string) === "planner"
+                              ? "default"
+                              : "ghost"
+                          }
+                          onClick={() => setViewMode("planner")}
+                          className={`h-7 px-2.5 rounded-md transition-all text-xs ${
+                            (viewMode as string) === "planner"
+                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              : "hover:bg-background"
+                          }`}
+                        >
+                          <LayoutDashboard className="h-3 w-3 mr-1" />
+                          Planejador
+                        </Button>
+                      </div>
+                      {viewMode === "kanban" && (
+                        <Button
+                          onClick={handleAddColumn}
+                          size="sm"
+                          className="h-7 text-xs px-2.5 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-sm"
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Nova Coluna
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+
+                  {viewMode === "kanban" && (
+                    <div className="py-2 pb-0">
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragStart={handleDragStart}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <div className="flex gap-2 overflow-x-auto">
+                          <SortableContext
+                            items={kanbanColumns.map((col) => col.id)}
+                            strategy={horizontalListSortingStrategy}
+                          >
+                            {kanbanColumns.map((column) => (
+                              <KanbanColumn
+                                key={column.id}
+                                column={column}
+                                projects={filteredProjects.filter(
+                                  (p) => p.status === column.id,
+                                )}
+                                onEdit={() => handleEditColumn(column)}
+                                onDelete={() => handleDeleteColumn(column.id)}
+                                onViewProject={handleViewProject}
+                                onEditProject={handleEditProject}
+                              />
+                            ))}
+                          </SortableContext>
+                        </div>
+
+                        <DragOverlay>
+                          {activeId && activeType === "column" && (
+                            <div className="w-52 opacity-80">
+                              {kanbanColumns.find(
+                                (col) => col.id === activeId,
+                              ) && (
+                                <div
+                                  className={`${kanbanColumns.find((col) => col.id === activeId)?.color} text-white rounded-t-lg px-3 py-2`}
+                                >
+                                  <h3 className="font-bold text-xs">
+                                    {
+                                      kanbanColumns.find(
+                                        (col) => col.id === activeId,
+                                      )?.label
+                                    }
+                                  </h3>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {activeId && activeType === "card" && (
+                            <div className="w-52 opacity-80">
+                              <Card className="p-2 bg-white border-2 border-blue-500">
+                                <div className="text-xs font-semibold">
+                                  Movendo projeto...
+                                </div>
+                              </Card>
+                            </div>
+                          )}
+                        </DragOverlay>
+                      </DndContext>
+
+                      {/* Column Create/Edit Dialog */}
+                      <Dialog
+                        open={showColumnDialog}
+                        onOpenChange={setShowColumnDialog}
+                      >
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>
+                              {editingColumn ? "Editar Coluna" : "Nova Coluna"}
+                            </DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
                             <div className="space-y-2">
-                              <Label htmlFor="target-column">
-                                Mover projetos para:
+                              <Label htmlFor="column-name">
+                                Nome da Coluna
                               </Label>
-                              <select
-                                id="target-column"
-                                value={targetColumnForItems}
+                              <Input
+                                id="column-name"
+                                value={newColumnName}
                                 onChange={(e) =>
-                                  setTargetColumnForItems(e.target.value)
+                                  setNewColumnName(e.target.value)
                                 }
-                                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                              >
-                                {kanbanColumns
-                                  .filter((col) => col.id !== columnToDelete)
-                                  .map((col) => (
-                                    <option key={col.id} value={col.id}>
-                                      {col.label}
-                                    </option>
-                                  ))}
-                              </select>
+                                placeholder="Ex: Em Aprovação"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Cor da Coluna</Label>
+                              <div className="grid grid-cols-5 gap-2">
+                                {availableColors.map((color) => (
+                                  <button
+                                    key={color.value}
+                                    onClick={() =>
+                                      setNewColumnColor(color.value)
+                                    }
+                                    className={`h-10 rounded-md ${color.value} ${
+                                      newColumnColor === color.value
+                                        ? "ring-2 ring-offset-2 ring-black"
+                                        : ""
+                                    }`}
+                                    title={color.label}
+                                  />
+                                ))}
+                              </div>
                             </div>
                           </div>
-                        )}
+                          <DialogFooter>
+                            <Button
+                              variant="outline"
+                              onClick={() => setShowColumnDialog(false)}
+                            >
+                              Cancelar
+                            </Button>
+                            <Button onClick={handleSaveColumn}>Salvar</Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+
+                      <Dialog
+                        open={showDeleteColumnDialog}
+                        onOpenChange={setShowDeleteColumnDialog}
+                      >
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>Excluir Coluna</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <p className="text-sm text-muted-foreground">
+                              Remover a coluna{" "}
+                              <span className="font-semibold text-foreground">
+                                {kanbanColumns.find(
+                                  (col) => col.id === columnToDelete,
+                                )?.label ?? "selecionada"}
+                              </span>{" "}
+                              deste quadro? Ela some da visualização por status
+                              — os projetos não são excluídos.
+                            </p>
+
+                            {columnToDelete &&
+                              projectsData.filter(
+                                (p) => p.status === columnToDelete,
+                              ).length > 0 && (
+                                <div className="space-y-3">
+                                  <div className="rounded-md bg-yellow-50 p-3 border border-yellow-200">
+                                    <p className="text-sm text-yellow-800">
+                                      Esta coluna contém{" "}
+                                      {
+                                        projectsData.filter(
+                                          (p) => p.status === columnToDelete,
+                                        ).length
+                                      }{" "}
+                                      projeto(s). Selecione para qual coluna os
+                                      projetos serão movidos:
+                                    </p>
+                                  </div>
+
+                                  <div className="space-y-2">
+                                    <Label htmlFor="target-column">
+                                      Mover projetos para:
+                                    </Label>
+                                    <select
+                                      id="target-column"
+                                      value={targetColumnForItems}
+                                      onChange={(e) =>
+                                        setTargetColumnForItems(e.target.value)
+                                      }
+                                      className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                    >
+                                      {kanbanColumns
+                                        .filter(
+                                          (col) => col.id !== columnToDelete,
+                                        )
+                                        .map((col) => (
+                                          <option key={col.id} value={col.id}>
+                                            {col.label}
+                                          </option>
+                                        ))}
+                                    </select>
+                                  </div>
+                                </div>
+                              )}
+                          </div>
+                          <DialogFooter>
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setShowDeleteColumnDialog(false);
+                                setColumnToDelete(null);
+                                setTargetColumnForItems("");
+                              }}
+                            >
+                              Cancelar
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              onClick={confirmDeleteColumn}
+                              disabled={
+                                columnToDelete &&
+                                projectsData.filter(
+                                  (p) => p.status === columnToDelete,
+                                ).length > 0 &&
+                                !targetColumnForItems
+                              }
+                            >
+                              Excluir
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
                     </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setShowDeleteColumnDialog(false);
-                          setColumnToDelete(null);
-                          setTargetColumnForItems("");
-                        }}
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={confirmDeleteColumn}
-                        disabled={
-                          columnToDelete &&
-                          projectsData.filter(
-                            (p) => p.status === columnToDelete,
-                          ).length > 0 &&
-                          !targetColumnForItems
-                        }
-                      >
-                        Excluir
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            )}
+                  )}
 
-            {/* Planejador view — extraído para features/planner/planner-board.tsx (lote 6). */}
-            {viewMode === "planner" && <PlannerBoard projects={projectsData} />}
-          </div>
-        )}
+                  {/* Planejador view — extraído para features/planner/planner-board.tsx (lote 6). */}
+                  {viewMode === "planner" && (
+                    <PlannerBoard projects={projectsData} />
+                  )}
+                </div>
+              )}
 
-        <StandardModalDialog
-          open={showCloneDialog}
-          onClose={() => {
-            setShowCloneDialog(false);
-            setProjectToClone(null);
-            setCloneProjectName("");
-          }}
-          title="Duplicar Projeto"
-          subtitle="Selecione o que deseja incluir na cópia"
-          footer={
-            <div className="flex items-center justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
+              <StandardModalDialog
+                open={showCloneDialog}
+                onClose={() => {
                   setShowCloneDialog(false);
                   setProjectToClone(null);
                   setCloneProjectName("");
                 }}
-                className="h-8 px-4 text-xs"
+                title="Duplicar Projeto"
+                subtitle="Selecione o que deseja incluir na cópia"
+                footer={
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowCloneDialog(false);
+                        setProjectToClone(null);
+                        setCloneProjectName("");
+                      }}
+                      className="h-8 px-4 text-xs"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleConfirmCloneAndOpen}
+                      disabled={!cloneProjectName.trim()}
+                      className="h-8 px-4 text-xs btn-brand"
+                    >
+                      <Copy className="h-3.5 w-3.5 mr-1.5" />
+                      Abrir para Editar
+                    </Button>
+                  </div>
+                }
               >
-                Cancelar
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleConfirmCloneAndOpen}
-                disabled={!cloneProjectName.trim()}
-                className="h-8 px-4 text-xs btn-brand"
-              >
-                <Copy className="h-3.5 w-3.5 mr-1.5" />
-                Abrir para Editar
-              </Button>
-            </div>
-          }
-        >
-            <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
-              {/* Name field */}
-              <div>
-                <Label
-                  htmlFor="clone-name"
-                  className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 block"
-                >
-                  Nome do Novo Projeto
-                </Label>
-                <Input
-                  id="clone-name"
-                  value={cloneProjectName}
-                  onChange={(e) => setCloneProjectName(e.target.value)}
-                  placeholder="Nome do projeto duplicado"
-                  className="h-9 text-sm"
-                />
-              </div>
+                <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
+                  {/* Name field */}
+                  <div>
+                    <Label
+                      htmlFor="clone-name"
+                      className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 block"
+                    >
+                      Nome do Novo Projeto
+                    </Label>
+                    <Input
+                      id="clone-name"
+                      value={cloneProjectName}
+                      onChange={(e) => setCloneProjectName(e.target.value)}
+                      placeholder="Nome do projeto duplicado"
+                      className="h-9 text-sm"
+                    />
+                  </div>
 
-              {/* Options */}
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
-                  O que clonar
-                </p>
-                <div className="space-y-2">
-                  {/* Dados do projeto - locked */}
-                  <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 opacity-70">
-                    <div className="mt-0.5 h-4 w-4 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center shrink-0">
-                      <CheckCircle className="h-2.5 w-2.5 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">
-                        Dados do Projeto
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Cliente, agência, tipo, datas e descrição — sempre
-                        incluídos
-                      </p>
+                  {/* Options */}
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
+                      O que clonar
+                    </p>
+                    <div className="space-y-2">
+                      {/* Dados do projeto - locked */}
+                      <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-3 opacity-70">
+                        <div className="mt-0.5 h-4 w-4 rounded border-2 border-emerald-500 bg-emerald-500 flex items-center justify-center shrink-0">
+                          <CheckCircle className="h-2.5 w-2.5 text-white" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-slate-700">
+                            Dados do Projeto
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Cliente, agência, tipo, datas e descrição — sempre
+                            incluídos
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Equipe */}
+                      <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                        <Checkbox
+                          checked={cloneOptions.team}
+                          onCheckedChange={(v) =>
+                            setCloneOptions((o) => ({ ...o, team: !!v }))
+                          }
+                          className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-slate-700">
+                            Equipe / Usuários
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Consultor responsável, nômades e membros da equipe
+                          </p>
+                        </div>
+                      </label>
+
+                      {/* Produtos */}
+                      <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                        <Checkbox
+                          checked={cloneOptions.products}
+                          onCheckedChange={(v) =>
+                            setCloneOptions((o) => ({ ...o, products: !!v }))
+                          }
+                          className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-slate-700">
+                            Produtos
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Lista de produtos disponíveis (dados de contratação
+                            serão resetados)
+                          </p>
+                        </div>
+                      </label>
+
+                      {/* Cofre */}
+                      <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                        <Checkbox
+                          checked={cloneOptions.vault}
+                          onCheckedChange={(v) =>
+                            setCloneOptions((o) => ({ ...o, vault: !!v }))
+                          }
+                          className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-slate-700">
+                            Arquivos e Senhas (Cofre)
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Credenciais e cartões de pagamento — pode remover
+                            antes de salvar
+                          </p>
+                        </div>
+                      </label>
+
+                      {/* Orçamento */}
+                      <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
+                        <Checkbox
+                          checked={cloneOptions.financial}
+                          onCheckedChange={(v) =>
+                            setCloneOptions((o) => ({ ...o, financial: !!v }))
+                          }
+                          className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-slate-700">
+                            Orçamento
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Valor e orçamento do projeto (gastos serão zerados)
+                          </p>
+                        </div>
+                      </label>
                     </div>
                   </div>
 
-                  {/* Equipe */}
-                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
-                    <Checkbox
-                      checked={cloneOptions.team}
-                      onCheckedChange={(v) =>
-                        setCloneOptions((o) => ({ ...o, team: !!v }))
-                      }
-                      className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">
-                        Equipe / Usuários
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Consultor responsável, nômades e membros da equipe
-                      </p>
-                    </div>
-                  </label>
-
-                  {/* Produtos */}
-                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
-                    <Checkbox
-                      checked={cloneOptions.products}
-                      onCheckedChange={(v) =>
-                        setCloneOptions((o) => ({ ...o, products: !!v }))
-                      }
-                      className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">
-                        Produtos
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Lista de produtos disponíveis (dados de contratação
-                        serão resetados)
-                      </p>
-                    </div>
-                  </label>
-
-                  {/* Cofre */}
-                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
-                    <Checkbox
-                      checked={cloneOptions.vault}
-                      onCheckedChange={(v) =>
-                        setCloneOptions((o) => ({ ...o, vault: !!v }))
-                      }
-                      className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">
-                        Arquivos e Senhas (Cofre)
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Credenciais e cartões de pagamento — pode remover antes
-                        de salvar
-                      </p>
-                    </div>
-                  </label>
-
-                  {/* Orçamento */}
-                  <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3.5 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-colors">
-                    <Checkbox
-                      checked={cloneOptions.financial}
-                      onCheckedChange={(v) =>
-                        setCloneOptions((o) => ({ ...o, financial: !!v }))
-                      }
-                      className="mt-0.5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
-                    />
-                    <div>
-                      <p className="text-sm font-medium text-slate-700">
-                        Orçamento
-                      </p>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Valor e orçamento do projeto (gastos serão zerados)
-                      </p>
-                    </div>
-                  </label>
+                  {/* Info note */}
+                  <div className="flex gap-2.5 rounded-lg bg-blue-50 border border-blue-100 px-3.5 py-3">
+                    <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-700 leading-relaxed">
+                      O projeto será aberto para revisão antes de ser salvo.
+                      Você poderá editar e remover qualquer informação na tela
+                      de criação.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              </StandardModalDialog>
 
-              {/* Info note */}
-              <div className="flex gap-2.5 rounded-lg bg-blue-50 border border-blue-100 px-3.5 py-3">
-                <AlertTriangle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-700 leading-relaxed">
-                  O projeto será aberto para revisão antes de ser salvo. Você
-                  poderá editar e remover qualquer informação na tela de
-                  criação.
-                </p>
-              </div>
-            </div>
-        </StandardModalDialog>
-
-        {/* Cancel Project — Popup 2 (confirmação compacta) */}
-        <ConfirmationDialog
-          open={showCancelWizard}
-          onClose={() => {
-            setShowCancelWizard(false);
-            setProjectToCancel(null);
-            setCancelReason("");
-          }}
-          onConfirm={handleConfirmCancel}
-          title="Cancelar Projeto"
-          message={
-            <>
-              <p className="mb-3">
-                Tem certeza que deseja cancelar{" "}
-                <strong>{projectToCancel?.name}</strong>? Ao cancelar, todas as
-                cobranças futuras serão suspensas e o projeto será marcado
-                como inativo. Esta ação não pode ser desfeita.
-              </p>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Motivo do cancelamento (opcional)"
-                className="w-full h-20 p-3 border border-gray-300 rounded-lg text-sm resize-none"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </>
-          }
-          confirmText={isCancellingProject ? "Cancelando…" : "Cancelar Projeto"}
-          cancelText="Voltar"
-          destructive
-        />
-
-        {/* Arquivar Projeto — ação não destrutiva, motivo obrigatório */}
-        <ConfirmationDialog
-          open={showArchiveDialog}
-          onClose={() => {
-            // Cancelar não altera o projeto — só fecha o diálogo.
-            setShowArchiveDialog(false);
-            setProjectToArchive(null);
-            setArchiveReason("");
-          }}
-          onConfirm={handleConfirmArchiveProject}
-          title="Arquivar projeto"
-          icon={Archive}
-          destructive={false}
-          message={
-            <>
-              <span className="block mb-3">
-                Tem certeza que deseja arquivar{" "}
-                <strong>{projectToArchive?.name}</strong>? O projeto sairá da
-                lista de projetos ativos, mas permanecerá disponível no
-                histórico de Arquivados — nada será excluído.
-              </span>
-              <label className="block text-xs font-medium text-slate-600 mb-1">
-                Motivo do arquivamento (obrigatório)
-              </label>
-              <textarea
-                value={archiveReason}
-                onChange={(e) =>
-                  setArchiveReason(e.target.value.slice(0, ARCHIVE_REASON_MAX))
+              {/* Cancel Project — Popup 2 (confirmação compacta) */}
+              <ConfirmationDialog
+                open={showCancelWizard}
+                onClose={() => {
+                  setShowCancelWizard(false);
+                  setProjectToCancel(null);
+                  setCancelReason("");
+                }}
+                onConfirm={handleConfirmCancel}
+                title="Cancelar Projeto"
+                message={
+                  <>
+                    <p className="mb-3">
+                      Tem certeza que deseja cancelar{" "}
+                      <strong>{projectToCancel?.name}</strong>? Ao cancelar,
+                      todas as cobranças futuras serão suspensas e o projeto
+                      será marcado como inativo. Esta ação não pode ser
+                      desfeita.
+                    </p>
+                    <textarea
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      placeholder="Motivo do cancelamento (opcional)"
+                      className="w-full h-20 p-3 border border-gray-300 rounded-lg text-sm resize-none"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </>
                 }
-                placeholder="Ex.: perda do projeto, cliente cancelou o contrato..."
-                className="w-full h-20 p-3 border border-gray-300 rounded-lg text-sm resize-none"
-                onClick={(e) => e.stopPropagation()}
-                maxLength={ARCHIVE_REASON_MAX}
+                confirmText={
+                  isCancellingProject ? "Cancelando…" : "Cancelar Projeto"
+                }
+                cancelText="Voltar"
+                destructive
               />
-              <span
-                className={`block mt-1 text-[11px] ${
-                  archiveReason.trim().length > 0 &&
+
+              {/* Arquivar Projeto — ação não destrutiva, motivo obrigatório */}
+              <ConfirmationDialog
+                open={showArchiveDialog}
+                onClose={() => {
+                  // Cancelar não altera o projeto — só fecha o diálogo.
+                  setShowArchiveDialog(false);
+                  setProjectToArchive(null);
+                  setArchiveReason("");
+                }}
+                onConfirm={handleConfirmArchiveProject}
+                title="Arquivar projeto"
+                icon={Archive}
+                destructive={false}
+                message={
+                  <>
+                    <span className="block mb-3">
+                      Tem certeza que deseja arquivar{" "}
+                      <strong>{projectToArchive?.name}</strong>? O projeto sairá
+                      da lista de projetos ativos, mas permanecerá disponível no
+                      histórico de Arquivados — nada será excluído.
+                    </span>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Motivo do arquivamento (obrigatório)
+                    </label>
+                    <textarea
+                      value={archiveReason}
+                      onChange={(e) =>
+                        setArchiveReason(
+                          e.target.value.slice(0, ARCHIVE_REASON_MAX),
+                        )
+                      }
+                      placeholder="Ex.: perda do projeto, cliente cancelou o contrato..."
+                      className="w-full h-20 p-3 border border-gray-300 rounded-lg text-sm resize-none"
+                      onClick={(e) => e.stopPropagation()}
+                      maxLength={ARCHIVE_REASON_MAX}
+                    />
+                    <span
+                      className={`block mt-1 text-[11px] ${
+                        archiveReason.trim().length > 0 &&
+                        archiveReason.trim().length < ARCHIVE_REASON_MIN
+                          ? "text-red-500"
+                          : "text-slate-400"
+                      }`}
+                    >
+                      {archiveReason.length}/{ARCHIVE_REASON_MAX} caracteres
+                      (mínimo {ARCHIVE_REASON_MIN})
+                    </span>
+                  </>
+                }
+                confirmText="Arquivar projeto"
+                cancelText="Cancelar"
+                confirmDisabled={
                   archiveReason.trim().length < ARCHIVE_REASON_MIN
-                    ? "text-red-500"
-                    : "text-slate-400"
-                }`}
-              >
-                {archiveReason.length}/{ARCHIVE_REASON_MAX} caracteres
-                (mínimo {ARCHIVE_REASON_MIN})
-              </span>
-            </>
-          }
-          confirmText="Arquivar projeto"
-          cancelText="Cancelar"
-          confirmDisabled={archiveReason.trim().length < ARCHIVE_REASON_MIN}
-        />
-
-        <ProjectManagementModal
-          // FrontendProject.id e string|number (projetos importados usam cuid);
-          // o modal declara number. Nao ha conversao segura — o modal so usa o
-          // id para lookup, entao passa como esta.
-          project={selectedProject as unknown as React.ComponentProps<typeof ProjectManagementModal>["project"]}
-          open={modalOpen}
-          onOpenChange={(open) => {
-            setModalOpen(open);
-            if (!open) navigate(projectRouteBase, { replace: true });
-          }}
-          mode={modalMode}
-          initialTab={initialProjectTab}
-          onEdit={() => {
-            setModalMode("edit");
-          }}
-          onClone={() => handleCloneProject(selectedProject)}
-          onExport={() => {}}
-          onSave={handleSaveProjectChanges}
-          onCancel={() => handleStartCancelProject(selectedProject)}
-          onContinueDraft={
-            selectedProject
-              ? () => {
-                  setModalOpen(false);
-                  handleContinueDraft(selectedProject);
                 }
-              : undefined
-          }
-          onGoToPayment={
-            selectedProject
-              ? () => {
-                  setModalOpen(false);
-                  handleGoToPayment(selectedProject);
-                }
-              : undefined
-          }
-        />
-        <ProjectWizardSlidePanel
-          open={showWizard}
-          onClose={() => setShowWizard(false)}
-          onSkip={handleSkipWizard}
-          onCreateWithAI={handleCreateWithAI}
-        />
-        <ProjectCreateNewPanel
-          open={showProjectCreate}
-          onOpenChange={(v) => {
-            setShowProjectCreate(v);
-            if (!v) {
-              setProjectCreateData(null);
-              setDraftPanelProducts([]);
-              setDraftPanelQuantities({});
-              setDraftPanelCommissions({});
-              setDraftPanelProjectId(undefined);
-              setDraftResumeToCheckout(false);
-            }
-          }}
-          initialData={projectCreateData}
-          cloneMode={!!projectCreateData && !draftPanelProjectId}
-          allowCompanySelect={scope === "admin"}
-          agencyName={scope === "agency" ? agencyName : undefined}
-          companyName={scope === "agency" ? agencyName : undefined}
-          draftProducts={
-            draftPanelProducts.length > 0 ? draftPanelProducts : undefined
-          }
-          draftProductQuantities={
-            draftPanelProducts.length > 0 ? draftPanelQuantities : undefined
-          }
-          draftCommissions={
-            draftPanelProducts.length > 0 ? draftPanelCommissions : undefined
-          }
-          draftProjectId={draftPanelProjectId}
-          resumeToCheckout={draftResumeToCheckout}
-          onCreate={async (project) => {
-            refetchProjects();
-            if (project?.id) {
-              setShowProjectCreate(false);
-              const openTab = project.openTab ?? "dashboard";
-              setInitialProjectTab(openTab);
-              const tabParam = openTab !== "dashboard" ? `?tab=${openTab}` : "";
-              try {
-                const raw: any = await apiClient.getProject(project.id);
-                const full = adaptApiProject(raw);
-                setInitialProjectTab(openTab);
-                setSelectedProject(full);
-                setModalMode("view");
-                setModalOpen(true);
-                navigate(`${projectRouteBase}/${full.seq ?? project.id}${tabParam}`, {
-                  replace: true,
-                });
-              } catch {
-                setInitialProjectTab(openTab);
-                setSelectedProject(project as FrontendProject);
-                setModalMode("view");
-                setModalOpen(true);
-                const fallbackSeq = project.project_code
-                  ? project.project_code.replace(/^proj_/, "")
-                  : project.id;
-                navigate(`${projectRouteBase}/${fallbackSeq}${tabParam}`, {
-                  replace: true,
-                });
-              }
-            }
-          }}
-        />
+              />
 
-        {/* Alterar vínculo (agency_id/company_id/partner_id) — exclusivo do Admin */}
-        {scope === "admin" && (
-          <SlidePanel
-            open={linkPanelOpen}
-            onClose={() => { if (!linkSaving) setLinkPanelOpen(false); }}
-            title="Alterar vínculo"
-            subtitle={linkPanelProject ? linkPanelProject.name : undefined}
-            widthMode="full"
-            footer={
-              <div className="flex items-center justify-end gap-2">
-                <Button variant="outline" onClick={() => setLinkPanelOpen(false)} disabled={linkSaving}>
-                  Cancelar
-                </Button>
-                <Button onClick={saveLink} disabled={linkSaving} className="btn-brand">
-                  {linkSaving ? "Salvando..." : "Salvar vínculo"}
-                </Button>
-              </div>
-            }
-          >
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              <div className="space-y-2">
-                <Label>Este projeto pertence a</Label>
-                <Select
-                  value={linkForm.type}
-                  onValueChange={(v: "none" | "agency" | "company" | "partner") => setLinkForm({ type: v, id: "" })}
+              <ProjectManagementModal
+                // FrontendProject.id e string|number (projetos importados usam cuid);
+                // o modal declara number. Nao ha conversao segura — o modal so usa o
+                // id para lookup, entao passa como esta.
+                project={
+                  selectedProject as unknown as React.ComponentProps<
+                    typeof ProjectManagementModal
+                  >["project"]
+                }
+                open={modalOpen}
+                onOpenChange={(open) => {
+                  setModalOpen(open);
+                  if (!open) navigate(projectRouteBase, { replace: true });
+                }}
+                mode={modalMode}
+                initialTab={initialProjectTab}
+                onEdit={() => {
+                  setModalMode("edit");
+                }}
+                onClone={() => handleCloneProject(selectedProject)}
+                onExport={() => {}}
+                onSave={handleSaveProjectChanges}
+                onCancel={() => handleStartCancelProject(selectedProject)}
+                onContinueDraft={
+                  selectedProject
+                    ? () => {
+                        setModalOpen(false);
+                        handleContinueDraft(selectedProject);
+                      }
+                    : undefined
+                }
+                onGoToPayment={
+                  selectedProject
+                    ? () => {
+                        setModalOpen(false);
+                        handleGoToPayment(selectedProject);
+                      }
+                    : undefined
+                }
+              />
+              <ProjectWizardSlidePanel
+                open={showWizard}
+                onClose={() => setShowWizard(false)}
+                onSkip={handleSkipWizard}
+                onCreateWithAI={handleCreateWithAI}
+              />
+              <ProjectCreateNewPanel
+                open={showProjectCreate}
+                onOpenChange={(v) => {
+                  setShowProjectCreate(v);
+                  if (!v) {
+                    setProjectCreateData(null);
+                    setDraftPanelProducts([]);
+                    setDraftPanelQuantities({});
+                    setDraftPanelCommissions({});
+                    setDraftPanelProjectId(undefined);
+                    setDraftResumeToCheckout(false);
+                  }
+                }}
+                initialData={projectCreateData}
+                cloneMode={!!projectCreateData && !draftPanelProjectId}
+                allowCompanySelect={scope === "admin"}
+                agencyName={scope === "agency" ? agencyName : undefined}
+                companyName={scope === "agency" ? agencyName : undefined}
+                draftProducts={
+                  draftPanelProducts.length > 0 ? draftPanelProducts : undefined
+                }
+                draftProductQuantities={
+                  draftPanelProducts.length > 0
+                    ? draftPanelQuantities
+                    : undefined
+                }
+                draftCommissions={
+                  draftPanelProducts.length > 0
+                    ? draftPanelCommissions
+                    : undefined
+                }
+                draftProjectId={draftPanelProjectId}
+                resumeToCheckout={draftResumeToCheckout}
+                onCreate={async (project) => {
+                  refetchProjects();
+                  if (project?.id) {
+                    setShowProjectCreate(false);
+                    const openTab = project.openTab ?? "dashboard";
+                    setInitialProjectTab(openTab);
+                    const tabParam =
+                      openTab !== "dashboard" ? `?tab=${openTab}` : "";
+                    try {
+                      const raw: any = await apiClient.getProject(project.id);
+                      const full = adaptApiProject(raw);
+                      setInitialProjectTab(openTab);
+                      setSelectedProject(full);
+                      setModalMode("view");
+                      setModalOpen(true);
+                      navigate(
+                        `${projectRouteBase}/${full.seq ?? project.id}${tabParam}`,
+                        {
+                          replace: true,
+                        },
+                      );
+                    } catch {
+                      setInitialProjectTab(openTab);
+                      setSelectedProject(project as FrontendProject);
+                      setModalMode("view");
+                      setModalOpen(true);
+                      const fallbackSeq = project.project_code
+                        ? project.project_code.replace(/^proj_/, "")
+                        : project.id;
+                      navigate(
+                        `${projectRouteBase}/${fallbackSeq}${tabParam}`,
+                        {
+                          replace: true,
+                        },
+                      );
+                    }
+                  }
+                }}
+              />
+
+              {/* Alterar vínculo (agency_id/company_id/partner_id) — exclusivo do Admin */}
+              {scope === "admin" && (
+                <SlidePanel
+                  open={linkPanelOpen}
+                  onClose={() => {
+                    if (!linkSaving) setLinkPanelOpen(false);
+                  }}
+                  title="Alterar vínculo"
+                  subtitle={
+                    linkPanelProject ? linkPanelProject.name : undefined
+                  }
+                  widthMode="full"
+                  footer={
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setLinkPanelOpen(false)}
+                        disabled={linkSaving}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        onClick={saveLink}
+                        disabled={linkSaving}
+                        className="btn-brand"
+                      >
+                        {linkSaving ? "Salvando..." : "Salvar vínculo"}
+                      </Button>
+                    </div>
+                  }
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem vínculo</SelectItem>
-                    <SelectItem value="agency">Agency</SelectItem>
-                    <SelectItem value="company">Company</SelectItem>
-                    <SelectItem value="partner">Partner</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {linkForm.type !== "none" && (
-                <div className="space-y-2">
-                  <Label>
-                    {linkForm.type === "agency" ? "Qual Agency" : linkForm.type === "company" ? "Qual Company" : "Qual Partner"}
-                  </Label>
-                  <Select value={linkForm.id} onValueChange={(v) => setLinkForm({ ...linkForm, id: v })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currentLinkOptions.map((o) => (
-                        <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    <div className="space-y-2">
+                      <Label>Este projeto pertence a</Label>
+                      <Select
+                        value={linkForm.type}
+                        onValueChange={(
+                          v: "none" | "agency" | "company" | "partner",
+                        ) => setLinkForm({ type: v, id: "" })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem vínculo</SelectItem>
+                          <SelectItem value="agency">Agency</SelectItem>
+                          <SelectItem value="company">Company</SelectItem>
+                          <SelectItem value="partner">Partner</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {linkForm.type !== "none" && (
+                      <div className="space-y-2">
+                        <Label>
+                          {linkForm.type === "agency"
+                            ? "Qual Agency"
+                            : linkForm.type === "company"
+                              ? "Qual Company"
+                              : "Qual Partner"}
+                        </Label>
+                        <Select
+                          value={linkForm.id}
+                          onValueChange={(v) =>
+                            setLinkForm({ ...linkForm, id: v })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {currentLinkOptions.map((o) => (
+                              <SelectItem key={o.id} value={o.id}>
+                                {o.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    {linkError && (
+                      <p className="text-xs text-red-600">{linkError}</p>
+                    )}
+                  </div>
+                </SlidePanel>
               )}
-              {linkError && <p className="text-xs text-red-600">{linkError}</p>}
             </div>
-          </SlidePanel>
-        )}
+          </div>
+        </div>
       </div>
-    </div>
-    </div>
-    </div>
     </div>
   );
 }

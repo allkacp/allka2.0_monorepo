@@ -7,6 +7,18 @@ import { requireTestDatabaseUrl } from "../test-support/require-test-database";
 import app from "../app";
 import { prisma } from "../lib/prisma";
 import { config } from "../config";
+import { findOrCreateWallet } from "../lib/wallet-service";
+
+// Dá saldo real na carteira do nômade antes de testar criação de saque —
+// desde que POST /financial/withdrawals passou a validar contra o saldo
+// real (achado da auditoria de lançamento: antes qualquer valor era
+// aceito sem checar nada), um saque de teste sem saldo prévio é
+// corretamente rejeitado com 400, não mais um cenário válido pra estes
+// testes de controle de ACESSO (que quer testar quem pode, não quanto tem).
+async function grantNomadeBalance(nomadeId: string, amount: number) {
+  const wallet = await findOrCreateWallet("nomad", nomadeId);
+  await prisma.wallet.update({ where: { id: wallet.id }, data: { balance: amount } });
+}
 
 // Lote de segurança 2A-3 (continuação da ata 2026-08-20): controle de
 // acesso de LEITURA e CRIAÇÃO de saques (financial.ts) e faturas
@@ -264,6 +276,7 @@ describe("controle de acesso de leitura/criação — saques e faturas (lote 2A-
       const user = await createUser({ role: "nomad", account_type: "nomades" });
       const own = await createNomade(user.id);
       const outroNomade = await createNomade(); // conta de terceiro, id válido de verdade
+      await grantNomadeBalance(own.id, 500);
 
       const res = await api("/api/financial/withdrawals", {
         method: "POST",
@@ -323,6 +336,7 @@ describe("controle de acesso de leitura/criação — saques e faturas (lote 2A-
 
     it("admin com sistema/create -> cria em nome do nômade informado (uso legítimo administrativo)", async () => {
       const nomade = await createNomade();
+      await grantNomadeBalance(nomade.id, 500);
       const profile = await createProfile({ permissions: [{ module: "sistema", action: "create" }] });
       const admin = await createUser({ role: "admin", account_type: "admin", admin_profile_id: profile.id });
       const res = await api("/api/financial/withdrawals", {

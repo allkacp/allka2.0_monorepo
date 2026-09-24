@@ -71,7 +71,20 @@ router.post("/fake-checkout", verifyToken, async (req, res, next) => {
       throw err;
     }
 
-    const { payment, project: updatedProject, alreadyProcessed, tasksResult } = result;
+    const { payment, project: updatedProject, alreadyProcessed, tasksResult, declined, declineReason } = result;
+
+    if (declined) {
+      res.status(402).json({
+        success: false,
+        declined: true,
+        payment,
+        paymentId: payment.id,
+        projectId: project_id,
+        paymentStatus: payment.status,
+        message: declineReason ?? "Pagamento recusado pelo gateway.",
+      });
+      return;
+    }
 
     // ── Registro na carteira (não bloqueia o fluxo, best-effort) ──────────────
     // Fluxo Allkoin: pagamento aprovado → crédito na carteira → projeto debita

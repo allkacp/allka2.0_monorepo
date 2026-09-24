@@ -6,7 +6,12 @@ import { SidebarProvider } from "@/contexts/sidebar-context"
 import { TaskRotationPanel } from "@/components/task-rotation-panel"
 
 const { api } = vi.hoisted(() => ({
-  api: { getTaskRotation: vi.fn(), restartTaskRotation: vi.fn() },
+  api: {
+    getTaskRotation: vi.fn(), restartTaskRotation: vi.fn(), getCurrentUser: vi.fn(),
+    getTaskRoutingSettings: vi.fn(), getTaskRoutingAreas: vi.fn(), getTaskRoutingNomades: vi.fn(),
+    updateTaskRouting: vi.fn(), updateTaskRoutingSettings: vi.fn(), updateTaskRoutingArea: vi.fn(),
+    sendTaskManualOffer: vi.fn(), assignTaskNomadeDirectly: vi.fn(),
+  },
 }))
 vi.mock("@/lib/api-client", () => ({
   apiClient: api,
@@ -43,6 +48,10 @@ function renderPanel() {
 beforeEach(() => {
   vi.clearAllMocks()
   api.getTaskRotation.mockResolvedValue(rot())
+  api.getCurrentUser.mockResolvedValue({ account_type: "admin", admin_profile: { is_active: true, is_master: false } })
+  api.getTaskRoutingSettings.mockResolvedValue({ offer_timeout_minutes: 60, mandatory_decline_alerts: true })
+  api.getTaskRoutingAreas.mockResolvedValue([])
+  api.getTaskRoutingNomades.mockResolvedValue([])
 })
 
 it("9. mostra a fase, contagens e a oferta pendente", async () => {
@@ -68,4 +77,29 @@ it("erro de carga → botão tentar de novo", async () => {
   api.getTaskRotation.mockRejectedValue(new Error("x"))
   renderPanel()
   expect(await screen.findByText(/Não foi possível carregar o rodízio/i)).toBeInTheDocument()
+})
+
+it("Admin Master vê e abre os controles de encaminhamento", async () => {
+  const user = userEvent.setup()
+  api.getCurrentUser.mockResolvedValue({ account_type: "admin", admin_profile: { is_active: true, is_master: true } })
+  renderPanel()
+  const button = await screen.findByRole("button", { name: /Controle do Admin Master/i })
+  await user.click(button)
+  expect(await screen.findByText(/Encaminhamento de Nômades/i)).toBeInTheDocument()
+  expect(screen.getByText(/Escolher Nômade manualmente/i)).toBeInTheDocument()
+})
+
+it("Admin Master pesquisa Nômades e identifica quem não está habilitado", async () => {
+  const user = userEvent.setup()
+  api.getCurrentUser.mockResolvedValue({ account_type: "admin", admin_profile: { is_active: true, is_master: true } })
+  api.getTaskRoutingNomades.mockResolvedValue([
+    { id: "n1", name: "Nômade habilitado", eligible: true },
+    { id: "n2", name: "Nômade exceção", eligible: false },
+  ])
+  renderPanel()
+  await user.click(await screen.findByRole("button", { name: /Controle do Admin Master/i }))
+  const search = await screen.findByLabelText(/Escolher Nômade manualmente/i)
+  await user.type(search, "exceção")
+  expect(await screen.findByRole("button", { name: /Nômade exceção.*Não habilitado/i })).toBeInTheDocument()
+  expect(screen.queryByText("Nômade habilitado")).not.toBeInTheDocument()
 })

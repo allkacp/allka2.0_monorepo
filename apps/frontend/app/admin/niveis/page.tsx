@@ -33,7 +33,12 @@ import {
   Shield,
   Gem,
 } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   StandardPageBanner,
@@ -165,11 +170,21 @@ export default function NiveisPage() {
     let cancelled = false;
     apiClient
       .getCurrentUser()
-      .then((me: any) => { if (!cancelled) setAdminProfile(me?.admin_profile ?? null); })
-      .catch(() => { if (!cancelled) setAdminProfile(null); });
-    return () => { cancelled = true; };
+      .then((me: any) => {
+        if (!cancelled) setAdminProfile(me?.admin_profile ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAdminProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  const canDeleteLevel = hasAdminModulePermission(adminProfile, "sistema", "delete");
+  const canDeleteLevel = hasAdminModulePermission(
+    adminProfile,
+    "sistema",
+    "delete",
+  );
 
   const loadLevels = useCallback(async () => {
     setLoading(true);
@@ -238,7 +253,9 @@ export default function NiveisPage() {
   const confirmDeleteLevel = async () => {
     if (deleteDialog.id == null) return;
     await apiClient.deleteLevel(String(deleteDialog.id));
-    setPartnerLevels((levels) => levels.filter((level) => level.id !== deleteDialog.id));
+    setPartnerLevels((levels) =>
+      levels.filter((level) => level.id !== deleteDialog.id),
+    );
   };
 
   const confirmDelete = (id: number, name: string) => {
@@ -316,323 +333,348 @@ export default function NiveisPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="relative h-full min-h-0 flex flex-col">
-      <div className="shrink-0 -mb-[11px]">
-      <StandardPageBanner
-        icon={Award}
-        title="Níveis do Programa Partner"
-        description="Configure os 5 níveis do Programa Allka Partners com critérios de progressão, benefícios e regras de comissão"
-        actions={
-          <>
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => openEditDialog()}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                  >
-                    <Plus className="h-3.5 w-3.5 shrink-0" />
-                    Novo Nível
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Criar novo nível</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <PinToTrayButton id="page-niveis" label="Níveis do Programa Partner" icon={Award} path="/admin/niveis" />
-          </>
-        }
-      />
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-6">
-      <div className="grid gap-4">
-        {partnerLevels.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
-            <Award className="h-10 w-10 opacity-30" />
-            <p className="text-sm">Nenhum nível cadastrado ainda.</p>
-            <Button
-              size="sm"
-              onClick={() => openEditDialog()}
-              className="btn-brand gap-2"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Criar primeiro nível
-            </Button>
-          </div>
-        )}
-
-        {partnerLevels.map((level, index) => {
-          const theme = LEVEL_THEMES[level.name] ?? DEFAULT_THEME;
-          const levelConfig = LEVEL_ICON_MAP[level.name] ?? {
-            gradient: "from-blue-500 to-indigo-600",
-            Icon: Award,
-          };
-          const LevelIcon = levelConfig.Icon;
-          return (
-            <div
-              key={level.id}
-              className="animate-in fade-in slide-in-from-bottom duration-500"
-              style={{ animationDelay: `${index * 80}ms` }}
-            >
-              <Card
-                className={`overflow-hidden bg-white dark:bg-slate-900 border-0 border-l-4 ${theme.accent} ${theme.neonRing} ${theme.glowShadow} transition-all duration-200`}
-              >
-                {/* ── HEADER ── */}
-                <CardHeader className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-4 min-w-0">
-                      {/* Modern gradient icon badge */}
-                      <div className="relative shrink-0">
-                        <div
-                          className={`w-12 h-12 rounded-xl bg-linear-to-br ${levelConfig.gradient} flex items-center justify-center shadow-md`}
-                        >
-                          <LevelIcon className="h-6 w-6 text-white drop-shadow-sm" />
-                        </div>
-                        <span
-                          className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow border-2 border-white dark:border-slate-900"
-                          style={{ backgroundColor: level.color ?? "#6B7280" }}
-                        >
-                          {level.sort_order ?? index + 1}
-                        </span>
-                      </div>
-
-                      {/* Name + badges + description */}
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-base font-bold text-slate-800 dark:text-white">
-                            {level.name}
-                          </h3>
-                          {level.requires_partner && (
-                            <Badge
-                              className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                            >
-                              <Crown className="h-3 w-3 mr-1" />
-                              Requer Partner
-                            </Badge>
-                          )}
-                          {level.receives_leads_premium && (
-                            <Badge className="border text-xs font-medium bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
-                              <Zap className="h-3 w-3 mr-1" />
-                              Leads Premium
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          {level.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-1.5 shrink-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(level)}
-                        className="h-7 w-7 p-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100"
+      <div className="relative h-full min-h-0 flex flex-col">
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={Award}
+            title="Níveis do Programa Partner"
+            description="Configure os 5 níveis do Programa Allka Partners com critérios de progressão, benefícios e regras de comissão"
+            contentClassName="lg:h-[65px]"
+            actions={
+              <>
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => openEditDialog()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
                       >
-                        <Edit className="h-3.5 w-3.5" />
-                      </Button>
-                      <TooltipProvider delayDuration={400}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
+                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                        Novo Nível
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Criar novo nível
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <PinToTrayButton
+                  id="page-niveis"
+                  label="Níveis do Programa Partner"
+                  icon={Award}
+                  path="/admin/niveis"
+                />
+              </>
+            }
+          />
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="space-y-6">
+            <div className="mt-0 grid gap-4">
+              {partnerLevels.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                  <Award className="h-10 w-10 opacity-30" />
+                  <p className="text-sm">Nenhum nível cadastrado ainda.</p>
+                  <Button
+                    size="sm"
+                    onClick={() => openEditDialog()}
+                    className="btn-brand gap-2"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Criar primeiro nível
+                  </Button>
+                </div>
+              )}
+
+              {partnerLevels.map((level, index) => {
+                const theme = LEVEL_THEMES[level.name] ?? DEFAULT_THEME;
+                const levelConfig = LEVEL_ICON_MAP[level.name] ?? {
+                  gradient: "from-blue-500 to-indigo-600",
+                  Icon: Award,
+                };
+                const LevelIcon = levelConfig.Icon;
+                return (
+                  <div
+                    key={level.id}
+                    className="animate-in fade-in slide-in-from-bottom duration-500"
+                    style={{ animationDelay: `${index * 80}ms` }}
+                  >
+                    <Card
+                      className={`overflow-hidden bg-white dark:bg-slate-900 border-0 border-l-4 ${theme.accent} ${theme.neonRing} ${theme.glowShadow} transition-all duration-200`}
+                    >
+                      {/* ── HEADER ── */}
+                      <CardHeader className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-4 min-w-0">
+                            {/* Modern gradient icon badge */}
+                            <div className="relative shrink-0">
+                              <div
+                                className={`w-12 h-12 rounded-xl bg-linear-to-br ${levelConfig.gradient} flex items-center justify-center shadow-md`}
+                              >
+                                <LevelIcon className="h-6 w-6 text-white drop-shadow-sm" />
+                              </div>
+                              <span
+                                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow border-2 border-white dark:border-slate-900"
+                                style={{
+                                  backgroundColor: level.color ?? "#6B7280",
+                                }}
+                              >
+                                {level.sort_order ?? index + 1}
+                              </span>
+                            </div>
+
+                            {/* Name + badges + description */}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="text-base font-bold text-slate-800 dark:text-white">
+                                  {level.name}
+                                </h3>
+                                {level.requires_partner && (
+                                  <Badge
+                                    className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                                  >
+                                    <Crown className="h-3 w-3 mr-1" />
+                                    Requer Partner
+                                  </Badge>
+                                )}
+                                {level.receives_leads_premium && (
+                                  <Badge className="border text-xs font-medium bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
+                                    <Zap className="h-3 w-3 mr-1" />
+                                    Leads Premium
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                {level.description}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-1.5 shrink-0">
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => canDeleteLevel && confirmDelete(level.id, level.name)}
-                              disabled={!canDeleteLevel}
-                              aria-label={canDeleteLevel ? "Excluir nível" : "Sem permissão para excluir níveis"}
-                              className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 disabled:opacity-40 disabled:pointer-events-none"
+                              onClick={() => openEditDialog(level)}
+                              className="h-7 w-7 p-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              <Edit className="h-3.5 w-3.5" />
                             </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {canDeleteLevel ? "Excluir nível" : "Sem permissão para excluir níveis"}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
+                            <TooltipProvider delayDuration={400}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      canDeleteLevel &&
+                                      confirmDelete(level.id, level.name)
+                                    }
+                                    disabled={!canDeleteLevel}
+                                    aria-label={
+                                      canDeleteLevel
+                                        ? "Excluir nível"
+                                        : "Sem permissão para excluir níveis"
+                                    }
+                                    className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 disabled:opacity-40 disabled:pointer-events-none"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" sideOffset={6}>
+                                  {canDeleteLevel
+                                    ? "Excluir nível"
+                                    : "Sem permissão para excluir níveis"}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </div>
+                      </CardHeader>
+
+                      <CardContent className="px-4 py-3 space-y-3 dark:bg-slate-900">
+                        {/* ── CRITÉRIOS DE PROGRESSÃO ── */}
+                        <div>
+                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
+                            Critérios de Progressão
+                          </p>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div
+                              className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                            >
+                              <div className="flex items-center gap-1 mb-1">
+                                <DollarSign
+                                  className={`h-3 w-3 ${theme.statIconColor}`}
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                                  MRR Consumo
+                                </span>
+                              </div>
+                              <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                                {formatMrrRange(level.min_mrr, level.max_mrr)}
+                              </p>
+                            </div>
+                            <div
+                              className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                            >
+                              <div className="flex items-center gap-1 mb-1">
+                                <Users
+                                  className={`h-3 w-3 ${theme.statIconColor}`}
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                                  Ag. Lideradas
+                                </span>
+                              </div>
+                              <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                                {level.led_agencies_min > 0
+                                  ? `${level.led_agencies_min} ativas`
+                                  : "—"}
+                              </p>
+                            </div>
+                            <div
+                              className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                            >
+                              <div className="flex items-center gap-1 mb-1">
+                                <BarChart3
+                                  className={`h-3 w-3 ${theme.statIconColor}`}
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                                  MRR Lideradas
+                                </span>
+                              </div>
+                              <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                                {level.led_agencies_mrr_min > 0
+                                  ? `R$ ${level.led_agencies_mrr_min.toLocaleString("pt-BR")}`
+                                  : "—"}
+                              </p>
+                            </div>
+                            <div
+                              className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                            >
+                              <div className="flex items-center gap-1 mb-1">
+                                <Target
+                                  className={`h-3 w-3 ${theme.statIconColor}`}
+                                />
+                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                                  Proj. Premium
+                                </span>
+                              </div>
+                              <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                                {formatPremiumLimit(level)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* ── PERKS ── */}
+                        {(level.commission_rate > 0 ||
+                          level.extra_discount > 0 ||
+                          level.level_up_bonus_credits > 0) && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {level.commission_rate > 0 && (
+                              <span
+                                className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                              >
+                                <TrendingUp className="h-2.5 w-2.5" />
+                                {level.commission_rate}% comissão sobre MRR das
+                                lideradas
+                              </span>
+                            )}
+                            {level.extra_discount > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
+                                <Percent className="h-2.5 w-2.5" />+
+                                {level.extra_discount}% desconto adicional nas
+                                contratações
+                              </span>
+                            )}
+                            {level.level_up_bonus_credits > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-700/40 text-purple-700 dark:text-purple-400">
+                                <Gift className="h-2.5 w-2.5" />
+                                R${" "}
+                                {level.level_up_bonus_credits.toLocaleString(
+                                  "pt-BR",
+                                )}{" "}
+                                em créditos ao atingir nível
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* ── BENEFÍCIOS DESBLOQUEADOS ── */}
+                        {(level.benefits ?? []).length > 0 && (
+                          <div>
+                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
+                              Benefícios Desbloqueados
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(level.benefits ?? []).map((benefit, i) => (
+                                <span
+                                  key={i}
+                                  className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                                >
+                                  <CheckCircle2 className="h-2.5 w-2.5 opacity-70 shrink-0" />
+                                  {benefit}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
                   </div>
-                </CardHeader>
-
-                <CardContent className="px-4 py-3 space-y-3 dark:bg-slate-900">
-                  {/* ── CRITÉRIOS DE PROGRESSÃO ── */}
-                  <div>
-                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
-                      Critérios de Progressão
-                    </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <div
-                        className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
-                      >
-                        <div className="flex items-center gap-1 mb-1">
-                          <DollarSign
-                            className={`h-3 w-3 ${theme.statIconColor}`}
-                          />
-                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
-                            MRR Consumo
-                          </span>
-                        </div>
-                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
-                          {formatMrrRange(level.min_mrr, level.max_mrr)}
-                        </p>
-                      </div>
-                      <div
-                        className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
-                      >
-                        <div className="flex items-center gap-1 mb-1">
-                          <Users className={`h-3 w-3 ${theme.statIconColor}`} />
-                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
-                            Ag. Lideradas
-                          </span>
-                        </div>
-                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
-                          {level.led_agencies_min > 0
-                            ? `${level.led_agencies_min} ativas`
-                            : "—"}
-                        </p>
-                      </div>
-                      <div
-                        className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
-                      >
-                        <div className="flex items-center gap-1 mb-1">
-                          <BarChart3
-                            className={`h-3 w-3 ${theme.statIconColor}`}
-                          />
-                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
-                            MRR Lideradas
-                          </span>
-                        </div>
-                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
-                          {level.led_agencies_mrr_min > 0
-                            ? `R$ ${level.led_agencies_mrr_min.toLocaleString("pt-BR")}`
-                            : "—"}
-                        </p>
-                      </div>
-                      <div
-                        className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
-                      >
-                        <div className="flex items-center gap-1 mb-1">
-                          <Target
-                            className={`h-3 w-3 ${theme.statIconColor}`}
-                          />
-                          <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
-                            Proj. Premium
-                          </span>
-                        </div>
-                        <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
-                          {formatPremiumLimit(level)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ── PERKS ── */}
-                  {(level.commission_rate > 0 ||
-                    level.extra_discount > 0 ||
-                    level.level_up_bonus_credits > 0) && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {level.commission_rate > 0 && (
-                        <span
-                          className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                        >
-                          <TrendingUp className="h-2.5 w-2.5" />
-                          {level.commission_rate}% comissão sobre MRR das
-                          lideradas
-                        </span>
-                      )}
-                      {level.extra_discount > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
-                          <Percent className="h-2.5 w-2.5" />+
-                          {level.extra_discount}% desconto adicional nas
-                          contratações
-                        </span>
-                      )}
-                      {level.level_up_bonus_credits > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-700/40 text-purple-700 dark:text-purple-400">
-                          <Gift className="h-2.5 w-2.5" />
-                          R${" "}
-                          {level.level_up_bonus_credits.toLocaleString(
-                            "pt-BR",
-                          )}{" "}
-                          em créditos ao atingir nível
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* ── BENEFÍCIOS DESBLOQUEADOS ── */}
-                  {(level.benefits ?? []).length > 0 && (
-                    <div>
-                      <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
-                        Benefícios Desbloqueados
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(level.benefits ?? []).map((benefit, i) => (
-                          <span
-                            key={i}
-                            className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                          >
-                            <CheckCircle2 className="h-2.5 w-2.5 opacity-70 shrink-0" />
-                            {benefit}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
 
-      <EmbeddedSlideScreen
-        open={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
-        title={editingLevel?.id ? "Editar Nível" : "Novo Nível Partner"}
-        subtitle="Configure critérios, benefícios e regras do nível"
-        pin={{
-          id: `niveis-${editingLevel?.id ?? "novo"}`,
-          label: editingLevel?.id ? "Editar Nível" : "Novo Nível Partner",
-          icon: TrendingUp,
-          path: "/admin/niveis",
-          activateKey: editingLevel?.id ? `edit:${editingLevel.id}` : "create",
-        }}
-      >
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950 w-full">
-            <div className="max-w-3xl mx-auto">
-              {editingLevel && (
-                <LevelForm
-                  level={editingLevel}
-                  onSave={handleSaveLevel}
-                  onCancel={() => setIsDialogOpen(false)}
-                />
-              )}
-            </div>
+            <EmbeddedSlideScreen
+              open={isDialogOpen}
+              onClose={() => setIsDialogOpen(false)}
+              title={editingLevel?.id ? "Editar Nível" : "Novo Nível Partner"}
+              subtitle="Configure critérios, benefícios e regras do nível"
+              pin={{
+                id: `niveis-${editingLevel?.id ?? "novo"}`,
+                label: editingLevel?.id ? "Editar Nível" : "Novo Nível Partner",
+                icon: TrendingUp,
+                path: "/admin/niveis",
+                activateKey: editingLevel?.id
+                  ? `edit:${editingLevel.id}`
+                  : "create",
+              }}
+            >
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950 w-full">
+                <div className="max-w-3xl mx-auto">
+                  {editingLevel && (
+                    <LevelForm
+                      level={editingLevel}
+                      onSave={handleSaveLevel}
+                      onCancel={() => setIsDialogOpen(false)}
+                    />
+                  )}
+                </div>
+              </div>
+            </EmbeddedSlideScreen>
+
+            <ConfirmationDialog
+              open={deleteDialog.open}
+              onClose={() =>
+                setDeleteDialog({ open: false, id: null, name: "" })
+              }
+              onConfirm={confirmDeleteLevel}
+              title="Excluir nível"
+              message="Esta ação é permanente e não pode ser desfeita."
+              twoStep
+              targetName={deleteDialog.name}
+              targetDetail="Nível do Programa Partner"
+              consequences={[
+                "O nível sai da lista de configuração do Programa Partner imediatamente.",
+                "Se houver parceiros ou vínculos associados a este nível, a exclusão será recusada.",
+              ]}
+              finalConfirmText="Excluir nível definitivamente"
+            />
           </div>
-      </EmbeddedSlideScreen>
-
-      <ConfirmationDialog
-        open={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, id: null, name: "" })}
-        onConfirm={confirmDeleteLevel}
-        title="Excluir nível"
-        message="Esta ação é permanente e não pode ser desfeita."
-        twoStep
-        targetName={deleteDialog.name}
-        targetDetail="Nível do Programa Partner"
-        consequences={[
-          "O nível sai da lista de configuração do Programa Partner imediatamente.",
-          "Se houver parceiros ou vínculos associados a este nível, a exclusão será recusada.",
-        ]}
-        finalConfirmText="Excluir nível definitivamente"
-      />
-    </div>
-    </div>
-    </div>
+        </div>
+      </div>
     </div>
   );
 }

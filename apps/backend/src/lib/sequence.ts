@@ -58,3 +58,7 @@ export function formatProjectCode(seq: number): string {
 export function formatTaskCode(seq: number): string {
   return "T" + String(seq).padStart(6, "0");
 }
+
+export function formatInvoiceNumber(seq: number, year: number = new Date().getFullYear()): string {
+  return `INV-${year}-${String(seq).padStart(4, "0")}`;
+}

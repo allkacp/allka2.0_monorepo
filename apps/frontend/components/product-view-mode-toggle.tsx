@@ -9,12 +9,16 @@
 
 import type { ProductViewMode } from "@/lib/use-persisted-view-mode";
 
-const MODES: { value: ProductViewMode; label: string; Icon: React.FC<{ active: boolean }> }[] = [
+const MODES: {
+  value: ProductViewMode;
+  label: string;
+  Icon: React.FC<{ active: boolean }>;
+}[] = [
   {
     value: 2,
     label: "2 colunas",
     Icon: ({ active }) => {
-      const c = active ? "#4f46e5" : "#94a3b8";
+      const c = active ? "#ffffff" : "#94a3b8";
       return (
         <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
           <rect x="1" y="1" width="6" height="6" rx="1" fill={c} />
@@ -29,7 +33,7 @@ const MODES: { value: ProductViewMode; label: string; Icon: React.FC<{ active: b
     value: 3,
     label: "3 colunas",
     Icon: ({ active }) => {
-      const c = active ? "#4f46e5" : "#94a3b8";
+      const c = active ? "#ffffff" : "#94a3b8";
       return (
         <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
           <rect x="1" y="1" width="4" height="4" rx="0.8" fill={c} />
@@ -46,7 +50,7 @@ const MODES: { value: ProductViewMode; label: string; Icon: React.FC<{ active: b
     value: 4,
     label: "4 colunas",
     Icon: ({ active }) => {
-      const c = active ? "#4f46e5" : "#94a3b8";
+      const c = active ? "#ffffff" : "#94a3b8";
       return (
         <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
           <rect x="0.5" y="1" width="3" height="3" rx="0.6" fill={c} />
@@ -65,13 +69,43 @@ const MODES: { value: ProductViewMode; label: string; Icon: React.FC<{ active: b
     value: 5,
     label: "5 colunas",
     Icon: ({ active }) => {
-      const c = active ? "#4f46e5" : "#94a3b8";
+      const c = active ? "#ffffff" : "#94a3b8";
       const xs = [0.5, 3.5, 6.5, 9.5, 12.5];
       return (
         <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
-          {xs.map((x) => <rect key={x + "a"} x={x} y="1" width="2.3" height="3" rx="0.5" fill={c} />)}
-          {xs.map((x) => <rect key={x + "b"} x={x} y="5.5" width="2.3" height="3" rx="0.5" fill={c} />)}
-          {xs.map((x) => <rect key={x + "c"} x={x} y="10" width="2.3" height="3" rx="0.5" fill={c} />)}
+          {xs.map((x) => (
+            <rect
+              key={x + "a"}
+              x={x}
+              y="1"
+              width="2.3"
+              height="3"
+              rx="0.5"
+              fill={c}
+            />
+          ))}
+          {xs.map((x) => (
+            <rect
+              key={x + "b"}
+              x={x}
+              y="5.5"
+              width="2.3"
+              height="3"
+              rx="0.5"
+              fill={c}
+            />
+          ))}
+          {xs.map((x) => (
+            <rect
+              key={x + "c"}
+              x={x}
+              y="10"
+              width="2.3"
+              height="3"
+              rx="0.5"
+              fill={c}
+            />
+          ))}
         </svg>
       );
     },
@@ -80,7 +114,7 @@ const MODES: { value: ProductViewMode; label: string; Icon: React.FC<{ active: b
     value: "list",
     label: "Lista",
     Icon: ({ active }) => {
-      const c = active ? "#4f46e5" : "#94a3b8";
+      const c = active ? "#ffffff" : "#94a3b8";
       return (
         <svg viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5">
           <rect x="1" y="1.5" width="14" height="3" rx="0.8" fill={c} />
@@ -92,24 +126,43 @@ const MODES: { value: ProductViewMode; label: string; Icon: React.FC<{ active: b
   },
 ];
 
-export function ProductViewModeToggle({ value, onChange }: { value: ProductViewMode; onChange: (m: ProductViewMode) => void }) {
+export function ProductViewModeToggle({
+  value,
+  onChange,
+}: {
+  value: ProductViewMode;
+  onChange: (m: ProductViewMode) => void;
+}) {
+  const orderedModes = [
+    ...MODES.filter(({ value }) => value === "list"),
+    ...MODES.filter(({ value }) => value !== "list"),
+  ];
   return (
-    <div className="flex items-center gap-0.5 rounded-lg bg-slate-100 p-0.5 dark:bg-slate-800" role="group" aria-label="Modo de visualização">
-      {MODES.map(({ value: v, label, Icon }) => (
-        <button
-          key={String(v)}
-          type="button"
-          title={label}
-          aria-label={label}
-          aria-pressed={value === v}
-          onClick={() => onChange(v)}
-          className={`flex h-8 w-8 items-center justify-center rounded-md transition-all ${
-            value === v ? "bg-white shadow-sm dark:bg-slate-700" : "hover:bg-white/60 dark:hover:bg-slate-700/60"
-          }`}
-        >
-          <Icon active={value === v} />
-        </button>
-      ))}
+    <div
+      className="flex h-9 items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800"
+      role="group"
+      aria-label="Modo de visualização"
+    >
+      {orderedModes.map(({ value: v, label, Icon }) => {
+        const active = value === v;
+        return (
+          <button
+            key={String(v)}
+            type="button"
+            title={label}
+            aria-label={label}
+            aria-pressed={active}
+            onClick={() => onChange(v)}
+            className={`flex h-8 w-8 items-center justify-center rounded-md transition-all ${
+              active
+                ? "bg-gradient-to-r from-[#101b4c] via-[#4b1c83] to-[#bf087f] text-white shadow-sm"
+                : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700"
+            }`}
+          >
+            <Icon active={active} />
+          </button>
+        );
+      })}
     </div>
   );
 }

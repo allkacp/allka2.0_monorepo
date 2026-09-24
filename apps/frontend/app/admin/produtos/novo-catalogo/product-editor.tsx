@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useIallkaContext } from "@/contexts/iallka-context";
+import { CATALOG2_STATUSES, CATALOG2_STATUS_LABEL, CATALOG2_STATUS_MEANING, catalog2StatusLabel, catalog2StatusTone, type Catalog2Status } from "@/lib/catalog2-status";
 
 // Construtor de produto do novo catálogo (sprint de produtos, bloco 3/6).
 // Ocupa o container padrão — SEM sobreposição grande sobre outra tela.
@@ -39,6 +40,9 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
   const [product, setProduct] = useState<any>(null);
   const [refs, setRefs] = useState<{ pillars: any[]; fourF: any[]; categories: any[]; specialties: any[]; questionnaires: any[] }>({ pillars: [], fourF: [], categories: [], specialties: [], questionnaires: [] });
   const [selectedVersionId, setSelectedVersionId] = useState<string>("");
+  const [editorTab, setEditorTab] = useState("info");
+  const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
+  const [highlightTaskIds, setHighlightTaskIds] = useState<string[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
@@ -76,7 +80,45 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
   const version = useMemo(() => product?.versions.find((v: any) => v.id === selectedVersionId) ?? null, [product, selectedVersionId]);
   const readOnly = version?.state === "publicada";
 
-  async function act(fn: () => Promise<any>, ok?: string | ((r: any) => string | undefined)) {
+  function goToPublishIssue(issue: string, detail?: { target?: string; task_ids?: string[] }) {
+    const text = issue.toLocaleLowerCase("pt-BR");
+    const targetFromApi = detail?.target;
+    const destination = targetFromApi === "title" ? { tab: "info", target: "catalog2-field-title" }
+      : targetFromApi === "full_description" ? { tab: "info", target: "catalog2-field-full-description" }
+      : targetFromApi === "pillar" ? { tab: "opcoes", target: "catalog2-field-pillar" }
+      : targetFromApi === "category" ? { tab: "opcoes", target: "catalog2-field-category" }
+      : targetFromApi === "four_f" ? { tab: "opcoes", target: "catalog2-field-four-f" }
+      : targetFromApi === "task_create" ? { tab: "entrega", target: "catalog2-task-create" }
+      : targetFromApi === "task_effort" ? { tab: "entrega", target: "catalog2-task-effort" }
+      : targetFromApi === "task_duration" ? { tab: "entrega", target: "catalog2-task-duration" }
+      : targetFromApi === "conditions" ? { tab: "entrega", target: "catalog2-conditions" }
+      : targetFromApi === "options" ? { tab: "opcoes", target: "catalog2-classification" }
+      : targetFromApi === "pricing" ? { tab: "precos", target: "catalog2-costs" }
+      : text.includes("título")
+      ? { tab: "info", target: "catalog2-field-title" }
+      : text.includes("descrição")
+        ? { tab: "info", target: "catalog2-field-full-description" }
+        : text.includes("pilar")
+          ? { tab: "opcoes", target: "catalog2-field-pillar" }
+          : text.includes("categoria")
+            ? { tab: "opcoes", target: "catalog2-field-category" }
+            : text.includes("4f")
+              ? { tab: "opcoes", target: "catalog2-field-four-f" }
+              : text.includes("variação") || text.includes("adicional")
+                ? { tab: "opcoes", target: "catalog2-classification" }
+        : text.includes("tarefa") || text.includes("prazo") || text.includes("duração") || text.includes("condição")
+          ? { tab: "entrega", target: "catalog2-tasks" }
+          : { tab: "precos", target: "catalog2-costs" };
+
+    setEditorTab(destination.tab);
+    setHighlightTarget(destination.target);
+    setHighlightTaskIds(detail?.task_ids ?? []);
+    window.setTimeout(() => document.getElementById(destination.target)?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
+  }
+
+  const clearPublishHighlight = (target: string) => setHighlightTarget((current) => current === target ? null : current);
+
+  async function act(fn: () => Promise<any>, ok?: string | ((r: any) => string | undefined), opts?: { rethrow?: boolean }) {
     setMsg(null);
     try {
       const r = await fn();
@@ -85,7 +127,11 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
       await load();
       return r;
     }
-    catch (e: any) { setMsg(e?.message ?? "Falha na operação."); }
+    catch (e: any) {
+      const message = e?.message ?? "Falha na operação.";
+      setMsg(message);
+      if (opts?.rethrow) throw e instanceof Error ? e : new Error(message);
+    }
   }
 
   if (loading) return <div className="flex items-center gap-2 p-10 text-sm text-neutral-500"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>;
@@ -97,7 +143,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
         <div className="flex items-center gap-2">
           <Button size="sm" variant="ghost" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar</Button>
           <h2 className="text-lg font-semibold">{product.internal_name}</h2>
-          <Badge>{product.status}</Badge>
+          <Badge className={catalog2StatusTone(product.status)}>{catalog2StatusLabel(product.status)}</Badge>
           {product.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
         </div>
         <div className="flex items-center gap-2">
@@ -117,7 +163,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
       {msg && <p className="text-sm text-blue-600">{msg}</p>}
 
       {version && (
-        <Tabs defaultValue="info">
+        <Tabs value={editorTab} onValueChange={setEditorTab}>
           {/* Etapas de trabalho (reunião 10/09). As 10 seções originais
               continuam todas aqui — reagrupadas, nada removido. */}
           <TabsList className="flex-wrap" data-tour-id="catalog2-editor-tabs">
@@ -132,7 +178,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
           </TabsList>
 
           <TabsContent value="info">
-            <GeneralTab version={version} readOnly={readOnly} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Salvo.")} product={product} onStatus={(s) => act(() => apiClient.setCatalog2ProductStatus(productId, s), "Situação atualizada.")} />
+            <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} onStatus={(s) => act(() => apiClient.setCatalog2ProductStatus(productId, s), "Status salvo.", { rethrow: true })} />
           </TabsContent>
 
           <TabsContent value="opcoes">
@@ -143,7 +189,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
                 <TabsTrigger value="var">Variações</TabsTrigger>
                 <TabsTrigger value="add">Adicionais</TabsTrigger>
               </TabsList>
-              <TabsContent value="class"><ClassTab product={product} refs={refs} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></TabsContent>
+              <TabsContent value="class"><ClassTab product={product} refs={refs} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></TabsContent>
               <TabsContent value="var"><VariationsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
               <TabsContent value="add"><AddonsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
             </Tabs>
@@ -156,14 +202,14 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
                 <TabsTrigger value="tarefas">Tarefas e etapas</TabsTrigger>
                 <TabsTrigger value="cond">Prazos e condições</TabsTrigger>
               </TabsList>
-              <TabsContent value="tarefas"><TasksTab version={version} readOnly={readOnly} refs={refs} act={act} /></TabsContent>
+              <TabsContent value="tarefas"><TasksTab version={version} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} /></TabsContent>
               <TabsContent value="cond"><ConditionsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
             </Tabs>
           </TabsContent>
 
           <TabsContent value="precos">
             <StepIntro>Taxas, margens e valor/hora das especialidades. O preço e o prazo são sempre calculados no servidor.</StepIntro>
-            <CostTab version={version} refs={refs} act={act} onReloadRefs={load} productId={productId} />
+            <CostTab version={version} refs={refs} act={act} onReloadRefs={load} productId={productId} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} />
           </TabsContent>
 
           <TabsContent value="revisao">
@@ -175,7 +221,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
                 <TabsTrigger value="historico">Histórico</TabsTrigger>
               </TabsList>
               <TabsContent value="preview"><PreviewTab version={version} /></TabsContent>
-              <TabsContent value="hist"><HistoryTab version={version} readOnly={readOnly} act={act} /></TabsContent>
+              <TabsContent value="hist"><HistoryTab version={version} readOnly={readOnly} act={act} onResolveIssue={goToPublishIssue} /></TabsContent>
               <TabsContent value="historico"><ProductHistoryTab productId={productId} /></TabsContent>
             </Tabs>
           </TabsContent>
@@ -191,43 +237,103 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
 }
 
 // ── 1. Geral ──────────────────────────────────────────────────────────
-function GeneralTab({ version, readOnly, onSave, product, onStatus }: any) {
+function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTarget, clearHighlight }: any) {
   const [f, setF] = useState({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" });
+  const [draftStatus, setDraftStatus] = useState<string>(product.status ?? "em_preparacao");
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [infoSaved, setInfoSaved] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   useEffect(() => setF({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" }), [version.id]);
+  useEffect(() => setDraftStatus(product.status ?? "em_preparacao"), [product.status]);
+
+  async function saveStatus() {
+    if (draftStatus === product.status) return;
+    const needsPublishedVersion = ["pre_lancamento", "disponivel", "temporariamente_inativo", "esgotado_temporariamente"].includes(draftStatus) && !product.published_version_id;
+    if (needsPublishedVersion) {
+      setStatusError("Publique uma versão antes de usar este status, pois ele pode aparecer no catálogo do cliente.");
+      return;
+    }
+    setSavingStatus(true);
+    setStatusError(null);
+    try {
+      await onStatus(draftStatus);
+    } catch (e: any) {
+      setStatusError(e?.message ?? "Não foi possível salvar o status.");
+    } finally {
+      setSavingStatus(false);
+    }
+  }
+
+  async function saveInfo() {
+    setSavingInfo(true);
+    setInfoSaved(false);
+    try {
+      await onSave(f);
+      setInfoSaved(true);
+      if (f.title.trim()) clearHighlight("catalog2-field-title");
+      if (f.full_description.trim()) clearHighlight("catalog2-field-full-description");
+    } catch {
+      // O erro da API fica visível no editor; não exibimos confirmação falsa.
+    } finally {
+      setSavingInfo(false);
+    }
+  }
+
+  function updateInfo(next: Partial<typeof f>) {
+    setF({ ...f, ...next });
+    setInfoSaved(false);
+  }
+
   return (
-    <div className="mt-3 space-y-3">
-      <Field label="Título comercial"><Input disabled={readOnly} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
-      <Field label="Descrição curta"><Textarea rows={2} disabled={readOnly} value={f.summary} onChange={(e) => setF({ ...f, summary: e.target.value })} /></Field>
-      <Field label="Descrição completa"><Textarea rows={5} disabled={readOnly} value={f.full_description} onChange={(e) => setF({ ...f, full_description: e.target.value })} /></Field>
-      <Field label="Resumo da mudança (histórico)"><Input disabled={readOnly} value={f.change_summary} onChange={(e) => setF({ ...f, change_summary: e.target.value })} /></Field>
-      <Field label="Situação do produto">
-        <select className="rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={product.status} onChange={(e) => onStatus(e.target.value)}>
-          {["em_preparacao", "disponivel", "temporariamente_inativo", "arquivado"].map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-      </Field>
-      {!readOnly && <Button size="sm" onClick={() => onSave(f)}>Salvar</Button>}
+    <div id="catalog2-general" className="mt-3 space-y-3 scroll-mt-6">
+      <div id="catalog2-field-title" className={highlightTarget === "catalog2-field-title" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Título comercial"><Input disabled={readOnly} value={f.title} onChange={(e) => updateInfo({ title: e.target.value })} /></Field></div>
+      <Field label="Descrição curta"><Textarea rows={2} disabled={readOnly} value={f.summary} onChange={(e) => updateInfo({ summary: e.target.value })} /></Field>
+      <div id="catalog2-field-full-description" className={highlightTarget === "catalog2-field-full-description" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Descrição completa"><Textarea rows={5} disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} /></Field></div>
+      <Field label="Resumo da mudança (histórico)"><Input disabled={readOnly} value={f.change_summary} onChange={(e) => updateInfo({ change_summary: e.target.value })} /></Field>
+      <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+        <Field label="Status do produto">
+          <select aria-label="Status do produto" className="w-full rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={draftStatus} onChange={(e) => { setDraftStatus(e.target.value); setStatusError(null); }}>
+            {CATALOG2_STATUSES.map((status) => <option key={status} value={status}>{CATALOG2_STATUS_LABEL[status]}</option>)}
+          </select>
+        </Field>
+        <p className="mt-2 text-xs text-neutral-500">{CATALOG2_STATUS_MEANING[draftStatus as Catalog2Status] ?? "Status não reconhecido."}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button size="sm" disabled={savingStatus || draftStatus === product.status} onClick={() => void saveStatus()}>
+            {savingStatus ? "Salvando status…" : "Salvar status"}
+          </Button>
+          <span className="text-xs text-neutral-500">Status salvo: {catalog2StatusLabel(product.status)}.</span>
+        </div>
+        {statusError && <p role="alert" className="mt-2 text-xs text-red-600">{statusError}</p>}
+      </div>
+      {!readOnly && <div className="flex flex-wrap items-center gap-2"><Button size="sm" disabled={savingInfo} onClick={() => void saveInfo()}>{savingInfo ? "Salvando informações…" : "Salvar informações"}</Button>{infoSaved && <span role="status" className="text-sm text-emerald-700">✓ Informações salvas.</span>}</div>}
     </div>
   );
 }
 
 // ── 2. Classificações ─────────────────────────────────────────────────
-function ClassTab({ product, refs, onSave }: any) {
+function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight }: any) {
   const [pillar, setPillar] = useState(product.pillar?.id ?? "");
   const [category, setCategory] = useState(product.category?.id ?? "");
   const [fourF, setFourF] = useState<string[]>(product.four_f.map((f: any) => f.id));
+  const saveClassifications = () => onSave({ pillar_id: pillar || null, category_id: category || null, four_f_ids: fourF }).then(() => {
+    if (pillar) clearHighlight("catalog2-field-pillar");
+    if (category) clearHighlight("catalog2-field-category");
+    if (fourF.length > 0) clearHighlight("catalog2-field-four-f");
+  });
   return (
-    <div className="mt-3 space-y-3">
-      <Field label="Pilar">
+    <div id="catalog2-classification" className="mt-3 space-y-3 scroll-mt-6">
+      <div id="catalog2-field-pillar" className={highlightTarget === "catalog2-field-pillar" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Pilar">
         <select className="w-full rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={pillar} onChange={(e) => setPillar(e.target.value)}>
           <option value="">—</option>{refs.pillars.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-      </Field>
-      <Field label="Categoria">
+      </Field></div>
+      <div id="catalog2-field-category" className={highlightTarget === "catalog2-field-category" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Categoria">
         <select className="w-full rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">—</option>{refs.categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-      </Field>
-      <Field label="Classificações 4F">
+      </Field></div>
+      <div id="catalog2-field-four-f" className={highlightTarget === "catalog2-field-four-f" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Classificações 4F">
         <div className="flex flex-wrap gap-3">
           {refs.fourF.map((f: any) => (
             <label key={f.id} className="flex items-center gap-1.5 text-sm">
@@ -236,9 +342,9 @@ function ClassTab({ product, refs, onSave }: any) {
             </label>
           ))}
         </div>
-      </Field>
+      </Field></div>
       <p className="text-xs text-neutral-400">A divergência de classificação entre a planilha principal e a Review Rose não é resolvida aqui — precisa de decisão comercial.</p>
-      <Button size="sm" onClick={() => onSave({ pillar_id: pillar || null, category_id: category || null, four_f_ids: fourF })}>Salvar</Button>
+      <Button size="sm" onClick={saveClassifications}>Salvar</Button>
     </div>
   );
 }
@@ -346,7 +452,7 @@ function AddonsTab({ version, readOnly, act }: any) {
 // vínculo por referência aqui (diferente de especialidade/questionário,
 // que são bibliotecas compartilhadas de verdade). "Criar nova" continua o
 // formulário inline já existente.
-function TasksTab({ version, readOnly, refs, act }: any) {
+function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTaskIds, clearHighlight }: any) {
   const [nt, setNt] = useState({ key: "", name: "" });
   const [showCreate, setShowCreate] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -370,7 +476,7 @@ function TasksTab({ version, readOnly, refs, act }: any) {
               </div>
             )}
           </div>
-          {!readOnly && <TaskInlineEdit task={t} refs={refs} act={act} />}
+          {!readOnly && <TaskInlineEdit task={t} refs={refs} act={act} effortHighlighted={highlightTarget === "catalog2-task-effort" && highlightTaskIds.includes(t.id)} durationHighlighted={highlightTarget === "catalog2-task-duration" && highlightTaskIds.includes(t.id)} onSaved={(target: string) => clearHighlight(target)} />}
           <ul className="mt-2 ml-3 space-y-1">
             {t.steps.map((s: any, si: number) => (
               <StepRow key={s.id} step={s} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} />
@@ -380,7 +486,7 @@ function TasksTab({ version, readOnly, refs, act }: any) {
         </div>
       ))}
       {!readOnly && (
-        <div className="space-y-2 rounded-lg border border-dashed border-neutral-300 p-3 dark:border-neutral-700">
+        <div id="catalog2-task-create" className={`space-y-2 rounded-lg border border-dashed border-neutral-300 p-3 dark:border-neutral-700 ${highlightTarget === "catalog2-task-create" ? "bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}`}>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant={showSearch ? "outline" : "default"} onClick={() => { setShowSearch((v) => !v); setShowCreate(false); }}>
               <Search className="h-4 w-4" /> Selecionar existente
@@ -399,7 +505,7 @@ function TasksTab({ version, readOnly, refs, act }: any) {
             <div className="flex items-end gap-2">
               <Field label="key"><Input value={nt.key} onChange={(e) => setNt({ ...nt, key: e.target.value })} /></Field>
               <Field label="nome"><Input value={nt.name} onChange={(e) => setNt({ ...nt, name: e.target.value })} /></Field>
-              <Button size="sm" onClick={() => nt.key && nt.name && act(() => apiClient.addCatalog2Task(version.id, nt), "Tarefa criada.").then(() => setNt({ key: "", name: "" }))}>Criar tarefa</Button>
+              <Button size="sm" onClick={() => nt.key && nt.name && act(() => apiClient.addCatalog2Task(version.id, nt), "Tarefa criada.").then((result) => { if (result) { setNt({ key: "", name: "" }); clearHighlight("catalog2-task-create"); } })}>Criar tarefa</Button>
             </div>
           )}
         </div>
@@ -475,21 +581,30 @@ function TaskLibrarySearch({ excludeVersionId, onImport }: { excludeVersionId: s
     </div>
   );
 }
-function TaskInlineEdit({ task, refs, act }: any) {
+function TaskInlineEdit({ task, refs, act, effortHighlighted, durationHighlighted, onSaved }: any) {
   const [t, setT] = useState({ execution_mode: task.execution_mode, estimated_minutes: task.estimated_minutes ?? "", specialty_id: task.specialty?.id ?? "", is_conditional: task.is_conditional, requires_review: task.requires_review, requires_client_approval: task.requires_client_approval });
   const [showNewSpecialty, setShowNewSpecialty] = useState(false);
+  const saveTask = () => act(
+    () => apiClient.updateCatalog2Task(task.id, { ...t, estimated_minutes: t.estimated_minutes === "" ? null : Number(t.estimated_minutes), specialty_id: t.specialty_id || null }),
+    "Tarefa salva."
+  ).then((result: any) => {
+    if (!result) return;
+    if (effortHighlighted) onSaved("catalog2-task-effort");
+    if (durationHighlighted && t.estimated_minutes !== "" && Number(t.estimated_minutes) >= 0) onSaved("catalog2-task-duration");
+  });
   return (
     <div className="mt-2 space-y-2 text-xs">
       <div className="flex flex-wrap items-center gap-2">
         <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.execution_mode} onChange={(e) => setT({ ...t, execution_mode: e.target.value })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.specialty_id} onChange={(e) => setT({ ...t, specialty_id: e.target.value })}><option value="">sem especialidade</option>{refs.specialties.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         <button type="button" className="text-neutral-500 underline hover:text-neutral-900 dark:hover:text-neutral-100" onClick={() => setShowNewSpecialty((v) => !v)}>+ nova especialidade</button>
-        <label>min <input type="number" className="w-16 rounded border border-neutral-300 bg-transparent px-1 dark:border-neutral-700" value={t.estimated_minutes} onChange={(e) => setT({ ...t, estimated_minutes: e.target.value })} /></label>
+        <label>min <input type="number" className={`w-16 rounded border bg-transparent px-1 dark:border-neutral-700 ${durationHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.estimated_minutes} onChange={(e) => setT({ ...t, estimated_minutes: e.target.value })} /></label>
         <label><input type="checkbox" checked={t.is_conditional} onChange={(e) => setT({ ...t, is_conditional: e.target.checked })} /> condicional</label>
         <label><input type="checkbox" checked={t.requires_review} onChange={(e) => setT({ ...t, requires_review: e.target.checked })} /> revisão</label>
         <label><input type="checkbox" checked={t.requires_client_approval} onChange={(e) => setT({ ...t, requires_client_approval: e.target.checked })} /> aprovação cliente</label>
-        <Button size="sm" variant="outline" className="h-6" onClick={() => act(() => apiClient.updateCatalog2Task(task.id, { ...t, estimated_minutes: t.estimated_minutes === "" ? null : Number(t.estimated_minutes), specialty_id: t.specialty_id || null }), "Tarefa salva.")}>Salvar tarefa</Button>
+        <Button size="sm" variant="outline" className={`h-6 ${effortHighlighted ? "border-amber-500 bg-amber-100 text-amber-950 ring-2 ring-amber-400 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-100" : ""}`} onClick={saveTask}>Salvar tarefa</Button>
       </div>
+      {effortHighlighted && <p className="text-amber-700 dark:text-amber-300">Dados provisórios de teste: revise os valores já preenchidos e clique em <strong>Salvar tarefa</strong> para confirmá-los como dados reais.</p>}
       {showNewSpecialty && (
         <NewSpecialtyForm
           onCreated={(s: any) => { setT((c) => ({ ...c, specialty_id: s.id })); setShowNewSpecialty(false); }}
@@ -806,7 +921,7 @@ function ConditionsTab({ version, readOnly, act }: any) {
 }
 
 // ── 7. Custos e preço (simulador) ───────────────────────────────────
-function CostTab({ version, refs, act, onReloadRefs, productId }: any) {
+function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget, clearHighlight }: any) {
   const [sel, setSel] = useState<any>({ variation_option_keys: [], addon_keys: [], quantity: 1, answers: {} });
   const [result, setResult] = useState<any>(null);
   const [pricing, setPricing] = useState<any>(null);
@@ -823,20 +938,17 @@ function CostTab({ version, refs, act, onReloadRefs, productId }: any) {
   useEffect(() => { void run(); /* eslint-disable-next-line */ }, [JSON.stringify(sel), version.id]);
 
   return (
-    <div className="mt-3 grid gap-4 md:grid-cols-2">
+    <div id="catalog2-costs" className="mt-3 grid gap-4 scroll-mt-6 md:grid-cols-2">
       <div className="space-y-3">
+        {highlightTarget === "catalog2-costs" && <p className="rounded-lg border border-amber-400 bg-amber-100 p-2 text-sm text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">Há uma pendência comercial de preço ou prazo. Revise o valor que está marcado como “aguardando definição comercial” e salve a alteração.</p>}
         <h3 className="text-sm font-semibold">Módulo de precificação (taxas e margens)</h3>
         {pricing && <PricingSettingsForm pricing={pricing} onSave={(b) => act(() => apiClient.updateCatalog2PricingSettings(b).then(setPricing), "Taxas salvas.")} />}
-        <h3 className="mt-4 text-sm font-semibold">Valor/hora das especialidades (referência máxima)</h3>
+        <h3 className="mt-4 text-sm font-semibold">Valor/hora padrão das especialidades</h3>
+        <p className="text-xs text-neutral-500">Estas taxas são globais: o produto usa automaticamente o valor da especialidade vinculada à tarefa. Não existe valor/hora manual por produto.</p>
         {refs.specialties.map((s: any) => {
           const isTestLocal = typeof s.hourly_rate_note === "string" && s.hourly_rate_note.toUpperCase().includes("[TESTE LOCAL]");
           return (
-            <div key={s.id} className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="w-40 truncate">{s.name}</span>
-              <Input className="w-24" type="number" defaultValue={s.max_hourly_rate ?? ""} onBlur={(e) => act(() => apiClient.updateCatalog2Specialty(s.id, { max_hourly_rate: e.target.value === "" ? null : Number(e.target.value) }).then(onReloadRefs))} />
-              {s.max_hourly_rate == null && <span className="text-xs text-amber-600">aguardando definição comercial</span>}
-              {s.max_hourly_rate != null && isTestLocal && <span className="text-xs text-amber-600">valor de teste — não é decisão comercial</span>}
-            </div>
+            <SpecialtyRateRow key={s.id} specialty={s} isTestLocal={isTestLocal} act={act} onReloadRefs={onReloadRefs} />
           );
         })}
       </div>
@@ -926,7 +1038,7 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Mensal, trimestral, semestral e anual — cada um só fica disponível pra contratação depois de um desconto ser definido aqui (e da entrega mensal recorrente estar marcada acima). Sem configuração, o período aparece como "Não configurado" e não pode ser contratado.
+        Nesta primeira etapa, somente a contratação <strong>mensal</strong> fica disponível. Trimestral, semestral e anual permanecem registrados para ativação futura e não podem ser contratados agora.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -935,13 +1047,14 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
               <th className="py-1 pr-2">Período</th>
               <th className="py-1 pr-2">Meses</th>
               <th className="py-1 pr-2">Desconto (%)</th>
-              <th className="py-1 pr-2">Situação</th>
+              <th className="py-1 pr-2">Status</th>
               <th className="py-1 pr-2">Ações</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
               const draft = drafts[row.period] ?? (row.discount_percent != null ? String(row.discount_percent) : "");
+              const reservedForFuture = row.period !== "mensal";
               return (
                 <tr key={row.period} className="border-t border-neutral-100 dark:border-neutral-800">
                   <td className="py-1.5 pr-2 font-medium">{row.label}</td>
@@ -954,11 +1067,14 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
                       max={90}
                       placeholder="—"
                       value={draft}
+                      disabled={reservedForFuture}
                       onChange={(e) => setDrafts((d) => ({ ...d, [row.period]: e.target.value }))}
                     />
                   </td>
                   <td className="py-1.5 pr-2">
-                    {!row.configured ? (
+                    {reservedForFuture ? (
+                      <Badge className="bg-muted text-muted-foreground">Reservado para o futuro</Badge>
+                    ) : !row.configured ? (
                       <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Não configurado</Badge>
                     ) : row.is_active ? (
                       <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Ativo</Badge>
@@ -968,6 +1084,9 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
                   </td>
                   <td className="py-1.5 pr-2">
                     <div className="flex flex-wrap gap-1.5">
+                      {reservedForFuture ? (
+                        <span className="text-xs text-muted-foreground">Indisponível nesta etapa</span>
+                      ) : <>
                       <Button
                         size="sm"
                         variant="outline"
@@ -992,6 +1111,7 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
                           Remover
                         </Button>
                       )}
+                      </>}
                     </div>
                   </td>
                 </tr>
@@ -1003,9 +1123,48 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
     </div>
   );
 }
+const PRICING_FIELD_LABEL: Record<string, string> = {
+  tax_percent: "Imposto (%)",
+  commission_percent: "Comissão (%)",
+  operational_fee_percent: "Taxa operacional (%)",
+  profit_margin_percent: "Margem de lucro (%)",
+  human_review_percent: "Reserva para revisão humana (%)",
+};
+
+function SpecialtyRateRow({ specialty, isTestLocal, act, onReloadRefs }: any) {
+  const initialValue = specialty.max_hourly_rate ?? "";
+  const [value, setValue] = useState<string | number>(initialValue);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  useEffect(() => setValue(specialty.max_hourly_rate ?? ""), [specialty.id, specialty.max_hourly_rate]);
+  const changed = String(value) !== String(initialValue);
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm">
+      <span className="w-40 truncate">{specialty.name}</span>
+      <Input aria-label={`Valor/hora padrão: ${specialty.name}`} className="w-24" type="number" value={value} onChange={(e) => setValue(e.target.value)} />
+      <Button size="sm" variant="outline" disabled={!changed} onClick={() => setConfirmOpen(true)}>Salvar valor/hora</Button>
+      <Button size="sm" variant="ghost" disabled={!changed} onClick={() => setValue(initialValue)}>Restaurar padrão</Button>
+      {specialty.max_hourly_rate == null && <span className="text-xs text-amber-600">aguardando definição comercial</span>}
+      {specialty.max_hourly_rate != null && isTestLocal && <span className="text-xs text-amber-600">valor de teste — não é decisão comercial</span>}
+      <ConfirmationDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="Salvar valor/hora padrão?"
+        message={`O valor de ${specialty.name} será aplicado automaticamente aos produtos que usam essa especialidade.`}
+        confirmText="Salvar valor/hora"
+        destructive={false}
+        onConfirm={() => act(() => apiClient.updateCatalog2Specialty(specialty.id, { max_hourly_rate: value === "" ? null : Number(value) }).then(onReloadRefs), "Valor/hora padrão salvo.")}
+      />
+    </div>
+  );
+}
+
 function PricingSettingsForm({ pricing, onSave }: any) {
   const [f, setF] = useState({ tax_percent: pricing.tax_percent ?? "", commission_percent: pricing.commission_percent ?? "", operational_fee_percent: pricing.operational_fee_percent ?? "", profit_margin_percent: pricing.profit_margin_percent ?? "", human_review_percent: pricing.human_review_percent ?? "" });
   const n = (v: any) => (v === "" ? null : Number(v));
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  useEffect(() => setF({ tax_percent: pricing.tax_percent ?? "", commission_percent: pricing.commission_percent ?? "", operational_fee_percent: pricing.operational_fee_percent ?? "", profit_margin_percent: pricing.profit_margin_percent ?? "", human_review_percent: pricing.human_review_percent ?? "" }), [pricing]);
+  const restoreConfigured = () => setF({ tax_percent: pricing.tax_percent ?? "", commission_percent: pricing.commission_percent ?? "", operational_fee_percent: pricing.operational_fee_percent ?? "", profit_margin_percent: pricing.profit_margin_percent ?? "", human_review_percent: pricing.human_review_percent ?? "" });
+  const savePayload = () => ({ tax_percent: n(f.tax_percent), commission_percent: n(f.commission_percent), operational_fee_percent: n(f.operational_fee_percent), profit_margin_percent: n(f.profit_margin_percent), human_review_percent: n(f.human_review_percent) });
   const [inact, setInact] = useState({
     demo_inactivation_compensation_percent: pricing.demo_inactivation_compensation_percent ?? "",
     demo_inactivation_compensation_note: pricing.demo_inactivation_compensation_note ?? "",
@@ -1039,13 +1198,25 @@ function PricingSettingsForm({ pricing, onSave }: any) {
       )}
       {(Object.keys(f) as (keyof typeof f)[]).map((k) => (
         <label key={k} className="flex flex-wrap items-center gap-2">
-          <span className="w-44 text-xs">{k.replace(/_/g, " ")}</span>
+          <span className="w-44 text-xs">{PRICING_FIELD_LABEL[k]}</span>
           <Input className="w-20" type="number" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} />
           {f[k] === "" && <span className="text-[10px] text-amber-600">aguardando definição comercial</span>}
           {f[k] !== "" && provisional && <span className="text-[10px] text-amber-600">provisório (seed)</span>}
         </label>
       ))}
-      <Button size="sm" onClick={() => onSave({ tax_percent: n(f.tax_percent), commission_percent: n(f.commission_percent), operational_fee_percent: n(f.operational_fee_percent), profit_margin_percent: n(f.profit_margin_percent), human_review_percent: n(f.human_review_percent) })}>Salvar taxas</Button>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={() => setConfirmOpen(true)}>Salvar taxas e margem</Button>
+        <Button size="sm" variant="outline" onClick={restoreConfigured}>Restaurar valores salvos</Button>
+      </div>
+      <ConfirmationDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="Salvar configuração comercial?"
+        message="As taxas e a margem são globais e passam a ser usadas nos cálculos dos produtos. Cotações já emitidas permanecem protegidas pela regra comercial."
+        confirmText="Salvar configuração"
+        destructive={false}
+        onConfirm={() => onSave(savePayload())}
+      />
 
       <div className="mt-3 space-y-1.5 rounded border border-amber-300 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-950/20">
         <p className="text-[11px] font-medium text-amber-700">
@@ -1221,24 +1392,25 @@ function PreviewTab({ version }: any) {
 }
 
 // ── 9. Versões e histórico ─────────────────────────────────────────
-function HistoryTab({ version, readOnly, act }: any) {
+function HistoryTab({ version, readOnly, act, onResolveIssue }: any) {
   const [val, setVal] = useState<any>(null);
   const [summary, setSummary] = useState("");
-  useEffect(() => { apiClient.validateCatalog2Version(version.id).then(setVal).catch(() => setVal(null)); }, [version.id]);
+  useEffect(() => { apiClient.validateCatalog2Version(version.id).then(setVal).catch(() => setVal(null)); }, [version.id, version.updated_at]);
   return (
     <div className="mt-3 space-y-3">
       <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
         <h3 className="text-sm font-semibold">Validação para publicar</h3>
         {!val ? "…" : val.ok ? <p className="text-sm text-emerald-600">Tudo certo para publicar.</p> : (
-          <ul className="list-inside list-disc text-sm text-red-600">{val.issues.map((i: string, k: number) => <li key={k}>{i}</li>)}</ul>
+          <ul className="space-y-1 text-sm text-red-600">{val.issues.map((i: string, k: number) => <li key={k}><button type="button" className="text-left underline decoration-red-300 underline-offset-2 hover:text-red-800" onClick={() => onResolveIssue(i, val.issue_details?.[k])}>{i} → corrigir agora</button></li>)}</ul>
         )}
-        {val?.pricing_pending && <p className="text-xs text-amber-600">Preço com pendência comercial — pode publicar com "situação comercial pendente".</p>}
+        {val?.pricing_pending && <p className="text-xs text-amber-600">Preço com pendência comercial — pode publicar com “status comercial pendente” somente quando não houver pendência estrutural.</p>}
+        {readOnly && <p className="mt-2 text-xs text-neutral-500">Esta versão já está publicada. Crie uma nova versão para editar ou publicar uma alteração.</p>}
         {!readOnly && (
           <div className="mt-2 flex items-end gap-2">
             <Field label="Resumo da mudança"><Input value={summary} onChange={(e) => setSummary(e.target.value)} /></Field>
-            <PublishBtn versionId={version.id} canPublish={!!val?.ok} pending={!!val?.pricing_pending} summary={summary} act={act} />
           </div>
         )}
+        <div className="mt-2"><PublishBtn versionId={version.id} canPublish={!!val?.ok} canForce={!!val?.force_allowed} readOnly={readOnly} summary={summary} act={act} /></div>
       </div>
       <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
         <h3 className="text-sm font-semibold">Histórico da versão</h3>
@@ -1251,20 +1423,20 @@ function HistoryTab({ version, readOnly, act }: any) {
     </div>
   );
 }
-function PublishBtn({ versionId, canPublish, pending, summary, act }: any) {
+function PublishBtn({ versionId, canPublish, canForce, readOnly, summary, act }: any) {
   const [open, setOpen] = useState(false);
   const clientActionId = useMemo(() => `pub-${versionId}-${Date.now()}`, [versionId, open]);
   return (
     <>
-      <Button size="sm" onClick={() => setOpen(true)}>Publicar versão</Button>
+      <Button size="sm" disabled={readOnly || (!canPublish && !canForce)} onClick={() => setOpen(true)}>Publicar versão</Button>
       <ConfirmationDialog
         open={open}
         onClose={() => setOpen(false)}
         title="Publicar esta versão?"
-        message={canPublish ? "A versão ficará imutável. Mudanças futuras exigem uma nova versão." : pending ? "Há pendência comercial de preço. Publicar assim mesmo (situação comercial pendente)?" : "Há pendências — não é possível publicar."}
+        message={canPublish ? "A versão ficará imutável. Mudanças futuras exigem uma nova versão." : "Há somente pendências comerciais de preço ou prazo. Publicar assim mesmo com status comercial pendente?"}
         confirmText="Publicar"
         destructive={false}
-        onConfirm={() => act(() => apiClient.publishCatalog2Version(versionId, { client_action_id: clientActionId, change_summary: summary, force: pending && !canPublish ? true : undefined }), "Versão publicada.")}
+        onConfirm={() => act(() => apiClient.publishCatalog2Version(versionId, { client_action_id: clientActionId, change_summary: summary, force: canForce && !canPublish ? true : undefined }), "Versão publicada.", { rethrow: true })}
       />
     </>
   );
@@ -1279,7 +1451,7 @@ const HISTORY_CATEGORY_LABEL: Record<string, string> = {
   conteudo: "Conteúdo",
   tarefas: "Tarefas e questionários",
   variacoes: "Variações e adicionais",
-  status: "Situação e inativação",
+  status: "Status e inativação",
   periodos: "Períodos e recorrência",
   versao: "Versão e publicação",
   comercial: "Comercial",

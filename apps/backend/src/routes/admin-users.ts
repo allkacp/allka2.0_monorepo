@@ -35,6 +35,12 @@ const enrichedSelect = {
   reactivation_review_required: true,
   created_at: true,
   updated_at: true,
+  // Perfil de acesso (Admin > Usuários > Permissões). Sem isto a tela
+  // sempre mostrava "Sem perfil" ao clicar num usuário na listagem, mesmo
+  // com admin_profile_id preenchido no banco — mapUser() abaixo também
+  // precisa devolver os dois campos, não só o select.
+  admin_profile_id: true,
+  admin_profile: { select: { id: true, name: true, is_master: true } },
   company: { select: { id: true, name: true } },
   // partner_profile aninhado: Partner não é mais um vínculo próprio do
   // User (owned_partner não existe mais) — é um upgrade da Agency que este
@@ -157,6 +163,14 @@ function mapUser(u: EnrichedUser) {
     reactivation_review_required: u.reactivation_review_required,
     created_at: u.created_at,
     updated_at: u.updated_at,
+    admin_profile_id: u.admin_profile_id,
+    admin_profile: u.admin_profile
+      ? {
+          id: u.admin_profile.id,
+          name: u.admin_profile.name,
+          is_master: u.admin_profile.is_master,
+        }
+      : null,
     agency_id: u.owned_agency?.id ?? u.agency_link?.id ?? null,
     agency_name: u.owned_agency?.name ?? u.agency_link?.name ?? null,
     company_name: u.company?.name ?? null,
@@ -235,6 +249,85 @@ router.get("/", verifyToken, requireRole("admin"), async (req, res, next) => {
     const data = users.map(mapUser);
 
     res.json({ data, total, page, limit, totalPages: total === 0 ? 0 : Math.ceil(total / limit) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/admin/users/:id/overview — dados reais para a Visão Geral do
+// perfil. Uma etapa é contabilizada para QUEM a concluiu (`concluida_por`),
+// nunca simplesmente para quem recebeu a tarefa originalmente.
+router.get("/:id/overview", verifyToken, requireRole("admin"), async (req, res, next) => {
+  try {
+    const userId = String(req.params.id);
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, last_login: true } });
+    if (!target) {
+      res.status(404).json({ error: "Usuário não encontrado" });
+      return;
+    }
+
+    const now = new Date();
+    const since30 = new Date(now);
+    since30.setDate(since30.getDate() - 29);
+    since30.setHours(0, 0, 0, 0);
+
+    const [completedStages, recentStages, upcomingTasks] = await Promise.all([
+      prisma.projectTaskStage.count({ where: { concluida_por: userId, status: "CONCLUIDA" } }),
+      prisma.projectTaskStage.findMany({
+        where: { concluida_por: userId, status: "CONCLUIDA", concluida_em: { gte: since30 } },
+        select: { concluida_em: true, categoria: true, titulo: true, project_task: { select: { title: true } } },
+        orderBy: { concluida_em: "desc" },
+        take: 500,
+      }),
+      prisma.projectTask.findMany({
+        where: {
+          OR: [{ assignee_id: userId }, { lider_responsavel_id: userId }],
+          status: { notIn: ["CONCLUIDA", "CANCELADA"] },
+        },
+        select: { id: true, title: true, status: true, due_date: true },
+        orderBy: [{ due_date: "asc" }, { updated_at: "desc" }],
+        take: 8,
+      }),
+    ]);
+
+    const byDay = new Map<string, number>();
+    for (let offset = 29; offset >= 0; offset -= 1) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - offset);
+      byDay.set(date.toISOString().slice(0, 10), 0);
+    }
+    const categories = new Map<string, number>();
+    for (const stage of recentStages) {
+      if (stage.concluida_em) {
+        const key = stage.concluida_em.toISOString().slice(0, 10);
+        if (byDay.has(key)) byDay.set(key, (byDay.get(key) ?? 0) + 1);
+      }
+      const category = stage.categoria?.trim() || "Sem área";
+      categories.set(category, (categories.get(category) ?? 0) + 1);
+    }
+    const activity = [...byDay.entries()].map(([date, completed]) => ({ date, completed }));
+    const activeDays = activity.filter((point) => point.completed > 0).length;
+
+    res.json({
+      completed_stages: completedStages,
+      completed_stages_30d: recentStages.length,
+      activity_rate_30d: Math.round((activeDays / 30) * 100),
+      last_login: target.last_login,
+      activity,
+      // Não existe telemetria de navegação por módulo no banco. Esta lista
+      // representa áreas com execução concluída, explicitamente nomeada assim
+      // para não fingir que é "uso de módulos".
+      completion_areas: [...categories.entries()]
+        .map(([name, completed]) => ({ name, completed }))
+        .sort((a, b) => b.completed - a.completed)
+        .slice(0, 6),
+      recent_completions: recentStages.slice(0, 6).map((stage) => ({
+        title: stage.titulo,
+        task_title: stage.project_task.title,
+        completed_at: stage.concluida_em,
+      })),
+      upcoming_tasks: upcomingTasks,
+    });
   } catch (err) {
     next(err);
   }

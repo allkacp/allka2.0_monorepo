@@ -242,7 +242,7 @@ export const TOURS: TourDefinition[] = [
     description: "Como buscar, configurar e adicionar um produto à cesta.",
     category: "produtos-catalogo",
     allowedAccountTypes: ["empresas", "agencias"],
-    routes: ["/company/catalog2", "/agency/catalog2"],
+    routes: ["/company/catalogo-produtos", "/agency/catalogo-produtos"],
     steps: [
       { id: "filters", target: "catalog2-client-filters", title: "Busca e filtros", description: "Encontre um produto por nome, pilar ou categoria.", placement: "bottom" },
       { id: "detail", target: null, title: "Abrir um produto", description: "Veja a descrição completa e as opções disponíveis para configurar." },
@@ -259,7 +259,7 @@ export const TOURS: TourDefinition[] = [
     description: "Da cesta até a confirmação do pedido.",
     category: "produtos-catalogo",
     allowedAccountTypes: ["empresas", "agencias"],
-    routes: ["/company/catalog2", "/agency/catalog2", "/company/catalog2/checkout", "/agency/catalog2/checkout"],
+    routes: ["/company/catalogo-produtos", "/agency/catalogo-produtos", "/company/catalogo-produtos/checkout", "/agency/catalogo-produtos/checkout"],
     steps: [
       { id: "cart", target: "catalog2-cart-button", title: "Itens da cesta", description: "Sua cesta é isolada por conta — nunca compartilhada com outra empresa ou agência.", placement: "bottom", optional: true },
       { id: "clear", target: null, title: "Limpar a cesta", description: "É possível remover um item ou esvaziar a cesta inteira, sempre com confirmação antes." },
@@ -276,7 +276,7 @@ export const TOURS: TourDefinition[] = [
     description: "O que muda quando um pedido vira um projeto de execução.",
     category: "produtos-catalogo",
     allowedAccountTypes: ["empresas", "agencias", "admin"],
-    routes: ["/company/catalog2/checkout", "/agency/catalog2/checkout"],
+    routes: ["/company/catalogo-produtos/checkout", "/agency/catalogo-produtos/checkout"],
     steps: [
       { id: "checkout-header", target: "catalog2-checkout-header", title: "Antes do pagamento: Pedido", description: "Enquanto o pagamento simulado não é confirmado, o que existe é um Pedido — ainda não um projeto de execução.", placement: "bottom", optional: true },
       { id: "becomes-project", target: null, title: "Depois da confirmação: Projeto", description: "Assim que o pagamento (simulado) é confirmado, o pedido vira um Projeto real, com número de acompanhamento próprio." },

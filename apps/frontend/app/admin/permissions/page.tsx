@@ -142,7 +142,7 @@ function PermissionCompactStat({ label, value, icon: Icon, color }: any) {
     violet: "bg-violet-50 text-violet-600 ring-violet-100",
   };
   return (
-    <div className="flex min-w-0 items-center gap-3 px-4 py-2.5 sm:px-5">
+    <div className="flex h-full min-w-0 items-center gap-3 px-4 sm:px-5">
       <span
         className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${tone[color]}`}
       >
@@ -339,6 +339,7 @@ export default function PermissionsPage() {
             icon={Shield}
             title="Gestão de Permissões"
             description="Configure perfis de acesso e permissões granulares"
+            contentClassName="lg:h-[65px]"
             actions={
               <>
                 <div className="bg-white rounded-lg">
@@ -372,8 +373,8 @@ export default function PermissionsPage() {
         </div>
 
         <div className="allka-users-scroll flex-1 min-h-0 overflow-y-scroll">
-          <div className="space-y-2 pr-1">
-            <div className="grid grid-cols-1 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 sm:grid-cols-3 sm:divide-x sm:divide-slate-200">
+          <div className="space-y-0 pr-1">
+            <div className="mt-[5px] mb-[5px] grid grid-cols-1 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 lg:h-[65px] sm:grid-cols-3 sm:divide-x sm:divide-slate-200">
               {stats.map((stat, index) => (
                 <PermissionCompactStat
                   key={index}

@@ -331,7 +331,15 @@ export function validateConditionShape(c: {
 export interface PublishValidation {
   ok: boolean;
   issues: string[];
+  // Metadados para a interface levar o administrador ao campo exato. O
+  // texto continua por compatibilidade, mas a UI não precisa mais adivinhar
+  // qual parte de uma tarefa está pendente pelo texto da mensagem.
+  issue_details: Array<{ message: string; target: string; task_ids?: string[] }>;
   pricing_pending: boolean;
+  // Só pendências estritamente comerciais (preço/prazo) podem ser
+  // publicadas como "situação comercial pendente". Campos estruturais,
+  // classificações, tarefas e regras inválidas nunca podem ser ignorados.
+  force_allowed: boolean;
   // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
   // alguma tarefa tem specialty_id/estimated_minutes preenchidos só como
   // dado PROVISÓRIO (effort_is_provisional=true) — bloqueia a publicação
@@ -351,7 +359,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
       tasks: { include: { steps: true, ai: true } },
     },
   });
-  if (!v) return { ok: false, issues: ["Versão não encontrada."], pricing_pending: true, has_provisional_effort: false };
+  if (!v) return { ok: false, issues: ["Versão não encontrada."], issue_details: [{ message: "Versão não encontrada.", target: "version" }], pricing_pending: true, force_allowed: false, has_provisional_effort: false };
 
   const issues: string[] = [];
   if (!v.title?.trim()) issues.push("Informe o título comercial.");
@@ -396,6 +404,10 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
   for (const ad of v.addons) for (const e of ad.effects) if (e.effect_type === "add_task") includedTaskKeys.add(e.effect_value);
   for (const t of v.tasks) if (t.is_conditional && !includedTaskKeys.has(t.key)) issues.push(`A tarefa condicional "${t.name}" nunca é incluída por nenhum efeito.`);
 
+  // Tudo que veio antes daqui é estrutural. A opção de publicar com
+  // pendência comercial nunca pode mascarar uma dessas falhas.
+  const hasStructuralIssues = issues.length > 0;
+
   // Prazo e preço calculáveis (ou pendência comercial explícita).
   let pricingPending = true;
   try {
@@ -407,7 +419,32 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
     issues.push("Não foi possível calcular o preço/prazo desta versão.");
   }
 
-  return { ok: issues.length === 0, issues, pricing_pending: pricingPending, has_provisional_effort: hasProvisionalEffort };
+  const issue_details = issues.map((message) => {
+    if (message.includes("título comercial")) return { message, target: "title" };
+    if (message.includes("descrição completa")) return { message, target: "full_description" };
+    if (message.includes("um pilar")) return { message, target: "pillar" };
+    if (message.includes("uma categoria")) return { message, target: "category" };
+    if (message.includes("classificação 4F")) return { message, target: "four_f" };
+    if (message.includes("ao menos uma tarefa")) return { message, target: "task_create" };
+    if (message.includes("especialidade/tempo PROVISÓRIOS")) {
+      return { message, target: "task_effort", task_ids: v.tasks.filter((t) => t.effort_is_provisional).map((t) => t.id) };
+    }
+    if (message.includes("nenhuma tarefa tem duração estimada")) {
+      return { message, target: "task_duration", task_ids: v.tasks.filter((t) => t.estimated_minutes == null).map((t) => t.id) };
+    }
+    if (message.startsWith("Condição")) return { message, target: "conditions" };
+    if (message.startsWith("Opção") || message.startsWith("Adicional") || message.startsWith("A variação")) return { message, target: "options" };
+    return { message, target: "pricing" };
+  });
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    issue_details,
+    pricing_pending: pricingPending,
+    force_allowed: !hasStructuralIssues && !hasProvisionalEffort && pricingPending,
+    has_provisional_effort: hasProvisionalEffort,
+  };
 }
 
 export async function publishVersion(
@@ -437,9 +474,9 @@ export async function publishVersion(
   if (!validation.ok && !opts.force) {
     throw new Catalog2Error("A versão tem pendências e não pode ser publicada.", 422, "validation_failed");
   }
-  // Mesmo com force, preço pendente é permitido só se marcado como
-  // "pendência comercial" — o motor já sinaliza; publicamos assim mesmo
-  // porque a ata prevê "situação comercial explicitamente pendente".
+  if (!validation.ok && opts.force && !validation.force_allowed) {
+    throw new Catalog2Error("A publicação forçada só é permitida quando restam exclusivamente pendências comerciais de preço ou prazo.", 422, "validation_force_not_allowed");
+  }
 
   const result = await prisma.$transaction(async (tx) => {
     const version = await tx.catalog2ProductVersion.findUnique({ where: { id: versionId } });
@@ -568,7 +605,7 @@ async function assertNoActiveCommercialLinks(productId: string) {
 // quem não precisa disso.
 export async function setProductStatus(productId: string, status: string, db: DbClient = prisma) {
   if (!CATALOG2_STATUSES.includes(status as Catalog2Status)) {
-    throw new Catalog2Error(`Situação inválida: ${status}`, 400, "invalid_status");
+    throw new Catalog2Error(`Status inválido: ${status}`, 400, "invalid_status");
   }
   const product = await prisma.catalog2Product.findUnique({ where: { id: productId }, select: { id: true, published_version_id: true } });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
@@ -917,6 +954,7 @@ export async function getProductDetail(productId: string) {
   return {
     id: product.id,
     slug: product.slug,
+    sequence_number: product.sequence_number,
     internal_name: product.internal_name,
     status: product.status,
     origin: product.origin,

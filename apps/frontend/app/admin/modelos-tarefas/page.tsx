@@ -97,6 +97,7 @@ import {
 } from "@/components/ui/loading";
 import {
   STANDARD_SHELL_PANEL_CLASS,
+  STANDARD_SHELL_TABLE_CARD_CLASS,
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
@@ -108,11 +109,7 @@ import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 
 type ModelStatus = "ativa" | "inativa" | "em_revisao";
 type TaskType =
-  | "execution"
-  | "review"
-  | "approval"
-  | "qualification"
-  | "support";
+  "execution" | "review" | "approval" | "qualification" | "support";
 
 interface ProductLink {
   id: string;
@@ -225,12 +222,18 @@ const ALL_STATUSES: ModelStatus[] = ["ativa", "inativa", "em_revisao"];
 // labels (e.g. the drawer header pills). The Select-based status control
 // keeps its own sc.bg/sc.color/sc.border classes since that's a change
 // control, not a badge.
-const STATUS_BADGE_COLOR: Record<ModelStatus, import("@/lib/badge-styles").BadgeColor> = {
+const STATUS_BADGE_COLOR: Record<
+  ModelStatus,
+  import("@/lib/badge-styles").BadgeColor
+> = {
   ativa: "emerald",
   inativa: "slate",
   em_revisao: "amber",
 };
-const TYPE_BADGE_COLOR: Record<TaskType, import("@/lib/badge-styles").BadgeColor> = {
+const TYPE_BADGE_COLOR: Record<
+  TaskType,
+  import("@/lib/badge-styles").BadgeColor
+> = {
   execution: "blue",
   review: "amber",
   approval: "purple",
@@ -242,7 +245,10 @@ const TYPE_BADGE_COLOR: Record<TaskType, import("@/lib/badge-styles").BadgeColor
 // docs/padrao-tabela-empresas.md) — copied verbatim from admin/clientes'
 // StatCard, with an added optional onClick so the cards can still drive the
 // existing filter shortcuts without changing any of the visual classes.
-const STAT_COLOR_MAP: Record<string, { gradient: string; darkGradient: string; borderClass: string }> = {
+const STAT_COLOR_MAP: Record<
+  string,
+  { gradient: string; darkGradient: string; borderClass: string }
+> = {
   blue: {
     gradient: "from-blue-500 to-blue-700",
     darkGradient: "dark:from-blue-800 dark:to-blue-950",
@@ -283,7 +289,7 @@ function StatCard({
     <div
       onClick={onClick}
       className={cn(
-        "relative rounded-xl overflow-hidden transition-all duration-200 bg-gradient-to-br",
+        "relative h-full rounded-xl overflow-hidden transition-all duration-200 bg-gradient-to-br",
         colors.gradient,
         colors.darkGradient,
         colors.borderClass,
@@ -291,9 +297,11 @@ function StatCard({
         onClick ? "cursor-pointer" : "cursor-default",
       )}
     >
-      <div className="px-4 py-3.5">
+      <div className="h-full px-4 py-2">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wide">{label}</span>
+          <span className="text-[11px] font-semibold text-white/80 uppercase tracking-wide">
+            {label}
+          </span>
           <div className="bg-white/20 rounded-md p-1">
             <Icon className="h-3.5 w-3.5 text-white" />
           </div>
@@ -405,9 +413,13 @@ function Th({
         {info && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
+              <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">
+                ⓘ
+              </span>
             </TooltipTrigger>
-            <TooltipContent className="text-xs max-w-[200px]">{info}</TooltipContent>
+            <TooltipContent className="text-xs max-w-[200px]">
+              {info}
+            </TooltipContent>
           </Tooltip>
         )}
       </span>
@@ -544,7 +556,9 @@ function ModelDetailDrawer({
                 <span className="text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-md tracking-wider">
                   {formatModelCode(codeOrdinal)}
                 </span>
-                <NeonBadge color={STATUS_BADGE_COLOR[model.status] ?? "emerald"}>
+                <NeonBadge
+                  color={STATUS_BADGE_COLOR[model.status] ?? "emerald"}
+                >
                   {sc.label}
                 </NeonBadge>
                 <NeonBadge color={TYPE_BADGE_COLOR[model.task_type] ?? "blue"}>
@@ -1291,7 +1305,9 @@ export default function AdminModelosTarefasPage() {
   // requirements, product links) using only real fields already present on
   // the row object, no fabricated data.
   const [infoPanelOpen, setInfoPanelOpen] = useState(false);
-  const [infoPanelModel, setInfoPanelModel] = useState<CatalogTask | null>(null);
+  const [infoPanelModel, setInfoPanelModel] = useState<CatalogTask | null>(
+    null,
+  );
   const openInfoPanel = useCallback((model: CatalogTask) => {
     setInfoPanelModel(model);
     setInfoPanelOpen(true);
@@ -1353,7 +1369,10 @@ export default function AdminModelosTarefasPage() {
   };
 
   const removeFromList = (key: keyof typeof EMPTY_LISTS, index: number) => {
-    setCreateLists((l) => ({ ...l, [key]: l[key].filter((_, i) => i !== index) }));
+    setCreateLists((l) => ({
+      ...l,
+      [key]: l[key].filter((_, i) => i !== index),
+    }));
   };
 
   // Etapas de execução — modelo próprio {name, description} (não reaproveita
@@ -1367,7 +1386,10 @@ export default function AdminModelosTarefasPage() {
     if (!stepNameInput.trim()) return;
     setCreateSteps((s) => [
       ...s,
-      { name: stepNameInput.trim(), description: stepDescInput.trim() || undefined },
+      {
+        name: stepNameInput.trim(),
+        description: stepDescInput.trim() || undefined,
+      },
     ]);
     setStepNameInput("");
     setStepDescInput("");
@@ -1397,7 +1419,13 @@ export default function AdminModelosTarefasPage() {
       notes: "",
     });
     setCreateLists(EMPTY_LISTS);
-    setListInputs({ checklist: "", briefing_questions: "", required_files: "", execution_rules: "", conclusion_rules: "" });
+    setListInputs({
+      checklist: "",
+      briefing_questions: "",
+      required_files: "",
+      execution_rules: "",
+      conclusion_rules: "",
+    });
     setCreateSteps([]);
     setStepNameInput("");
     setStepDescInput("");
@@ -1414,10 +1442,13 @@ export default function AdminModelosTarefasPage() {
       description: model.description || "",
       objective: model.objective || "",
       default_deadline_days:
-        model.default_deadline_days != null ? String(model.default_deadline_days) : "",
+        model.default_deadline_days != null
+          ? String(model.default_deadline_days)
+          : "",
       default_priority: model.default_priority || "medium",
       complexity: model.complexity || "basic",
-      estimated_hours: model.estimated_hours != null ? String(model.estimated_hours) : "",
+      estimated_hours:
+        model.estimated_hours != null ? String(model.estimated_hours) : "",
       responsible_type: model.responsible_type || "",
       requires_access: !!model.requires_access,
       requires_briefing: !!model.requires_briefing,
@@ -1482,7 +1513,8 @@ export default function AdminModelosTarefasPage() {
   // so we derive a stable ordinal from creation order instead of parsing it.
   const codeOrdinals = useMemo(() => {
     const byCreation = [...models].sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
     const map = new Map<string, number>();
     byCreation.forEach((m, i) => map.set(m.id, i + 1));
@@ -1500,7 +1532,8 @@ export default function AdminModelosTarefasPage() {
         (m) => (m._count?.product_links ?? m.product_links?.length ?? 0) > 0,
       ).length,
       totalLinks: models.reduce(
-        (sum, m) => sum + (m._count?.product_links ?? m.product_links?.length ?? 0),
+        (sum, m) =>
+          sum + (m._count?.product_links ?? m.product_links?.length ?? 0),
         0,
       ),
     }),
@@ -1716,7 +1749,9 @@ export default function AdminModelosTarefasPage() {
       </button>
       {getPageNumbers().map((p, idx) =>
         p === "..." ? (
-          <span key={`dot-${idx}`} className="text-xs text-slate-300 px-0.5">·</span>
+          <span key={`dot-${idx}`} className="text-xs text-slate-300 px-0.5">
+            ·
+          </span>
         ) : (
           <button
             key={p}
@@ -1728,7 +1763,14 @@ export default function AdminModelosTarefasPage() {
                 ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
                 : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400",
             )}
-            style={p === page ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+            style={
+              p === page
+                ? {
+                    background:
+                      "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                  }
+                : undefined
+            }
           >
             {p}
           </button>
@@ -1752,7 +1794,9 @@ export default function AdminModelosTarefasPage() {
                 max={totalPages}
                 value={pageJumpValue}
                 onChange={(e) => setPageJumpValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitPageJump();
+                }}
                 placeholder="Pág."
                 aria-label="Ir para a página"
                 className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -1764,13 +1808,20 @@ export default function AdminModelosTarefasPage() {
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{
+                    background:
+                      "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                  }}
                 />
-                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
+                  Ir
+                </span>
               </button>
             </div>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+          <TooltipContent side="bottom">
+            Ir diretamente para uma página
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>
@@ -1782,21 +1833,29 @@ export default function AdminModelosTarefasPage() {
         <TooltipTrigger asChild>
           <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap cursor-default">
             {(() => {
-              const start = sorted.length === 0 ? 0 : Math.min((page - 1) * pageSize + 1, sorted.length);
+              const start =
+                sorted.length === 0
+                  ? 0
+                  : Math.min((page - 1) * pageSize + 1, sorted.length);
               const end = Math.min(page * pageSize, sorted.length);
               return (
                 <>
                   {start}-{end} de{" "}
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">{sorted.length}</span>{" "}
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">
+                    {sorted.length}
+                  </span>{" "}
                   modelo{sorted.length !== 1 ? "s" : ""}
-                  {hasActiveFilters && <span className="text-blue-600 ml-1">· filtros ativos</span>}
+                  {hasActiveFilters && (
+                    <span className="text-blue-600 ml-1">· filtros ativos</span>
+                  )}
                 </>
               );
             })()}
           </span>
         </TooltipTrigger>
         <TooltipContent side={side} sideOffset={6}>
-          Intervalo de modelos exibido nesta página, do total filtrado ({models.length} no total)
+          Intervalo de modelos exibido nesta página, do total filtrado (
+          {models.length} no total)
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -1828,7 +1887,11 @@ export default function AdminModelosTarefasPage() {
         requires_files: createForm.requires_files,
         steps: createSteps.length
           ? JSON.stringify(
-              createSteps.map((s, i) => ({ name: s.name, description: s.description, order: i + 1 })),
+              createSteps.map((s, i) => ({
+                name: s.name,
+                description: s.description,
+                order: i + 1,
+              })),
             )
           : undefined,
         checklist: createLists.checklist.length
@@ -1954,810 +2017,922 @@ export default function AdminModelosTarefasPage() {
   return (
     <TooltipProvider>
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-      <div className="relative h-full min-h-0 flex flex-col">
-      <div className="shrink-0 -mb-[11px]">
-        <StandardPageBanner
-          icon={ClipboardList}
-          title="Modelos de Tarefas"
-          description="Gerencie modelos reutilizáveis vinculados aos produtos da plataforma."
-          actions={<>
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={fetchModels}
-                    disabled={loading}
-                    className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setCreateOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                  >
-                    <Plus className="h-3.5 w-3.5 shrink-0" />
-                    Novo Modelo
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Criar novo modelo de tarefa</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <PinToTrayButton id="page-modelos-tarefas" label="Modelos de Tarefas" icon={ClipboardList} path="/admin/modelos-tarefas" />
-          </>}
-        />
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-5">
-        {/* Error */}
-        {error && (
-          <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
-            <AlertTriangle className="h-5 w-5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold">
-                Não foi possível carregar os modelos de tarefas.
-              </p>
-              <p className="text-xs text-red-500 mt-0.5 truncate">{error}</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={fetchModels}
-              className="shrink-0 text-red-700"
-            >
-              Tentar novamente
-            </Button>
-          </div>
-        )}
-
-        {/* Stat cards — gradient cards matching admin/empresas & admin/clientes */}
-        {!loading && !error && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard
-              label="Total de modelos"
-              value={stats.total}
+        <div className="relative h-full min-h-0 flex flex-col">
+          <div className="shrink-0 -mb-[11px]">
+            <StandardPageBanner
               icon={ClipboardList}
-              color="blue"
-              onClick={() => clearFilters()}
-            />
-            <StatCard
-              label="Modelos ativos"
-              value={stats.ativos}
-              icon={CheckCircle2}
-              color="emerald"
-              onClick={() => {
-                clearFilters();
-                setFilterStatus("ativa");
-              }}
-            />
-            <StatCard
-              label="Vinculados a produtos"
-              value={stats.vinculados}
-              icon={Boxes}
-              color="violet"
-              onClick={() => {
-                clearFilters();
-                setFilterLinkedMode("linked");
-              }}
-            />
-            <StatCard
-              label="Total de vínculos com produtos"
-              value={stats.totalLinks}
-              icon={Link2}
-              color="orange"
+              title="Modelos de Tarefas"
+              description="Gerencie modelos reutilizáveis vinculados aos produtos da plataforma."
+              contentClassName="lg:h-[65px]"
+              actions={
+                <>
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={fetchModels}
+                          disabled={loading}
+                          className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={cn("h-4 w-4", loading && "animate-spin")}
+                          />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Atualizar
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => setCreateOpen(true)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                        >
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                          Novo Modelo
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Criar novo modelo de tarefa
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <PinToTrayButton
+                    id="page-modelos-tarefas"
+                    label="Modelos de Tarefas"
+                    icon={ClipboardList}
+                    path="/admin/modelos-tarefas"
+                  />
+                </>
+              }
             />
           </div>
-        )}
 
-        {/* Main Card — search + filters/config icons + pagination + table, all in one card matching admin/empresas */}
-        {!loading && !error && (
-          <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
-            {/* Row 1 — search + icon toolbar buttons */}
-            <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
-              <div className="relative flex-1 min-w-[220px] max-w-sm">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por código, nome, categoria ou produto..."
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(1);
-                  }}
-                  className="pl-8 h-9 text-sm w-full"
-                />
-                {search && (
-                  <button
-                    onClick={() => {
-                      setSearch("");
-                      setPage(1);
-                    }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="space-y-5">
+              {/* Error */}
+              {error && (
+                <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+                  <AlertTriangle className="h-5 w-5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold">
+                      Não foi possível carregar os modelos de tarefas.
+                    </p>
+                    <p className="text-xs text-red-500 mt-0.5 truncate">
+                      {error}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={fetchModels}
+                    className="shrink-0 text-red-700"
                   >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-
-              <div className="ml-auto flex items-center gap-2">
-                <IconToolbarButton
-                  icon={Filter}
-                  tooltip={filterActiveCount > 0 ? `Filtros (${filterActiveCount} ativos)` : "Filtros"}
-                  onClick={() => setFiltersPanelOpen(true)}
-                />
-                <IconToolbarButton
-                  icon={Cog}
-                  tooltip="Configurar colunas"
-                  onClick={() => setColConfigOpen(true)}
-                />
-              </div>
-            </div>
-
-            {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
-              <div className="flex items-center gap-3">
-                <ItemsPerPageSelect
-                  value={String(pageSize)}
-                  onValueChange={(v) => {
-                    setPageSize(Number(v));
-                    setPage(1);
-                  }}
-                  variant="top"
-                />
-                <CountText side="bottom" />
-              </div>
-
-              {hasHorizontalOverflow && (
-                <div
-                  ref={topScrollRef}
-                  onScroll={handleTopBarScroll}
-                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                  className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-                  style={{ height: 12 }}
-                >
-                  <div style={{ minWidth: 800, height: 1 }} />
+                    Tentar novamente
+                  </Button>
                 </div>
               )}
 
-              {totalPages > 1 && <PaginationControls />}
-            </div>
+              {/* Stat cards — gradient cards matching admin/empresas & admin/clientes */}
+              {!loading && !error && (
+                <div className="mt-[5px] grid grid-cols-2 gap-3 lg:h-[65px] lg:grid-cols-4">
+                  <StatCard
+                    label="Total de modelos"
+                    value={stats.total}
+                    icon={ClipboardList}
+                    color="blue"
+                    onClick={() => clearFilters()}
+                  />
+                  <StatCard
+                    label="Modelos ativos"
+                    value={stats.ativos}
+                    icon={CheckCircle2}
+                    color="emerald"
+                    onClick={() => {
+                      clearFilters();
+                      setFilterStatus("ativa");
+                    }}
+                  />
+                  <StatCard
+                    label="Vinculados a produtos"
+                    value={stats.vinculados}
+                    icon={Boxes}
+                    color="violet"
+                    onClick={() => {
+                      clearFilters();
+                      setFilterLinkedMode("linked");
+                    }}
+                  />
+                  <StatCard
+                    label="Total de vínculos com produtos"
+                    value={stats.totalLinks}
+                    icon={Link2}
+                    color="orange"
+                  />
+                </div>
+              )}
 
-            {models.length === 0 ? (
-              <div className="p-16 flex flex-col items-center text-center gap-4">
-                <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <ClipboardList className="h-8 w-8 text-slate-400" />
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold text-slate-700 mb-1">
-                    Nenhum modelo de tarefa encontrado.
-                  </h2>
-                  <p className="text-sm text-slate-400 max-w-sm mx-auto">
-                    Modelos de tarefas são estruturas reutilizáveis vinculadas a
-                    produtos. Crie um modelo para começar.
-                  </p>
-                </div>
-              </div>
-            ) : sorted.length === 0 ? (
-              <div className="p-12 flex flex-col items-center text-center gap-3">
-                <Filter className="h-8 w-8 text-slate-300" />
-                <p className="text-sm font-medium text-slate-600">
-                  Nenhum modelo com os filtros aplicados.
-                </p>
-                <button
-                  onClick={clearFilters}
-                  className="text-xs text-blue-600 underline hover:no-underline"
-                >
-                  Limpar filtros
-                </button>
-              </div>
-            ) : (
-              <>
-            <div
-              ref={tableScrollRef}
-              onScroll={handleTableScroll}
-              className="overflow-x-auto allka-table-scroll-body"
-            >
-              <table className="tabela-cartao w-full text-sm min-w-[800px]">
-                <thead
-                  style={{
-                    position: "sticky",
-                    top: 0,
-                    zIndex: 2,
-                    background: "var(--table-head)",
-                    boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
-                  }}
-                >
-                  <tr>
-                    <th
-                      className="px-1 py-3 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center"
-                      style={{
-                        position: "sticky",
-                        left: 0,
-                        top: 0,
-                        zIndex: 3,
-                        minWidth: 84,
-                        background: "var(--table-head)",
-                        boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
-                        borderRight: "1px solid rgba(100,116,139,0.18)",
-                      }}
-                    >
-                      Ações
-                    </th>
-                    {isCol("code") && (
-                      <Th
-                        label="Código"
-                        field="code"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={toggleSort}
-                        className="pl-4 w-28"
-                        info="Código sequencial do modelo de tarefa."
+              {/* Main Card — search + filters/config icons + pagination + table, all in one card matching admin/empresas */}
+              {!loading && !error && (
+                <div className={STANDARD_SHELL_TABLE_CARD_CLASS}>
+                  {/* Row 1 — search + icon toolbar buttons */}
+                  <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+                    <div className="relative flex-1 min-w-[220px] max-w-sm">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por código, nome, categoria ou produto..."
+                        value={search}
+                        onChange={(e) => {
+                          setSearch(e.target.value);
+                          setPage(1);
+                        }}
+                        className="pl-8 h-9 text-sm w-full"
                       />
-                    )}
-                    {isCol("name") && (
-                      <Th
-                        label="Nome do modelo"
-                        field="name"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={toggleSort}
-                        className="min-w-[200px]"
-                        info="Nome do modelo de tarefa reutilizável."
-                      />
-                    )}
-                    {isCol("category") && (
-                      <Th
-                        label="Categoria"
-                        field="category"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={toggleSort}
-                        className="min-w-[130px]"
-                        info="Categoria/agrupamento do modelo."
-                      />
-                    )}
-                    {isCol("type") && (
-                      <Th
-                        label="Tipo"
-                        field="type"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={toggleSort}
-                        className="w-36"
-                        info="Tipo de tarefa gerada a partir deste modelo."
-                      />
-                    )}
-                    {isCol("status") && (
-                      <Th
-                        label="Status"
-                        field="status"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={toggleSort}
-                        className="w-32"
-                        info="Situação atual do modelo: ativo, inativo ou em revisão."
-                      />
-                    )}
-                    {isCol("links") && (
-                      <Th
-                        label="Produtos vinculados"
-                        field="links"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={toggleSort}
-                        className="w-40"
-                        info="Quantidade de produtos do catálogo que usam este modelo."
-                      />
-                    )}
-                    {isCol("updated_at") && (
-                      <Th
-                        label="Atualizado"
-                        field="updated_at"
-                        sortKey={sortKey}
-                        sortDir={sortDir}
-                        onSort={toggleSort}
-                        className="w-32"
-                        info="Data da última atualização do modelo."
-                      />
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {paginated.map((model, i) => {
-                    const sc =
-                      STATUS_CONFIG[model.status] ?? STATUS_CONFIG.ativa;
-                    const tc =
-                      TYPE_CONFIG[model.task_type] ?? TYPE_CONFIG.execution;
-                    const linkCount =
-                      model._count?.product_links ??
-                      model.product_links?.length ??
-                      0;
-                    const updatingThis = updatingId === model.id;
-                    const isEven = i % 2 === 0;
-                    return (
-                      <tr
-                        key={model.id}
-                        className={cn(
-                          "group transition-colors",
-                          isEven
-                            ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                            : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]",
-                        )}
-                      >
-                        {/* Ações — pinned, matching the doc's exact recipe */}
-                        <td
-                          className={cn(
-                            "px-1 py-2 transition-colors",
-                            isEven
-                              ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                              : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]",
-                          )}
-                          style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 84, borderRight: "1px solid rgba(100,116,139,0.18)" }}
+                      {search && (
+                        <button
+                          onClick={() => {
+                            setSearch("");
+                            setPage(1);
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                         >
-                          <div className="flex items-center justify-center gap-1">
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openInfoPanel(model);
-                                    }}
-                                    className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">Mais informações</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedModel(model);
-                                      setDrawerOpen(true);
-                                      navigate(`/admin/modelos-tarefas/${model.id}`, { replace: true });
-                                    }}
-                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                  >
-                                    <Eye className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">Ver detalhes</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openEditModel(model);
-                                    }}
-                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">Editar modelo</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
-                                  <span className="sr-only">Mais ações</span>
-                                  <MoreHorizontal className="h-3.5 w-3.5" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="w-56 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60">
-                                <DropdownMenuItem
-                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                  onClick={() => handleDuplicate(model)}
-                                  disabled={updatingThis}
-                                >
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0">
-                                    <Copy className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                                  </span>
-                                  Duplicar modelo
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator className="my-1" />
-                                <DropdownMenuItem
-                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                  onClick={() => handleStatusChange(model, "ativa")}
-                                  disabled={model.status === "ativa"}
-                                >
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-900/30 shrink-0">
-                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                  </span>
-                                  Marcar como ativo
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                  onClick={() => handleStatusChange(model, "inativa")}
-                                  disabled={model.status === "inativa"}
-                                >
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 shrink-0">
-                                    <Circle className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                                  </span>
-                                  Marcar como inativo
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                  onClick={() => handleStatusChange(model, "em_revisao")}
-                                  disabled={model.status === "em_revisao"}
-                                >
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30 shrink-0">
-                                    <Eye className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                                  </span>
-                                  Enviar p/ revisão
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </td>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
 
-                        {/* Código */}
-                        {isCol("code") && (
-                          <td data-rotulo="Código" className="px-3 py-3 pl-4">
-                            <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                              {formatModelCode(codeOrdinals.get(model.id))}
-                            </span>
-                          </td>
-                        )}
+                    <div className="ml-auto flex items-center gap-2">
+                      <IconToolbarButton
+                        icon={Filter}
+                        tooltip={
+                          filterActiveCount > 0
+                            ? `Filtros (${filterActiveCount} ativos)`
+                            : "Filtros"
+                        }
+                        onClick={() => setFiltersPanelOpen(true)}
+                      />
+                      <IconToolbarButton
+                        icon={Cog}
+                        tooltip="Configurar colunas"
+                        onClick={() => setColConfigOpen(true)}
+                      />
+                    </div>
+                  </div>
 
-                        {/* Nome */}
-                        {isCol("name") && (
-                          <td data-rotulo="Nome do modelo" className="px-3 py-3">
-                            <button
-                              className="text-left w-full"
-                              onClick={() => {
-                                setSelectedModel(model);
-                                setDrawerOpen(true);
-                                navigate(`/admin/modelos-tarefas/${model.id}`, {
-                                  replace: true,
-                                });
-                              }}
-                            >
-                              <p className="font-medium text-slate-800 dark:text-slate-100 leading-snug hover:text-blue-600 transition-colors line-clamp-1">
-                                {model.name}
-                              </p>
-                              {model.description && (
-                                <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
-                                  {model.description}
-                                </p>
-                              )}
-                            </button>
-                          </td>
-                        )}
+                  {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+                    <div className="flex items-center gap-3">
+                      <ItemsPerPageSelect
+                        value={String(pageSize)}
+                        onValueChange={(v) => {
+                          setPageSize(Number(v));
+                          setPage(1);
+                        }}
+                        variant="top"
+                      />
+                      <CountText side="bottom" />
+                    </div>
 
-                        {/* Categoria */}
-                        {isCol("category") && (
-                          <td data-rotulo="Categoria" className="px-3 py-3">
-                            <span className="text-sm text-slate-600 line-clamp-1">
-                              {model.category}
-                            </span>
-                            {model.subcategory && (
-                              <p className="text-[11px] text-slate-400 mt-0.5">
-                                {model.subcategory}
-                              </p>
-                            )}
-                          </td>
-                        )}
+                    {hasHorizontalOverflow && (
+                      <div
+                        ref={topScrollRef}
+                        onScroll={handleTopBarScroll}
+                        title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                        className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                        style={{ height: 12 }}
+                      >
+                        <div style={{ minWidth: 800, height: 1 }} />
+                      </div>
+                    )}
 
-                        {/* Tipo */}
-                        {isCol("type") && (
-                          <td data-rotulo="Tipo" className="px-3 py-3">
-                            <NeonBadge color={TYPE_BADGE_COLOR[model.task_type] ?? "blue"}>
-                              {tc.label}
-                            </NeonBadge>
-                          </td>
-                        )}
+                    {totalPages > 1 && <PaginationControls />}
+                  </div>
 
-                        {/* Status */}
-                        {isCol("status") && (
-                          <td data-rotulo="Status" className="px-3 py-3">
-                            {updatingThis ? (
-                              <InlineLoader
-                                text="..."
-                                className="py-1 justify-start"
-                              />
-                            ) : (
-                              <Select
-                                value={model.status}
-                                onValueChange={(v) =>
-                                  handleStatusChange(model, v as ModelStatus)
-                                }
+                  {models.length === 0 ? (
+                    <div className="p-16 flex flex-col items-center text-center gap-4">
+                      <div className="h-16 w-16 rounded-2xl bg-slate-100 flex items-center justify-center">
+                        <ClipboardList className="h-8 w-8 text-slate-400" />
+                      </div>
+                      <div>
+                        <h2 className="text-base font-semibold text-slate-700 mb-1">
+                          Nenhum modelo de tarefa encontrado.
+                        </h2>
+                        <p className="text-sm text-slate-400 max-w-sm mx-auto">
+                          Modelos de tarefas são estruturas reutilizáveis
+                          vinculadas a produtos. Crie um modelo para começar.
+                        </p>
+                      </div>
+                    </div>
+                  ) : sorted.length === 0 ? (
+                    <div className="p-12 flex flex-col items-center text-center gap-3">
+                      <Filter className="h-8 w-8 text-slate-300" />
+                      <p className="text-sm font-medium text-slate-600">
+                        Nenhum modelo com os filtros aplicados.
+                      </p>
+                      <button
+                        onClick={clearFilters}
+                        className="text-xs text-blue-600 underline hover:no-underline"
+                      >
+                        Limpar filtros
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        ref={tableScrollRef}
+                        onScroll={handleTableScroll}
+                        className="overflow-x-auto allka-table-scroll-body"
+                      >
+                        <table className="tabela-cartao w-full text-sm min-w-[800px]">
+                          <thead
+                            style={{
+                              position: "sticky",
+                              top: 0,
+                              zIndex: 2,
+                              background: "var(--table-head)",
+                              boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
+                            }}
+                          >
+                            <tr>
+                              <th
+                                className="px-1 py-3 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center"
+                                style={{
+                                  position: "sticky",
+                                  left: 0,
+                                  top: 0,
+                                  zIndex: 3,
+                                  minWidth: 84,
+                                  background: "var(--table-head)",
+                                  boxShadow: "0 1px 0 rgba(148,163,184,0.3)",
+                                  borderRight:
+                                    "1px solid rgba(100,116,139,0.18)",
+                                }}
                               >
-                                <SelectTrigger
+                                Ações
+                              </th>
+                              {isCol("code") && (
+                                <Th
+                                  label="Código"
+                                  field="code"
+                                  sortKey={sortKey}
+                                  sortDir={sortDir}
+                                  onSort={toggleSort}
+                                  className="pl-4 w-28"
+                                  info="Código sequencial do modelo de tarefa."
+                                />
+                              )}
+                              {isCol("name") && (
+                                <Th
+                                  label="Nome do modelo"
+                                  field="name"
+                                  sortKey={sortKey}
+                                  sortDir={sortDir}
+                                  onSort={toggleSort}
+                                  className="min-w-[200px]"
+                                  info="Nome do modelo de tarefa reutilizável."
+                                />
+                              )}
+                              {isCol("category") && (
+                                <Th
+                                  label="Categoria"
+                                  field="category"
+                                  sortKey={sortKey}
+                                  sortDir={sortDir}
+                                  onSort={toggleSort}
+                                  className="min-w-[130px]"
+                                  info="Categoria/agrupamento do modelo."
+                                />
+                              )}
+                              {isCol("type") && (
+                                <Th
+                                  label="Tipo"
+                                  field="type"
+                                  sortKey={sortKey}
+                                  sortDir={sortDir}
+                                  onSort={toggleSort}
+                                  className="w-36"
+                                  info="Tipo de tarefa gerada a partir deste modelo."
+                                />
+                              )}
+                              {isCol("status") && (
+                                <Th
+                                  label="Status"
+                                  field="status"
+                                  sortKey={sortKey}
+                                  sortDir={sortDir}
+                                  onSort={toggleSort}
+                                  className="w-32"
+                                  info="Situação atual do modelo: ativo, inativo ou em revisão."
+                                />
+                              )}
+                              {isCol("links") && (
+                                <Th
+                                  label="Produtos vinculados"
+                                  field="links"
+                                  sortKey={sortKey}
+                                  sortDir={sortDir}
+                                  onSort={toggleSort}
+                                  className="w-40"
+                                  info="Quantidade de produtos do catálogo que usam este modelo."
+                                />
+                              )}
+                              {isCol("updated_at") && (
+                                <Th
+                                  label="Atualizado"
+                                  field="updated_at"
+                                  sortKey={sortKey}
+                                  sortDir={sortDir}
+                                  onSort={toggleSort}
+                                  className="w-32"
+                                  info="Data da última atualização do modelo."
+                                />
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {paginated.map((model, i) => {
+                              const sc =
+                                STATUS_CONFIG[model.status] ??
+                                STATUS_CONFIG.ativa;
+                              const tc =
+                                TYPE_CONFIG[model.task_type] ??
+                                TYPE_CONFIG.execution;
+                              const linkCount =
+                                model._count?.product_links ??
+                                model.product_links?.length ??
+                                0;
+                              const updatingThis = updatingId === model.id;
+                              const isEven = i % 2 === 0;
+                              return (
+                                <tr
+                                  key={model.id}
                                   className={cn(
-                                    "h-7 text-[11px] font-semibold border w-[110px]",
-                                    sc.bg,
-                                    sc.color,
-                                    sc.border,
+                                    "group transition-colors",
+                                    isEven
+                                      ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                      : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]",
                                   )}
                                 >
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {ALL_STATUSES.map((s) => {
-                                    const cfg = STATUS_CONFIG[s];
-                                    const Icon = cfg.icon;
-                                    return (
-                                      <SelectItem
-                                        key={s}
-                                        value={s}
-                                        className="text-xs"
-                                      >
-                                        <span className="flex items-center gap-1.5">
-                                          <Icon className="h-3 w-3" />{" "}
-                                          {cfg.label}
-                                        </span>
-                                      </SelectItem>
-                                    );
-                                  })}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </td>
-                        )}
-
-                        {/* Produtos vinculados */}
-                        {isCol("links") && (
-                          <td data-rotulo="Produtos vinculados" className="px-3 py-3">
-                            {linkCount > 0 ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium"
-                                    onClick={() => {
-                                      setSelectedModel(model);
-                                      setDrawerOpen(true);
-                                      navigate(
-                                        `/admin/modelos-tarefas/${model.id}`,
-                                        { replace: true },
-                                      );
+                                  {/* Ações — pinned, matching the doc's exact recipe */}
+                                  <td
+                                    className={cn(
+                                      "px-1 py-2 transition-colors",
+                                      isEven
+                                        ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                        : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]",
+                                    )}
+                                    style={{
+                                      position: "sticky",
+                                      left: 0,
+                                      zIndex: 1,
+                                      minWidth: 84,
+                                      borderRight:
+                                        "1px solid rgba(100,116,139,0.18)",
                                     }}
                                   >
-                                    <Package className="h-3.5 w-3.5" />
-                                    {linkCount}{" "}
-                                    {linkCount === 1 ? "produto" : "produtos"}
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="left"
-                                  className="max-w-[260px]"
-                                >
-                                  <p className="text-xs font-semibold mb-1">
-                                    Produtos vinculados:
-                                  </p>
-                                  <ul className="space-y-0.5">
-                                    {(model.product_links ?? [])
-                                      .slice(0, 5)
-                                      .map((l) => (
-                                        <li
-                                          key={l.id}
-                                          className="text-xs flex items-center gap-1.5"
+                                    <div className="flex items-center justify-center gap-1">
+                                      <TooltipProvider delayDuration={400}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openInfoPanel(model);
+                                              }}
+                                              className="h-[21px] w-[21px] flex items-center justify-center rounded-full bg-[#2558FF] text-white shadow-[0_2px_6px_rgba(37,88,255,0.35)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:shadow-[0_2px_10px_rgba(110,44,150,0.5)] transition-all"
+                                            >
+                                              <Plus className="h-3 w-3" />
+                                            </button>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="text-xs font-medium">
+                                            Mais informações
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                      <TooltipProvider delayDuration={400}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <button
+                                              onClick={() => {
+                                                setSelectedModel(model);
+                                                setDrawerOpen(true);
+                                                navigate(
+                                                  `/admin/modelos-tarefas/${model.id}`,
+                                                  { replace: true },
+                                                );
+                                              }}
+                                              className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                            >
+                                              <Eye className="h-3.5 w-3.5" />
+                                            </button>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="text-xs font-medium">
+                                            Ver detalhes
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                      <TooltipProvider delayDuration={400}>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openEditModel(model);
+                                              }}
+                                              className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#6E2C96] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                            >
+                                              <Pencil className="h-3.5 w-3.5" />
+                                            </button>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="text-xs font-medium">
+                                            Editar modelo
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
+                                            <span className="sr-only">
+                                              Mais ações
+                                            </span>
+                                            <MoreHorizontal className="h-3.5 w-3.5" />
+                                          </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                          align="start"
+                                          className="w-56 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60"
                                         >
-                                          <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded">
-                                            {l.product.id}
-                                          </span>
-                                          <span className="truncate">
-                                            {l.product.name}
-                                          </span>
-                                        </li>
-                                      ))}
-                                    {(model._count?.product_links ?? 0) > 5 && (
-                                      <li className="text-xs text-slate-400">
-                                        +
-                                        {(model._count?.product_links ?? 0) - 5}{" "}
-                                        mais
-                                      </li>
-                                    )}
-                                  </ul>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="text-xs text-slate-300">
-                                Não vinculado
-                              </span>
-                            )}
-                          </td>
+                                          <DropdownMenuItem
+                                            className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                            onClick={() =>
+                                              handleDuplicate(model)
+                                            }
+                                            disabled={updatingThis}
+                                          >
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0">
+                                              <Copy className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                            </span>
+                                            Duplicar modelo
+                                          </DropdownMenuItem>
+                                          <DropdownMenuSeparator className="my-1" />
+                                          <DropdownMenuItem
+                                            className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                            onClick={() =>
+                                              handleStatusChange(model, "ativa")
+                                            }
+                                            disabled={model.status === "ativa"}
+                                          >
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-900/30 shrink-0">
+                                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                            </span>
+                                            Marcar como ativo
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                            onClick={() =>
+                                              handleStatusChange(
+                                                model,
+                                                "inativa",
+                                              )
+                                            }
+                                            disabled={
+                                              model.status === "inativa"
+                                            }
+                                          >
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-800 shrink-0">
+                                              <Circle className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                                            </span>
+                                            Marcar como inativo
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
+                                            className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                            onClick={() =>
+                                              handleStatusChange(
+                                                model,
+                                                "em_revisao",
+                                              )
+                                            }
+                                            disabled={
+                                              model.status === "em_revisao"
+                                            }
+                                          >
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30 shrink-0">
+                                              <Eye className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                            </span>
+                                            Enviar p/ revisão
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  </td>
+
+                                  {/* Código */}
+                                  {isCol("code") && (
+                                    <td
+                                      data-rotulo="Código"
+                                      className="px-3 py-3 pl-4"
+                                    >
+                                      <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
+                                        {formatModelCode(
+                                          codeOrdinals.get(model.id),
+                                        )}
+                                      </span>
+                                    </td>
+                                  )}
+
+                                  {/* Nome */}
+                                  {isCol("name") && (
+                                    <td
+                                      data-rotulo="Nome do modelo"
+                                      className="px-3 py-3"
+                                    >
+                                      <button
+                                        className="text-left w-full"
+                                        onClick={() => {
+                                          setSelectedModel(model);
+                                          setDrawerOpen(true);
+                                          navigate(
+                                            `/admin/modelos-tarefas/${model.id}`,
+                                            {
+                                              replace: true,
+                                            },
+                                          );
+                                        }}
+                                      >
+                                        <p className="font-medium text-slate-800 dark:text-slate-100 leading-snug hover:text-blue-600 transition-colors line-clamp-1">
+                                          {model.name}
+                                        </p>
+                                        {model.description && (
+                                          <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                                            {model.description}
+                                          </p>
+                                        )}
+                                      </button>
+                                    </td>
+                                  )}
+
+                                  {/* Categoria */}
+                                  {isCol("category") && (
+                                    <td
+                                      data-rotulo="Categoria"
+                                      className="px-3 py-3"
+                                    >
+                                      <span className="text-sm text-slate-600 line-clamp-1">
+                                        {model.category}
+                                      </span>
+                                      {model.subcategory && (
+                                        <p className="text-[11px] text-slate-400 mt-0.5">
+                                          {model.subcategory}
+                                        </p>
+                                      )}
+                                    </td>
+                                  )}
+
+                                  {/* Tipo */}
+                                  {isCol("type") && (
+                                    <td
+                                      data-rotulo="Tipo"
+                                      className="px-3 py-3"
+                                    >
+                                      <NeonBadge
+                                        color={
+                                          TYPE_BADGE_COLOR[model.task_type] ??
+                                          "blue"
+                                        }
+                                      >
+                                        {tc.label}
+                                      </NeonBadge>
+                                    </td>
+                                  )}
+
+                                  {/* Status */}
+                                  {isCol("status") && (
+                                    <td
+                                      data-rotulo="Status"
+                                      className="px-3 py-3"
+                                    >
+                                      {updatingThis ? (
+                                        <InlineLoader
+                                          text="..."
+                                          className="py-1 justify-start"
+                                        />
+                                      ) : (
+                                        <Select
+                                          value={model.status}
+                                          onValueChange={(v) =>
+                                            handleStatusChange(
+                                              model,
+                                              v as ModelStatus,
+                                            )
+                                          }
+                                        >
+                                          <SelectTrigger
+                                            className={cn(
+                                              "h-7 text-[11px] font-semibold border w-[110px]",
+                                              sc.bg,
+                                              sc.color,
+                                              sc.border,
+                                            )}
+                                          >
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {ALL_STATUSES.map((s) => {
+                                              const cfg = STATUS_CONFIG[s];
+                                              const Icon = cfg.icon;
+                                              return (
+                                                <SelectItem
+                                                  key={s}
+                                                  value={s}
+                                                  className="text-xs"
+                                                >
+                                                  <span className="flex items-center gap-1.5">
+                                                    <Icon className="h-3 w-3" />{" "}
+                                                    {cfg.label}
+                                                  </span>
+                                                </SelectItem>
+                                              );
+                                            })}
+                                          </SelectContent>
+                                        </Select>
+                                      )}
+                                    </td>
+                                  )}
+
+                                  {/* Produtos vinculados */}
+                                  {isCol("links") && (
+                                    <td
+                                      data-rotulo="Produtos vinculados"
+                                      className="px-3 py-3"
+                                    >
+                                      {linkCount > 0 ? (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <button
+                                              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                              onClick={() => {
+                                                setSelectedModel(model);
+                                                setDrawerOpen(true);
+                                                navigate(
+                                                  `/admin/modelos-tarefas/${model.id}`,
+                                                  { replace: true },
+                                                );
+                                              }}
+                                            >
+                                              <Package className="h-3.5 w-3.5" />
+                                              {linkCount}{" "}
+                                              {linkCount === 1
+                                                ? "produto"
+                                                : "produtos"}
+                                            </button>
+                                          </TooltipTrigger>
+                                          <TooltipContent
+                                            side="left"
+                                            className="max-w-[260px]"
+                                          >
+                                            <p className="text-xs font-semibold mb-1">
+                                              Produtos vinculados:
+                                            </p>
+                                            <ul className="space-y-0.5">
+                                              {(model.product_links ?? [])
+                                                .slice(0, 5)
+                                                .map((l) => (
+                                                  <li
+                                                    key={l.id}
+                                                    className="text-xs flex items-center gap-1.5"
+                                                  >
+                                                    <span className="font-mono text-[10px] bg-slate-100 text-slate-600 px-1 py-0.5 rounded">
+                                                      {l.product.id}
+                                                    </span>
+                                                    <span className="truncate">
+                                                      {l.product.name}
+                                                    </span>
+                                                  </li>
+                                                ))}
+                                              {(model._count?.product_links ??
+                                                0) > 5 && (
+                                                <li className="text-xs text-slate-400">
+                                                  +
+                                                  {(model._count
+                                                    ?.product_links ?? 0) -
+                                                    5}{" "}
+                                                  mais
+                                                </li>
+                                              )}
+                                            </ul>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      ) : (
+                                        <span className="text-xs text-slate-300">
+                                          Não vinculado
+                                        </span>
+                                      )}
+                                    </td>
+                                  )}
+
+                                  {/* Atualizado */}
+                                  {isCol("updated_at") && (
+                                    <td
+                                      data-rotulo="Atualizado"
+                                      className="px-3 py-3"
+                                    >
+                                      <span className="text-sm text-slate-500">
+                                        {fmtDate(model.updated_at)}
+                                      </span>
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Row 3 — bottom mirror of row 2 */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+                        <div className="flex items-center gap-3">
+                          <ItemsPerPageSelect
+                            value={String(pageSize)}
+                            onValueChange={(v) => {
+                              setPageSize(Number(v));
+                              setPage(1);
+                            }}
+                            variant="bottom"
+                          />
+                          <CountText side="top" />
+                        </div>
+
+                        {hasHorizontalOverflow && (
+                          <div
+                            ref={bottomScrollRef}
+                            onScroll={handleBottomBarScroll}
+                            title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                            className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                            style={{ height: 12 }}
+                          >
+                            <div style={{ minWidth: 800, height: 1 }} />
+                          </div>
                         )}
 
-                        {/* Atualizado */}
-                        {isCol("updated_at") && (
-                          <td data-rotulo="Atualizado" className="px-3 py-3">
-                            <span className="text-sm text-slate-500">
-                              {fmtDate(model.updated_at)}
-                            </span>
-                          </td>
-                        )}
-
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Row 3 — bottom mirror of row 2 */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
-              <div className="flex items-center gap-3">
-                <ItemsPerPageSelect
-                  value={String(pageSize)}
-                  onValueChange={(v) => {
-                    setPageSize(Number(v));
-                    setPage(1);
-                  }}
-                  variant="bottom"
-                />
-                <CountText side="top" />
-              </div>
-
-              {hasHorizontalOverflow && (
-                <div
-                  ref={bottomScrollRef}
-                  onScroll={handleBottomBarScroll}
-                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                  className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-                  style={{ height: 12 }}
-                >
-                  <div style={{ minWidth: 800, height: 1 }} />
+                        {totalPages > 1 && <PaginationControls />}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
-
-              {totalPages > 1 && <PaginationControls />}
             </div>
-              </>
-            )}
           </div>
-        )}
-      </div>
-      </div>
 
-      {/* Filtros panel */}
-      <StandardModalDialog
-        open={filtersPanelOpen}
-        onClose={() => setFiltersPanelOpen(false)}
-        title="Filtros"
-        subtitle="Refine os modelos de tarefas exibidos."
-        footer={
-          filterActiveCount > 0 ? (
-            <button
-              onClick={clearFilters}
-              className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Limpar todos os filtros
-            </button>
-          ) : undefined
-        }
-      >
-        <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto p-6 space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Status */}
-            <div>
-              <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Status</Label>
-              <Select
-                value={filterStatus}
-                onValueChange={(v) => {
-                  setFilterStatus(v);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="h-9 w-full text-xs">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os status</SelectItem>
-                  <SelectItem value="ativa" className="text-xs">
-                    Ativo
-                  </SelectItem>
-                  <SelectItem value="inativa" className="text-xs">
-                    Inativo
-                  </SelectItem>
-                  <SelectItem value="em_revisao" className="text-xs">
-                    Em Revisão
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Type */}
-            <div>
-              <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Tipo</Label>
-              <Select
-                value={filterType}
-                onValueChange={(v) => {
-                  setFilterType(v);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="h-9 w-full text-xs">
-                  <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os tipos</SelectItem>
-                  {(
-                    [
-                      "execution",
-                      "review",
-                      "approval",
-                      "qualification",
-                      "support",
-                    ] as TaskType[]
-                  ).map((t) => (
-                    <SelectItem key={t} value={t} className="text-xs">
-                      {TYPE_CONFIG[t].label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Category */}
-            {uniqueCategories.length > 0 && (
-              <div>
-                <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Categoria</Label>
-                <Select
-                  value={filterCategory}
-                  onValueChange={(v) => {
-                    setFilterCategory(v);
-                    setPage(1);
-                  }}
+          {/* Filtros panel */}
+          <StandardModalDialog
+            open={filtersPanelOpen}
+            onClose={() => setFiltersPanelOpen(false)}
+            title="Filtros"
+            subtitle="Refine os modelos de tarefas exibidos."
+            footer={
+              filterActiveCount > 0 ? (
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                 >
-                  <SelectTrigger className="h-9 w-full text-xs">
-                    <SelectValue placeholder="Categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as categorias</SelectItem>
-                    {uniqueCategories.map((c) => (
-                      <SelectItem key={c} value={c} className="text-xs">
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                  Limpar todos os filtros
+                </button>
+              ) : undefined
+            }
+          >
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-3xl mx-auto p-6 space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Status */}
+                  <div>
+                    <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">
+                      Status
+                    </Label>
+                    <Select
+                      value={filterStatus}
+                      onValueChange={(v) => {
+                        setFilterStatus(v);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-9 w-full text-xs">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os status</SelectItem>
+                        <SelectItem value="ativa" className="text-xs">
+                          Ativo
+                        </SelectItem>
+                        <SelectItem value="inativa" className="text-xs">
+                          Inativo
+                        </SelectItem>
+                        <SelectItem value="em_revisao" className="text-xs">
+                          Em Revisão
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-            {/* Vinculação */}
-            <div>
-              <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">Vinculação</Label>
-              <Select
-                value={filterLinkedMode}
-                onValueChange={(v) => {
-                  setFilterLinkedMode(v as any);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger className="h-9 w-full text-xs">
-                  <SelectValue placeholder="Vinculação" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as vinculações</SelectItem>
-                  <SelectItem value="linked" className="text-xs">
-                    Vinculados a produtos
-                  </SelectItem>
-                  <SelectItem value="unlinked" className="text-xs">
-                    Sem produto vinculado
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
-              Filtros avançados
-            </p>
+                  {/* Type */}
+                  <div>
+                    <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">
+                      Tipo
+                    </Label>
+                    <Select
+                      value={filterType}
+                      onValueChange={(v) => {
+                        setFilterType(v);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-9 w-full text-xs">
+                        <SelectValue placeholder="Tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos os tipos</SelectItem>
+                        {(
+                          [
+                            "execution",
+                            "review",
+                            "approval",
+                            "qualification",
+                            "support",
+                          ] as TaskType[]
+                        ).map((t) => (
+                          <SelectItem key={t} value={t} className="text-xs">
+                            {TYPE_CONFIG[t].label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Category */}
+                  {uniqueCategories.length > 0 && (
+                    <div>
+                      <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">
+                        Categoria
+                      </Label>
+                      <Select
+                        value={filterCategory}
+                        onValueChange={(v) => {
+                          setFilterCategory(v);
+                          setPage(1);
+                        }}
+                      >
+                        <SelectTrigger className="h-9 w-full text-xs">
+                          <SelectValue placeholder="Categoria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">
+                            Todas as categorias
+                          </SelectItem>
+                          {uniqueCategories.map((c) => (
+                            <SelectItem key={c} value={c} className="text-xs">
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {/* Vinculação */}
+                  <div>
+                    <Label className="text-[11px] font-semibold text-slate-600 mb-1.5 block">
+                      Vinculação
+                    </Label>
+                    <Select
+                      value={filterLinkedMode}
+                      onValueChange={(v) => {
+                        setFilterLinkedMode(v as any);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-9 w-full text-xs">
+                        <SelectValue placeholder="Vinculação" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">
+                          Todas as vinculações
+                        </SelectItem>
+                        <SelectItem value="linked" className="text-xs">
+                          Vinculados a produtos
+                        </SelectItem>
+                        <SelectItem value="unlinked" className="text-xs">
+                          Sem produto vinculado
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+                  <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                    Filtros avançados
+                  </p>
                   <div className="space-y-4">
                     {/* Datas */}
                     <div className="grid grid-cols-2 gap-3">
@@ -2906,743 +3081,1044 @@ export default function AdminModelosTarefasPage() {
                       </div>
                     )}
                   </div>
-          </div>
-        </div>
-        </div>
-      </StandardModalDialog>
-
-      {/* Column config panel */}
-      <StandardModalDialog
-        open={colConfigOpen}
-        onClose={() => setColConfigOpen(false)}
-        title="Configurar colunas"
-        subtitle={`${visibleCols.size} de ${ALL_COLUMNS.length} visíveis`}
-        footer={
-          <div className="flex items-center justify-end gap-3">
-            <button
-              onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
-              className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              Restaurar padrão
-            </button>
-            <button
-              onClick={() => setVisibleCols(new Set(ALL_COLUMNS.map((c) => c.key)))}
-              className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
-            >
-              Mostrar todas
-            </button>
-          </div>
-        }
-      >
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {ALL_COLUMNS.map((col) => (
-              <label
-                key={col.key}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors",
-                  visibleCols.has(col.key)
-                    ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
-                    : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800",
-                  col.required && "opacity-60 pointer-events-none",
-                )}
-              >
-                <Checkbox
-                  checked={visibleCols.has(col.key)}
-                  onCheckedChange={() => toggleCol(col.key)}
-                  disabled={col.required}
-                  className="h-4 w-4"
-                />
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
-                  {col.label}
-                </span>
-                {col.required && (
-                  <span className="text-[9px] text-slate-400 flex-shrink-0">
-                    obrigatória
-                  </span>
-                )}
-              </label>
-            ))}
-          </div>
-        </div>
-      </StandardModalDialog>
-
-      {/* "+" info panel — real fields already present on the row object
-          (no fetch needed: getCatalogTasks already returns product_links). */}
-      <EmbeddedSlideScreen
-        open={infoPanelOpen}
-        onClose={() => setInfoPanelOpen(false)}
-        title={infoPanelModel?.name}
-        subtitle={
-          infoPanelModel &&
-          `${formatModelCode(codeOrdinals.get(infoPanelModel.id))} · ${infoPanelModel.category}${infoPanelModel.subcategory ? ` · ${infoPanelModel.subcategory}` : ""}`
-        }
-      >
-        {infoPanelModel && (
-          <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="flex flex-wrap gap-2">
-              <NeonBadge color={STATUS_BADGE_COLOR[infoPanelModel.status] ?? "emerald"}>
-                {(STATUS_CONFIG[infoPanelModel.status] ?? STATUS_CONFIG.ativa).label}
-              </NeonBadge>
-              <NeonBadge color={TYPE_BADGE_COLOR[infoPanelModel.task_type] ?? "blue"}>
-                {(TYPE_CONFIG[infoPanelModel.task_type] ?? TYPE_CONFIG.execution).label}
-              </NeonBadge>
-              {infoPanelModel.requires_briefing && (
-                <NeonBadge color="blue">
-                  <HelpCircle className="h-3 w-3 mr-1 inline" /> Requer briefing
-                </NeonBadge>
-              )}
-              {infoPanelModel.requires_access && (
-                <NeonBadge color="orange">
-                  <ShieldCheck className="h-3 w-3 mr-1 inline" /> Requer acesso
-                </NeonBadge>
-              )}
-              {infoPanelModel.requires_files && (
-                <NeonBadge color="purple">
-                  <FileText className="h-3 w-3 mr-1 inline" /> Requer arquivos
-                </NeonBadge>
-              )}
-            </div>
-
-            <div>
-              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                Dados do modelo
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Complexidade</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
-                    {COMPLEXITY_LABEL[infoPanelModel.complexity] ?? infoPanelModel.complexity ?? "—"}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Prioridade padrão</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
-                    {PRIORITY_LABEL[infoPanelModel.default_priority] ?? infoPanelModel.default_priority ?? "—"}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Prazo padrão</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
-                    {infoPanelModel.default_deadline_days ? `${infoPanelModel.default_deadline_days} dia(s)` : "—"}
-                  </p>
-                </div>
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Horas estimadas</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
-                    {infoPanelModel.estimated_hours ? `${infoPanelModel.estimated_hours}h` : "—"}
-                  </p>
-                </div>
-                {infoPanelModel.responsible_type && (
-                  <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 col-span-2">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Responsável</p>
-                    <p className="text-sm text-slate-700 dark:text-slate-300">{infoPanelModel.responsible_type}</p>
-                  </div>
-                )}
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 col-span-2">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">Criado · Atualizado</p>
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
-                    {fmtDate(infoPanelModel.created_at)} · {fmtDate(infoPanelModel.updated_at)}
-                  </p>
                 </div>
               </div>
             </div>
+          </StandardModalDialog>
 
-            {infoPanelModel.description && (
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Descrição</h3>
-                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{infoPanelModel.description}</p>
+          {/* Column config panel */}
+          <StandardModalDialog
+            open={colConfigOpen}
+            onClose={() => setColConfigOpen(false)}
+            title="Configurar colunas"
+            subtitle={`${visibleCols.size} de ${ALL_COLUMNS.length} visíveis`}
+            footer={
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
+                  className="h-9 px-4 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Restaurar padrão
+                </button>
+                <button
+                  onClick={() =>
+                    setVisibleCols(new Set(ALL_COLUMNS.map((c) => c.key)))
+                  }
+                  className="h-9 px-4 rounded-lg text-xs font-semibold btn-brand transition-all"
+                >
+                  Mostrar todas
+                </button>
               </div>
-            )}
-
-            {infoPanelModel.objective && (
-              <div>
-                <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Objetivo</h3>
-                <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{infoPanelModel.objective}</p>
-              </div>
-            )}
-
-            <div>
-              <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
-                Produtos vinculados
-                <span className="ml-1.5 inline-flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-[9px] font-bold text-slate-600 dark:text-slate-300 align-middle">
-                  {infoPanelModel._count?.product_links ?? infoPanelModel.product_links?.length ?? 0}
-                </span>
-              </h3>
-              {(infoPanelModel.product_links?.length ?? 0) > 0 ? (
-                <div className="space-y-2">
-                  {infoPanelModel.product_links!.map((l) => (
-                    <div
-                      key={l.id}
-                      className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5"
-                    >
-                      <div className="min-w-0 flex items-center gap-2">
-                        <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded shrink-0">
-                          {l.product.id}
-                        </span>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{l.product.name}</p>
-                      </div>
-                      {l.is_mandatory && (
-                        <span className="flex-shrink-0 ml-3 text-[10px] font-bold text-orange-600 dark:text-orange-400">
-                          Obrigatório
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-slate-400">Nenhum produto vinculado a este modelo.</p>
-              )}
-            </div>
-          </div>
-          </div>
-        )}
-      </EmbeddedSlideScreen>
-
-      {/* Detail Drawer */}
-      <ModelDetailDrawer
-        model={selectedModel}
-        codeOrdinal={selectedModel ? codeOrdinals.get(selectedModel.id) : undefined}
-        open={drawerOpen}
-        onClose={() => {
-          setDrawerOpen(false);
-          navigate("/admin/modelos-tarefas", { replace: true });
-        }}
-        onStatusChange={handleStatusChange}
-        onDuplicate={handleDuplicate}
-        onEdit={(m) => {
-          setDrawerOpen(false);
-          openEditModel(m);
-        }}
-        updatingId={updatingId}
-      />
-
-      {/* Create/Edit Sheet */}
-      <EmbeddedSlideScreen
-        open={createOpen}
-        onClose={() => {
-          setCreateOpen(false);
-          resetCreateForm();
-        }}
-        hideHeader
-      >
-        <div className="flex flex-col flex-1 min-h-0 w-full">
-          <div
-            className="flex items-center justify-between px-5 py-3 flex-shrink-0"
-            style={{
-              background:
-                "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
-            }}
+            }
           >
-            <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
-              {createForm.name || (editingModel ? "Editar Modelo" : "Novo Modelo de Tarefa")}
-              <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
-                {editingModel
-                  ? "Editando modelo de tarefa reutilizável"
-                  : "Criando modelo de tarefa reutilizável · código gerado automaticamente"}
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                setCreateOpen(false);
-                resetCreateForm();
-              }}
-              className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all shrink-0"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-auto">
-            <Tabs defaultValue="info" className="space-y-0">
-              {/* Tab nav */}
-              <div className="sticky top-0 z-10 bg-background border-b border-slate-200 dark:border-slate-700 px-5">
-                <TabsList className="bg-transparent p-0 h-10 border-0 rounded-none gap-0 w-full justify-start">
-                  <TabsTrigger
-                    value="info"
-                    className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {ALL_COLUMNS.map((col) => (
+                  <label
+                    key={col.key}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-colors",
+                      visibleCols.has(col.key)
+                        ? "bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800"
+                        : "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800",
+                      col.required && "opacity-60 pointer-events-none",
+                    )}
                   >
-                    <ClipboardList className="h-3.5 w-3.5" />
-                    Informações
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="etapas"
-                    className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                  >
-                    <Layers className="h-3.5 w-3.5" />
-                    Etapas & Checklist
-                    {(createSteps.length + createLists.checklist.length) > 0 && (
-                      <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center">
-                        {createSteps.length + createLists.checklist.length}
+                    <Checkbox
+                      checked={visibleCols.has(col.key)}
+                      onCheckedChange={() => toggleCol(col.key)}
+                      disabled={col.required}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 flex-1">
+                      {col.label}
+                    </span>
+                    {col.required && (
+                      <span className="text-[9px] text-slate-400 flex-shrink-0">
+                        obrigatória
                       </span>
                     )}
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="briefing"
-                    className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
-                  >
-                    <HelpCircle className="h-3.5 w-3.5" />
-                    Briefing & Regras
-                    {(createLists.briefing_questions.length + createLists.required_files.length + createLists.execution_rules.length + createLists.conclusion_rules.length) > 0 && (
-                      <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center">
-                        {createLists.briefing_questions.length + createLists.required_files.length + createLists.execution_rules.length + createLists.conclusion_rules.length}
-                      </span>
-                    )}
-                  </TabsTrigger>
-                </TabsList>
+                  </label>
+                ))}
               </div>
+            </div>
+          </StandardModalDialog>
 
-              {/* ── Tab: Informações ── */}
-              <TabsContent value="info" className="p-6 space-y-5 mt-0">
-                {/* Nome */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="ct-name" className="text-xs font-semibold">
-                    Nome do modelo <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="ct-name"
-                    value={createForm.name}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
-                    placeholder="Ex.: Configuração de Tag Manager"
-                    className="h-9 text-sm"
-                  />
-                </div>
-
-                {/* Categoria + Subcategoria */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ct-cat" className="text-xs font-semibold">
-                      Categoria <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="ct-cat"
-                      value={createForm.category}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, category: e.target.value }))}
-                      placeholder="Ex.: Tráfego Pago"
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ct-sub" className="text-xs font-semibold">
-                      Subcategoria
-                    </Label>
-                    <Input
-                      id="ct-sub"
-                      value={createForm.subcategory}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, subcategory: e.target.value }))}
-                      placeholder="Opcional"
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                </div>
-
-                {/* Tipo + Prioridade + Complexidade */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Tipo de tarefa</Label>
-                    <Select
-                      value={createForm.task_type}
-                      onValueChange={(v) => setCreateForm((f) => ({ ...f, task_type: v as TaskType }))}
+          {/* "+" info panel — real fields already present on the row object
+          (no fetch needed: getCatalogTasks already returns product_links). */}
+          <EmbeddedSlideScreen
+            open={infoPanelOpen}
+            onClose={() => setInfoPanelOpen(false)}
+            title={infoPanelModel?.name}
+            subtitle={
+              infoPanelModel &&
+              `${formatModelCode(codeOrdinals.get(infoPanelModel.id))} · ${infoPanelModel.category}${infoPanelModel.subcategory ? ` · ${infoPanelModel.subcategory}` : ""}`
+            }
+          >
+            {infoPanelModel && (
+              <div className="flex-1 overflow-y-auto p-6">
+                <div className="max-w-3xl mx-auto space-y-6">
+                  <div className="flex flex-wrap gap-2">
+                    <NeonBadge
+                      color={
+                        STATUS_BADGE_COLOR[infoPanelModel.status] ?? "emerald"
+                      }
                     >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(["execution", "review", "approval", "qualification", "support"] as TaskType[]).map((t) => (
-                          <SelectItem key={t} value={t} className="text-sm">{TYPE_CONFIG[t].label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Prioridade padrão</Label>
-                    <Select
-                      value={createForm.default_priority}
-                      onValueChange={(v) => setCreateForm((f) => ({ ...f, default_priority: v }))}
+                      {
+                        (
+                          STATUS_CONFIG[infoPanelModel.status] ??
+                          STATUS_CONFIG.ativa
+                        ).label
+                      }
+                    </NeonBadge>
+                    <NeonBadge
+                      color={
+                        TYPE_BADGE_COLOR[infoPanelModel.task_type] ?? "blue"
+                      }
                     >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(PRIORITY_LABEL).map(([k, label]) => (
-                          <SelectItem key={k} value={k} className="text-sm">{label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      {
+                        (
+                          TYPE_CONFIG[infoPanelModel.task_type] ??
+                          TYPE_CONFIG.execution
+                        ).label
+                      }
+                    </NeonBadge>
+                    {infoPanelModel.requires_briefing && (
+                      <NeonBadge color="blue">
+                        <HelpCircle className="h-3 w-3 mr-1 inline" /> Requer
+                        briefing
+                      </NeonBadge>
+                    )}
+                    {infoPanelModel.requires_access && (
+                      <NeonBadge color="orange">
+                        <ShieldCheck className="h-3 w-3 mr-1 inline" /> Requer
+                        acesso
+                      </NeonBadge>
+                    )}
+                    {infoPanelModel.requires_files && (
+                      <NeonBadge color="purple">
+                        <FileText className="h-3 w-3 mr-1 inline" /> Requer
+                        arquivos
+                      </NeonBadge>
+                    )}
                   </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Complexidade</Label>
-                    <Select
-                      value={createForm.complexity}
-                      onValueChange={(v) => setCreateForm((f) => ({ ...f, complexity: v }))}
-                    >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(COMPLEXITY_LABEL).map(([k, label]) => (
-                          <SelectItem key={k} value={k} className="text-sm">{label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
-                {/* Prazo + Horas + Responsável */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ct-days" className="text-xs font-semibold">Prazo padrão (dias)</Label>
-                    <Input
-                      id="ct-days"
-                      type="number"
-                      min="0"
-                      value={createForm.default_deadline_days}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, default_deadline_days: e.target.value }))}
-                      placeholder="Ex.: 5"
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ct-hours" className="text-xs font-semibold">Horas estimadas</Label>
-                    <Input
-                      id="ct-hours"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={createForm.estimated_hours}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, estimated_hours: e.target.value }))}
-                      placeholder="Ex.: 3.5"
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="ct-resp" className="text-xs font-semibold">Tipo de responsável</Label>
-                    <Input
-                      id="ct-resp"
-                      value={createForm.responsible_type}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, responsible_type: e.target.value }))}
-                      placeholder="Ex.: Designer"
-                      className="h-9 text-sm"
-                    />
-                  </div>
-                </div>
-
-                {/* Descrição */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="ct-desc" className="text-xs font-semibold">Descrição</Label>
-                  <Textarea
-                    id="ct-desc"
-                    value={createForm.description}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, description: e.target.value }))}
-                    placeholder="Descrição curta do modelo de tarefa"
-                    rows={2}
-                    className="text-sm resize-none"
-                  />
-                </div>
-
-                {/* Objetivo */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="ct-obj" className="text-xs font-semibold">Objetivo</Label>
-                  <Textarea
-                    id="ct-obj"
-                    value={createForm.objective}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, objective: e.target.value }))}
-                    placeholder="Qual o objetivo principal desta tarefa?"
-                    rows={2}
-                    className="text-sm resize-none"
-                  />
-                </div>
-
-                {/* Flags */}
-                <div className="space-y-2">
-                  <Label className="text-xs font-semibold">Requisitos</Label>
-                  <div className="flex flex-col gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
-                    {[
-                      { key: "requires_access", label: "Requer acesso a plataformas", desc: "Nômade precisará de credenciais de acesso" },
-                      { key: "requires_briefing", label: "Requer briefing do cliente", desc: "Depende de respostas do formulário de briefing" },
-                      { key: "requires_files", label: "Requer arquivos do cliente", desc: "Cliente precisa enviar arquivos antes da execução" },
-                    ].map(({ key, label, desc }) => (
-                      <div key={key} className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{desc}</p>
-                        </div>
-                        <Switch
-                          checked={createForm[key] as boolean}
-                          onCheckedChange={(v) => setCreateForm((f) => ({ ...f, [key]: v }))}
-                        />
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                      Dados do modelo
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          Complexidade
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">
+                          {COMPLEXITY_LABEL[infoPanelModel.complexity] ??
+                            infoPanelModel.complexity ??
+                            "—"}
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Orientações internas */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="ct-guidance" className="text-xs font-semibold">Orientações internas</Label>
-                  <Textarea
-                    id="ct-guidance"
-                    value={createForm.internal_guidance}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, internal_guidance: e.target.value }))}
-                    placeholder="Instruções visíveis apenas para a equipe interna"
-                    rows={3}
-                    className="text-sm resize-none"
-                  />
-                </div>
-
-                {/* Notas */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="ct-notes" className="text-xs font-semibold">Notas</Label>
-                  <Textarea
-                    id="ct-notes"
-                    value={createForm.notes}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, notes: e.target.value }))}
-                    placeholder="Observações adicionais (opcional)"
-                    rows={2}
-                    className="text-sm resize-none"
-                  />
-                </div>
-
-                <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
-                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                  <span>
-                    O modelo será criado com status <strong>Em revisão</strong>. Após validação, altere para <strong>Ativo</strong> para que possa ser vinculado a produtos.
-                  </span>
-                </div>
-              </TabsContent>
-
-              {/* ── Tab: Etapas & Checklist ── */}
-              <TabsContent value="etapas" className="p-6 space-y-8 mt-0">
-                {/* Etapas de execução */}
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                      <Layers className="h-4 w-4 text-indigo-500" />
-                      Etapas de execução
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-0.5">Passos sequenciais que o nômade deve seguir para completar a tarefa.</p>
-                  </div>
-                  <div className="space-y-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-                    <Input
-                      value={stepNameInput}
-                      onChange={(e) => setStepNameInput(e.target.value)}
-                      placeholder="Nome da etapa (ex.: Configuração inicial da campanha)"
-                      className="h-9 text-sm"
-                    />
-                    <Textarea
-                      value={stepDescInput}
-                      onChange={(e) => setStepDescInput(e.target.value)}
-                      placeholder="Descrição da etapa (opcional)"
-                      rows={2}
-                      className="text-sm resize-none"
-                    />
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={addStep}
-                        disabled={!stepNameInput.trim()}
-                        className="h-8 px-3 gap-1.5"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Adicionar etapa
-                      </Button>
-                    </div>
-                  </div>
-                  {createSteps.length > 0 && (
-                    <div className="space-y-1.5">
-                      {createSteps.map((step, i) => (
-                        <div key={i} className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
-                          <span className="text-[11px] font-mono text-slate-400 w-5 mt-0.5 shrink-0">{i + 1}.</span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-slate-700 dark:text-slate-200">{step.name}</p>
-                            {step.description && (
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{step.description}</p>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeStep(i)}
-                            className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          Prioridade padrão
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">
+                          {PRIORITY_LABEL[infoPanelModel.default_priority] ??
+                            infoPanelModel.default_priority ??
+                            "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          Prazo padrão
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">
+                          {infoPanelModel.default_deadline_days
+                            ? `${infoPanelModel.default_deadline_days} dia(s)`
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          Horas estimadas
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">
+                          {infoPanelModel.estimated_hours
+                            ? `${infoPanelModel.estimated_hours}h`
+                            : "—"}
+                        </p>
+                      </div>
+                      {infoPanelModel.responsible_type && (
+                        <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 col-span-2">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            Responsável
+                          </p>
+                          <p className="text-sm text-slate-700 dark:text-slate-300">
+                            {infoPanelModel.responsible_type}
+                          </p>
                         </div>
-                      ))}
+                      )}
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-3.5 col-span-2">
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                          Criado · Atualizado
+                        </p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300">
+                          {fmtDate(infoPanelModel.created_at)} ·{" "}
+                          {fmtDate(infoPanelModel.updated_at)}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                  {createSteps.length === 0 && (
-                    <p className="text-xs text-slate-400 italic">Nenhuma etapa adicionada ainda.</p>
-                  )}
-                </div>
-
-                <div className="border-t border-slate-100 dark:border-slate-800" />
-
-                {/* Checklist */}
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                      <ListChecks className="h-4 w-4 text-emerald-500" />
-                      Checklist de entrega
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-0.5">Itens que devem ser verificados antes de marcar a tarefa como concluída.</p>
                   </div>
-                  <div className="flex gap-2">
-                    <Input
-                      value={listInputs.checklist}
-                      onChange={(e) => setListInputs((l) => ({ ...l, checklist: e.target.value }))}
-                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addToList("checklist", listInputs.checklist); }}}
-                      placeholder="Adicione um item ao checklist e pressione Enter"
-                      className="h-9 text-sm"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => addToList("checklist", listInputs.checklist)}
-                      disabled={!listInputs.checklist.trim()}
-                      className="h-9 px-3 shrink-0"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  {createLists.checklist.length > 0 && (
-                    <div className="space-y-1.5">
-                      {createLists.checklist.map((item, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                          <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">{item}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeFromList("checklist", i)}
-                            className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {createLists.checklist.length === 0 && (
-                    <p className="text-xs text-slate-400 italic">Nenhum item adicionado ainda.</p>
-                  )}
-                </div>
-              </TabsContent>
 
-              {/* ── Tab: Briefing & Regras ── */}
-              <TabsContent value="briefing" className="p-6 space-y-8 mt-0">
-                {/* Perguntas de briefing */}
-                {[
-                  {
-                    key: "briefing_questions" as const,
-                    title: "Perguntas de briefing",
-                    desc: "Perguntas respondidas pelo cliente antes da execução.",
-                    icon: <HelpCircle className="h-4 w-4 text-violet-500" />,
-                    placeholder: "Ex.: Qual o público-alvo da campanha?",
-                  },
-                  {
-                    key: "required_files" as const,
-                    title: "Arquivos necessários",
-                    desc: "Arquivos que o cliente deve fornecer.",
-                    icon: <FileText className="h-4 w-4 text-orange-500" />,
-                    placeholder: "Ex.: Logo em alta resolução (PNG ou SVG)",
-                  },
-                  {
-                    key: "execution_rules" as const,
-                    title: "Regras de execução",
-                    desc: "Diretrizes obrigatórias durante a execução.",
-                    icon: <ShieldCheck className="h-4 w-4 text-blue-500" />,
-                    placeholder: "Ex.: Sempre verificar conformidade com a marca",
-                  },
-                  {
-                    key: "conclusion_rules" as const,
-                    title: "Regras de conclusão",
-                    desc: "Critérios para considerar a tarefa concluída.",
-                    icon: <Target className="h-4 w-4 text-red-500" />,
-                    placeholder: "Ex.: Relatório final aprovado pelo cliente",
-                  },
-                ].map(({ key, title, desc, icon, placeholder }, sectionIdx) => (
-                  <div key={key} className="space-y-3">
-                    {sectionIdx > 0 && <div className="border-t border-slate-100 dark:border-slate-800" />}
+                  {infoPanelModel.description && (
                     <div>
-                      <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                        {icon}
-                        {title}
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+                        Descrição
+                      </h3>
+                      <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                        {infoPanelModel.description}
+                      </p>
                     </div>
-                    <div className="flex gap-2">
-                      <Input
-                        value={listInputs[key]}
-                        onChange={(e) => setListInputs((l) => ({ ...l, [key]: e.target.value }))}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addToList(key, listInputs[key]); }}}
-                        placeholder={placeholder}
-                        className="h-9 text-sm"
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => addToList(key, listInputs[key])}
-                        disabled={!listInputs[key]?.trim()}
-                        className="h-9 px-3 shrink-0"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
+                  )}
+
+                  {infoPanelModel.objective && (
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+                        Objetivo
+                      </h3>
+                      <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                        {infoPanelModel.objective}
+                      </p>
                     </div>
-                    {createLists[key].length > 0 ? (
-                      <div className="space-y-1.5">
-                        {createLists[key].map((item, i) => (
-                          <div key={i} className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
-                            <span className="text-[11px] font-mono text-slate-400 w-5 mt-0.5 shrink-0">{i + 1}.</span>
-                            <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">{item}</span>
-                            <button
-                              type="button"
-                              onClick={() => removeFromList(key, i)}
-                              className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                  )}
+
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+                      Produtos vinculados
+                      <span className="ml-1.5 inline-flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-slate-200 dark:bg-slate-700 text-[9px] font-bold text-slate-600 dark:text-slate-300 align-middle">
+                        {infoPanelModel._count?.product_links ??
+                          infoPanelModel.product_links?.length ??
+                          0}
+                      </span>
+                    </h3>
+                    {(infoPanelModel.product_links?.length ?? 0) > 0 ? (
+                      <div className="space-y-2">
+                        {infoPanelModel.product_links!.map((l) => (
+                          <div
+                            key={l.id}
+                            className="flex items-center justify-between rounded-xl border border-slate-200 dark:border-slate-700 px-3.5 py-2.5"
+                          >
+                            <div className="min-w-0 flex items-center gap-2">
+                              <span className="font-mono text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded shrink-0">
+                                {l.product.id}
+                              </span>
+                              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
+                                {l.product.name}
+                              </p>
+                            </div>
+                            {l.is_mandatory && (
+                              <span className="flex-shrink-0 ml-3 text-[10px] font-bold text-orange-600 dark:text-orange-400">
+                                Obrigatório
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 italic">Nenhum item adicionado ainda.</p>
+                      <p className="text-xs text-slate-400">
+                        Nenhum produto vinculado a este modelo.
+                      </p>
                     )}
                   </div>
-                ))}
-              </TabsContent>
-            </Tabs>
-          </div>
+                </div>
+              </div>
+            )}
+          </EmbeddedSlideScreen>
 
-          {/* Footer */}
-          <div className="border-t border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between gap-3 shrink-0 bg-background">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { setCreateOpen(false); resetCreateForm(); }}
-              disabled={creating}
-            >
-              Cancelar
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleCreateModel}
-              disabled={creating || !createForm.name.trim() || !createForm.category.trim()}
-              className="btn-brand border-0 gap-2"
-            >
-              {creating ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Plus className="h-3.5 w-3.5" />
-              )}
-              {editingModel ? "Salvar alterações" : "Criar modelo"}
-            </Button>
-          </div>
+          {/* Detail Drawer */}
+          <ModelDetailDrawer
+            model={selectedModel}
+            codeOrdinal={
+              selectedModel ? codeOrdinals.get(selectedModel.id) : undefined
+            }
+            open={drawerOpen}
+            onClose={() => {
+              setDrawerOpen(false);
+              navigate("/admin/modelos-tarefas", { replace: true });
+            }}
+            onStatusChange={handleStatusChange}
+            onDuplicate={handleDuplicate}
+            onEdit={(m) => {
+              setDrawerOpen(false);
+              openEditModel(m);
+            }}
+            updatingId={updatingId}
+          />
+
+          {/* Create/Edit Sheet */}
+          <EmbeddedSlideScreen
+            open={createOpen}
+            onClose={() => {
+              setCreateOpen(false);
+              resetCreateForm();
+            }}
+            hideHeader
+          >
+            <div className="flex flex-col flex-1 min-h-0 w-full">
+              <div
+                className="flex items-center justify-between px-5 py-3 flex-shrink-0"
+                style={{
+                  background:
+                    "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))",
+                }}
+              >
+                <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
+                  {createForm.name ||
+                    (editingModel ? "Editar Modelo" : "Novo Modelo de Tarefa")}
+                  <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
+                    {editingModel
+                      ? "Editando modelo de tarefa reutilizável"
+                      : "Criando modelo de tarefa reutilizável · código gerado automaticamente"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setCreateOpen(false);
+                    resetCreateForm();
+                  }}
+                  className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-1.5 transition-all shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-auto">
+                <Tabs defaultValue="info" className="space-y-0">
+                  {/* Tab nav */}
+                  <div className="sticky top-0 z-10 bg-background border-b border-slate-200 dark:border-slate-700 px-5">
+                    <TabsList className="bg-transparent p-0 h-10 border-0 rounded-none gap-0 w-full justify-start">
+                      <TabsTrigger
+                        value="info"
+                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                      >
+                        <ClipboardList className="h-3.5 w-3.5" />
+                        Informações
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="etapas"
+                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                      >
+                        <Layers className="h-3.5 w-3.5" />
+                        Etapas & Checklist
+                        {createSteps.length + createLists.checklist.length >
+                          0 && (
+                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center">
+                            {createSteps.length + createLists.checklist.length}
+                          </span>
+                        )}
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="briefing"
+                        className="relative h-10 px-4 rounded-none bg-transparent border-0 shadow-none text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 data-[state=active]:text-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none gap-1.5 after:absolute after:bottom-0 after:inset-x-0 after:h-0.5 after:bg-blue-500 after:scale-x-0 data-[state=active]:after:scale-x-100 after:transition-transform"
+                      >
+                        <HelpCircle className="h-3.5 w-3.5" />
+                        Briefing & Regras
+                        {createLists.briefing_questions.length +
+                          createLists.required_files.length +
+                          createLists.execution_rules.length +
+                          createLists.conclusion_rules.length >
+                          0 && (
+                          <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold flex items-center justify-center">
+                            {createLists.briefing_questions.length +
+                              createLists.required_files.length +
+                              createLists.execution_rules.length +
+                              createLists.conclusion_rules.length}
+                          </span>
+                        )}
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
+
+                  {/* ── Tab: Informações ── */}
+                  <TabsContent value="info" className="p-6 space-y-5 mt-0">
+                    {/* Nome */}
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="ct-name"
+                        className="text-xs font-semibold"
+                      >
+                        Nome do modelo <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="ct-name"
+                        value={createForm.name}
+                        onChange={(e) =>
+                          setCreateForm((f) => ({ ...f, name: e.target.value }))
+                        }
+                        placeholder="Ex.: Configuração de Tag Manager"
+                        className="h-9 text-sm"
+                      />
+                    </div>
+
+                    {/* Categoria + Subcategoria */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="ct-cat"
+                          className="text-xs font-semibold"
+                        >
+                          Categoria <span className="text-red-500">*</span>
+                        </Label>
+                        <Input
+                          id="ct-cat"
+                          value={createForm.category}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              category: e.target.value,
+                            }))
+                          }
+                          placeholder="Ex.: Tráfego Pago"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="ct-sub"
+                          className="text-xs font-semibold"
+                        >
+                          Subcategoria
+                        </Label>
+                        <Input
+                          id="ct-sub"
+                          value={createForm.subcategory}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              subcategory: e.target.value,
+                            }))
+                          }
+                          placeholder="Opcional"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Tipo + Prioridade + Complexidade */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">
+                          Tipo de tarefa
+                        </Label>
+                        <Select
+                          value={createForm.task_type}
+                          onValueChange={(v) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              task_type: v as TaskType,
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-9 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(
+                              [
+                                "execution",
+                                "review",
+                                "approval",
+                                "qualification",
+                                "support",
+                              ] as TaskType[]
+                            ).map((t) => (
+                              <SelectItem key={t} value={t} className="text-sm">
+                                {TYPE_CONFIG[t].label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">
+                          Prioridade padrão
+                        </Label>
+                        <Select
+                          value={createForm.default_priority}
+                          onValueChange={(v) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              default_priority: v,
+                            }))
+                          }
+                        >
+                          <SelectTrigger className="h-9 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(PRIORITY_LABEL).map(
+                              ([k, label]) => (
+                                <SelectItem
+                                  key={k}
+                                  value={k}
+                                  className="text-sm"
+                                >
+                                  {label}
+                                </SelectItem>
+                              ),
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold">
+                          Complexidade
+                        </Label>
+                        <Select
+                          value={createForm.complexity}
+                          onValueChange={(v) =>
+                            setCreateForm((f) => ({ ...f, complexity: v }))
+                          }
+                        >
+                          <SelectTrigger className="h-9 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(COMPLEXITY_LABEL).map(
+                              ([k, label]) => (
+                                <SelectItem
+                                  key={k}
+                                  value={k}
+                                  className="text-sm"
+                                >
+                                  {label}
+                                </SelectItem>
+                              ),
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Prazo + Horas + Responsável */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="ct-days"
+                          className="text-xs font-semibold"
+                        >
+                          Prazo padrão (dias)
+                        </Label>
+                        <Input
+                          id="ct-days"
+                          type="number"
+                          min="0"
+                          value={createForm.default_deadline_days}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              default_deadline_days: e.target.value,
+                            }))
+                          }
+                          placeholder="Ex.: 5"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="ct-hours"
+                          className="text-xs font-semibold"
+                        >
+                          Horas estimadas
+                        </Label>
+                        <Input
+                          id="ct-hours"
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={createForm.estimated_hours}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              estimated_hours: e.target.value,
+                            }))
+                          }
+                          placeholder="Ex.: 3.5"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label
+                          htmlFor="ct-resp"
+                          className="text-xs font-semibold"
+                        >
+                          Tipo de responsável
+                        </Label>
+                        <Input
+                          id="ct-resp"
+                          value={createForm.responsible_type}
+                          onChange={(e) =>
+                            setCreateForm((f) => ({
+                              ...f,
+                              responsible_type: e.target.value,
+                            }))
+                          }
+                          placeholder="Ex.: Designer"
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Descrição */}
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="ct-desc"
+                        className="text-xs font-semibold"
+                      >
+                        Descrição
+                      </Label>
+                      <Textarea
+                        id="ct-desc"
+                        value={createForm.description}
+                        onChange={(e) =>
+                          setCreateForm((f) => ({
+                            ...f,
+                            description: e.target.value,
+                          }))
+                        }
+                        placeholder="Descrição curta do modelo de tarefa"
+                        rows={2}
+                        className="text-sm resize-none"
+                      />
+                    </div>
+
+                    {/* Objetivo */}
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ct-obj" className="text-xs font-semibold">
+                        Objetivo
+                      </Label>
+                      <Textarea
+                        id="ct-obj"
+                        value={createForm.objective}
+                        onChange={(e) =>
+                          setCreateForm((f) => ({
+                            ...f,
+                            objective: e.target.value,
+                          }))
+                        }
+                        placeholder="Qual o objetivo principal desta tarefa?"
+                        rows={2}
+                        className="text-sm resize-none"
+                      />
+                    </div>
+
+                    {/* Flags */}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold">
+                        Requisitos
+                      </Label>
+                      <div className="flex flex-col gap-3 p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40">
+                        {[
+                          {
+                            key: "requires_access",
+                            label: "Requer acesso a plataformas",
+                            desc: "Nômade precisará de credenciais de acesso",
+                          },
+                          {
+                            key: "requires_briefing",
+                            label: "Requer briefing do cliente",
+                            desc: "Depende de respostas do formulário de briefing",
+                          },
+                          {
+                            key: "requires_files",
+                            label: "Requer arquivos do cliente",
+                            desc: "Cliente precisa enviar arquivos antes da execução",
+                          },
+                        ].map(({ key, label, desc }) => (
+                          <div
+                            key={key}
+                            className="flex items-center justify-between gap-4"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                {label}
+                              </p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">
+                                {desc}
+                              </p>
+                            </div>
+                            <Switch
+                              checked={createForm[key] as boolean}
+                              onCheckedChange={(v) =>
+                                setCreateForm((f) => ({ ...f, [key]: v }))
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Orientações internas */}
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="ct-guidance"
+                        className="text-xs font-semibold"
+                      >
+                        Orientações internas
+                      </Label>
+                      <Textarea
+                        id="ct-guidance"
+                        value={createForm.internal_guidance}
+                        onChange={(e) =>
+                          setCreateForm((f) => ({
+                            ...f,
+                            internal_guidance: e.target.value,
+                          }))
+                        }
+                        placeholder="Instruções visíveis apenas para a equipe interna"
+                        rows={3}
+                        className="text-sm resize-none"
+                      />
+                    </div>
+
+                    {/* Notas */}
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="ct-notes"
+                        className="text-xs font-semibold"
+                      >
+                        Notas
+                      </Label>
+                      <Textarea
+                        id="ct-notes"
+                        value={createForm.notes}
+                        onChange={(e) =>
+                          setCreateForm((f) => ({
+                            ...f,
+                            notes: e.target.value,
+                          }))
+                        }
+                        placeholder="Observações adicionais (opcional)"
+                        rows={2}
+                        className="text-sm resize-none"
+                      />
+                    </div>
+
+                    <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                      <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        O modelo será criado com status{" "}
+                        <strong>Em revisão</strong>. Após validação, altere para{" "}
+                        <strong>Ativo</strong> para que possa ser vinculado a
+                        produtos.
+                      </span>
+                    </div>
+                  </TabsContent>
+
+                  {/* ── Tab: Etapas & Checklist ── */}
+                  <TabsContent value="etapas" className="p-6 space-y-8 mt-0">
+                    {/* Etapas de execução */}
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                          <Layers className="h-4 w-4 text-indigo-500" />
+                          Etapas de execução
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Passos sequenciais que o nômade deve seguir para
+                          completar a tarefa.
+                        </p>
+                      </div>
+                      <div className="space-y-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                        <Input
+                          value={stepNameInput}
+                          onChange={(e) => setStepNameInput(e.target.value)}
+                          placeholder="Nome da etapa (ex.: Configuração inicial da campanha)"
+                          className="h-9 text-sm"
+                        />
+                        <Textarea
+                          value={stepDescInput}
+                          onChange={(e) => setStepDescInput(e.target.value)}
+                          placeholder="Descrição da etapa (opcional)"
+                          rows={2}
+                          className="text-sm resize-none"
+                        />
+                        <div className="flex justify-end">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={addStep}
+                            disabled={!stepNameInput.trim()}
+                            className="h-8 px-3 gap-1.5"
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                            Adicionar etapa
+                          </Button>
+                        </div>
+                      </div>
+                      {createSteps.length > 0 && (
+                        <div className="space-y-1.5">
+                          {createSteps.map((step, i) => (
+                            <div
+                              key={i}
+                              className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
+                            >
+                              <span className="text-[11px] font-mono text-slate-400 w-5 mt-0.5 shrink-0">
+                                {i + 1}.
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-slate-700 dark:text-slate-200">
+                                  {step.name}
+                                </p>
+                                {step.description && (
+                                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    {step.description}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeStep(i)}
+                                className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {createSteps.length === 0 && (
+                        <p className="text-xs text-slate-400 italic">
+                          Nenhuma etapa adicionada ainda.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="border-t border-slate-100 dark:border-slate-800" />
+
+                    {/* Checklist */}
+                    <div className="space-y-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                          <ListChecks className="h-4 w-4 text-emerald-500" />
+                          Checklist de entrega
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Itens que devem ser verificados antes de marcar a
+                          tarefa como concluída.
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          value={listInputs.checklist}
+                          onChange={(e) =>
+                            setListInputs((l) => ({
+                              ...l,
+                              checklist: e.target.value,
+                            }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              addToList("checklist", listInputs.checklist);
+                            }
+                          }}
+                          placeholder="Adicione um item ao checklist e pressione Enter"
+                          className="h-9 text-sm"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            addToList("checklist", listInputs.checklist)
+                          }
+                          disabled={!listInputs.checklist.trim()}
+                          className="h-9 px-3 shrink-0"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      {createLists.checklist.length > 0 && (
+                        <div className="space-y-1.5">
+                          {createLists.checklist.map((item, i) => (
+                            <div
+                              key={i}
+                              className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">
+                                {item}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeFromList("checklist", i)}
+                                className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {createLists.checklist.length === 0 && (
+                        <p className="text-xs text-slate-400 italic">
+                          Nenhum item adicionado ainda.
+                        </p>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  {/* ── Tab: Briefing & Regras ── */}
+                  <TabsContent value="briefing" className="p-6 space-y-8 mt-0">
+                    {/* Perguntas de briefing */}
+                    {[
+                      {
+                        key: "briefing_questions" as const,
+                        title: "Perguntas de briefing",
+                        desc: "Perguntas respondidas pelo cliente antes da execução.",
+                        icon: (
+                          <HelpCircle className="h-4 w-4 text-violet-500" />
+                        ),
+                        placeholder: "Ex.: Qual o público-alvo da campanha?",
+                      },
+                      {
+                        key: "required_files" as const,
+                        title: "Arquivos necessários",
+                        desc: "Arquivos que o cliente deve fornecer.",
+                        icon: <FileText className="h-4 w-4 text-orange-500" />,
+                        placeholder: "Ex.: Logo em alta resolução (PNG ou SVG)",
+                      },
+                      {
+                        key: "execution_rules" as const,
+                        title: "Regras de execução",
+                        desc: "Diretrizes obrigatórias durante a execução.",
+                        icon: <ShieldCheck className="h-4 w-4 text-blue-500" />,
+                        placeholder:
+                          "Ex.: Sempre verificar conformidade com a marca",
+                      },
+                      {
+                        key: "conclusion_rules" as const,
+                        title: "Regras de conclusão",
+                        desc: "Critérios para considerar a tarefa concluída.",
+                        icon: <Target className="h-4 w-4 text-red-500" />,
+                        placeholder:
+                          "Ex.: Relatório final aprovado pelo cliente",
+                      },
+                    ].map(
+                      ({ key, title, desc, icon, placeholder }, sectionIdx) => (
+                        <div key={key} className="space-y-3">
+                          {sectionIdx > 0 && (
+                            <div className="border-t border-slate-100 dark:border-slate-800" />
+                          )}
+                          <div>
+                            <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                              {icon}
+                              {title}
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {desc}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Input
+                              value={listInputs[key]}
+                              onChange={(e) =>
+                                setListInputs((l) => ({
+                                  ...l,
+                                  [key]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  addToList(key, listInputs[key]);
+                                }
+                              }}
+                              placeholder={placeholder}
+                              className="h-9 text-sm"
+                            />
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => addToList(key, listInputs[key])}
+                              disabled={!listInputs[key]?.trim()}
+                              className="h-9 px-3 shrink-0"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          {createLists[key].length > 0 ? (
+                            <div className="space-y-1.5">
+                              {createLists[key].map((item, i) => (
+                                <div
+                                  key={i}
+                                  className="flex items-start gap-2 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2"
+                                >
+                                  <span className="text-[11px] font-mono text-slate-400 w-5 mt-0.5 shrink-0">
+                                    {i + 1}.
+                                  </span>
+                                  <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">
+                                    {item}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeFromList(key, i)}
+                                    className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-400 italic">
+                              Nenhum item adicionado ainda.
+                            </p>
+                          )}
+                        </div>
+                      ),
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between gap-3 shrink-0 bg-background">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setCreateOpen(false);
+                    resetCreateForm();
+                  }}
+                  disabled={creating}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleCreateModel}
+                  disabled={
+                    creating ||
+                    !createForm.name.trim() ||
+                    !createForm.category.trim()
+                  }
+                  className="btn-brand border-0 gap-2"
+                >
+                  {creating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  {editingModel ? "Salvar alterações" : "Criar modelo"}
+                </Button>
+              </div>
+            </div>
+          </EmbeddedSlideScreen>
         </div>
-      </EmbeddedSlideScreen>
-      </div>
       </div>
     </TooltipProvider>
   );

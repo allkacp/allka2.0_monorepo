@@ -1,4 +1,10 @@
-import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useNavigate, useParams } from "react-router-dom";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
@@ -22,6 +28,7 @@ import {
   UserX,
   Shield,
   Eye,
+  EyeOff,
   Phone,
   MessageCircle,
   X,
@@ -123,19 +130,62 @@ import { useToast } from "@/components/ui/use-toast";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 
-type ColKey = "codigo" | "usuario" | "contato" | "tipo_funcao" | "vinculo" | "status" | "ultimo_acesso";
+type ColKey =
+  | "codigo"
+  | "usuario"
+  | "contato"
+  | "tipo_funcao"
+  | "vinculo"
+  | "status"
+  | "ultimo_acesso";
 const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
-  { key: "codigo", label: "ID", info: "Identificador curto e estável do usuário." },
-  { key: "usuario", label: "Usuário", info: "Nome, e-mail e status de presença do usuário." },
-  { key: "contato", label: "Contato", info: "Atalhos para ligar ou chamar no WhatsApp." },
-  { key: "tipo_funcao", label: "Tipo / Função", info: "Tipo de conta, função na plataforma e sinalizações de LGPD." },
-  { key: "vinculo", label: "Conta vinculada", info: "Agency, Company, Partner ou Nômade ao qual este usuário está vinculado." },
-  { key: "status", label: "Status", info: "Situação da conta: ativo, bloqueado ou pausado automaticamente." },
-  { key: "ultimo_acesso", label: "Último Acesso", info: "Data do último login e tempo de inatividade." },
+  {
+    key: "codigo",
+    label: "ID",
+    info: "Identificador curto e estável do usuário.",
+  },
+  {
+    key: "usuario",
+    label: "Usuário",
+    info: "Nome, e-mail e status de presença do usuário.",
+  },
+  {
+    key: "contato",
+    label: "Contato",
+    info: "Atalhos para ligar ou chamar no WhatsApp.",
+  },
+  {
+    key: "tipo_funcao",
+    label: "Tipo",
+    info: "Tipo de conta e função exercida pelo usuário na plataforma. Passe o mouse nos selos da linha para ver os detalhes.",
+  },
+  {
+    key: "vinculo",
+    label: "Vínculo",
+    info: "Conta à qual o usuário está vinculado: Agency, Company, Partner ou Nômade. Passe o mouse no selo para mais detalhes.",
+  },
+  {
+    key: "status",
+    label: "Status",
+    info: "Situação da conta: ativo, bloqueado ou pausado automaticamente.",
+  },
+  {
+    key: "ultimo_acesso",
+    label: "Último Acesso",
+    info: "Data do último login e tempo de inatividade.",
+  },
 ];
-const DEFAULT_VISIBLE: ColKey[] = ["codigo", "usuario", "contato", "tipo_funcao", "vinculo", "status", "ultimo_acesso"];
+const DEFAULT_VISIBLE: ColKey[] = [
+  "codigo",
+  "usuario",
+  "contato",
+  "tipo_funcao",
+  "vinculo",
+  "status",
+  "ultimo_acesso",
+];
 const DEFAULT_COLUMN_WIDTHS: Record<ColKey, number> = {
-  codigo: 48,
+  codigo: 40,
   usuario: 340,
   contato: 80,
   tipo_funcao: 102,
@@ -143,6 +193,52 @@ const DEFAULT_COLUMN_WIDTHS: Record<ColKey, number> = {
   status: 112,
   ultimo_acesso: 122,
 };
+const MIN_COLUMN_WIDTHS: Record<ColKey, number> = {
+  codigo: 32,
+  usuario: 72,
+  contato: 40,
+  tipo_funcao: 48,
+  vinculo: 48,
+  status: 48,
+  ultimo_acesso: 56,
+};
+const USERS_LIST_PREFERENCES_KEY = "allka:admin-users-list-preferences";
+
+function getUsersListPreferences(): {
+  visibleColumns: ColKey[];
+  columnWidths: Record<ColKey, number>;
+} {
+  if (typeof window === "undefined") {
+    return {
+      visibleColumns: DEFAULT_VISIBLE,
+      columnWidths: DEFAULT_COLUMN_WIDTHS,
+    };
+  }
+
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem(USERS_LIST_PREFERENCES_KEY) || "{}",
+    );
+    const visibleColumns = Array.isArray(stored.visibleColumns)
+      ? stored.visibleColumns.filter((key: unknown): key is ColKey =>
+          DEFAULT_VISIBLE.includes(key as ColKey),
+        )
+      : DEFAULT_VISIBLE;
+    const columnWidths = { ...DEFAULT_COLUMN_WIDTHS };
+    for (const key of DEFAULT_VISIBLE) {
+      const width = Number(stored.columnWidths?.[key]);
+      if (Number.isFinite(width) && width >= MIN_COLUMN_WIDTHS[key]) {
+        columnWidths[key] = width;
+      }
+    }
+    return { visibleColumns, columnWidths };
+  } catch {
+    return {
+      visibleColumns: DEFAULT_VISIBLE,
+      columnWidths: DEFAULT_COLUMN_WIDTHS,
+    };
+  }
+}
 
 // ── Conta vinculada (Agency/Company/Partner/Nômade) ────────────────────────
 const LINK_TYPE_LABEL: Record<string, string> = {
@@ -158,10 +254,13 @@ const LINK_TYPE_LABEL: Record<string, string> = {
 // calculados no backend (GET /api/admin/users). "unknown" = account_type
 // sem regra definida — não confundir com "sem vínculo" (tipo conhecido,
 // vínculo não encontrado).
-function getLinkedAccount(user: any): { type: string; name: string } | null | "unknown" {
+function getLinkedAccount(
+  user: any,
+): { type: string; name: string } | null | "unknown" {
   if (user.profile_link_type === "unknown") return "unknown";
   if (!user.has_profile_link) return null;
-  const type = LINK_TYPE_LABEL[user.profile_link_type as string] ?? user.profile_link_type;
+  const type =
+    LINK_TYPE_LABEL[user.profile_link_type as string] ?? user.profile_link_type;
   return { type, name: user.profile_link_name || type };
 }
 
@@ -218,20 +317,38 @@ export default function UsuariosPage() {
   const { toast } = useToast();
   const { sidebarWidth, sidebarSettings, previewTheme } = useSidebar();
   const { headerHeight: infoModalHeaderHeight } = useAppFrameMetrics();
-  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_VISIBLE));
-  const [columnWidths, setColumnWidths] = useState<Record<ColKey, number>>(DEFAULT_COLUMN_WIDTHS);
-  const resizingColumnRef = useRef<{ key: ColKey; startX: number; startWidth: number } | null>(null);
+  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(
+    () => new Set(getUsersListPreferences().visibleColumns),
+  );
+  const [columnWidths, setColumnWidths] = useState<Record<ColKey, number>>(
+    () => getUsersListPreferences().columnWidths,
+  );
+  const resizingColumnRef = useRef<{
+    key: ColKey;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
 
-  const beginColumnResize = (key: ColKey, event: ReactMouseEvent<HTMLDivElement>) => {
+  const beginColumnResize = (
+    key: ColKey,
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
     event.preventDefault();
     event.stopPropagation();
-    resizingColumnRef.current = { key, startX: event.clientX, startWidth: columnWidths[key] };
+    resizingColumnRef.current = {
+      key,
+      startX: event.clientX,
+      startWidth: columnWidths[key],
+    };
     const onMove = (moveEvent: MouseEvent) => {
       const active = resizingColumnRef.current;
       if (!active) return;
       setColumnWidths((current) => ({
         ...current,
-        [active.key]: Math.max(72, active.startWidth + moveEvent.clientX - active.startX),
+        [active.key]: Math.max(
+          MIN_COLUMN_WIDTHS[active.key],
+          active.startWidth + moveEvent.clientX - active.startX,
+        ),
       }));
     };
     const onEnd = () => {
@@ -242,6 +359,22 @@ export default function UsuariosPage() {
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onEnd);
   };
+  const hiddenColumnCount = DEFAULT_VISIBLE.filter(
+    (key) => !visibleCols.has(key),
+  ).length;
+  const restoreDefaultColumns = () => {
+    setVisibleCols(new Set(DEFAULT_VISIBLE));
+    setColumnWidths(DEFAULT_COLUMN_WIDTHS);
+  };
+  useEffect(() => {
+    window.localStorage.setItem(
+      USERS_LIST_PREFERENCES_KEY,
+      JSON.stringify({
+        visibleColumns: Array.from(visibleCols),
+        columnWidths,
+      }),
+    );
+  }, [visibleCols, columnWidths]);
   const {
     tableScrollRef,
     topScrollRef,
@@ -278,21 +411,21 @@ export default function UsuariosPage() {
     toggleColumnFilter,
     clearColumnFilter,
   } = useSorting<User>();
-/**
- * O usuário como esta tela trabalha: o User da API, mais o vínculo
- * enriquecido que /api/admin/users devolve (profile_link_*), mais dois
- * campos derivados no próprio componente a partir de last_login.
- */
-type UsuarioDaLista = User & {
-  has_profile_link?: boolean | null;
-  profile_link_type?: string | null;
-  profile_link_name?: string | null;
-  profile_link_status?: string | null;
-  /** Faixa de inatividade calculada por computeInactivityBucket. */
-  inactivity_bucket?: string;
-  /** Pausa automática por inatividade; "grudenta" (ver o useEffect). */
-  auto_paused?: boolean;
-};
+  /**
+   * O usuário como esta tela trabalha: o User da API, mais o vínculo
+   * enriquecido que /api/admin/users devolve (profile_link_*), mais dois
+   * campos derivados no próprio componente a partir de last_login.
+   */
+  type UsuarioDaLista = User & {
+    has_profile_link?: boolean | null;
+    profile_link_type?: string | null;
+    profile_link_name?: string | null;
+    profile_link_status?: string | null;
+    /** Faixa de inatividade calculada por computeInactivityBucket. */
+    inactivity_bucket?: string;
+    /** Pausa automática por inatividade; "grudenta" (ver o useEffect). */
+    auto_paused?: boolean;
+  };
 
   // Única normalização de um registro cru da API pro formato que a tabela
   // usa — extraída da carga inicial (useEffect abaixo) pra ser reaproveitada
@@ -307,7 +440,8 @@ type UsuarioDaLista = User & {
       online_status: u.online_status ?? "offline",
       account_type: u.account_type || "empresas",
       inactivity_bucket: bucket,
-      auto_paused: bucket === "inactive_90" || u.reactivation_review_required === true,
+      auto_paused:
+        bucket === "inactive_90" || u.reactivation_review_required === true,
     };
   };
 
@@ -354,7 +488,7 @@ type UsuarioDaLista = User & {
   // a 1ª só coleta o motivo e avança, a 2ª é a única que chama DELETE.
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [searchTerm, setSearchTerm] = useState("");
-  const [usersView, setUsersView] = useState<"list" | "cards">("list");
+  const usersView = "list" as "list" | "cards";
   /**
    * Funções que existem de fato na plataforma (conferido contra o banco).
    * O filtro avançado oferecia só "admin"/"user", e decidia pelo texto:
@@ -436,7 +570,9 @@ type UsuarioDaLista = User & {
   const [linkTargetUser, setLinkTargetUser] = useState<any>(null);
   const [linkCompanyId, setLinkCompanyId] = useState<string>("");
   const [linkSaving, setLinkSaving] = useState(false);
-  const [companiesForSelect, setCompaniesForSelect] = useState<{ id: string; name: string }[]>([]);
+  const [companiesForSelect, setCompaniesForSelect] = useState<
+    { id: string; name: string }[]
+  >([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
 
   const openLinkPanel = (user: any) => {
@@ -448,8 +584,14 @@ type UsuarioDaLista = User & {
       apiClient
         .getCompanies({ limit: 500 })
         .then((res: any) => {
-          const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-          setCompaniesForSelect(list.map((c: any) => ({ id: c.id, name: c.name })));
+          const list = Array.isArray(res?.data)
+            ? res.data
+            : Array.isArray(res)
+              ? res
+              : [];
+          setCompaniesForSelect(
+            list.map((c: any) => ({ id: c.id, name: c.name })),
+          );
         })
         .catch(() => setCompaniesForSelect([]))
         .finally(() => setCompaniesLoading(false));
@@ -468,7 +610,10 @@ type UsuarioDaLista = User & {
       const payload = linkCompanyId
         ? { link_type: "company", company_id: linkCompanyId }
         : { link_type: null, company_id: null };
-      const updated = await apiClient.updateAdminUserCompanyLink(linkTargetUser.id, payload);
+      const updated = await apiClient.updateAdminUserCompanyLink(
+        linkTargetUser.id,
+        payload,
+      );
       toast({
         title: linkCompanyId ? "Vínculo atualizado" : "Usuário desvinculado",
         description: linkCompanyId
@@ -535,7 +680,10 @@ type UsuarioDaLista = User & {
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useItemsPerPage(`admin-usuarios:${currentUserId ?? "anonymous"}`, 10);
+  const [pageSize, setPageSize] = useItemsPerPage(
+    `admin-usuarios:${currentUserId ?? "anonymous"}`,
+    10,
+  );
   const [paginatedUsers, setPaginatedUsers] = useState<UsuarioDaLista[]>([]);
 
   useEffect(() => {
@@ -646,7 +794,9 @@ type UsuarioDaLista = User & {
             ? "ativo"
             : "bloqueado";
         const lgpdLabel = [
-          user.has_lgpd_consent === false ? "lgpd pendente sem consentimento" : "",
+          user.has_lgpd_consent === false
+            ? "lgpd pendente sem consentimento"
+            : "",
           user.has_lgpd_consent === true ? "lgpd consentimento registrado" : "",
         ].join(" ");
         // Phone digit match — only when query has digits
@@ -670,7 +820,6 @@ type UsuarioDaLista = User & {
         if (statusFilter === "active" && !user.is_active) return false;
         if (statusFilter === "inactive" && user.is_active) return false;
       }
-
 
       // Advanced filters — identificação
       if (advancedFilters.name.trim()) {
@@ -706,10 +855,8 @@ type UsuarioDaLista = User & {
             return at === "nomades" || at === "nomade" || at === "nomad";
           if (type === "agency")
             return at === "agencias" || at === "agencia" || at === "agency";
-          if (type === "partner")
-            return at === "parceiro" || at === "partner";
-          if (type === "lider")
-            return at === "lider" || at === "leader";
+          if (type === "partner") return at === "parceiro" || at === "partner";
+          if (type === "lider") return at === "lider" || at === "leader";
           return false;
         });
         if (!match) return false;
@@ -718,7 +865,8 @@ type UsuarioDaLista = User & {
       // Advanced filters — vínculo (com/sem)
       if (advancedFilters.linkStatus && advancedFilters.linkStatus.length > 0) {
         const linked = getLinkedAccount(user);
-        const state = linked === "unknown" ? "unknown" : linked ? "with" : "without";
+        const state =
+          linked === "unknown" ? "unknown" : linked ? "with" : "without";
         if (!advancedFilters.linkStatus.includes(state)) return false;
       }
 
@@ -768,8 +916,7 @@ type UsuarioDaLista = User & {
 
       if (advancedFilters.plan !== "all") {
         // Mock plan filter - in real app would check user.plan field
-        const userPlan =
-          user.account_type === "empresas" ? "premium" : "free";
+        const userPlan = user.account_type === "empresas" ? "premium" : "free";
         if (userPlan !== advancedFilters.plan) return false;
       }
 
@@ -818,7 +965,10 @@ type UsuarioDaLista = User & {
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
-      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+      if (
+        searchBoxRef.current &&
+        !searchBoxRef.current.contains(e.target as Node)
+      ) {
         setSearchFocused(false);
       }
     };
@@ -904,7 +1054,7 @@ type UsuarioDaLista = User & {
         onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
         disabled={currentPage === 1}
         title="Página anterior"
-        className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
@@ -917,13 +1067,22 @@ type UsuarioDaLista = User & {
           <button
             key={index}
             onClick={() => setCurrentPage(Number(page))}
-            title={page === currentPage ? "Página atual" : `Ir para a página ${page}`}
-            className={`h-7 w-7 flex items-center justify-center rounded-full text-xs font-bold transition-colors ${
+            title={
+              page === currentPage ? "Página atual" : `Ir para a página ${page}`
+            }
+            className={`h-9 w-9 flex items-center justify-center rounded-lg text-xs font-bold transition-colors ${
               page === currentPage
                 ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
                 : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
             }`}
-            style={page === currentPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+            style={
+              page === currentPage
+                ? {
+                    background:
+                      "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                  }
+                : undefined
+            }
           >
             {page}
           </button>
@@ -933,7 +1092,7 @@ type UsuarioDaLista = User & {
         onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
         disabled={currentPage === totalPages}
         title="Próxima página"
-        className="h-7 w-7 flex items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        className="h-9 w-9 flex items-center justify-center rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
@@ -947,25 +1106,34 @@ type UsuarioDaLista = User & {
                 max={totalPages}
                 value={pageJumpValue}
                 onChange={(e) => setPageJumpValue(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitPageJump();
+                }}
                 placeholder="Pág."
                 aria-label="Ir para a página"
-                className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="h-9 w-14 rounded-lg border border-slate-200 bg-white text-center text-xs text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
               />
               <button
                 onClick={commitPageJump}
                 disabled={!pageJumpValue}
-                className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+                className="group relative h-9 overflow-hidden rounded-lg border border-slate-200 px-2.5 text-xs font-medium transition-all hover:border-transparent disabled:pointer-events-none disabled:opacity-40 dark:border-slate-700"
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{
+                    background:
+                      "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                  }}
                 />
-                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+                <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
+                  Ir
+                </span>
               </button>
             </div>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+          <TooltipContent side="bottom">
+            Ir diretamente para uma página
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
     </div>
@@ -977,14 +1145,24 @@ type UsuarioDaLista = User & {
         <TooltipTrigger asChild>
           <span className="text-xs text-slate-400 whitespace-nowrap cursor-default">
             {(() => {
-              const start = filteredUsers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-              const end = Math.min(currentPage * pageSize, filteredUsers.length);
+              const start =
+                filteredUsers.length === 0
+                  ? 0
+                  : (currentPage - 1) * pageSize + 1;
+              const end = Math.min(
+                currentPage * pageSize,
+                filteredUsers.length,
+              );
               return (
                 <>
                   {start}-{end} de{" "}
-                  <span className="font-semibold text-slate-600 dark:text-slate-300">{filteredUsers.length}</span>{" "}
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">
+                    {filteredUsers.length}
+                  </span>{" "}
                   usuário{filteredUsers.length !== 1 ? "s" : ""}
-                  {filteredUsers.length !== users.length && <> (de {users.length} no total)</>}
+                  {filteredUsers.length !== users.length && (
+                    <> (de {users.length} no total)</>
+                  )}
                 </>
               );
             })()}
@@ -1083,12 +1261,18 @@ type UsuarioDaLista = User & {
       case "view":
         setViewStartInEditMode(false);
         setIsViewDialogOpen(true);
-        navigate(`/admin/usuarios/${userCodeToNum((user as any).user_code) ?? user.id}`, { replace: true });
+        navigate(
+          `/admin/usuarios/${userCodeToNum((user as any).user_code) ?? user.id}`,
+          { replace: true },
+        );
         break;
       case "edit":
         setViewStartInEditMode(true);
         setIsViewDialogOpen(true);
-        navigate(`/admin/usuarios/${userCodeToNum((user as any).user_code) ?? user.id}`, { replace: true });
+        navigate(
+          `/admin/usuarios/${userCodeToNum((user as any).user_code) ?? user.id}`,
+          { replace: true },
+        );
         break;
       case "block":
         setIsDeleteAlertOpen(true);
@@ -1127,7 +1311,9 @@ type UsuarioDaLista = User & {
       return;
     }
     if (selectedUser.is_admin && selectedUser.role === "admin") {
-      setDeletionReasonError("Não é possível excluir a conta principal de administrador por aqui.");
+      setDeletionReasonError(
+        "Não é possível excluir a conta principal de administrador por aqui.",
+      );
       return;
     }
 
@@ -1342,7 +1528,11 @@ type UsuarioDaLista = User & {
       return { label: "Nomad", badgeColor: "blue" as const };
     if (normalizedType === "parceiro" || normalizedType === "partner")
       return { label: "Partner", badgeColor: "pink" as const };
-    if (normalizedType === "lider" || normalizedType === "leader" || role === "lider")
+    if (
+      normalizedType === "lider" ||
+      normalizedType === "leader" ||
+      role === "lider"
+    )
       return { label: "Leader", badgeColor: "amber" as const };
     if (role === "financial")
       return { label: "Financial", badgeColor: "orange" as const };
@@ -1426,7 +1616,9 @@ type UsuarioDaLista = User & {
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.is_active).length;
   const inactiveUsers = users.filter((u) => !u.is_active).length;
-  const adminUsers = users.filter((u) => u.role === "admin" || u.account_type === "admin").length;
+  const adminUsers = users.filter(
+    (u) => u.role === "admin" || u.account_type === "admin",
+  ).length;
   const active90 = users.filter((u) => {
     const last = new Date(u.last_login || Date.now());
     const ago = new Date();
@@ -1461,7 +1653,8 @@ type UsuarioDaLista = User & {
 
     const serie = (filtro: (u: UsuarioDaLista) => boolean) =>
       marcos.map(
-        (limite) => users.filter((u) => filtro(u) && existiaEm(u, limite)).length,
+        (limite) =>
+          users.filter((u) => filtro(u) && existiaEm(u, limite)).length,
       );
 
     const daSerie = (dados: number[]) => ({
@@ -1654,21 +1847,39 @@ type UsuarioDaLista = User & {
     } as const;
     const delta = prevValue === null ? null : value - prevValue;
     return (
-      <div className="flex min-w-0 items-center gap-3 px-5 py-2.5 first:rounded-l-xl last:rounded-r-xl">
-        <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-1 ${styleByColor[colorKey]}`}>
-          <Icon className="h-7 w-7 stroke-[2]" />
+      <div className="flex h-full min-w-0 items-center gap-3 px-5 first:rounded-l-xl last:rounded-r-xl">
+        <div
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ring-1 ${styleByColor[colorKey]}`}
+        >
+          <Icon className="h-6 w-6 stroke-[2]" />
         </div>
         <div className="min-w-0 leading-none">
-          <p className="truncate text-[11px] font-bold uppercase tracking-[0.02em] text-[#31578f] dark:text-slate-300">{label}</p>
+          <p className="truncate text-[11px] font-bold uppercase tracking-[0.02em] text-[#31578f] dark:text-slate-300">
+            {label}
+          </p>
           <div className="mt-1.5 flex min-w-0 items-center gap-2">
-            <span className="text-[28px] font-extrabold tracking-tight text-[#0c2455] dark:text-white">{value}</span>
+            <span className="text-[28px] font-extrabold tracking-tight text-[#0c2455] dark:text-white">
+              {value}
+            </span>
             {delta === null ? (
-              <span className="truncate rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500">sem histórico para comparar</span>
+              <span className="truncate rounded-full bg-slate-100 px-2 py-1 text-[10px] text-slate-500">
+                sem histórico para comparar
+              </span>
             ) : (
-              <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${up ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}>
-                {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {pct > 999 || prevValue < 10 ? `${delta >= 0 ? "+" : ""}${delta}` : `${up ? "+" : "-"}${pct}%`}
-                <span className="font-normal text-slate-400">{prevLabel === "mês passado" ? "no mês" : "vs. anterior"}</span>
+              <span
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${up ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}
+              >
+                {up ? (
+                  <TrendingUp className="h-3 w-3" />
+                ) : (
+                  <TrendingDown className="h-3 w-3" />
+                )}
+                {pct > 999 || prevValue < 10
+                  ? `${delta >= 0 ? "+" : ""}${delta}`
+                  : `${up ? "+" : "-"}${pct}%`}
+                <span className="font-normal text-slate-400">
+                  {prevLabel === "mês passado" ? "no mês" : "vs. anterior"}
+                </span>
               </span>
             )}
           </div>
@@ -1707,720 +1918,788 @@ type UsuarioDaLista = User & {
 
   return (
     <div className={`${STANDARD_SHELL_PANEL_CLASS} !p-1.5 sm:!p-2 lg:!p-2`}>
-    <div className="relative h-full min-h-0 flex flex-col overflow-hidden" ref={pageRef}>
-      <div className="shrink-0 -mb-[11px]">
-      <StandardPageBanner
-        icon={Users}
-        title="Usuários"
-        description="Gerencie todos os usuários da plataforma e mantenha sua equipe sempre produtiva."
-        actions={<>
-          <div className="bg-white rounded-lg">
-            <ExportButton pageRef={pageRef} filename="usuarios" />
-          </div>
-          <PinToTrayButton id="page-usuarios" label="Usuários" icon={Users} path="/admin/usuarios" />
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setShowCreateUser(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                >
-                  <Plus className="h-3.5 w-3.5 shrink-0" />
-                  Novo Usuário
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>Criar novo usuário</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </>}
-      />
-      </div>
+      <div
+        className="relative h-full min-h-0 flex flex-col overflow-hidden"
+        ref={pageRef}
+      >
+        <div className="shrink-0">
+          <StandardPageBanner
+            icon={Users}
+            title="Usuários"
+            description="Gerencie todos os usuários da plataforma e mantenha sua equipe sempre produtiva."
+            className="!mb-0 sm:!mb-0"
+            contentClassName="h-[65px]"
+            actions={
+              <>
+                <div className="bg-white rounded-lg">
+                  <ExportButton pageRef={pageRef} filename="usuarios" />
+                </div>
+                <PinToTrayButton
+                  id="page-usuarios"
+                  label="Usuários"
+                  icon={Users}
+                  path="/admin/usuarios"
+                />
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setShowCreateUser(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                        Novo Usuário
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Criar novo usuário
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
+            }
+          />
+        </div>
 
-      <div className="flex-1 min-h-0 overflow-y-scroll allka-users-scroll">
-      <div className="space-y-2 pr-1">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-5 divide-x divide-slate-200 dark:divide-slate-700 rounded-xl border border-slate-200/80 dark:border-slate-700 bg-white/80 dark:bg-slate-900/70 overflow-hidden">
-        <CompactStatCard
-          label="Total de Usuários"
-          value={totalUsers}
-          prevValue={statsHistory.total.prev}
-          prevLabel={statsHistory.total.label}
-          pct={Math.round(
-            Math.abs(
-              ((totalUsers - statsHistory.total.prev) /
-                (statsHistory.total.prev || 1)) *
-                100,
-            ),
-          )}
-          up={totalUsers >= statsHistory.total.prev}
-          icon={Users}
-          colorKey="blue"
-        />
-        <CompactStatCard
-          label="Usuários Ativos"
-          value={activeUsers}
-          prevValue={statsHistory.active.prev}
-          prevLabel={statsHistory.active.label}
-          pct={Math.round(
-            Math.abs(
-              ((activeUsers - statsHistory.active.prev) /
-                (statsHistory.active.prev || 1)) *
-                100,
-            ),
-          )}
-          up={activeUsers >= statsHistory.active.prev}
-          icon={Activity}
-          colorKey="emerald"
-        />
-        <CompactStatCard
-          label="Usuários Inativos"
-          value={inactiveUsers}
-          prevValue={statsHistory.inactive.prev}
-          prevLabel={statsHistory.inactive.label}
-          pct={Math.round(
-            Math.abs(
-              ((inactiveUsers - statsHistory.inactive.prev) /
-                (statsHistory.inactive.prev || 1)) *
-                100,
-            ),
-          )}
-          up={inactiveUsers >= statsHistory.inactive.prev}
-          icon={UserX}
-          colorKey="rose"
-        />
-        <CompactStatCard
-          label="Administradores"
-          value={adminUsers}
-          prevValue={statsHistory.admins.prev}
-          prevLabel={statsHistory.admins.label}
-          pct={Math.round(
-            Math.abs(
-              ((adminUsers - statsHistory.admins.prev) /
-                (statsHistory.admins.prev || 1)) *
-                100,
-            ),
-          )}
-          up={adminUsers >= statsHistory.admins.prev}
-          icon={Shield}
-          colorKey="violet"
-        />
-        <CompactStatCard
-          label="Ativos 90 dias"
-          value={active90}
-          prevValue={statsHistory.active90.prev}
-          prevLabel={statsHistory.active90.label}
-          pct={Math.round(
-            Math.abs(
-              ((active90 - statsHistory.active90.prev) /
-                (statsHistory.active90.prev || 1)) *
-                100,
-            ),
-          )}
-          up={active90 >= statsHistory.active90.prev}
-          icon={Clock}
-          colorKey="orange"
-        />
-      </div>
-
-      {/* Main Table Card */}
-      <div className={STANDARD_SHELL_TABLE_CARD_CLASS}>
-        {/* Row 1 — search + icon toolbar buttons */}
-        <div className="flex items-center gap-2 flex-wrap px-3 py-2">
-          <div ref={searchBoxRef} className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Nome, e-mail ou telefone..."
-              autoComplete="new-password"
-              value={searchTerm}
-              onFocus={() => setSearchFocused(true)}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-9 text-sm w-full"
-            />
-            {searchFocused && searchTerm && (
-              <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-64 overflow-y-auto">
-                {searchSuggestions.length === 0 ? (
-                  <p className="text-xs text-slate-400 px-3 py-2">Nenhum resultado</p>
-                ) : (
-                  searchSuggestions.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => {
-                        setSearchTerm(u.name);
-                        setSearchFocused(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
-                    >
-                      <Avatar className="h-7 w-7 flex-shrink-0">
-                        <AvatarFallback className="text-[10px] font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
-                          {u.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{u.name}</p>
-                        <p className="text-[11px] text-slate-400 truncate">{u.email}</p>
-                      </div>
-                    </button>
-                  ))
+        <div className="flex-1 min-h-0 overflow-y-scroll allka-users-scroll">
+          <div className="space-y-0 pr-[4px]">
+            {/* Stats Cards */}
+            <div className="mt-[5px] mb-[5px] grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 divide-x divide-slate-200 dark:border-slate-700 dark:bg-slate-900/70 dark:divide-slate-700 xl:h-[65px] xl:grid-cols-5">
+              <CompactStatCard
+                label="Total de Usuários"
+                value={totalUsers}
+                prevValue={statsHistory.total.prev}
+                prevLabel={statsHistory.total.label}
+                pct={Math.round(
+                  Math.abs(
+                    ((totalUsers - statsHistory.total.prev) /
+                      (statsHistory.total.prev || 1)) *
+                      100,
+                  ),
                 )}
-              </div>
-            )}
-          </div>
+                up={totalUsers >= statsHistory.total.prev}
+                icon={Users}
+                colorKey="blue"
+              />
+              <CompactStatCard
+                label="Usuários Ativos"
+                value={activeUsers}
+                prevValue={statsHistory.active.prev}
+                prevLabel={statsHistory.active.label}
+                pct={Math.round(
+                  Math.abs(
+                    ((activeUsers - statsHistory.active.prev) /
+                      (statsHistory.active.prev || 1)) *
+                      100,
+                  ),
+                )}
+                up={activeUsers >= statsHistory.active.prev}
+                icon={Activity}
+                colorKey="emerald"
+              />
+              <CompactStatCard
+                label="Usuários Inativos"
+                value={inactiveUsers}
+                prevValue={statsHistory.inactive.prev}
+                prevLabel={statsHistory.inactive.label}
+                pct={Math.round(
+                  Math.abs(
+                    ((inactiveUsers - statsHistory.inactive.prev) /
+                      (statsHistory.inactive.prev || 1)) *
+                      100,
+                  ),
+                )}
+                up={inactiveUsers >= statsHistory.inactive.prev}
+                icon={UserX}
+                colorKey="rose"
+              />
+              <CompactStatCard
+                label="Administradores"
+                value={adminUsers}
+                prevValue={statsHistory.admins.prev}
+                prevLabel={statsHistory.admins.label}
+                pct={Math.round(
+                  Math.abs(
+                    ((adminUsers - statsHistory.admins.prev) /
+                      (statsHistory.admins.prev || 1)) *
+                      100,
+                  ),
+                )}
+                up={adminUsers >= statsHistory.admins.prev}
+                icon={Shield}
+                colorKey="violet"
+              />
+              <CompactStatCard
+                label="Ativos 90 dias"
+                value={active90}
+                prevValue={statsHistory.active90.prev}
+                prevLabel={statsHistory.active90.label}
+                pct={Math.round(
+                  Math.abs(
+                    ((active90 - statsHistory.active90.prev) /
+                      (statsHistory.active90.prev || 1)) *
+                      100,
+                  ),
+                )}
+                up={active90 >= statsHistory.active90.prev}
+                icon={Clock}
+                colorKey="orange"
+              />
+            </div>
 
-          <div className="ml-auto flex items-center gap-2">
-            <div className="flex items-center rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-              {[
-                { value: "active", label: "Ativos" },
-                { value: "inactive", label: "Inativos" },
-                { value: "all", label: "Todos" },
-              ].map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => setStatusFilter(value)}
-                  className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                    statusFilter === value
-                      ? "text-white"
-                      : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  }`}
-                  style={statusFilter === value ? { background: "linear-gradient(105deg,#061637 0%,#321360 48%,#C5107A 100%)" } : undefined}
+            {/* Main Table Card */}
+            <div className={STANDARD_SHELL_TABLE_CARD_CLASS}>
+              {/* Row 1 — search + icon toolbar buttons */}
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 xl:flex-nowrap">
+                <div
+                  ref={searchBoxRef}
+                  className="relative flex-1 min-w-[170px] max-w-[300px]"
                 >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <IconToolbarButton icon={Filter} tooltip="Filtros" onClick={() => setIsFilterModalOpen(true)} />
-            <div className="flex overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-              <button onClick={() => setUsersView("list")} aria-label="Visualização em lista" className={`px-3 py-1.5 text-xs font-semibold transition-all ${usersView === "list" ? "bg-[linear-gradient(105deg,#061637_0%,#321360_48%,#C5107A_100%)] text-white shadow-sm" : "bg-white text-[#31578F] hover:bg-[#F4F7FC]"}`}>Lista</button>
-              <button onClick={() => setUsersView("cards")} aria-label="Visualização em cards" className={`px-3 py-1.5 text-xs font-semibold transition-all ${usersView === "cards" ? "bg-[linear-gradient(105deg,#061637_0%,#321360_48%,#C5107A_100%)] text-white shadow-sm" : "bg-white text-[#31578F] hover:bg-[#F4F7FC]"}`}>Cards</button>
-            </div>
-            <ItemsPerPageSelect
-              value={pageSize.toString()}
-              onValueChange={(value) => {
-                setPageSize(Number(value));
-                setCurrentPage(1);
-              }}
-              variant="top"
-            />
-            <span className="hidden xl:block border-l border-slate-200 pl-2 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400"><CountText side="bottom" /></span>
-            <div className="hidden xl:block">{totalPages > 1 && <PaginationControls />}</div>
-          </div>
-        </div>
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Nome, e-mail ou telefone..."
+                    autoComplete="new-password"
+                    value={searchTerm}
+                    onFocus={() => setSearchFocused(true)}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8 h-9 text-sm w-full"
+                  />
+                  {searchFocused && searchTerm && (
+                    <div className="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg max-h-64 overflow-y-auto">
+                      {searchSuggestions.length === 0 ? (
+                        <p className="text-xs text-slate-400 px-3 py-2">
+                          Nenhum resultado
+                        </p>
+                      ) : (
+                        searchSuggestions.map((u) => (
+                          <button
+                            key={u.id}
+                            onClick={() => {
+                              setSearchTerm(u.name);
+                              setSearchFocused(false);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors"
+                          >
+                            <Avatar className="h-7 w-7 flex-shrink-0">
+                              <AvatarFallback className="text-[10px] font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
+                                {u.name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")
+                                  .toUpperCase()
+                                  .slice(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                                {u.name}
+                              </p>
+                              <p className="text-[11px] text-slate-400 truncate">
+                                {u.email}
+                              </p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
 
-        {/* Mantido apenas para telas compactas, onde os controles acima podem quebrar de linha. */}
-        <div className="hidden flex-wrap items-center justify-between gap-3 px-3 py-1.5 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
-          <div className="flex items-center gap-3">
-            <ItemsPerPageSelect
-              value={pageSize.toString()}
-              onValueChange={(value) => {
-                setPageSize(Number(value));
-                setCurrentPage(1);
-              }}
-              variant="top"
-            />
-            <CountText side="bottom" />
-          </div>
+                <div className="ml-auto flex items-center gap-2">
+                  <div className="flex h-9 items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+                    {[
+                      { value: "active", label: "Ativos" },
+                      { value: "inactive", label: "Inativos" },
+                      { value: "all", label: "Todos" },
+                    ].map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => setStatusFilter(value)}
+                        className={`h-9 px-2.5 text-xs font-medium transition-colors ${
+                          statusFilter === value
+                            ? "text-white"
+                            : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                        }`}
+                        style={
+                          statusFilter === value
+                            ? {
+                                background:
+                                  "linear-gradient(105deg,#061637 0%,#321360 48%,#C5107A 100%)",
+                              }
+                            : undefined
+                        }
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <IconToolbarButton
+                    icon={Filter}
+                    tooltip="Filtros"
+                    onClick={() => setIsFilterModalOpen(true)}
+                  />
+                  <div className="relative">
+                    <IconToolbarButton
+                      icon={Settings2}
+                      tooltip={
+                        hiddenColumnCount > 0
+                          ? `Configurar colunas — ${hiddenColumnCount} ocultas`
+                          : "Configurar colunas"
+                      }
+                      onClick={() => setColConfigOpen(true)}
+                    />
+                    {hiddenColumnCount > 0 && (
+                      <span
+                        title={`${hiddenColumnCount} coluna${hiddenColumnCount > 1 ? "s" : ""} ocultada${hiddenColumnCount > 1 ? "s" : ""}`}
+                        className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#C5107A] px-1 text-[9px] font-bold text-white shadow-sm"
+                      >
+                        {hiddenColumnCount}
+                      </span>
+                    )}
+                  </div>
+                  <ItemsPerPageSelect
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setCurrentPage(1);
+                    }}
+                    variant="top"
+                  />
+                  <span className="hidden xl:block border-l border-slate-200 pl-2 text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                    <CountText side="bottom" />
+                  </span>
+                  <div className="hidden xl:block">
+                    {totalPages > 1 && <PaginationControls />}
+                  </div>
+                </div>
+              </div>
 
-          {/* Top horizontal scrollbar mirror — only rendered when the table
+              {/* Mantido apenas para telas compactas, onde os controles acima podem quebrar de linha. */}
+              <div className="hidden flex-wrap items-center justify-between gap-3 px-3 py-1.5 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+                <div className="flex items-center gap-3">
+                  <ItemsPerPageSelect
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setCurrentPage(1);
+                    }}
+                    variant="top"
+                  />
+                  <CountText side="bottom" />
+                </div>
+
+                {/* Top horizontal scrollbar mirror — only rendered when the table
               actually overflows its container. */}
-          {hasHorizontalOverflow && (
-            <div
-              ref={topScrollRef}
-              onScroll={handleTopBarScroll}
-              title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-              className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-              style={{ height: 12 }}
-            >
-              <div style={{ minWidth: 960, height: 1 }} />
-            </div>
-          )}
+                {hasHorizontalOverflow && (
+                  <div
+                    ref={topScrollRef}
+                    onScroll={handleTopBarScroll}
+                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                    className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                    style={{ height: 12 }}
+                  >
+                    <div style={{ minWidth: 960, height: 1 }} />
+                  </div>
+                )}
 
-          {totalPages > 1 && <PaginationControls />}
-        </div>
+                {totalPages > 1 && <PaginationControls />}
+              </div>
 
-        <div>
-            {/* Filter Modal — empresas layout */}
-            {isFilterModalOpen &&
-              (() => {
-                const closeFn = () => {
-                  setIsFilterModalOpen(false);
-                  setSelectedFilterId(null);
-                  setIsEditingFilter(false);
-                  setUnsavedChanges(false);
-                  setShowSaveInput(false);
-                  setFilterNameInput("");
-                };
-                const handleDrop = (targetId: string) => {
-                  if (!draggingFilterId || draggingFilterId === targetId)
-                    return;
-                  const from = savedFilters.findIndex(
-                    (f) => f.id === draggingFilterId,
-                  );
-                  const to = savedFilters.findIndex((f) => f.id === targetId);
-                  if (from === -1 || to === -1) return;
-                  const reordered = [...savedFilters];
-                  const [moved] = reordered.splice(from, 1);
-                  reordered.splice(to, 0, moved);
-                  setSavedFilters(reordered);
-                  setDraggingFilterId(null);
-                  setDragOverFilterId(null);
-                };
-                const guardedClose = () => {
-                  if (unsavedChanges) {
-                    setPendingClose(() => closeFn);
-                    return;
-                  }
-                  closeFn();
-                };
-                return (
-                  <StandardModalDialog
-                    open={isFilterModalOpen}
-                    onClose={guardedClose}
-                    title="Filtros Avançados"
-                    subtitle={
-                      unsavedChanges
-                        ? "• Alterações não salvas"
-                        : selectedFilterId && !isEditingFilter
-                          ? "Filtro carregado"
-                          : "Configure e aplique filtros"
-                    }
-                    footer={
-                      <div className="flex items-center justify-between w-full">
-                        <button
-                          onClick={() => {
-                            setAdvancedFilters({
-                              name: "",
-                              email: "",
-                              cpf: "",
-                              phone: "",
-                              whatsapp: "",
-                              hasWhatsapp: "all",
-                              accountTypes: [] as string[],
-                              roles: [] as string[],
-                              statuses: [] as string[],
-                              linkStatus: [] as string[],
-                              registrationDateFrom: "",
-                              registrationDateTo: "",
-                              lastAccessDateFrom: "",
-                              lastAccessDateTo: "",
-                              lastUpdateDateFrom: "",
-                              lastUpdateDateTo: "",
-                              minScore: "",
-                              maxScore: "",
-                              userLevel: "all",
-                              rating: "all",
-                              hasCompany: "all",
-                              hasSpecialPermissions: "all",
-                              hasActiveWallet: "all",
-                              minBalance: "",
-                              maxBalance: "",
-                              hasFinancialActions: "all",
-                              profile: "all",
-                              plan: "all",
-                            });
-                            setUnsavedChanges(false);
-                          }}
-                          className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
-                        >
-                          <X className="h-3 w-3" /> Limpar filtros
-                        </button>
-                        <div className="flex items-center gap-2">
-                          {showSaveInput ? (
-                            <div className="flex items-center gap-1.5">
-                              <input
-                                autoFocus
-                                type="text"
-                                value={filterNameInput}
-                                onChange={(e) =>
-                                  setFilterNameInput(e.target.value)
-                                }
-                                onKeyDown={(e) => {
-                                  if (
-                                    e.key === "Enter" &&
-                                    filterNameInput.trim()
-                                  ) {
-                                    const newId = `filter-${Date.now()}`;
-                                    setSavedFilters([
-                                      ...savedFilters,
-                                      {
-                                        id: newId,
-                                        name: filterNameInput.trim(),
-                                        filters: { ...advancedFilters },
-                                      },
-                                    ]);
-                                    setSelectedFilterId(newId);
-                                    setUnsavedChanges(false);
-                                    setShowSaveInput(false);
-                                    setFilterNameInput("");
-                                  }
-                                  if (e.key === "Escape") {
-                                    setShowSaveInput(false);
-                                    setFilterNameInput("");
-                                  }
-                                }}
-                                placeholder={`Filtro ${savedFilters.length + 1}`}
-                                className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
-                              />
-                              <button
-                                disabled={!filterNameInput.trim()}
-                                onClick={() => {
-                                  const newId = `filter-${Date.now()}`;
-                                  setSavedFilters([
-                                    ...savedFilters,
-                                    {
-                                      id: newId,
-                                      name: filterNameInput.trim(),
-                                      filters: { ...advancedFilters },
-                                    },
-                                  ]);
-                                  setSelectedFilterId(newId);
-                                  setUnsavedChanges(false);
-                                  setShowSaveInput(false);
-                                  setFilterNameInput("");
-                                }}
-                                className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
-                              >
-                                OK
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setShowSaveInput(false);
-                                  setFilterNameInput("");
-                                }}
-                                className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </div>
-                          ) : selectedFilterId && unsavedChanges ? (
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => {
-                                  setSavedFilters(
-                                    savedFilters.map((f) =>
-                                      f.id === selectedFilterId
-                                        ? {
-                                            ...f,
-                                            filters: { ...advancedFilters },
-                                          }
-                                        : f,
-                                    ),
-                                  );
-                                  setUnsavedChanges(false);
-                                }}
-                                className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
-                              >
-                                Atualizar filtro
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setFilterNameInput(
-                                    `Filtro ${savedFilters.length + 1}`,
-                                  );
-                                  setShowSaveInput(true);
-                                }}
-                                className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
-                              >
-                                Salvar como novo
-                              </button>
-                            </div>
-                          ) : (
+              <div>
+                {/* Filter Modal — empresas layout */}
+                {isFilterModalOpen &&
+                  (() => {
+                    const closeFn = () => {
+                      setIsFilterModalOpen(false);
+                      setSelectedFilterId(null);
+                      setIsEditingFilter(false);
+                      setUnsavedChanges(false);
+                      setShowSaveInput(false);
+                      setFilterNameInput("");
+                    };
+                    const handleDrop = (targetId: string) => {
+                      if (!draggingFilterId || draggingFilterId === targetId)
+                        return;
+                      const from = savedFilters.findIndex(
+                        (f) => f.id === draggingFilterId,
+                      );
+                      const to = savedFilters.findIndex(
+                        (f) => f.id === targetId,
+                      );
+                      if (from === -1 || to === -1) return;
+                      const reordered = [...savedFilters];
+                      const [moved] = reordered.splice(from, 1);
+                      reordered.splice(to, 0, moved);
+                      setSavedFilters(reordered);
+                      setDraggingFilterId(null);
+                      setDragOverFilterId(null);
+                    };
+                    const guardedClose = () => {
+                      if (unsavedChanges) {
+                        setPendingClose(() => closeFn);
+                        return;
+                      }
+                      closeFn();
+                    };
+                    return (
+                      <StandardModalDialog
+                        open={isFilterModalOpen}
+                        onClose={guardedClose}
+                        title="Filtros Avançados"
+                        subtitle={
+                          unsavedChanges
+                            ? "• Alterações não salvas"
+                            : selectedFilterId && !isEditingFilter
+                              ? "Filtro carregado"
+                              : "Configure e aplique filtros"
+                        }
+                        footer={
+                          <div className="flex items-center justify-between w-full">
                             <button
                               onClick={() => {
-                                setFilterNameInput(
-                                  `Filtro ${savedFilters.length + 1}`,
-                                );
-                                setShowSaveInput(true);
+                                setAdvancedFilters({
+                                  name: "",
+                                  email: "",
+                                  cpf: "",
+                                  phone: "",
+                                  whatsapp: "",
+                                  hasWhatsapp: "all",
+                                  accountTypes: [] as string[],
+                                  roles: [] as string[],
+                                  statuses: [] as string[],
+                                  linkStatus: [] as string[],
+                                  registrationDateFrom: "",
+                                  registrationDateTo: "",
+                                  lastAccessDateFrom: "",
+                                  lastAccessDateTo: "",
+                                  lastUpdateDateFrom: "",
+                                  lastUpdateDateTo: "",
+                                  minScore: "",
+                                  maxScore: "",
+                                  userLevel: "all",
+                                  rating: "all",
+                                  hasCompany: "all",
+                                  hasSpecialPermissions: "all",
+                                  hasActiveWallet: "all",
+                                  minBalance: "",
+                                  maxBalance: "",
+                                  hasFinancialActions: "all",
+                                  profile: "all",
+                                  plan: "all",
+                                });
+                                setUnsavedChanges(false);
                               }}
-                              className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
+                              className="text-[11px] text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1"
                             >
-                              Salvar filtro
+                              <X className="h-3 w-3" /> Limpar filtros
                             </button>
-                          )}
-                          <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
-                          <button
-                            onClick={closeFn}
-                            className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={() => {
-                              setIsFilterModalOpen(false);
-                              setShowSaveInput(false);
-                            }}
-                            className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
-                          >
-                            Aplicar Filtros
-                          </button>
-                        </div>
-                      </div>
-                    }
-                  >
-                      {/* Body */}
-                      <div className="flex flex-1 overflow-hidden min-h-0">
-                        {/* Left — Saved Filters (compact, drag-drop, inline rename) */}
-                        <div className="w-44 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
-                          <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1 flex-shrink-0">
-                            <Filter className="h-3 w-3" /> Filtros Salvos
-                          </p>
-                          <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
-                            {savedFilters.length === 0 ? (
-                              <div className="text-center py-8">
-                                <Filter className="h-6 w-6 mx-auto text-slate-300 dark:text-slate-600 mb-1.5" />
-                                <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                                  Nenhum filtro salvo
-                                </p>
-                              </div>
-                            ) : (
-                              savedFilters.map((filter) => (
-                                <div
-                                  key={filter.id}
-                                  draggable
-                                  onDragStart={() =>
-                                    setDraggingFilterId(filter.id)
-                                  }
-                                  onDragOver={(e) => {
-                                    e.preventDefault();
-                                    setDragOverFilterId(filter.id);
-                                  }}
-                                  onDrop={() => handleDrop(filter.id)}
-                                  onDragEnd={() => {
-                                    setDraggingFilterId(null);
-                                    setDragOverFilterId(null);
-                                  }}
-                                  onClick={() => {
-                                    if (editingFilterId) return;
-                                    setAdvancedFilters(filter.filters);
-                                    setSelectedFilterId(filter.id);
-                                    setIsEditingFilter(false);
-                                    setUnsavedChanges(false);
-                                  }}
-                                  className={`group relative flex items-center gap-1 p-2 rounded-lg border text-[11px] cursor-pointer transition-all select-none ${
-                                    dragOverFilterId === filter.id &&
-                                    draggingFilterId !== filter.id
-                                      ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30"
-                                      : draggingFilterId === filter.id
-                                        ? "opacity-40"
-                                        : selectedFilterId === filter.id
-                                          ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-semibold"
-                                          : "bg-white dark:bg-slate-700/40 border-slate-200 dark:border-slate-600/50 text-slate-700 dark:text-slate-300 hover:border-blue-300"
-                                  }`}
-                                >
-                                  <GripVertical className="h-3 w-3 text-slate-300 dark:text-slate-600 flex-shrink-0 cursor-grab active:cursor-grabbing" />
-                                  {editingFilterId === filter.id ? (
-                                    <input
-                                      autoFocus
-                                      type="text"
-                                      value={editingFilterName}
-                                      onChange={(e) =>
-                                        setEditingFilterName(e.target.value)
+                            <div className="flex items-center gap-2">
+                              {showSaveInput ? (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    value={filterNameInput}
+                                    onChange={(e) =>
+                                      setFilterNameInput(e.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (
+                                        e.key === "Enter" &&
+                                        filterNameInput.trim()
+                                      ) {
+                                        const newId = `filter-${Date.now()}`;
+                                        setSavedFilters([
+                                          ...savedFilters,
+                                          {
+                                            id: newId,
+                                            name: filterNameInput.trim(),
+                                            filters: { ...advancedFilters },
+                                          },
+                                        ]);
+                                        setSelectedFilterId(newId);
+                                        setUnsavedChanges(false);
+                                        setShowSaveInput(false);
+                                        setFilterNameInput("");
                                       }
-                                      onClick={(e) => e.stopPropagation()}
-                                      onKeyDown={(e) => {
-                                        e.stopPropagation();
-                                        if (
-                                          e.key === "Enter" &&
-                                          editingFilterName.trim()
-                                        ) {
-                                          setSavedFilters(
-                                            savedFilters.map((f) =>
-                                              f.id === filter.id
-                                                ? {
-                                                    ...f,
-                                                    name: editingFilterName.trim(),
-                                                  }
-                                                : f,
-                                            ),
-                                          );
-                                          setEditingFilterId(null);
-                                        } else if (e.key === "Escape")
-                                          setEditingFilterId(null);
-                                      }}
-                                      onBlur={() => {
-                                        if (editingFilterName.trim())
-                                          setSavedFilters(
-                                            savedFilters.map((f) =>
-                                              f.id === filter.id
-                                                ? {
-                                                    ...f,
-                                                    name: editingFilterName.trim(),
-                                                  }
-                                                : f,
-                                            ),
-                                          );
-                                        setEditingFilterId(null);
-                                      }}
-                                      className="flex-1 min-w-0 text-[11px] bg-white dark:bg-slate-700 border border-blue-400 rounded px-1 py-0 outline-none focus:ring-1 focus:ring-blue-400 text-slate-700 dark:text-slate-200"
-                                    />
-                                  ) : (
-                                    <span className="flex-1 truncate">
-                                      {filter.name}
-                                    </span>
-                                  )}
-                                  {editingFilterId !== filter.id && (
-                                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity flex-shrink-0">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setEditingFilterId(filter.id);
-                                          setEditingFilterName(filter.name);
-                                        }}
-                                        title="Renomear"
-                                        className="p-0.5 rounded hover:bg-blue-100 hover:text-blue-500 text-slate-400 transition-all"
-                                      >
-                                        <Pencil className="h-2.5 w-2.5" />
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSavedFilters(
-                                            savedFilters.filter(
-                                              (f) => f.id !== filter.id,
-                                            ),
-                                          );
-                                          if (selectedFilterId === filter.id)
-                                            setSelectedFilterId(null);
-                                        }}
-                                        title="Excluir"
-                                        className="p-0.5 rounded hover:bg-red-100 hover:text-red-500 text-slate-400 transition-all"
-                                      >
-                                        <X className="h-2.5 w-2.5" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Right — Filter config */}
-                        <div className="flex-1 overflow-y-auto p-4">
-                          <Accordion
-                            type="multiple"
-                            defaultValue={["identificacao", "tipo-funcao"]}
-                            className="space-y-3"
-                          >
-                            {/* SEÇÃO: IDENTIFICAÇÃO */}
-                            <AccordionItem
-                              value="identificacao"
-                              className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
-                            >
-                              <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
-                                <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                                  Identificação
-                                </span>
-                              </AccordionTrigger>
-                              <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
-                                <div className="grid grid-cols-2 gap-3">
-                                  <Input
-                                    placeholder="Nome"
-                                    value={advancedFilters.name}
-                                    onChange={(e) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        name: e.target.value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
+                                      if (e.key === "Escape") {
+                                        setShowSaveInput(false);
+                                        setFilterNameInput("");
+                                      }
                                     }}
-                                    className="h-8 text-sm"
+                                    placeholder={`Filtro ${savedFilters.length + 1}`}
+                                    className="h-7 px-2 rounded-md text-[11px] border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-400 w-36"
                                   />
-                                  <Input
-                                    placeholder="E-mail"
-                                    value={advancedFilters.email}
-                                    onChange={(e) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        email: e.target.value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
+                                  <button
+                                    disabled={!filterNameInput.trim()}
+                                    onClick={() => {
+                                      const newId = `filter-${Date.now()}`;
+                                      setSavedFilters([
+                                        ...savedFilters,
+                                        {
+                                          id: newId,
+                                          name: filterNameInput.trim(),
+                                          filters: { ...advancedFilters },
+                                        },
+                                      ]);
+                                      setSelectedFilterId(newId);
+                                      setUnsavedChanges(false);
+                                      setShowSaveInput(false);
+                                      setFilterNameInput("");
                                     }}
-                                    className="h-8 text-sm"
-                                  />
-                                  <Input
-                                    placeholder="CPF"
-                                    value={advancedFilters.cpf}
-                                    onChange={(e) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        cpf: e.target.value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                    className="h-8 text-sm"
-                                  />
-                                  <Input
-                                    placeholder="Telefone"
-                                    value={advancedFilters.phone}
-                                    onChange={(e) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        phone: e.target.value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                    className="h-8 text-sm"
-                                  />
-                                </div>
-                                <div className="grid grid-cols-2 gap-3 items-end">
-                                  <Input
-                                    placeholder="WhatsApp"
-                                    value={advancedFilters.whatsapp}
-                                    onChange={(e) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        whatsapp: e.target.value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                    className="h-8 text-sm"
-                                  />
-                                  <Select
-                                    value={advancedFilters.hasWhatsapp}
-                                    onValueChange={(value) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        hasWhatsapp: value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
+                                    className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 text-white transition-all shadow-sm"
                                   >
-                                    <SelectTrigger className="h-8 text-sm">
-                                      <SelectValue placeholder="Com WhatsApp?" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">Todos</SelectItem>
-                                      <SelectItem value="yes">Sim</SelectItem>
-                                      <SelectItem value="no">Não</SelectItem>
-                                    </SelectContent>
-                                  </Select>
+                                    OK
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShowSaveInput(false);
+                                      setFilterNameInput("");
+                                    }}
+                                    className="h-7 w-7 flex items-center justify-center rounded-md border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-300 transition-colors"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
                                 </div>
-                              </AccordionContent>
-                            </AccordionItem>
+                              ) : selectedFilterId && unsavedChanges ? (
+                                <div className="flex items-center gap-1.5">
+                                  <button
+                                    onClick={() => {
+                                      setSavedFilters(
+                                        savedFilters.map((f) =>
+                                          f.id === selectedFilterId
+                                            ? {
+                                                ...f,
+                                                filters: { ...advancedFilters },
+                                              }
+                                            : f,
+                                        ),
+                                      );
+                                      setUnsavedChanges(false);
+                                    }}
+                                    className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white transition-all shadow-sm"
+                                  >
+                                    Atualizar filtro
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setFilterNameInput(
+                                        `Filtro ${savedFilters.length + 1}`,
+                                      );
+                                      setShowSaveInput(true);
+                                    }}
+                                    className="h-7 px-3 rounded-md text-[11px] font-medium border border-emerald-400 text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                  >
+                                    Salvar como novo
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setFilterNameInput(
+                                      `Filtro ${savedFilters.length + 1}`,
+                                    );
+                                    setShowSaveInput(true);
+                                  }}
+                                  className="h-7 px-3 rounded-md text-[11px] font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all shadow-sm"
+                                >
+                                  Salvar filtro
+                                </button>
+                              )}
+                              <div className="w-px h-5 bg-slate-200 dark:bg-slate-700" />
+                              <button
+                                onClick={closeFn}
+                                className="h-7 px-3 rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setIsFilterModalOpen(false);
+                                  setShowSaveInput(false);
+                                }}
+                                className="h-7 px-4 rounded-md text-[11px] font-semibold btn-brand transition-all shadow-sm"
+                              >
+                                Aplicar Filtros
+                              </button>
+                            </div>
+                          </div>
+                        }
+                      >
+                        {/* Body */}
+                        <div className="flex flex-1 overflow-hidden min-h-0">
+                          {/* Left — Saved Filters (compact, drag-drop, inline rename) */}
+                          <div className="w-44 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
+                            <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1 flex-shrink-0">
+                              <Filter className="h-3 w-3" /> Filtros Salvos
+                            </p>
+                            <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
+                              {savedFilters.length === 0 ? (
+                                <div className="text-center py-8">
+                                  <Filter className="h-6 w-6 mx-auto text-slate-300 dark:text-slate-600 mb-1.5" />
+                                  <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                                    Nenhum filtro salvo
+                                  </p>
+                                </div>
+                              ) : (
+                                savedFilters.map((filter) => (
+                                  <div
+                                    key={filter.id}
+                                    draggable
+                                    onDragStart={() =>
+                                      setDraggingFilterId(filter.id)
+                                    }
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      setDragOverFilterId(filter.id);
+                                    }}
+                                    onDrop={() => handleDrop(filter.id)}
+                                    onDragEnd={() => {
+                                      setDraggingFilterId(null);
+                                      setDragOverFilterId(null);
+                                    }}
+                                    onClick={() => {
+                                      if (editingFilterId) return;
+                                      setAdvancedFilters(filter.filters);
+                                      setSelectedFilterId(filter.id);
+                                      setIsEditingFilter(false);
+                                      setUnsavedChanges(false);
+                                    }}
+                                    className={`group relative flex items-center gap-1 p-2 rounded-lg border text-[11px] cursor-pointer transition-all select-none ${
+                                      dragOverFilterId === filter.id &&
+                                      draggingFilterId !== filter.id
+                                        ? "border-blue-400 bg-blue-50 dark:bg-blue-950/30"
+                                        : draggingFilterId === filter.id
+                                          ? "opacity-40"
+                                          : selectedFilterId === filter.id
+                                            ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-semibold"
+                                            : "bg-white dark:bg-slate-700/40 border-slate-200 dark:border-slate-600/50 text-slate-700 dark:text-slate-300 hover:border-blue-300"
+                                    }`}
+                                  >
+                                    <GripVertical className="h-3 w-3 text-slate-300 dark:text-slate-600 flex-shrink-0 cursor-grab active:cursor-grabbing" />
+                                    {editingFilterId === filter.id ? (
+                                      <input
+                                        autoFocus
+                                        type="text"
+                                        value={editingFilterName}
+                                        onChange={(e) =>
+                                          setEditingFilterName(e.target.value)
+                                        }
+                                        onClick={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => {
+                                          e.stopPropagation();
+                                          if (
+                                            e.key === "Enter" &&
+                                            editingFilterName.trim()
+                                          ) {
+                                            setSavedFilters(
+                                              savedFilters.map((f) =>
+                                                f.id === filter.id
+                                                  ? {
+                                                      ...f,
+                                                      name: editingFilterName.trim(),
+                                                    }
+                                                  : f,
+                                              ),
+                                            );
+                                            setEditingFilterId(null);
+                                          } else if (e.key === "Escape")
+                                            setEditingFilterId(null);
+                                        }}
+                                        onBlur={() => {
+                                          if (editingFilterName.trim())
+                                            setSavedFilters(
+                                              savedFilters.map((f) =>
+                                                f.id === filter.id
+                                                  ? {
+                                                      ...f,
+                                                      name: editingFilterName.trim(),
+                                                    }
+                                                  : f,
+                                              ),
+                                            );
+                                          setEditingFilterId(null);
+                                        }}
+                                        className="flex-1 min-w-0 text-[11px] bg-white dark:bg-slate-700 border border-blue-400 rounded px-1 py-0 outline-none focus:ring-1 focus:ring-blue-400 text-slate-700 dark:text-slate-200"
+                                      />
+                                    ) : (
+                                      <span className="flex-1 truncate">
+                                        {filter.name}
+                                      </span>
+                                    )}
+                                    {editingFilterId !== filter.id && (
+                                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity flex-shrink-0">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingFilterId(filter.id);
+                                            setEditingFilterName(filter.name);
+                                          }}
+                                          title="Renomear"
+                                          className="p-0.5 rounded hover:bg-blue-100 hover:text-blue-500 text-slate-400 transition-all"
+                                        >
+                                          <Pencil className="h-2.5 w-2.5" />
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSavedFilters(
+                                              savedFilters.filter(
+                                                (f) => f.id !== filter.id,
+                                              ),
+                                            );
+                                            if (selectedFilterId === filter.id)
+                                              setSelectedFilterId(null);
+                                          }}
+                                          title="Excluir"
+                                          className="p-0.5 rounded hover:bg-red-100 hover:text-red-500 text-slate-400 transition-all"
+                                        >
+                                          <X className="h-2.5 w-2.5" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
 
-                            {/* SEÇÃO: TIPO E FUNÇÃO */}
-                            <AccordionItem
-                              value="tipo-funcao"
-                              className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                          {/* Right — Filter config */}
+                          <div className="flex-1 overflow-y-auto p-4">
+                            <Accordion
+                              type="multiple"
+                              defaultValue={["identificacao", "tipo-funcao"]}
+                              className="space-y-3"
                             >
-                              <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
-                                <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                                  Tipo e Função
-                                </span>
-                              </AccordionTrigger>
-                              <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
-                                    Tipo de Conta
-                                  </label>
-                                  <div className="flex flex-wrap gap-2">
-                                    {["admin", "company", "agency", "partner", "lider", "nomad"].map(
-                                      (type) => (
+                              {/* SEÇÃO: IDENTIFICAÇÃO */}
+                              <AccordionItem
+                                value="identificacao"
+                                className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                              >
+                                <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    Identificação
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Input
+                                      placeholder="Nome"
+                                      value={advancedFilters.name}
+                                      onChange={(e) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          name: e.target.value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                      className="h-8 text-sm"
+                                    />
+                                    <Input
+                                      placeholder="E-mail"
+                                      value={advancedFilters.email}
+                                      onChange={(e) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          email: e.target.value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                      className="h-8 text-sm"
+                                    />
+                                    <Input
+                                      placeholder="CPF"
+                                      value={advancedFilters.cpf}
+                                      onChange={(e) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          cpf: e.target.value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                      className="h-8 text-sm"
+                                    />
+                                    <Input
+                                      placeholder="Telefone"
+                                      value={advancedFilters.phone}
+                                      onChange={(e) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          phone: e.target.value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3 items-end">
+                                    <Input
+                                      placeholder="WhatsApp"
+                                      value={advancedFilters.whatsapp}
+                                      onChange={(e) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          whatsapp: e.target.value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                      className="h-8 text-sm"
+                                    />
+                                    <Select
+                                      value={advancedFilters.hasWhatsapp}
+                                      onValueChange={(value) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          hasWhatsapp: value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-sm">
+                                        <SelectValue placeholder="Com WhatsApp?" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="all">
+                                          Todos
+                                        </SelectItem>
+                                        <SelectItem value="yes">Sim</SelectItem>
+                                        <SelectItem value="no">Não</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+
+                              {/* SEÇÃO: TIPO E FUNÇÃO */}
+                              <AccordionItem
+                                value="tipo-funcao"
+                                className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                              >
+                                <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    Tipo e Função
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
+                                  <div>
+                                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                                      Tipo de Conta
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {[
+                                        "admin",
+                                        "company",
+                                        "agency",
+                                        "partner",
+                                        "lider",
+                                        "nomad",
+                                      ].map((type) => (
                                         <label
                                           key={type}
                                           className="flex items-center gap-2 cursor-pointer"
@@ -2451,112 +2730,35 @@ type UsuarioDaLista = User & {
                                             {type}
                                           </span>
                                         </label>
-                                      ),
-                                    )}
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
 
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
-                                    Função
-                                  </label>
-                                  <div className="flex flex-wrap gap-2">
-                                    {FUNCOES.map(({ value: role, label }) => (
-                                      <label
-                                        key={role}
-                                        className="flex items-center gap-2 cursor-pointer"
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={advancedFilters.roles.includes(
-                                            role,
-                                          )}
-                                          onChange={(e) => {
-                                            setAdvancedFilters({
-                                              ...advancedFilters,
-                                              roles: e.target.checked
-                                                ? [
-                                                    ...advancedFilters.roles,
-                                                    role,
-                                                  ]
-                                                : advancedFilters.roles.filter(
-                                                    (r) => r !== role,
-                                                  ),
-                                            });
-                                            if (selectedFilterId)
-                                              setUnsavedChanges(true);
-                                          }}
-                                          className="rounded border-slate-300 dark:border-slate-600"
-                                        />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300">
-                                          {label}
-                                        </span>
-                                      </label>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
-                                    Vínculo
-                                  </label>
-                                  <div className="flex flex-wrap gap-2">
-                                    {[
-                                      { value: "with", label: "Com vínculo" },
-                                      { value: "without", label: "Sem vínculo" },
-                                    ].map(({ value, label }) => (
-                                      <label
-                                        key={value}
-                                        className="flex items-center gap-2 cursor-pointer"
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={advancedFilters.linkStatus.includes(value)}
-                                          onChange={(e) => {
-                                            setAdvancedFilters({
-                                              ...advancedFilters,
-                                              linkStatus: e.target.checked
-                                                ? [...advancedFilters.linkStatus, value]
-                                                : advancedFilters.linkStatus.filter((v) => v !== value),
-                                            });
-                                            if (selectedFilterId) setUnsavedChanges(true);
-                                          }}
-                                          className="rounded border-slate-300 dark:border-slate-600"
-                                        />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300">
-                                          {label}
-                                        </span>
-                                      </label>
-                                    ))}
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
-                                    Status
-                                  </label>
-                                  <div className="flex flex-wrap gap-2">
-                                    {["active", "blocked", "pausado"].map(
-                                      (status) => (
+                                  <div>
+                                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                                      Função
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {FUNCOES.map(({ value: role, label }) => (
                                         <label
-                                          key={status}
+                                          key={role}
                                           className="flex items-center gap-2 cursor-pointer"
                                         >
                                           <input
                                             type="checkbox"
-                                            checked={advancedFilters.statuses.includes(
-                                              status,
+                                            checked={advancedFilters.roles.includes(
+                                              role,
                                             )}
                                             onChange={(e) => {
                                               setAdvancedFilters({
                                                 ...advancedFilters,
-                                                statuses: e.target.checked
+                                                roles: e.target.checked
                                                   ? [
-                                                      ...advancedFilters.statuses,
-                                                      status,
+                                                      ...advancedFilters.roles,
+                                                      role,
                                                     ]
-                                                  : advancedFilters.statuses.filter(
-                                                      (s) => s !== status,
+                                                  : advancedFilters.roles.filter(
+                                                      (r) => r !== role,
                                                     ),
                                               });
                                               if (selectedFilterId)
@@ -2565,1072 +2767,1459 @@ type UsuarioDaLista = User & {
                                             className="rounded border-slate-300 dark:border-slate-600"
                                           />
                                           <span className="text-sm text-slate-700 dark:text-slate-300">
-                                            {status === "active"
-                                              ? "Ativo"
-                                              : status === "blocked"
-                                                ? "Bloqueado"
-                                                : "Pausado"}
+                                            {label}
                                           </span>
                                         </label>
-                                      ),
-                                    )}
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              </AccordionContent>
-                            </AccordionItem>
 
-                            {/* SEÇÃO: DATAS */}
-                            <AccordionItem
-                              value="datas"
-                              className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
-                            >
-                              <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
-                                <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                                  Período de Datas
-                                </span>
-                              </AccordionTrigger>
-                              <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
-                                    Data de Cadastro
-                                  </label>
-                                  <div className="flex gap-2">
+                                  <div>
+                                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                                      Vínculo
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {[
+                                        { value: "with", label: "Com vínculo" },
+                                        {
+                                          value: "without",
+                                          label: "Sem vínculo",
+                                        },
+                                      ].map(({ value, label }) => (
+                                        <label
+                                          key={value}
+                                          className="flex items-center gap-2 cursor-pointer"
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={advancedFilters.linkStatus.includes(
+                                              value,
+                                            )}
+                                            onChange={(e) => {
+                                              setAdvancedFilters({
+                                                ...advancedFilters,
+                                                linkStatus: e.target.checked
+                                                  ? [
+                                                      ...advancedFilters.linkStatus,
+                                                      value,
+                                                    ]
+                                                  : advancedFilters.linkStatus.filter(
+                                                      (v) => v !== value,
+                                                    ),
+                                              });
+                                              if (selectedFilterId)
+                                                setUnsavedChanges(true);
+                                            }}
+                                            className="rounded border-slate-300 dark:border-slate-600"
+                                          />
+                                          <span className="text-sm text-slate-700 dark:text-slate-300">
+                                            {label}
+                                          </span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                                      Status
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                      {["active", "blocked", "pausado"].map(
+                                        (status) => (
+                                          <label
+                                            key={status}
+                                            className="flex items-center gap-2 cursor-pointer"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={advancedFilters.statuses.includes(
+                                                status,
+                                              )}
+                                              onChange={(e) => {
+                                                setAdvancedFilters({
+                                                  ...advancedFilters,
+                                                  statuses: e.target.checked
+                                                    ? [
+                                                        ...advancedFilters.statuses,
+                                                        status,
+                                                      ]
+                                                    : advancedFilters.statuses.filter(
+                                                        (s) => s !== status,
+                                                      ),
+                                                });
+                                                if (selectedFilterId)
+                                                  setUnsavedChanges(true);
+                                              }}
+                                              className="rounded border-slate-300 dark:border-slate-600"
+                                            />
+                                            <span className="text-sm text-slate-700 dark:text-slate-300">
+                                              {status === "active"
+                                                ? "Ativo"
+                                                : status === "blocked"
+                                                  ? "Bloqueado"
+                                                  : "Pausado"}
+                                            </span>
+                                          </label>
+                                        ),
+                                      )}
+                                    </div>
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+
+                              {/* SEÇÃO: DATAS */}
+                              <AccordionItem
+                                value="datas"
+                                className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                              >
+                                <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    Período de Datas
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
+                                  <div>
+                                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                                      Data de Cadastro
+                                    </label>
+                                    <div className="flex gap-2">
+                                      <Input
+                                        type="date"
+                                        value={
+                                          advancedFilters.registrationDateFrom
+                                        }
+                                        onChange={(e) => {
+                                          setAdvancedFilters({
+                                            ...advancedFilters,
+                                            registrationDateFrom:
+                                              e.target.value,
+                                          });
+                                          if (selectedFilterId)
+                                            setUnsavedChanges(true);
+                                        }}
+                                        className="h-8 text-sm flex-1"
+                                      />
+                                      <Input
+                                        type="date"
+                                        value={
+                                          advancedFilters.registrationDateTo
+                                        }
+                                        onChange={(e) => {
+                                          setAdvancedFilters({
+                                            ...advancedFilters,
+                                            registrationDateTo: e.target.value,
+                                          });
+                                          if (selectedFilterId)
+                                            setUnsavedChanges(true);
+                                        }}
+                                        className="h-8 text-sm flex-1"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                                      Último Acesso
+                                    </label>
+                                    <div className="flex gap-2">
+                                      <Input
+                                        type="date"
+                                        value={
+                                          advancedFilters.lastAccessDateFrom
+                                        }
+                                        onChange={(e) => {
+                                          setAdvancedFilters({
+                                            ...advancedFilters,
+                                            lastAccessDateFrom: e.target.value,
+                                          });
+                                          if (selectedFilterId)
+                                            setUnsavedChanges(true);
+                                        }}
+                                        className="h-8 text-sm flex-1"
+                                      />
+                                      <Input
+                                        type="date"
+                                        value={advancedFilters.lastAccessDateTo}
+                                        onChange={(e) => {
+                                          setAdvancedFilters({
+                                            ...advancedFilters,
+                                            lastAccessDateTo: e.target.value,
+                                          });
+                                          if (selectedFilterId)
+                                            setUnsavedChanges(true);
+                                        }}
+                                        className="h-8 text-sm flex-1"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                                      Última Atualização
+                                    </label>
+                                    <div className="flex gap-2">
+                                      <Input
+                                        type="date"
+                                        value={
+                                          advancedFilters.lastUpdateDateFrom
+                                        }
+                                        onChange={(e) => {
+                                          setAdvancedFilters({
+                                            ...advancedFilters,
+                                            lastUpdateDateFrom: e.target.value,
+                                          });
+                                          if (selectedFilterId)
+                                            setUnsavedChanges(true);
+                                        }}
+                                        className="h-8 text-sm flex-1"
+                                      />
+                                      <Input
+                                        type="date"
+                                        value={advancedFilters.lastUpdateDateTo}
+                                        onChange={(e) => {
+                                          setAdvancedFilters({
+                                            ...advancedFilters,
+                                            lastUpdateDateTo: e.target.value,
+                                          });
+                                          if (selectedFilterId)
+                                            setUnsavedChanges(true);
+                                        }}
+                                        className="h-8 text-sm flex-1"
+                                      />
+                                    </div>
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+
+                              {/* SEÇÃO: MÉTRICAS */}
+                              <AccordionItem
+                                value="metricas"
+                                className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                              >
+                                <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    Métricas e Pontuação
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
+                                  <div className="grid grid-cols-2 gap-3">
                                     <Input
-                                      type="date"
+                                      placeholder="Pontuação Mínima"
+                                      type="number"
+                                      value={advancedFilters.minScore}
+                                      onChange={(e) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          minScore: e.target.value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                      className="h-8 text-sm"
+                                    />
+                                    <Input
+                                      placeholder="Pontuação Máxima"
+                                      type="number"
+                                      value={advancedFilters.maxScore}
+                                      onChange={(e) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          maxScore: e.target.value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                      className="h-8 text-sm"
+                                    />
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Select
+                                      value={advancedFilters.userLevel}
+                                      onValueChange={(value) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          userLevel: value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-sm">
+                                        <SelectValue placeholder="Nível" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="all">
+                                          Todos
+                                        </SelectItem>
+                                        <SelectItem value="iniciante">
+                                          Iniciante
+                                        </SelectItem>
+                                        <SelectItem value="intermediario">
+                                          Intermediário
+                                        </SelectItem>
+                                        <SelectItem value="avancado">
+                                          Avançado
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+
+                                    <Select
+                                      value={advancedFilters.rating}
+                                      onValueChange={(value) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          rating: value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-sm">
+                                        <SelectValue placeholder="Avaliação" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="all">
+                                          Todas
+                                        </SelectItem>
+                                        <SelectItem value="5">
+                                          5 Estrelas
+                                        </SelectItem>
+                                        <SelectItem value="4">
+                                          4+ Estrelas
+                                        </SelectItem>
+                                        <SelectItem value="3">
+                                          3+ Estrelas
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </AccordionContent>
+                              </AccordionItem>
+
+                              {/* SEÇÃO: DADOS COMPLEMENTARES */}
+                              <AccordionItem
+                                value="complementares"
+                                className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
+                              >
+                                <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
+                                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                                    Dados Complementares
+                                  </span>
+                                </AccordionTrigger>
+                                <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Select
+                                      value={advancedFilters.hasCompany}
+                                      onValueChange={(value) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          hasCompany: value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-sm">
+                                        <SelectValue placeholder="Empresa?" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="all">
+                                          Todos
+                                        </SelectItem>
+                                        <SelectItem value="yes">Sim</SelectItem>
+                                        <SelectItem value="no">Não</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+
+                                    <Select
                                       value={
-                                        advancedFilters.registrationDateFrom
+                                        advancedFilters.hasSpecialPermissions
                                       }
-                                      onChange={(e) => {
+                                      onValueChange={(value) => {
                                         setAdvancedFilters({
                                           ...advancedFilters,
-                                          registrationDateFrom: e.target.value,
+                                          hasSpecialPermissions: value,
                                         });
                                         if (selectedFilterId)
                                           setUnsavedChanges(true);
                                       }}
-                                      className="h-8 text-sm flex-1"
+                                    >
+                                      <SelectTrigger className="h-8 text-sm">
+                                        <SelectValue placeholder="Perms especiais?" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="all">
+                                          Todos
+                                        </SelectItem>
+                                        <SelectItem value="yes">Sim</SelectItem>
+                                        <SelectItem value="no">Não</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Select
+                                      value={advancedFilters.hasActiveWallet}
+                                      onValueChange={(value) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          hasActiveWallet: value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-sm">
+                                        <SelectValue placeholder="Carteira?" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="all">
+                                          Todos
+                                        </SelectItem>
+                                        <SelectItem value="yes">Sim</SelectItem>
+                                        <SelectItem value="no">Não</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+
+                                    <Select
+                                      value={
+                                        advancedFilters.hasFinancialActions
+                                      }
+                                      onValueChange={(value) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          hasFinancialActions: value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 text-sm">
+                                        <SelectValue placeholder="Ações financeiras?" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="all">
+                                          Todos
+                                        </SelectItem>
+                                        <SelectItem value="yes">Sim</SelectItem>
+                                        <SelectItem value="no">Não</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Input
+                                      placeholder="Saldo Mínimo"
+                                      type="number"
+                                      value={advancedFilters.minBalance}
+                                      onChange={(e) => {
+                                        setAdvancedFilters({
+                                          ...advancedFilters,
+                                          minBalance: e.target.value,
+                                        });
+                                        if (selectedFilterId)
+                                          setUnsavedChanges(true);
+                                      }}
+                                      className="h-8 text-sm"
                                     />
                                     <Input
-                                      type="date"
-                                      value={advancedFilters.registrationDateTo}
+                                      placeholder="Saldo Máximo"
+                                      type="number"
+                                      value={advancedFilters.maxBalance}
                                       onChange={(e) => {
                                         setAdvancedFilters({
                                           ...advancedFilters,
-                                          registrationDateTo: e.target.value,
+                                          maxBalance: e.target.value,
                                         });
                                         if (selectedFilterId)
                                           setUnsavedChanges(true);
                                       }}
-                                      className="h-8 text-sm flex-1"
+                                      className="h-8 text-sm"
                                     />
                                   </div>
-                                </div>
-
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
-                                    Último Acesso
-                                  </label>
-                                  <div className="flex gap-2">
-                                    <Input
-                                      type="date"
-                                      value={advancedFilters.lastAccessDateFrom}
-                                      onChange={(e) => {
-                                        setAdvancedFilters({
-                                          ...advancedFilters,
-                                          lastAccessDateFrom: e.target.value,
-                                        });
-                                        if (selectedFilterId)
-                                          setUnsavedChanges(true);
-                                      }}
-                                      className="h-8 text-sm flex-1"
-                                    />
-                                    <Input
-                                      type="date"
-                                      value={advancedFilters.lastAccessDateTo}
-                                      onChange={(e) => {
-                                        setAdvancedFilters({
-                                          ...advancedFilters,
-                                          lastAccessDateTo: e.target.value,
-                                        });
-                                        if (selectedFilterId)
-                                          setUnsavedChanges(true);
-                                      }}
-                                      className="h-8 text-sm flex-1"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
-                                    Última Atualização
-                                  </label>
-                                  <div className="flex gap-2">
-                                    <Input
-                                      type="date"
-                                      value={advancedFilters.lastUpdateDateFrom}
-                                      onChange={(e) => {
-                                        setAdvancedFilters({
-                                          ...advancedFilters,
-                                          lastUpdateDateFrom: e.target.value,
-                                        });
-                                        if (selectedFilterId)
-                                          setUnsavedChanges(true);
-                                      }}
-                                      className="h-8 text-sm flex-1"
-                                    />
-                                    <Input
-                                      type="date"
-                                      value={advancedFilters.lastUpdateDateTo}
-                                      onChange={(e) => {
-                                        setAdvancedFilters({
-                                          ...advancedFilters,
-                                          lastUpdateDateTo: e.target.value,
-                                        });
-                                        if (selectedFilterId)
-                                          setUnsavedChanges(true);
-                                      }}
-                                      className="h-8 text-sm flex-1"
-                                    />
-                                  </div>
-                                </div>
-                              </AccordionContent>
-                            </AccordionItem>
-
-                            {/* SEÇÃO: MÉTRICAS */}
-                            <AccordionItem
-                              value="metricas"
-                              className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
-                            >
-                              <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
-                                <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                                  Métricas e Pontuação
-                                </span>
-                              </AccordionTrigger>
-                              <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
-                                <div className="grid grid-cols-2 gap-3">
-                                  <Input
-                                    placeholder="Pontuação Mínima"
-                                    type="number"
-                                    value={advancedFilters.minScore}
-                                    onChange={(e) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        minScore: e.target.value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                    className="h-8 text-sm"
-                                  />
-                                  <Input
-                                    placeholder="Pontuação Máxima"
-                                    type="number"
-                                    value={advancedFilters.maxScore}
-                                    onChange={(e) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        maxScore: e.target.value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                    className="h-8 text-sm"
-                                  />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                  <Select
-                                    value={advancedFilters.userLevel}
-                                    onValueChange={(value) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        userLevel: value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-8 text-sm">
-                                      <SelectValue placeholder="Nível" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">Todos</SelectItem>
-                                      <SelectItem value="iniciante">
-                                        Iniciante
-                                      </SelectItem>
-                                      <SelectItem value="intermediario">
-                                        Intermediário
-                                      </SelectItem>
-                                      <SelectItem value="avancado">
-                                        Avançado
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-
-                                  <Select
-                                    value={advancedFilters.rating}
-                                    onValueChange={(value) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        rating: value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-8 text-sm">
-                                      <SelectValue placeholder="Avaliação" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">Todas</SelectItem>
-                                      <SelectItem value="5">
-                                        5 Estrelas
-                                      </SelectItem>
-                                      <SelectItem value="4">
-                                        4+ Estrelas
-                                      </SelectItem>
-                                      <SelectItem value="3">
-                                        3+ Estrelas
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </AccordionContent>
-                            </AccordionItem>
-
-                            {/* SEÇÃO: DADOS COMPLEMENTARES */}
-                            <AccordionItem
-                              value="complementares"
-                              className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden"
-                            >
-                              <AccordionTrigger className="bg-white hover:bg-slate-50 dark:bg-[oklch(0.17_0.016_258)] dark:hover:bg-[oklch(0.20_0.018_258)] px-4 py-3 transition-colors">
-                                <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                                  Dados Complementares
-                                </span>
-                              </AccordionTrigger>
-                              <AccordionContent className="p-4 space-y-3 bg-white dark:bg-slate-800/50">
-                                <div className="grid grid-cols-2 gap-3">
-                                  <Select
-                                    value={advancedFilters.hasCompany}
-                                    onValueChange={(value) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        hasCompany: value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-8 text-sm">
-                                      <SelectValue placeholder="Empresa?" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">Todos</SelectItem>
-                                      <SelectItem value="yes">Sim</SelectItem>
-                                      <SelectItem value="no">Não</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-
-                                  <Select
-                                    value={
-                                      advancedFilters.hasSpecialPermissions
-                                    }
-                                    onValueChange={(value) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        hasSpecialPermissions: value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-8 text-sm">
-                                      <SelectValue placeholder="Perms especiais?" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">Todos</SelectItem>
-                                      <SelectItem value="yes">Sim</SelectItem>
-                                      <SelectItem value="no">Não</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                  <Select
-                                    value={advancedFilters.hasActiveWallet}
-                                    onValueChange={(value) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        hasActiveWallet: value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-8 text-sm">
-                                      <SelectValue placeholder="Carteira?" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">Todos</SelectItem>
-                                      <SelectItem value="yes">Sim</SelectItem>
-                                      <SelectItem value="no">Não</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-
-                                  <Select
-                                    value={advancedFilters.hasFinancialActions}
-                                    onValueChange={(value) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        hasFinancialActions: value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                  >
-                                    <SelectTrigger className="h-8 text-sm">
-                                      <SelectValue placeholder="Ações financeiras?" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="all">Todos</SelectItem>
-                                      <SelectItem value="yes">Sim</SelectItem>
-                                      <SelectItem value="no">Não</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                  <Input
-                                    placeholder="Saldo Mínimo"
-                                    type="number"
-                                    value={advancedFilters.minBalance}
-                                    onChange={(e) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        minBalance: e.target.value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                    className="h-8 text-sm"
-                                  />
-                                  <Input
-                                    placeholder="Saldo Máximo"
-                                    type="number"
-                                    value={advancedFilters.maxBalance}
-                                    onChange={(e) => {
-                                      setAdvancedFilters({
-                                        ...advancedFilters,
-                                        maxBalance: e.target.value,
-                                      });
-                                      if (selectedFilterId)
-                                        setUnsavedChanges(true);
-                                    }}
-                                    className="h-8 text-sm"
-                                  />
-                                </div>
-                              </AccordionContent>
-                            </AccordionItem>
-                          </Accordion>
+                                </AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
+                          </div>
                         </div>
-                      </div>
-                  </StandardModalDialog>
-                );
-              })()}
-
-            {/* Inactivity Alert Banner */}
-            {!dismissedInactivityAlert &&
-              users.filter((u) => u.auto_paused).length > 0 && (
-                <div className="mx-4 mt-3 mb-1 flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
-                      {users.filter((u) => u.auto_paused).length} usuário
-                      {users.filter((u) => u.auto_paused).length !== 1
-                        ? "s"
-                        : ""}{" "}
-                      sem acesso há mais de 90 dias
-                    </p>
-                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
-                      Esses usuários foram pausados automaticamente. Revise e
-                      decida: bloquear, reativar ou arquivar.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setDismissedInactivityAlert(true)}
-                    className="text-amber-400 hover:text-amber-600 transition-colors flex-shrink-0"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-
-            <div className="relative min-h-[240px]">
-            {/* Users Table */}
-            {usersView === "cards" && (
-              <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
-                {paginatedUsers.map((user) => (
-                  <button key={user.id} onClick={() => handleUserAction(user, "view")} className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-indigo-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
-                    <Avatar className="h-10 w-10"><AvatarFallback className="bg-gradient-to-br from-indigo-500 to-fuchsia-600 text-xs font-bold text-white">{user.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
-                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-slate-800 dark:text-slate-100">{user.name}</span><span className="block truncate text-xs text-slate-500">{user.email}</span><span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">{user.is_active ? "Ativo" : "Inativo"}</span></span>
-                    <MoreHorizontal className="h-4 w-4 text-slate-400" />
-                  </button>
-                ))}
-              </div>
-            )}
-            <div
-              ref={tableScrollRef}
-              onScroll={handleTableScroll}
-              className={`${usersView === "list" ? "overflow-x-auto" : "hidden"} allka-table-scroll-body`}
-            >
-              <table className="tabela-cartao w-full text-xs min-w-[960px]">
-                <thead>
-                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
-                    <th
-                      className="hidden py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
-                      style={{ position: "sticky", left: 0, top: 0, zIndex: 3, minWidth: 128, background: "var(--table-head)", boxShadow: "0 1px 0 rgba(148,163,184,0.22)", borderRight: "1px solid rgba(100,116,139,0.18)" }}
-                    >
-                      Ações
-                    </th>
-                    {ALL_COLUMNS.filter((c) => visibleCols.has(c.key)).map((col) => (
-                      <th
-                        key={col.key}
-                        className="relative py-2.5 px-4 text-[11px] font-bold text-[#365a91] dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
-                        style={{
-                          position: "sticky",
-                          top: 0,
-                          zIndex: 2,
-                          width: columnWidths[col.key],
-                          minWidth: columnWidths[col.key],
-                          background: "var(--table-head)",
-                          boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
-                          borderRight: "1px solid rgba(148,163,184,0.16)",
-                        }}
-                      >
-                        <div className="inline-flex items-center gap-1">
-                          {col.key === "codigo" && (
-                            <SortableHeader
-                              label={col.label}
-                              field="user_code"
-                              type="text"
-                              sortKey={userSortKey ? String(userSortKey) : null}
-                              sortDir={userSortDir}
-                              onSort={handleUserSort}
-                            />
-                          )}
-                          {col.key === "usuario" && (
-                            <SortableHeader
-                              label={col.label}
-                              field="name"
-                              type="text"
-                              sortKey={userSortKey ? String(userSortKey) : null}
-                              sortDir={userSortDir}
-                              onSort={handleUserSort}
-                            />
-                          )}
-                          {col.key === "contato" && (
-                            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">{col.label}</span>
-                          )}
-                          {col.key === "vinculo" && (
-                            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">{col.label}</span>
-                          )}
-                          {col.key === "tipo_funcao" && (
-                            <SortableHeader
-                              label={col.label}
-                              field="account_type"
-                              type="status"
-                              sortKey={userSortKey ? String(userSortKey) : null}
-                              sortDir={userSortDir}
-                              onSort={handleUserSort}
-                              columnFilters={columnFilters}
-                              onFilter={toggleColumnFilter}
-                              onClearFilter={clearColumnFilter}
-                              filterValues={["admin", "company", "agency", "parceiro", "lider", "nomad"]}
-                            />
-                          )}
-                          {col.key === "status" && (
-                            <SortableHeader
-                              label={col.label}
-                              field="is_active"
-                              type="status"
-                              sortKey={userSortKey ? String(userSortKey) : null}
-                              sortDir={userSortDir}
-                              onSort={handleUserSort}
-                              columnFilters={columnFilters}
-                              onFilter={toggleColumnFilter}
-                              onClearFilter={clearColumnFilter}
-                              filterValues={["true", "false"]}
-                            />
-                          )}
-                          {col.key === "ultimo_acesso" && (
-                            <SortableHeader
-                              label={col.label}
-                              field="inactivity_bucket"
-                              type="status"
-                              sortKey={userSortKey ? String(userSortKey) : null}
-                              sortDir={userSortDir}
-                              onSort={handleUserSort}
-                              columnFilters={columnFilters}
-                              onFilter={toggleColumnFilter}
-                              onClearFilter={clearColumnFilter}
-                              filterValues={[
-                                "never",
-                                "today",
-                                "7days",
-                                "30days",
-                                "inactive_30",
-                                "inactive_60",
-                                "inactive_90",
-                              ]}
-                            />
-                          )}
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs max-w-[200px]">{col.info}</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        </div>
-                        <div
-                          role="separator"
-                          aria-orientation="vertical"
-                          aria-label={`Redimensionar coluna ${col.label}`}
-                          onMouseDown={(event) => beginColumnResize(col.key, event)}
-                          className="absolute -right-0.5 top-1/2 z-20 h-7 w-1.5 -translate-y-1/2 cursor-col-resize rounded-full bg-slate-200/90 opacity-70 transition-all hover:w-2 hover:bg-fuchsia-400 hover:opacity-100"
-                        />
-                      </th>
-                    ))}
-                    <th className="w-12 py-2 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {paginatedUsers.map((user, i) => {
-                    const accountBadge = getAccountTypeBadge(
-                      user.account_type,
-                      user.role,
+                      </StandardModalDialog>
                     );
-                    const isSelf = currentUserId !== null && user.id === currentUserId;
-                    const canDelete =
-                      !isSelf && !(user.is_admin && user.role === "admin");
-                    const deleteBlockedReason = isSelf
-                      ? "Você não pode excluir sua própria conta"
-                      : !canDelete
-                        ? "Não pode deletar este usuário"
-                        : undefined;
+                  })()}
 
-                    return (
-                      <tr
-                        key={user.id}
-                        onClick={() => handleUserAction(user, "view")}
-                        className={`group cursor-pointer transition-colors ${
-                          i % 2 === 0
-                            ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#f3f7ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                            : "bg-[#f5f8fc] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#eaf2ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                        }`}
+                {/* Inactivity Alert Banner */}
+                {!dismissedInactivityAlert &&
+                  users.filter((u) => u.auto_paused).length > 0 && (
+                    <div className="mx-4 mt-3 mb-1 flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40">
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                          {users.filter((u) => u.auto_paused).length} usuário
+                          {users.filter((u) => u.auto_paused).length !== 1
+                            ? "s"
+                            : ""}{" "}
+                          sem acesso há mais de 90 dias
+                        </p>
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                          Esses usuários foram pausados automaticamente. Revise
+                          e decida: bloquear, reativar ou arquivar.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setDismissedInactivityAlert(true)}
+                        className="text-amber-400 hover:text-amber-600 transition-colors flex-shrink-0"
                       >
-                        {/* Actions — pinned left: +, ver, bloquear/desbloquear, excluir */}
-                        <td
-                          className={`hidden px-1 py-2 transition-colors ${
-                            i % 2 === 0
-                              ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                              : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                          }`}
-                          style={{ position: "sticky", left: 0, zIndex: 1, minWidth: 128, borderRight: "1px solid rgba(100,116,139,0.18)" }}
-                        >
-                          <div className="flex items-center justify-center gap-1">
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => handleUserAction(user, "view")}
-                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                  >
-                                    <Eye className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">
-                                  Ver Detalhes
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => handleUserAction(user, "edit")}
-                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">
-                                  Editar
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
 
-                            {/* Demais ações (info rápida, link de primeiro
+                <div className="relative min-h-[240px]">
+                  {/* Users Table */}
+                  {usersView === "cards" && (
+                    <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {paginatedUsers.map((user) => (
+                        <button
+                          key={user.id}
+                          onClick={() => handleUserAction(user, "view")}
+                          className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-indigo-200 hover:shadow-md dark:border-slate-700 dark:bg-slate-900"
+                        >
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-fuchsia-600 text-xs font-bold text-white">
+                              {user.name
+                                .split(" ")
+                                .map((part) => part[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-bold text-slate-800 dark:text-slate-100">
+                              {user.name}
+                            </span>
+                            <span className="block truncate text-xs text-slate-500">
+                              {user.email}
+                            </span>
+                            <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              {user.is_active ? "Ativo" : "Inativo"}
+                            </span>
+                          </span>
+                          <MoreHorizontal className="h-4 w-4 text-slate-400" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div
+                    ref={tableScrollRef}
+                    onScroll={handleTableScroll}
+                    className={`${usersView === "list" ? "overflow-x-auto" : "hidden"} allka-table-scroll-body`}
+                  >
+                    <table className="tabela-cartao w-full text-xs min-w-[960px]">
+                      <thead>
+                        <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                          <th
+                            className="hidden py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
+                            style={{
+                              position: "sticky",
+                              left: 0,
+                              top: 0,
+                              zIndex: 3,
+                              minWidth: 128,
+                              background: "var(--table-head)",
+                              boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
+                              borderRight: "1px solid rgba(100,116,139,0.18)",
+                            }}
+                          >
+                            Ações
+                          </th>
+                          {ALL_COLUMNS.filter((c) =>
+                            visibleCols.has(c.key),
+                          ).map((col) => (
+                            <th
+                              key={col.key}
+                              className="relative py-2.5 px-4 text-[11px] font-bold text-[#365a91] dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
+                              style={{
+                                position: "sticky",
+                                top: 0,
+                                zIndex: 2,
+                                width: columnWidths[col.key],
+                                minWidth: columnWidths[col.key],
+                                background: "var(--table-head)",
+                                boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
+                                borderRight: "1px solid rgba(148,163,184,0.16)",
+                              }}
+                            >
+                              <div className="inline-flex items-center gap-1">
+                                {col.key === "codigo" && (
+                                  <SortableHeader
+                                    label={col.label}
+                                    field="user_code"
+                                    type="text"
+                                    sortKey={
+                                      userSortKey ? String(userSortKey) : null
+                                    }
+                                    sortDir={userSortDir}
+                                    onSort={handleUserSort}
+                                  />
+                                )}
+                                {col.key === "usuario" && (
+                                  <SortableHeader
+                                    label={col.label}
+                                    field="name"
+                                    type="text"
+                                    sortKey={
+                                      userSortKey ? String(userSortKey) : null
+                                    }
+                                    sortDir={userSortDir}
+                                    onSort={handleUserSort}
+                                  />
+                                )}
+                                {col.key === "contato" && (
+                                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">
+                                    {col.label}
+                                  </span>
+                                )}
+                                {col.key === "vinculo" && (
+                                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">
+                                    {col.label}
+                                  </span>
+                                )}
+                                {col.key === "tipo_funcao" && (
+                                  <SortableHeader
+                                    label={col.label}
+                                    field="account_type"
+                                    type="status"
+                                    sortKey={
+                                      userSortKey ? String(userSortKey) : null
+                                    }
+                                    sortDir={userSortDir}
+                                    onSort={handleUserSort}
+                                    columnFilters={columnFilters}
+                                    onFilter={toggleColumnFilter}
+                                    onClearFilter={clearColumnFilter}
+                                    filterValues={[
+                                      "admin",
+                                      "company",
+                                      "agency",
+                                      "parceiro",
+                                      "lider",
+                                      "nomad",
+                                    ]}
+                                  />
+                                )}
+                                {col.key === "status" && (
+                                  <SortableHeader
+                                    label={col.label}
+                                    field="is_active"
+                                    type="status"
+                                    sortKey={
+                                      userSortKey ? String(userSortKey) : null
+                                    }
+                                    sortDir={userSortDir}
+                                    onSort={handleUserSort}
+                                    columnFilters={columnFilters}
+                                    onFilter={toggleColumnFilter}
+                                    onClearFilter={clearColumnFilter}
+                                    filterValues={["true", "false"]}
+                                  />
+                                )}
+                                {col.key === "ultimo_acesso" && (
+                                  <SortableHeader
+                                    label={col.label}
+                                    field="inactivity_bucket"
+                                    type="status"
+                                    sortKey={
+                                      userSortKey ? String(userSortKey) : null
+                                    }
+                                    sortDir={userSortDir}
+                                    onSort={handleUserSort}
+                                    columnFilters={columnFilters}
+                                    onFilter={toggleColumnFilter}
+                                    onClearFilter={clearColumnFilter}
+                                    filterValues={[
+                                      "never",
+                                      "today",
+                                      "7days",
+                                      "30days",
+                                      "inactive_30",
+                                      "inactive_60",
+                                      "inactive_90",
+                                    ]}
+                                  />
+                                )}
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">
+                                        ⓘ
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="text-xs max-w-[200px]">
+                                      {col.info}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                              <div
+                                role="separator"
+                                aria-orientation="vertical"
+                                aria-label={`Redimensionar coluna ${col.label}`}
+                                onMouseDown={(event) =>
+                                  beginColumnResize(col.key, event)
+                                }
+                                className="absolute -right-0.5 top-1/2 z-20 h-7 w-1.5 -translate-y-1/2 cursor-col-resize rounded-full bg-slate-200/90 opacity-70 transition-all hover:w-2 hover:bg-fuchsia-400 hover:opacity-100"
+                              />
+                            </th>
+                          ))}
+                          <th className="w-12 py-2 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+                            Ações
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {paginatedUsers.map((user, i) => {
+                          const accountBadge = getAccountTypeBadge(
+                            user.account_type,
+                            user.role,
+                          );
+                          const isSelf =
+                            currentUserId !== null && user.id === currentUserId;
+                          const canDelete =
+                            !isSelf &&
+                            !(user.is_admin && user.role === "admin");
+                          const deleteBlockedReason = isSelf
+                            ? "Você não pode excluir sua própria conta"
+                            : !canDelete
+                              ? "Não pode deletar este usuário"
+                              : undefined;
+
+                          return (
+                            <tr
+                              key={user.id}
+                              onClick={() => handleUserAction(user, "view")}
+                              className={`group cursor-pointer transition-colors ${
+                                i % 2 === 0
+                                  ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#f3f7ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                  : "bg-[#f5f8fc] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#eaf2ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                              }`}
+                            >
+                              {/* Actions — pinned left: +, ver, bloquear/desbloquear, excluir */}
+                              <td
+                                className={`hidden px-1 py-2 transition-colors ${
+                                  i % 2 === 0
+                                    ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                    : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                }`}
+                                style={{
+                                  position: "sticky",
+                                  left: 0,
+                                  zIndex: 1,
+                                  minWidth: 128,
+                                  borderRight:
+                                    "1px solid rgba(100,116,139,0.18)",
+                                }}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  <TooltipProvider delayDuration={400}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          onClick={() =>
+                                            handleUserAction(user, "view")
+                                          }
+                                          className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs font-medium">
+                                        Ver Detalhes
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider delayDuration={400}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          onClick={() =>
+                                            handleUserAction(user, "edit")
+                                          }
+                                          className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs font-medium">
+                                        Editar
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+
+                                  {/* Demais ações (info rápida, link de primeiro
                                 acesso, bloquear/desbloquear, deletar) vivem
                                 aqui dentro — eram 5-9 ícones soltos na frente
                                 do nome, confuso demais na tabela inteira.
                                 Mesmo padrão "2 botões + reticências" já usado
                                 em admin/tarefas. */}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button
-                                  onClick={(e) => e.stopPropagation()}
-                                  aria-label={`Mais ações — ${user.name}`}
-                                  title="Mais ações"
-                                  className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                >
-                                  <MoreHorizontal className="h-3.5 w-3.5" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="start"
-                                className="w-64 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60"
-                              >
-                                <DropdownMenuItem
-                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                  onClick={() => openInfoPanel(user)}
-                                >
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0">
-                                    <Plus className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-                                  </span>
-                                  Ver todas as informações
-                                </DropdownMenuItem>
-                                {/* Link de primeiro acesso — só faz sentido
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button
+                                        onClick={(e) => e.stopPropagation()}
+                                        aria-label={`Mais ações — ${user.name}`}
+                                        title="Mais ações"
+                                        className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                      >
+                                        <MoreHorizontal className="h-3.5 w-3.5" />
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                      align="start"
+                                      className="w-64 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60"
+                                    >
+                                      <DropdownMenuItem
+                                        className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                        onClick={() => openInfoPanel(user)}
+                                      >
+                                        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0">
+                                          <Plus className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                        </span>
+                                        Ver todas as informações
+                                      </DropdownMenuItem>
+                                      {/* Link de primeiro acesso — só faz sentido
                                     para quem ainda não definiu senha. */}
-                                {(user as any).must_set_password && (
-                                  <DropdownMenuItem
-                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                    disabled={emitindoAcesso === user.id}
-                                    onClick={() => emitirPrimeiroAcesso(user)}
-                                  >
-                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30 shrink-0">
-                                      <KeyRound className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                                    </span>
-                                    Copiar link de primeiro acesso
-                                  </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator className="my-1" />
-                                <DropdownMenuItem
-                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                  onClick={() => handleUserAction(user, "block")}
-                                >
-                                  <span
-                                    className={`flex h-6 w-6 items-center justify-center rounded-md shrink-0 ${
-                                      user.is_active ? "bg-amber-100 dark:bg-amber-900/30" : "bg-emerald-100 dark:bg-emerald-900/30"
-                                    }`}
-                                  >
-                                    {user.is_active ? (
-                                      <UserX className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                                    ) : (
-                                      <Shield className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                                    )}
-                                  </span>
-                                  {user.is_active ? "Bloquear usuário" : "Desbloquear usuário"}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator className="my-1" />
-                                <DropdownMenuItem
-                                  className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
-                                  disabled={!canDelete}
-                                  aria-label={canDelete ? undefined : deleteBlockedReason}
-                                  title={canDelete ? undefined : deleteBlockedReason}
-                                  onClick={() => handleUserAction(user, "delete")}
-                                >
-                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-red-100 dark:bg-red-900/30 shrink-0">
-                                    <Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
-                                  </span>
-                                  {canDelete ? "Deletar usuário" : deleteBlockedReason}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </td>
-
-                        {visibleCols.has("codigo") && (
-                          <td data-rotulo="ID" className="py-1.5 px-2 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            <span className="text-sm font-bold text-[#31578F] dark:text-slate-300">
-                              {(() => {
-                                const n = userCodeToNum(user.user_code);
-                                return n ? String(n).padStart(2, "0") : "—";
-                              })()}
-                            </span>
-                          </td>
-                        )}
-
-                        {visibleCols.has("usuario") && (
-                          <td data-rotulo="Usuário" className="py-1.5 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            <div className="flex items-center gap-2.5">
-                              <div className="relative">
-                                <Avatar className="h-9 w-9 shadow-sm">
-                                  <AvatarFallback
-                                    className={`text-xs font-bold text-white bg-gradient-to-br ${
-                                      user.account_type === "admin"
-                                        ? "from-indigo-500 to-indigo-800"
-                                        : user.account_type === "empresas"
-                                          ? "from-violet-500 to-purple-700"
-                                          : user.account_type === "agencias"
-                                            ? "from-orange-500 to-rose-600"
-                                            : user.account_type === "parceiro"
-                                              ? "from-pink-500 to-rose-700"
-                                              : user.account_type === "lider"
-                                                ? "from-amber-500 to-orange-700"
-                                                : "from-blue-500 to-blue-700"
-                                    }`}
-                                  >
-                                    {user.name
-                                      .split(" ")
-                                      .map((n) => n[0])
-                                      .join("")
-                                      .toUpperCase()
-                                      .slice(0, 2)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="absolute -bottom-0.5 -right-0.5 scale-75">
-                                        {getOnlineStatusIndicator(
-                                          user.online_status,
-                                        )}
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="text-xs">
-                                      {user.online_status === "online" &&
-                                        "Online agora"}
-                                      {user.online_status === "offline" &&
-                                        "Offline"}
-                                      {user.online_status === "busy" && "Ocupado"}
-                                      {user.online_status === "away" && "Ausente"}
-                                      {user.last_login && (
-                                        <div>
-                                          Última atividade:{" "}
-                                          {new Date(
-                                            user.last_login,
-                                          ).toLocaleDateString("pt-BR")}{" "}
-                                          às{" "}
-                                          {new Date(
-                                            user.last_login,
-                                          ).toLocaleTimeString("pt-BR", {
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          })}
-                                        </div>
+                                      {(user as any).must_set_password && (
+                                        <DropdownMenuItem
+                                          className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                          disabled={emitindoAcesso === user.id}
+                                          onClick={() =>
+                                            emitirPrimeiroAcesso(user)
+                                          }
+                                        >
+                                          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30 shrink-0">
+                                            <KeyRound className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                          </span>
+                                          Copiar link de primeiro acesso
+                                        </DropdownMenuItem>
                                       )}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
-                                  {user.name}
-                                </p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                  {user.email}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                        )}
+                                      <DropdownMenuSeparator className="my-1" />
+                                      <DropdownMenuItem
+                                        className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                        onClick={() =>
+                                          handleUserAction(user, "block")
+                                        }
+                                      >
+                                        <span
+                                          className={`flex h-6 w-6 items-center justify-center rounded-md shrink-0 ${
+                                            user.is_active
+                                              ? "bg-amber-100 dark:bg-amber-900/30"
+                                              : "bg-emerald-100 dark:bg-emerald-900/30"
+                                          }`}
+                                        >
+                                          {user.is_active ? (
+                                            <UserX className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                          ) : (
+                                            <Shield className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                                          )}
+                                        </span>
+                                        {user.is_active
+                                          ? "Bloquear usuário"
+                                          : "Desbloquear usuário"}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator className="my-1" />
+                                      <DropdownMenuItem
+                                        className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
+                                        disabled={!canDelete}
+                                        aria-label={
+                                          canDelete
+                                            ? undefined
+                                            : deleteBlockedReason
+                                        }
+                                        title={
+                                          canDelete
+                                            ? undefined
+                                            : deleteBlockedReason
+                                        }
+                                        onClick={() =>
+                                          handleUserAction(user, "delete")
+                                        }
+                                      >
+                                        <span className="flex h-6 w-6 items-center justify-center rounded-md bg-red-100 dark:bg-red-900/30 shrink-0">
+                                          <Trash2 className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                                        </span>
+                                        {canDelete
+                                          ? "Deletar usuário"
+                                          : deleteBlockedReason}
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </td>
 
-                        {visibleCols.has("contato") && (
-                          <td data-rotulo="Contato" className="py-1.5 px-2" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            <div className="flex items-center gap-1">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handlePhoneCall(user.phone)}
-                                      className="h-7 w-7 rounded-full p-0 text-[#0879f9] transition-all duration-200 hover:-translate-y-0.5 hover:scale-110 hover:bg-blue-50 hover:text-[#005fd4] dark:text-blue-400 dark:hover:bg-blue-900/30"
-                                    >
-                                      <Phone className="h-4 w-4 stroke-[2.3]" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs">
-                                    Ligar
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleWhatsApp(user.phone)}
-                                      className="h-7 w-7 rounded-full p-0 text-[#08bd73] transition-all duration-200 hover:-translate-y-0.5 hover:scale-110 hover:bg-emerald-50 hover:text-[#009d5b] dark:text-emerald-400 dark:hover:bg-emerald-900/30"
-                                    >
-                                      <svg viewBox="0 0 32 32" aria-hidden="true" className="h-4 w-4 fill-current"><path d="M16 3C8.84 3 3 8.77 3 15.85c0 2.27.6 4.48 1.75 6.43L3 29l6.92-1.8A13.04 13.04 0 0 0 16 28.7c7.16 0 13-5.77 13-12.85S23.16 3 16 3Zm0 23.44c-1.91 0-3.78-.51-5.42-1.47l-.39-.23-4.1 1.07 1.1-3.96-.25-.4a10.96 10.96 0 0 1-1.68-5.86C5.26 9.68 10.09 4.9 16 4.9s10.74 4.79 10.74 10.69S21.91 26.44 16 26.44Zm5.9-8.01c-.32-.16-1.9-.93-2.2-1.04-.3-.11-.51-.16-.73.16-.21.32-.83 1.04-1.02 1.25-.19.21-.38.24-.7.08-.32-.16-1.35-.49-2.57-1.55-.95-.83-1.59-1.85-1.77-2.17-.19-.32-.02-.49.14-.65.14-.14.32-.38.48-.57.16-.19.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.73-1.75-1-2.4-.26-.62-.53-.54-.73-.55h-.62c-.21 0-.56.08-.86.4-.3.32-1.13 1.09-1.13 2.65s1.16 3.07 1.33 3.28c.16.21 2.29 3.47 5.54 4.87.77.33 1.37.53 1.84.67.77.24 1.47.2 2.02.12.62-.09 1.9-.77 2.17-1.52.27-.75.27-1.39.19-1.52-.08-.13-.3-.21-.62-.37Z" /></svg>
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent className="text-xs">
-                                    WhatsApp
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                          </td>
-                        )}
-
-                        {visibleCols.has("tipo_funcao") && (
-                          <td data-rotulo="Tipo / Função" className="py-1.5 px-2" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className={`inline-flex cursor-default items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${accountBadge.label === "Admin" ? "bg-violet-100 text-violet-700" : accountBadge.label === "Agency" ? "bg-orange-100 text-orange-700" : accountBadge.label === "Nomad" ? "bg-blue-100 text-blue-700" : accountBadge.label === "Company" ? "bg-fuchsia-100 text-fuchsia-700" : "bg-slate-100 text-slate-700"}`}>
-                                    {accountBadge.label === "Agency" ? "Agência" : accountBadge.label === "Nomad" ? "Nômade" : accountBadge.label === "Company" ? "Empresa" : accountBadge.label === "User" ? "Usuário" : accountBadge.label}
+                              {visibleCols.has("codigo") && (
+                                <td
+                                  data-rotulo="ID"
+                                  className="py-1.5 px-2 text-center"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                  }}
+                                >
+                                  <span className="text-sm font-bold text-[#31578F] dark:text-slate-300">
+                                    {(() => {
+                                      const n = userCodeToNum(user.user_code);
+                                      return n
+                                        ? String(n).padStart(2, "0")
+                                        : "—";
+                                    })()}
                                   </span>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-xs text-xs">
-                                  <p className="font-semibold">{getRoleLabel(user.role)}</p>
-                                  <p className="mt-1 text-slate-400">LGPD: {user.has_lgpd_consent ? "consentimento registrado" : "consentimento pendente"}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </td>
-                        )}
+                                </td>
+                              )}
 
-                        {visibleCols.has("vinculo") && (
-                          <td data-rotulo="Conta vinculada" className="py-1.5 px-2" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            {(() => {
-                              const linked = getLinkedAccount(user);
-                              if (linked === "unknown")
-                                return (
-                                  <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">Vínculo pendente</span>
-                                );
-                              if (!linked)
-                                return (
-                                  <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">Sem vínculo</span>
-                                );
-                              const linkBadge = getAccountTypeBadge(user.profile_link_type, user.role);
-                              return (
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="inline-flex cursor-default rounded-full bg-[#EAF2FF] px-2.5 py-1 text-[11px] font-semibold text-[#1268E8]">Vinculado</span>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs text-xs">
-                                      <p className="font-semibold">{linked.name}</p>
-                                      <p className="mt-1 text-slate-400">Tipo: {linkBadge.label}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              );
-                            })()}
-                          </td>
-                        )}
-
-                        {visibleCols.has("status") && (
-                          <td data-rotulo="Status" className="py-1.5 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                            <div className="flex items-center gap-1.5 whitespace-nowrap">
-                              {user.auto_paused ? (
-                                <span className="allka-badge allka-badge-status-pausado">
-                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500" />
-                                  Pausado
-                                </span>
-                              ) : (
-                                <span
-                                  className={
-                                    user.is_active
-                                      ? "allka-badge allka-badge-status-ativo"
-                                      : "allka-badge allka-badge-status-bloqueado"
-                                  }
+                              {visibleCols.has("usuario") && (
+                                <td
+                                  data-rotulo="Usuário"
+                                  className="py-1.5 px-4"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                  }}
                                 >
-                                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${user.is_active ? "bg-emerald-500" : "bg-red-500"}`} />
-                                  {user.is_active ? "Ativo" : "Bloqueado"}
-                                </span>
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="relative">
+                                      <Avatar className="h-9 w-9 shadow-sm">
+                                        <AvatarFallback
+                                          className={`text-xs font-bold text-white bg-gradient-to-br ${
+                                            user.account_type === "admin"
+                                              ? "from-indigo-500 to-indigo-800"
+                                              : user.account_type === "empresas"
+                                                ? "from-violet-500 to-purple-700"
+                                                : user.account_type ===
+                                                    "agencias"
+                                                  ? "from-orange-500 to-rose-600"
+                                                  : user.account_type ===
+                                                      "parceiro"
+                                                    ? "from-pink-500 to-rose-700"
+                                                    : user.account_type ===
+                                                        "lider"
+                                                      ? "from-amber-500 to-orange-700"
+                                                      : "from-blue-500 to-blue-700"
+                                          }`}
+                                        >
+                                          {user.name
+                                            .split(" ")
+                                            .map((n) => n[0])
+                                            .join("")
+                                            .toUpperCase()
+                                            .slice(0, 2)}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <div className="absolute -bottom-0.5 -right-0.5 scale-75">
+                                              {getOnlineStatusIndicator(
+                                                user.online_status,
+                                              )}
+                                            </div>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="text-xs">
+                                            {user.online_status === "online" &&
+                                              "Online agora"}
+                                            {user.online_status === "offline" &&
+                                              "Offline"}
+                                            {user.online_status === "busy" &&
+                                              "Ocupado"}
+                                            {user.online_status === "away" &&
+                                              "Ausente"}
+                                            {user.last_login && (
+                                              <div>
+                                                Última atividade:{" "}
+                                                {new Date(
+                                                  user.last_login,
+                                                ).toLocaleDateString(
+                                                  "pt-BR",
+                                                )}{" "}
+                                                às{" "}
+                                                {new Date(
+                                                  user.last_login,
+                                                ).toLocaleTimeString("pt-BR", {
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                                })}
+                                              </div>
+                                            )}
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
+                                        {user.name}
+                                      </p>
+                                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                                        {user.email}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </td>
                               )}
-                              {user.accessed_after_inactivity_pause && (
-                                <NeonBadge
-                                  color="amber"
-                                  tooltip="Usuário pausado por inatividade acessou recentemente. A conta permanece pausada até revisão administrativa."
-                                >
-                                  Acesso após pausa
-                                </NeonBadge>
-                              )}
-                            </div>
-                          </td>
-                        )}
 
-                        {visibleCols.has("ultimo_acesso") && (
-                          <td data-rotulo="Último acesso" className="py-1.5 px-2">
-                            <div className="flex items-center gap-1 whitespace-nowrap text-sm font-medium text-slate-700 dark:text-slate-200">
-                              <span>
-                                {user.last_login
-                                  ? `${new Date(user.last_login).toLocaleDateString("pt-BR")} ${new Date(user.last_login).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
-                                  : "Nunca"}
-                              </span>
-                              {user.inactivity_bucket === "inactive_30" && (
-                                <NeonBadge color="amber" tooltip="Sem acesso há mais de 30 dias.">30d+</NeonBadge>
+                              {visibleCols.has("contato") && (
+                                <td
+                                  data-rotulo="Contato"
+                                  className="py-1.5 px-2"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                  }}
+                                >
+                                  <div className="flex items-center gap-1">
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                              handlePhoneCall(user.phone)
+                                            }
+                                            className="h-7 w-7 rounded-full p-0 text-[#0879f9] transition-all duration-200 hover:-translate-y-0.5 hover:scale-110 hover:bg-blue-50 hover:text-[#005fd4] dark:text-blue-400 dark:hover:bg-blue-900/30"
+                                          >
+                                            <Phone className="h-4 w-4 stroke-[2.3]" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs">
+                                          Ligar
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() =>
+                                              handleWhatsApp(user.phone)
+                                            }
+                                            className="h-7 w-7 rounded-full p-0 text-[#08bd73] transition-all duration-200 hover:-translate-y-0.5 hover:scale-110 hover:bg-emerald-50 hover:text-[#009d5b] dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                                          >
+                                            <svg
+                                              viewBox="0 0 32 32"
+                                              aria-hidden="true"
+                                              className="h-4 w-4 fill-current"
+                                            >
+                                              <path d="M16 3C8.84 3 3 8.77 3 15.85c0 2.27.6 4.48 1.75 6.43L3 29l6.92-1.8A13.04 13.04 0 0 0 16 28.7c7.16 0 13-5.77 13-12.85S23.16 3 16 3Zm0 23.44c-1.91 0-3.78-.51-5.42-1.47l-.39-.23-4.1 1.07 1.1-3.96-.25-.4a10.96 10.96 0 0 1-1.68-5.86C5.26 9.68 10.09 4.9 16 4.9s10.74 4.79 10.74 10.69S21.91 26.44 16 26.44Zm5.9-8.01c-.32-.16-1.9-.93-2.2-1.04-.3-.11-.51-.16-.73.16-.21.32-.83 1.04-1.02 1.25-.19.21-.38.24-.7.08-.32-.16-1.35-.49-2.57-1.55-.95-.83-1.59-1.85-1.77-2.17-.19-.32-.02-.49.14-.65.14-.14.32-.38.48-.57.16-.19.21-.32.32-.53.11-.21.05-.4-.03-.56-.08-.16-.73-1.75-1-2.4-.26-.62-.53-.54-.73-.55h-.62c-.21 0-.56.08-.86.4-.3.32-1.13 1.09-1.13 2.65s1.16 3.07 1.33 3.28c.16.21 2.29 3.47 5.54 4.87.77.33 1.37.53 1.84.67.77.24 1.47.2 2.02.12.62-.09 1.9-.77 2.17-1.52.27-.75.27-1.39.19-1.52-.08-.13-.3-.21-.62-.37Z" />
+                                            </svg>
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs">
+                                          WhatsApp
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </div>
+                                </td>
                               )}
-                              {user.inactivity_bucket === "inactive_60" && (
-                                <NeonBadge color="orange" tooltip="Sem acesso há mais de 60 dias.">60d+</NeonBadge>
+
+                              {visibleCols.has("tipo_funcao") && (
+                                <td
+                                  data-rotulo="Tipo / Função"
+                                  className="py-1.5 px-2"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                  }}
+                                >
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span
+                                          className={`inline-flex cursor-default items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${accountBadge.label === "Admin" ? "bg-violet-100 text-violet-700" : accountBadge.label === "Agency" ? "bg-orange-100 text-orange-700" : accountBadge.label === "Nomad" ? "bg-blue-100 text-blue-700" : accountBadge.label === "Company" ? "bg-fuchsia-100 text-fuchsia-700" : "bg-slate-100 text-slate-700"}`}
+                                        >
+                                          {accountBadge.label === "Agency"
+                                            ? "Agência"
+                                            : accountBadge.label === "Nomad"
+                                              ? "Nômade"
+                                              : accountBadge.label === "Company"
+                                                ? "Empresa"
+                                                : accountBadge.label === "User"
+                                                  ? "Usuário"
+                                                  : accountBadge.label}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="max-w-xs text-xs">
+                                        <p className="font-semibold">
+                                          {getRoleLabel(user.role)}
+                                        </p>
+                                        <p className="mt-1 text-slate-400">
+                                          LGPD:{" "}
+                                          {user.has_lgpd_consent
+                                            ? "consentimento registrado"
+                                            : "consentimento pendente"}
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </td>
                               )}
-                              {user.inactivity_bucket === "inactive_90" && (
-                                <NeonBadge color="red" tooltip="Sem acesso há mais de 90 dias — usuário pausado automaticamente.">⚠ 90d+</NeonBadge>
+
+                              {visibleCols.has("vinculo") && (
+                                <td
+                                  data-rotulo="Conta vinculada"
+                                  className="py-1.5 px-2"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                  }}
+                                >
+                                  {(() => {
+                                    const linked = getLinkedAccount(user);
+                                    if (linked === "unknown")
+                                      return (
+                                        <span className="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                                          Vínculo pendente
+                                        </span>
+                                      );
+                                    if (!linked)
+                                      return (
+                                        <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                                          Sem vínculo
+                                        </span>
+                                      );
+                                    const linkBadge = getAccountTypeBadge(
+                                      user.profile_link_type,
+                                      user.role,
+                                    );
+                                    return (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <span className="inline-flex cursor-default rounded-full bg-[#EAF2FF] px-2.5 py-1 text-[11px] font-semibold text-[#1268E8]">
+                                              Vinculado
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent className="max-w-xs text-xs">
+                                            <p className="font-semibold">
+                                              {linked.name}
+                                            </p>
+                                            <p className="mt-1 text-slate-400">
+                                              Tipo: {linkBadge.label}
+                                            </p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    );
+                                  })()}
+                                </td>
                               )}
-                            </div>
-                          </td>
-                        )}
-                        <td className="w-12 px-2 py-1 text-center" onClick={(e) => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
+
+                              {visibleCols.has("status") && (
+                                <td
+                                  data-rotulo="Status"
+                                  className="py-1.5 px-4"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                  }}
+                                >
+                                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                    {user.auto_paused ? (
+                                      <span className="allka-badge allka-badge-status-pausado">
+                                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500" />
+                                        Pausado
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className={
+                                          user.is_active
+                                            ? "allka-badge allka-badge-status-ativo"
+                                            : "allka-badge allka-badge-status-bloqueado"
+                                        }
+                                      >
+                                        <span
+                                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${user.is_active ? "bg-emerald-500" : "bg-red-500"}`}
+                                        />
+                                        {user.is_active ? "Ativo" : "Bloqueado"}
+                                      </span>
+                                    )}
+                                    {user.accessed_after_inactivity_pause && (
+                                      <NeonBadge
+                                        color="amber"
+                                        tooltip="Usuário pausado por inatividade acessou recentemente. A conta permanece pausada até revisão administrativa."
+                                      >
+                                        Acesso após pausa
+                                      </NeonBadge>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+
+                              {visibleCols.has("ultimo_acesso") && (
+                                <td
+                                  data-rotulo="Último acesso"
+                                  className="py-1.5 px-2"
+                                >
+                                  <div className="flex items-center gap-1 whitespace-nowrap text-sm font-medium text-slate-700 dark:text-slate-200">
+                                    <span>
+                                      {user.last_login
+                                        ? `${new Date(user.last_login).toLocaleDateString("pt-BR")} ${new Date(user.last_login).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                                        : "Nunca"}
+                                    </span>
+                                    {user.inactivity_bucket ===
+                                      "inactive_30" && (
+                                      <NeonBadge
+                                        color="amber"
+                                        tooltip="Sem acesso há mais de 30 dias."
+                                      >
+                                        30d+
+                                      </NeonBadge>
+                                    )}
+                                    {user.inactivity_bucket ===
+                                      "inactive_60" && (
+                                      <NeonBadge
+                                        color="orange"
+                                        tooltip="Sem acesso há mais de 60 dias."
+                                      >
+                                        60d+
+                                      </NeonBadge>
+                                    )}
+                                    {user.inactivity_bucket ===
+                                      "inactive_90" && (
+                                      <NeonBadge
+                                        color="red"
+                                        tooltip="Sem acesso há mais de 90 dias — usuário pausado automaticamente."
+                                      >
+                                        ⚠ 90d+
+                                      </NeonBadge>
+                                    )}
+                                  </div>
+                                </td>
+                              )}
+                              <td
+                                className="w-12 px-2 py-1 text-center"
                                 onClick={(e) => e.stopPropagation()}
-                                aria-label={`Mais ações — ${user.name}`}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#12376D] transition-all hover:bg-white hover:text-[#6419D2] hover:shadow-sm dark:hover:bg-slate-800"
-                              ><MoreHorizontal className="h-4 w-4" /></button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56 rounded-2xl border-slate-100 bg-white p-2 text-[#092B61] shadow-xl">
-                              <DropdownMenuItem className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]" onClick={() => handleUserAction(user, "view")}><Eye className="h-4 w-4 text-[#0F55B8]" />Ver perfil</DropdownMenuItem>
-                              <DropdownMenuItem className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]" onClick={() => handleUserAction(user, "edit")}><Pencil className="h-4 w-4 text-[#0F55B8]" />Editar usuário</DropdownMenuItem>
-                              <DropdownMenuItem className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]" onClick={() => openInfoPanel(user)}><Key className="h-4 w-4 text-[#0F55B8]" />Gerenciar permissões</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="gap-3 rounded-xl py-2.5 text-red-600 focus:bg-red-50 focus:text-red-600" onClick={() => handleUserAction(user, "block")}><UserX className="h-4 w-4" />{user.is_active ? "Desativar usuário" : "Ativar usuário"}</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                              >
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <button
+                                      onClick={(e) => e.stopPropagation()}
+                                      aria-label={`Mais ações — ${user.name}`}
+                                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#12376D] transition-all hover:bg-white hover:text-[#6419D2] hover:shadow-sm dark:hover:bg-slate-800"
+                                    >
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent
+                                    align="end"
+                                    className="w-56 rounded-2xl border-slate-100 bg-white p-2 text-[#092B61] shadow-xl"
+                                  >
+                                    <DropdownMenuItem
+                                      className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]"
+                                      onClick={() =>
+                                        handleUserAction(user, "view")
+                                      }
+                                    >
+                                      <Eye className="h-4 w-4 text-[#0F55B8]" />
+                                      Ver perfil
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]"
+                                      onClick={() =>
+                                        handleUserAction(user, "edit")
+                                      }
+                                    >
+                                      <Pencil className="h-4 w-4 text-[#0F55B8]" />
+                                      Editar usuário
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]"
+                                      onClick={() => openInfoPanel(user)}
+                                    >
+                                      <Key className="h-4 w-4 text-[#0F55B8]" />
+                                      Gerenciar permissões
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      className="gap-3 rounded-xl py-2.5 text-red-600 focus:bg-red-50 focus:text-red-600"
+                                      onClick={() =>
+                                        handleUserAction(user, "block")
+                                      }
+                                    >
+                                      <UserX className="h-4 w-4" />
+                                      {user.is_active
+                                        ? "Desativar usuário"
+                                        : "Ativar usuário"}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-            {/* Empty State */}
-            {paginatedUsers.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
-                  <Users className="h-7 w-7 opacity-40" />
+                  {/* Empty State */}
+                  {paginatedUsers.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                      <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3">
+                        <Users className="h-7 w-7 opacity-40" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                        Nenhum usuário encontrado
+                      </p>
+                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                        Tente ajustar os filtros ou busca
+                      </p>
+                    </div>
+                  )}
+
+                  {usersLoading && hasLoadedUsersOnceRef.current && (
+                    <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/72 backdrop-blur-[1px] dark:bg-slate-950/65">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white px-4 py-2 text-xs font-semibold text-[#4A1AA0] shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:text-violet-300">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Atualizando lista…
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                  Nenhum usuário encontrado
-                </p>
-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                  Tente ajustar os filtros ou busca
-                </p>
-              </div>
-            )}
-
-            {usersLoading && hasLoadedUsersOnceRef.current && (
-              <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/72 backdrop-blur-[1px] dark:bg-slate-950/65">
-                <div className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white px-4 py-2 text-xs font-semibold text-[#4A1AA0] shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:text-violet-300">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Atualizando lista…
-                </div>
-              </div>
-            )}
-            </div>
-
-          </div>
-
-          {/* A paginação fica na barra de ferramentas, mantendo a lista compacta. */}
-          {filteredUsers.length > 0 && (
-            <div className="hidden flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
-              <div className="flex items-center gap-3">
-                <ItemsPerPageSelect
-                  value={pageSize.toString()}
-                  onValueChange={(value) => {
-                    setPageSize(Number(value));
-                    setCurrentPage(1);
-                  }}
-                  variant="bottom"
-                />
-                <CountText side="top" />
               </div>
 
-              {hasHorizontalOverflow && (
-                <div
-                  ref={bottomScrollRef}
-                  onScroll={handleBottomBarScroll}
-                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                  className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
-                  style={{ height: 12 }}
-                >
-                  <div style={{ minWidth: 960, height: 1 }} />
+              {/* A paginação fica na barra de ferramentas, mantendo a lista compacta. */}
+              {filteredUsers.length > 0 && (
+                <div className="hidden flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+                  <div className="flex items-center gap-3">
+                    <ItemsPerPageSelect
+                      value={pageSize.toString()}
+                      onValueChange={(value) => {
+                        setPageSize(Number(value));
+                        setCurrentPage(1);
+                      }}
+                      variant="bottom"
+                    />
+                    <CountText side="top" />
+                  </div>
+
+                  {hasHorizontalOverflow && (
+                    <div
+                      ref={bottomScrollRef}
+                      onScroll={handleBottomBarScroll}
+                      title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                      className="hidden md:block flex-1 min-w-[80px] overflow-x-scroll allka-table-scroll self-center"
+                      style={{ height: 12 }}
+                    >
+                      <div style={{ minWidth: 960, height: 1 }} />
+                    </div>
+                  )}
+
+                  {totalPages > 1 && <PaginationControls />}
                 </div>
               )}
-
-              {totalPages > 1 && <PaginationControls />}
             </div>
-          )}
-      </div>
-      </div>
-      </div>
-
-      {/* Column config panel */}
-      <StandardModalDialog
-        open={colConfigOpen}
-        onClose={() => setColConfigOpen(false)}
-        title="Configurar colunas"
-        subtitle="Escolha quais colunas aparecem na tabela"
-      >
-        <div className="p-5 flex-1 overflow-y-auto space-y-2">
-          {ALL_COLUMNS.map((col) => (
-            <label key={col.key} className={`flex items-center gap-2 text-sm py-1 ${col.key === "usuario" ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}>
-              <input
-                type="checkbox"
-                checked={visibleCols.has(col.key)}
-                disabled={col.key === "usuario"}
-                onChange={() => toggleCol(col.key)}
-              />
-              {col.label}
-            </label>
-          ))}
+          </div>
         </div>
-      </StandardModalDialog>
 
-      {/* "+" info panel — real user data already loaded in the table, no extra fetch needed */}
-      {/* Detalhes do usuário — modal centralizado (Dialog nativo cobre backdrop,
+        {/* Column config panel */}
+        <StandardModalDialog
+          open={colConfigOpen}
+          onClose={() => setColConfigOpen(false)}
+          title="Configurar colunas"
+          subtitle="Escolha quais colunas aparecem na tabela"
+        >
+          <div className="p-5 flex-1 overflow-y-auto space-y-2">
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/60">
+              <span className="inline-flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+                <EyeOff className="h-4 w-4 text-[#7d1b6a]" />
+                {hiddenColumnCount > 0
+                  ? `${hiddenColumnCount} coluna${hiddenColumnCount > 1 ? "s" : ""} oculta${hiddenColumnCount > 1 ? "s" : ""}`
+                  : "Todas as colunas visíveis"}
+              </span>
+              <button
+                type="button"
+                onClick={restoreDefaultColumns}
+                className="text-xs font-semibold text-[#31578f] transition-colors hover:text-[#7d1b6a]"
+              >
+                Restaurar padrão
+              </button>
+            </div>
+            {ALL_COLUMNS.map((col) => (
+              <label
+                key={col.key}
+                className="flex cursor-pointer items-center gap-2 py-1 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={visibleCols.has(col.key)}
+                  onChange={() => toggleCol(col.key)}
+                />
+                {col.label}
+              </label>
+            ))}
+          </div>
+        </StandardModalDialog>
+
+        {/* "+" info panel — real user data already loaded in the table, no extra fetch needed */}
+        {/* Detalhes do usuário — modal centralizado (Dialog nativo cobre backdrop,
           fechar por X/clique-fora/Esc). safe() nunca deixa undefined/null/NaN
           vazar pra tela — sempre "—" como fallback. */}
-      {infoPanelUser && (() => {
-        const safe = (v: unknown) => {
-          if (v === null || v === undefined) return "—";
-          if (typeof v === "number" && Number.isNaN(v)) return "—";
-          if (typeof v === "string" && v.trim() === "") return "—";
-          return v as React.ReactNode;
-        };
-        const safeBool = (v: unknown) => (v === true ? "Sim" : v === false ? "Não" : "—");
-        const safeDate = (v: unknown, withTime = false) => {
-          if (!v) return "—";
-          const d = new Date(v as string);
-          if (Number.isNaN(d.getTime())) return "—";
-          return withTime ? d.toLocaleString("pt-BR") : d.toLocaleDateString("pt-BR");
-        };
-        return (
-          <StandardModalDialog
-            open={infoPanelOpen}
-            onClose={() => setInfoPanelOpen(false)}
-            headerClassName="rounded-xl px-5 py-3.5 shadow-sm"
-            title={
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setAvatarLightboxOpen(true)}
-                  className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-white/50"
-                  title="Ver foto ampliada"
-                >
-                  <Avatar className="h-9 w-9 shadow-md ring-2 ring-white/30 hover:ring-white/60 cursor-pointer transition-all">
-                    <AvatarFallback className="text-xs font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
-                      {infoPanelUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-                <div className="min-w-0">
-                  <span className="block truncate">{safe(infoPanelUser.name)}</span>
-                  <span className="block mt-0.5 text-[11px] font-medium text-white/70">Perfil do usuário</span>
-                </div>
-              </div>
-            }
-            subtitle={`${safe(infoPanelUser.email)} · ID ${String(userCodeToNum(infoPanelUser.user_code) || safe(infoPanelUser.user_code)).padStart(2, "0")}`}
-          >
+        {infoPanelUser &&
+          (() => {
+            const safe = (v: unknown) => {
+              if (v === null || v === undefined) return "—";
+              if (typeof v === "number" && Number.isNaN(v)) return "—";
+              if (typeof v === "string" && v.trim() === "") return "—";
+              return v as React.ReactNode;
+            };
+            const safeBool = (v: unknown) =>
+              v === true ? "Sim" : v === false ? "Não" : "—";
+            const safeDate = (v: unknown, withTime = false) => {
+              if (!v) return "—";
+              const d = new Date(v as string);
+              if (Number.isNaN(d.getTime())) return "—";
+              return withTime
+                ? d.toLocaleString("pt-BR")
+                : d.toLocaleDateString("pt-BR");
+            };
+            return (
+              <StandardModalDialog
+                open={infoPanelOpen}
+                onClose={() => setInfoPanelOpen(false)}
+                headerClassName="rounded-xl px-5 py-3.5 shadow-sm"
+                title={
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAvatarLightboxOpen(true)}
+                      className="shrink-0 rounded-full focus:outline-none focus:ring-2 focus:ring-white/50"
+                      title="Ver foto ampliada"
+                    >
+                      <Avatar className="h-9 w-9 shadow-md ring-2 ring-white/30 hover:ring-white/60 cursor-pointer transition-all">
+                        <AvatarFallback className="text-xs font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
+                          {infoPanelUser.name
+                            .split(" ")
+                            .map((n: string) => n[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                    </button>
+                    <div className="min-w-0">
+                      <span className="block truncate">
+                        {safe(infoPanelUser.name)}
+                      </span>
+                      <span className="block mt-0.5 text-[11px] font-medium text-white/70">
+                        Perfil do usuário
+                      </span>
+                    </div>
+                  </div>
+                }
+                subtitle={`${safe(infoPanelUser.email)} · ID ${String(userCodeToNum(infoPanelUser.user_code) || safe(infoPanelUser.user_code)).padStart(2, "0")}`}
+              >
                 <div className="flex-1 overflow-y-auto p-4">
                   <div className="space-y-4">
                     <div>
@@ -3639,7 +4228,9 @@ type UsuarioDaLista = User & {
                       </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Contato</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                            Contato
+                          </p>
                           <p className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300">
                             <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
                             {safe(infoPanelUser.email)}
@@ -3653,13 +4244,23 @@ type UsuarioDaLista = User & {
                           </p>
                         </div>
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Tipo · Função</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                            Tipo · Função
+                          </p>
                           <p className="text-xs text-slate-700 dark:text-slate-300">
-                            {getAccountTypeBadge(infoPanelUser.account_type, infoPanelUser.role).label} · {getRoleLabel(infoPanelUser.role)}
+                            {
+                              getAccountTypeBadge(
+                                infoPanelUser.account_type,
+                                infoPanelUser.role,
+                              ).label
+                            }{" "}
+                            · {getRoleLabel(infoPanelUser.role)}
                           </p>
                         </div>
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Status</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                            Status
+                          </p>
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span
                               className={
@@ -3670,7 +4271,11 @@ type UsuarioDaLista = User & {
                                     : "allka-badge allka-badge-status-bloqueado"
                               }
                             >
-                              {infoPanelUser.auto_paused ? "Pausado" : infoPanelUser.is_active ? "Ativo" : "Bloqueado"}
+                              {infoPanelUser.auto_paused
+                                ? "Pausado"
+                                : infoPanelUser.is_active
+                                  ? "Ativo"
+                                  : "Bloqueado"}
                             </span>
                             {infoPanelUser.accessed_after_inactivity_pause && (
                               <NeonBadge
@@ -3683,32 +4288,56 @@ type UsuarioDaLista = User & {
                           </div>
                           {infoPanelUser.accessed_after_inactivity_pause && (
                             <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                              Conta pausada por inatividade. Houve acesso recente, mas ela permanece pausada até revisão.
+                              Conta pausada por inatividade. Houve acesso
+                              recente, mas ela permanece pausada até revisão.
                               {infoPanelUser.inactivity_paused_accessed_at && (
-                                <> Último acesso pós-pausa: {safeDate(infoPanelUser.inactivity_paused_accessed_at, true)}.</>
+                                <>
+                                  {" "}
+                                  Último acesso pós-pausa:{" "}
+                                  {safeDate(
+                                    infoPanelUser.inactivity_paused_accessed_at,
+                                    true,
+                                  )}
+                                  .
+                                </>
                               )}
                             </p>
                           )}
                           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                            Revisão de reativação pendente: {safeBool(infoPanelUser.reactivation_review_required)}
+                            Revisão de reativação pendente:{" "}
+                            {safeBool(
+                              infoPanelUser.reactivation_review_required,
+                            )}
                           </p>
                         </div>
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Último acesso</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                            Último acesso
+                          </p>
                           <p className="text-xs text-slate-700 dark:text-slate-300">
-                            {infoPanelUser.last_login ? safeDate(infoPanelUser.last_login, true) : "Nunca acessou"}
+                            {infoPanelUser.last_login
+                              ? safeDate(infoPanelUser.last_login, true)
+                              : "Nunca acessou"}
                           </p>
                         </div>
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
                           <div className="flex items-center justify-between gap-2 mb-1">
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Conta vinculada</p>
+                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                              Conta vinculada
+                            </p>
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <button
                                     type="button"
-                                    onClick={() => infoPanelUser.account_type === "empresas" && openLinkPanel(infoPanelUser)}
-                                    disabled={infoPanelUser.account_type !== "empresas"}
+                                    onClick={() =>
+                                      infoPanelUser.account_type ===
+                                        "empresas" &&
+                                      openLinkPanel(infoPanelUser)
+                                    }
+                                    disabled={
+                                      infoPanelUser.account_type !== "empresas"
+                                    }
                                     className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline disabled:text-slate-300 disabled:no-underline dark:disabled:text-slate-600 disabled:cursor-not-allowed"
                                   >
                                     Alterar vínculo
@@ -3716,7 +4345,8 @@ type UsuarioDaLista = User & {
                                 </TooltipTrigger>
                                 {infoPanelUser.account_type !== "empresas" && (
                                   <TooltipContent className="text-xs max-w-[220px]">
-                                    Vínculo de empresa só é suportado para usuários do tipo Empresa.
+                                    Vínculo de empresa só é suportado para
+                                    usuários do tipo Empresa.
                                   </TooltipContent>
                                 )}
                               </Tooltip>
@@ -3727,63 +4357,98 @@ type UsuarioDaLista = User & {
                             if (linked === "unknown")
                               return (
                                 <div className="flex items-center gap-2">
-                                  <p className="text-xs text-slate-700 dark:text-slate-300">Tipo desconhecido</p>
-                                  <NeonBadge color="amber">TIPO DESCONHECIDO</NeonBadge>
+                                  <p className="text-xs text-slate-700 dark:text-slate-300">
+                                    Tipo desconhecido
+                                  </p>
+                                  <NeonBadge color="amber">
+                                    TIPO DESCONHECIDO
+                                  </NeonBadge>
                                 </div>
                               );
                             if (!linked)
                               return (
                                 <div className="flex items-center gap-2">
-                                  <p className="text-xs text-slate-700 dark:text-slate-300">Sem vínculo</p>
-                                  <NeonBadge color="gray">NÃO VINCULADO</NeonBadge>
+                                  <p className="text-xs text-slate-700 dark:text-slate-300">
+                                    Sem vínculo
+                                  </p>
+                                  <NeonBadge color="gray">
+                                    NÃO VINCULADO
+                                  </NeonBadge>
                                 </div>
                               );
-                            const linkBadge = getAccountTypeBadge(infoPanelUser.profile_link_type, infoPanelUser.role);
+                            const linkBadge = getAccountTypeBadge(
+                              infoPanelUser.profile_link_type,
+                              infoPanelUser.role,
+                            );
                             return (
                               <div className="flex items-center gap-2">
-                                <p className="text-xs text-slate-700 dark:text-slate-300">{linked.name}</p>
-                                <NeonBadge color={linkBadge.badgeColor}>{linkBadge.label.toUpperCase()}</NeonBadge>
+                                <p className="text-xs text-slate-700 dark:text-slate-300">
+                                  {linked.name}
+                                </p>
+                                <NeonBadge color={linkBadge.badgeColor}>
+                                  {linkBadge.label.toUpperCase()}
+                                </NeonBadge>
                               </div>
                             );
                           })()}
                           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                            Status do vínculo: {safe(infoPanelUser.profile_link_status)}
+                            Status do vínculo:{" "}
+                            {safe(infoPanelUser.profile_link_status)}
                           </p>
                         </div>
-                        {infoPanelUser.leader_areas && infoPanelUser.leader_areas.length > 0 && (
-                          <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Áreas de liderança</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {infoPanelUser.leader_areas.map((area: string) => (
-                                <NeonBadge key={area} color="amber">{area}</NeonBadge>
-                              ))}
+                        {infoPanelUser.leader_areas &&
+                          infoPanelUser.leader_areas.length > 0 && (
+                            <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                                Áreas de liderança
+                              </p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {infoPanelUser.leader_areas.map(
+                                  (area: string) => (
+                                    <NeonBadge key={area} color="amber">
+                                      {area}
+                                    </NeonBadge>
+                                  ),
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Membro desde</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                            Membro desde
+                          </p>
                           <p className="text-xs text-slate-700 dark:text-slate-300">
                             {safeDate(infoPanelUser.created_at)}
                           </p>
                         </div>
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Atualizado em</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                            Atualizado em
+                          </p>
                           <p className="text-xs text-slate-700 dark:text-slate-300">
                             {safeDate(infoPanelUser.updated_at)}
                           </p>
                         </div>
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">ID público</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                            ID público
+                          </p>
                           <p className="text-sm font-mono text-slate-700 dark:text-slate-300">
                             {(() => {
                               const n = userCodeToNum(infoPanelUser.user_code);
-                              return n ? `User_${n}` : safe(infoPanelUser.user_code);
+                              return n
+                                ? `User_${n}`
+                                : safe(infoPanelUser.user_code);
                             })()}
                           </p>
                         </div>
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">ID técnico</p>
-                          <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate">{safe(infoPanelUser.id)}</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                            ID técnico
+                          </p>
+                          <p className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate">
+                            {safe(infoPanelUser.id)}
+                          </p>
                         </div>
                         {/* Só existe em usuário importado da plataforma antiga. */}
                         {(infoPanelUser as any).legacy_id != null && (
@@ -3797,19 +4462,31 @@ type UsuarioDaLista = User & {
                           </div>
                         )}
                         <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 sm:col-span-2">
-                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">IDs técnicos de vínculo</p>
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">
+                            IDs técnicos de vínculo
+                          </p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono text-slate-500 dark:text-slate-400">
-                            <p className="truncate">Agency: {safe(infoPanelUser.agency_id)}</p>
-                            <p className="truncate">Company: {safe(infoPanelUser.company_id)}</p>
-                            <p className="truncate">Partner: {safe(infoPanelUser.partner_profile_id)}</p>
-                            <p className="truncate">Nômade: {safe(infoPanelUser.nomad_id)}</p>
+                            <p className="truncate">
+                              Agency: {safe(infoPanelUser.agency_id)}
+                            </p>
+                            <p className="truncate">
+                              Company: {safe(infoPanelUser.company_id)}
+                            </p>
+                            <p className="truncate">
+                              Partner: {safe(infoPanelUser.partner_profile_id)}
+                            </p>
+                            <p className="truncate">
+                              Nômade: {safe(infoPanelUser.nomad_id)}
+                            </p>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     <div>
-                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">LGPD</h3>
+                      <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">
+                        LGPD
+                      </h3>
                       <div className="flex items-center gap-2">
                         {infoPanelUser.has_lgpd_consent ? (
                           <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -3817,303 +4494,366 @@ type UsuarioDaLista = User & {
                           <XCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
                         )}
                         <div>
-                          <p className={infoPanelUser.has_lgpd_consent ? "text-sm text-emerald-700 dark:text-emerald-300" : "text-sm text-rose-700 dark:text-rose-300"}>
-                            {infoPanelUser.has_lgpd_consent ? "Consentimento LGPD registrado" : "Consentimento LGPD pendente"}
+                          <p
+                            className={
+                              infoPanelUser.has_lgpd_consent
+                                ? "text-sm text-emerald-700 dark:text-emerald-300"
+                                : "text-sm text-rose-700 dark:text-rose-300"
+                            }
+                          >
+                            {infoPanelUser.has_lgpd_consent
+                              ? "Consentimento LGPD registrado"
+                              : "Consentimento LGPD pendente"}
                           </p>
-                          {infoPanelUser.has_lgpd_consent && infoPanelUser.lgpd_consent_at && (
-                            <p className="text-xs text-slate-400 dark:text-slate-500">
-                              Aceito em: {safeDate(infoPanelUser.lgpd_consent_at, true)}
-                            </p>
-                          )}
+                          {infoPanelUser.has_lgpd_consent &&
+                            infoPanelUser.lgpd_consent_at && (
+                              <p className="text-xs text-slate-400 dark:text-slate-500">
+                                Aceito em:{" "}
+                                {safeDate(infoPanelUser.lgpd_consent_at, true)}
+                              </p>
+                            )}
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-          </StandardModalDialog>
-        );
-      })()}
+              </StandardModalDialog>
+            );
+          })()}
 
-      {/* Foto ampliada do usuário — lightbox simples sobre o modal de detalhes */}
-      {avatarLightboxOpen &&
-        infoPanelUser &&
-        createPortal(
-          <div
-            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70"
-            onClick={() => setAvatarLightboxOpen(false)}
-          >
-            <button
-              type="button"
+        {/* Foto ampliada do usuário — lightbox simples sobre o modal de detalhes */}
+        {avatarLightboxOpen &&
+          infoPanelUser &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70"
               onClick={() => setAvatarLightboxOpen(false)}
-              className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 p-1.5"
-              title="Fechar"
-              aria-label="Fechar"
             >
-              <X className="size-7 text-white drop-shadow-md" />
-            </button>
-            <Avatar className="h-56 w-56 shadow-2xl ring-4 ring-white/30" onClick={(e) => e.stopPropagation()}>
-              <AvatarFallback className="text-6xl font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
-                {infoPanelUser.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
-              </AvatarFallback>
-            </Avatar>
-          </div>,
-          document.body,
-        )}
+              <button
+                type="button"
+                onClick={() => setAvatarLightboxOpen(false)}
+                className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 p-1.5"
+                title="Fechar"
+                aria-label="Fechar"
+              >
+                <X className="size-7 text-white drop-shadow-md" />
+              </button>
+              <Avatar
+                className="h-56 w-56 shadow-2xl ring-4 ring-white/30"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <AvatarFallback className="text-6xl font-bold text-white bg-gradient-to-br from-blue-500 to-blue-700">
+                  {infoPanelUser.name
+                    .split(" ")
+                    .map((n: string) => n[0])
+                    .join("")
+                    .toUpperCase()
+                    .slice(0, 2)}
+                </AvatarFallback>
+              </Avatar>
+            </div>,
+            document.body,
+          )}
 
-      {/* Alterar vínculo — vincular/desvincular/trocar a empresa do usuário */}
-      <SlidePanel
-        open={linkPanelOpen}
-        onClose={closeLinkPanel}
-        title="Alterar vínculo"
-        subtitle={linkTargetUser?.name}
-        widthMode="compact"
-        compactWidth={420}
-        footer={
-          <div className="flex items-center justify-end gap-2 p-4">
-            <Button variant="outline" size="sm" onClick={closeLinkPanel} disabled={linkSaving}>
-              Cancelar
-            </Button>
-            <Button size="sm" onClick={handleSaveLink} disabled={linkSaving} className="btn-brand border-0">
-              {linkSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
-              Salvar
-            </Button>
-          </div>
-        }
-      >
-        <div className="p-5 flex-1 overflow-y-auto space-y-4">
-          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-            <Link2 className="h-4 w-4" />
-            <p className="text-xs">
-              Vincule este usuário a uma empresa, troque a empresa atual, ou desvincule por completo. Somente o Admin pode
-              alterar esse vínculo.
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
-              Empresa vinculada
-            </p>
-            <Select value={linkCompanyId || "__none__"} onValueChange={(v) => setLinkCompanyId(v === "__none__" ? "" : v)}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder={companiesLoading ? "Carregando empresas..." : "Selecione uma empresa"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Sem empresa vinculada</SelectItem>
-                {companiesForSelect.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {companiesLoading && (
-              <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5">
-                <Loader2 className="h-3 w-3 animate-spin" /> Carregando lista de empresas...
-              </p>
-            )}
-          </div>
-        </div>
-      </SlidePanel>
-
-      <UserViewSlidePanel
-        open={isViewDialogOpen}
-        onClose={() => {
-          setIsViewDialogOpen(false);
-          navigate("/admin/usuarios", { replace: true });
-        }}
-        onRefresh={refetchUsers}
-        onUserSaved={(updated) => {
-          upsertUserRow(updated);
-          if (updated?.id) {
-            setSelectedUser((prev) => (prev && String(prev.id) === String(updated.id) ? { ...prev, ...updated } : prev));
-          }
-          window.dispatchEvent(new Event("allka:admin-counts-changed"));
-        }}
-        user={selectedUser}
-        startInEditMode={viewStartInEditMode}
-      />
-
-      <UserCreateSlidePanel
-        open={showCreateUser}
-        onClose={() => setShowCreateUser(false)}
-        onUserCreated={(created) => {
-          // `POST /users` devolve o formato "seguro" (safeSelect) — sem os
-          // campos que só GET /admin/users enriquece (company_name,
-          // agency_name, has_profile_link...). Como é um registro novo, não
-          // há linha existente pra mesclar; a normalização oficial
-          // (mapApiUserToRow, dentro de upsertUserRow) preenche os campos
-          // obrigatórios com os mesmos defaults da carga inicial — o vínculo
-          // detalhado só aparece completo na próxima vez que a lista
-          // recarregar de verdade (ex.: trocar o filtro de status).
-          upsertUserRow(created);
-          window.dispatchEvent(new Event("allka:admin-counts-changed"));
-          setShowCreateUser(false);
-        }}
-      />
-
-      <ConfirmationDialog
-        open={isDeleteAlertOpen && !!selectedUser}
-        onClose={() => setIsDeleteAlertOpen(false)}
-        onConfirm={handleStatusConfirmation}
-        title={
-          selectedUser?.is_active ? "Bloquear Usuário" : "Desbloquear Usuário"
-        }
-        message={
-          selectedUser?.is_active
-            ? "O usuário não poderá acessar a plataforma enquanto estiver bloqueado. A conta e todo o histórico permanecem no sistema — é possível desbloquear a qualquer momento."
-            : "O usuário volta a ter acesso à plataforma imediatamente, com o mesmo histórico e permissões de antes do bloqueio."
-        }
-        targetName={selectedUser?.name}
-        targetDetail={selectedUser ? `${maskEmail(selectedUser.email)} · ${getAccountTypeLabel(selectedUser.account_type)}` : undefined}
-        consequences={
-          selectedUser?.is_active
-            ? ["O login fica bloqueado até alguém desbloquear pela mesma tela.", "Nenhum dado é apagado."]
-            : ["O usuário consegue fazer login normalmente de novo."]
-        }
-        confirmText={selectedUser?.is_active ? "Bloquear" : "Desbloquear"}
-        cancelText="Cancelar"
-        destructive={selectedUser?.is_active}
-      />
-
-      <ConfirmationDialog
-        open={pendingClose !== null}
-        onClose={() => setPendingClose(null)}
-        onConfirm={() => {
-          pendingClose?.();
-          setPendingClose(null);
-        }}
-        title="Alterações não salvas"
-        message="Você tem alterações não salvas. Deseja sair sem salvar?"
-        confirmText="Sair sem salvar"
-        cancelText="Cancelar"
-        destructive={false}
-      />
-
-      {selectedUser && (
-        <StandardModalDialog
-          open={isDeleteUserAlertOpen}
-          onClose={() => {
-            if (!isDeleteLoading) {
-              setIsDeleteUserAlertOpen(false);
-              setDeleteStep(1);
-            }
-          }}
-          title={deleteStep === 1 ? "Excluir Usuário" : "Excluir Usuário — confirmação final"}
-          size="compact"
+        {/* Alterar vínculo — vincular/desvincular/trocar a empresa do usuário */}
+        <SlidePanel
+          open={linkPanelOpen}
+          onClose={closeLinkPanel}
+          title="Alterar vínculo"
+          subtitle={linkTargetUser?.name}
+          widthMode="compact"
+          compactWidth={420}
           footer={
-            deleteStep === 1 ? (
-              <div className="flex gap-3 w-full">
-                <Button
-                  variant="outline"
-                  className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  onClick={() => setIsDeleteUserAlertOpen(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  className="flex-1 h-9 text-sm font-semibold"
-                  onClick={handleContinueToDeleteConfirmation}
-                  disabled={!deletionReason.trim()}
-                >
-                  Continuar para confirmação
-                </Button>
-              </div>
-            ) : (
-              <div className="flex gap-3 w-full">
-                <Button
-                  variant="outline"
-                  className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  onClick={() => setDeleteStep(1)}
-                  disabled={isDeleteLoading}
-                >
-                  Voltar
-                </Button>
-                <Button
-                  className="flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={handleDeleteUser}
-                  disabled={isDeleteLoading}
-                >
-                  {isDeleteLoading ? (
-                    <ButtonLoader text="Excluindo..." />
-                  ) : (
-                    <>
-                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                      Excluir usuário definitivamente
-                    </>
-                  )}
-                </Button>
-              </div>
-            )
+            <div className="flex items-center justify-end gap-2 p-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={closeLinkPanel}
+                disabled={linkSaving}
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveLink}
+                disabled={linkSaving}
+                className="btn-brand border-0"
+              >
+                {linkSaving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : null}
+                Salvar
+              </Button>
+            </div>
           }
         >
-          {deleteStep === 1 ? (
-            <div className="px-6 py-5 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
-                  <Trash2 className="h-5 w-5 text-red-500" />
-                </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
-                  Esta ação apaga a conta do banco de dados — o usuário deixa de existir e não pode ser restaurado.
-                  Se ele for dono de uma agência ou empresa vinculada, a exclusão será bloqueada até esses vínculos serem resolvidos.
+          <div className="p-5 flex-1 overflow-y-auto space-y-4">
+            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+              <Link2 className="h-4 w-4" />
+              <p className="text-xs">
+                Vincule este usuário a uma empresa, troque a empresa atual, ou
+                desvincule por completo. Somente o Admin pode alterar esse
+                vínculo.
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+                Empresa vinculada
+              </p>
+              <Select
+                value={linkCompanyId || "__none__"}
+                onValueChange={(v) =>
+                  setLinkCompanyId(v === "__none__" ? "" : v)
+                }
+              >
+                <SelectTrigger className="h-9 text-sm">
+                  <SelectValue
+                    placeholder={
+                      companiesLoading
+                        ? "Carregando empresas..."
+                        : "Selecione uma empresa"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">
+                    Sem empresa vinculada
+                  </SelectItem>
+                  {companiesForSelect.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {companiesLoading && (
+                <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Carregando lista
+                  de empresas...
                 </p>
-              </div>
+              )}
+            </div>
+          </div>
+        </SlidePanel>
 
-              <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
-                <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                  {selectedUser.name}
-                </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {selectedUser.email}
-                </div>
-              </div>
+        <UserViewSlidePanel
+          open={isViewDialogOpen}
+          onClose={() => {
+            setIsViewDialogOpen(false);
+            navigate("/admin/usuarios", { replace: true });
+          }}
+          onRefresh={refetchUsers}
+          onUserSaved={(updated) => {
+            upsertUserRow(updated);
+            if (updated?.id) {
+              setSelectedUser((prev) =>
+                prev && String(prev.id) === String(updated.id)
+                  ? { ...prev, ...updated }
+                  : prev,
+              );
+            }
+            window.dispatchEvent(new Event("allka:admin-counts-changed"));
+          }}
+          user={selectedUser}
+          startInEditMode={viewStartInEditMode}
+        />
 
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                  Motivo da Exclusão <span className="text-red-500">*</span>
-                </label>
-                <Textarea
-                  placeholder="Descreva o motivo da exclusão para fins de auditoria (mínimo 10 caracteres)"
-                  value={deletionReason}
-                  onChange={(e) => {
-                    setDeletionReason(e.target.value);
-                    if (deletionReasonError) setDeletionReasonError("");
-                  }}
-                  className="text-sm resize-none focus-visible:ring-red-500"
-                  rows={3}
-                />
-                {deletionReasonError && (
-                  <p className="text-xs text-red-500 flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    {deletionReasonError}
+        <UserCreateSlidePanel
+          open={showCreateUser}
+          onClose={() => setShowCreateUser(false)}
+          onUserCreated={(created) => {
+            // `POST /users` devolve o formato "seguro" (safeSelect) — sem os
+            // campos que só GET /admin/users enriquece (company_name,
+            // agency_name, has_profile_link...). Como é um registro novo, não
+            // há linha existente pra mesclar; a normalização oficial
+            // (mapApiUserToRow, dentro de upsertUserRow) preenche os campos
+            // obrigatórios com os mesmos defaults da carga inicial — o vínculo
+            // detalhado só aparece completo na próxima vez que a lista
+            // recarregar de verdade (ex.: trocar o filtro de status).
+            upsertUserRow(created);
+            window.dispatchEvent(new Event("allka:admin-counts-changed"));
+            setShowCreateUser(false);
+          }}
+        />
+
+        <ConfirmationDialog
+          open={isDeleteAlertOpen && !!selectedUser}
+          onClose={() => setIsDeleteAlertOpen(false)}
+          onConfirm={handleStatusConfirmation}
+          title={
+            selectedUser?.is_active ? "Bloquear Usuário" : "Desbloquear Usuário"
+          }
+          message={
+            selectedUser?.is_active
+              ? "O usuário não poderá acessar a plataforma enquanto estiver bloqueado. A conta e todo o histórico permanecem no sistema — é possível desbloquear a qualquer momento."
+              : "O usuário volta a ter acesso à plataforma imediatamente, com o mesmo histórico e permissões de antes do bloqueio."
+          }
+          targetName={selectedUser?.name}
+          targetDetail={
+            selectedUser
+              ? `${maskEmail(selectedUser.email)} · ${getAccountTypeLabel(selectedUser.account_type)}`
+              : undefined
+          }
+          consequences={
+            selectedUser?.is_active
+              ? [
+                  "O login fica bloqueado até alguém desbloquear pela mesma tela.",
+                  "Nenhum dado é apagado.",
+                ]
+              : ["O usuário consegue fazer login normalmente de novo."]
+          }
+          confirmText={selectedUser?.is_active ? "Bloquear" : "Desbloquear"}
+          cancelText="Cancelar"
+          destructive={selectedUser?.is_active}
+        />
+
+        <ConfirmationDialog
+          open={pendingClose !== null}
+          onClose={() => setPendingClose(null)}
+          onConfirm={() => {
+            pendingClose?.();
+            setPendingClose(null);
+          }}
+          title="Alterações não salvas"
+          message="Você tem alterações não salvas. Deseja sair sem salvar?"
+          confirmText="Sair sem salvar"
+          cancelText="Cancelar"
+          destructive={false}
+        />
+
+        {selectedUser && (
+          <StandardModalDialog
+            open={isDeleteUserAlertOpen}
+            onClose={() => {
+              if (!isDeleteLoading) {
+                setIsDeleteUserAlertOpen(false);
+                setDeleteStep(1);
+              }
+            }}
+            title={
+              deleteStep === 1
+                ? "Excluir Usuário"
+                : "Excluir Usuário — confirmação final"
+            }
+            size="compact"
+            footer={
+              deleteStep === 1 ? (
+                <div className="flex gap-3 w-full">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    onClick={() => setIsDeleteUserAlertOpen(false)}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    className="flex-1 h-9 text-sm font-semibold"
+                    onClick={handleContinueToDeleteConfirmation}
+                    disabled={!deletionReason.trim()}
+                  >
+                    Continuar para confirmação
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-3 w-full">
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-9 text-sm border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    onClick={() => setDeleteStep(1)}
+                    disabled={isDeleteLoading}
+                  >
+                    Voltar
+                  </Button>
+                  <Button
+                    className="flex-1 h-9 text-sm font-semibold text-white border-0 shadow-sm bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleDeleteUser}
+                    disabled={isDeleteLoading}
+                  >
+                    {isDeleteLoading ? (
+                      <ButtonLoader text="Excluindo..." />
+                    ) : (
+                      <>
+                        <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                        Excluir usuário definitivamente
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )
+            }
+          >
+            {deleteStep === 1 ? (
+              <div className="px-6 py-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+                    <Trash2 className="h-5 w-5 text-red-500" />
+                  </div>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
+                    Esta ação apaga a conta do banco de dados — o usuário deixa
+                    de existir e não pode ser restaurado. Se ele for dono de uma
+                    agência ou empresa vinculada, a exclusão será bloqueada até
+                    esses vínculos serem resolvidos.
                   </p>
-                )}
-                <p className="text-xs text-slate-400">
-                  Caracteres: {deletionReason.length}/10 (mínimo)
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="px-6 py-5 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
-                  <Trash2 className="h-5 w-5 text-red-500" />
                 </div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
-                  Esta é a confirmação final — a conta será apagada assim que você clicar abaixo.
-                </p>
-              </div>
-              <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
-                <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                  {selectedUser.name}
+
+                <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {selectedUser.name}
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {selectedUser.email}
+                  </div>
                 </div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  {selectedUser.email}
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                    Motivo da Exclusão <span className="text-red-500">*</span>
+                  </label>
+                  <Textarea
+                    placeholder="Descreva o motivo da exclusão para fins de auditoria (mínimo 10 caracteres)"
+                    value={deletionReason}
+                    onChange={(e) => {
+                      setDeletionReason(e.target.value);
+                      if (deletionReasonError) setDeletionReasonError("");
+                    }}
+                    className="text-sm resize-none focus-visible:ring-red-500"
+                    rows={3}
+                  />
+                  {deletionReasonError && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      {deletionReasonError}
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-400">
+                    Caracteres: {deletionReason.length}/10 (mínimo)
+                  </p>
                 </div>
               </div>
-            </div>
-          )}
-        </StandardModalDialog>
-      )}
-    </div>
+            ) : (
+              <div className="px-6 py-5 space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-900/20">
+                    <Trash2 className="h-5 w-5 text-red-500" />
+                  </div>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed pt-2">
+                    Esta é a confirmação final — a conta será apagada assim que
+                    você clicar abaixo.
+                  </p>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3">
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {selectedUser.name}
+                  </div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {selectedUser.email}
+                  </div>
+                </div>
+              </div>
+            )}
+          </StandardModalDialog>
+        )}
+      </div>
     </div>
   );
 }

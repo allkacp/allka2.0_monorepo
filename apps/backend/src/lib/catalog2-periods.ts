@@ -15,6 +15,23 @@ import { computePricing, type PricingResult, type PricingSelection } from "./cat
 export const CATALOG2_PERIODS = ["mensal", "trimestral", "semestral", "anual"] as const;
 export type Catalog2Period = (typeof CATALOG2_PERIODS)[number];
 
+// Decisão da reunião de 18/09/2026: nesta primeira etapa comercial só a
+// contratação mensal pode ser oferecida. As demais modalidades permanecem
+// cadastráveis como configuração futura, mas nunca entram no catálogo,
+// cotação ou checkout até uma decisão posterior de liberação.
+export const CURRENTLY_CONTRACTABLE_PERIODS: readonly Catalog2Period[] = ["mensal"];
+
+export function isCurrentlyContractablePeriod(period: Catalog2Period): boolean {
+  // A chave existe apenas para a futura liberação técnica, que exige
+  // configuração explícita do ambiente e uma interface própria. Ausente
+  // (inclusive em produção) significa sempre "somente mensal".
+  return CURRENTLY_CONTRACTABLE_PERIODS.includes(period) || process.env.CATALOG2_ENABLE_MULTI_PERIOD_CONTRACTS === "true";
+}
+
+function contractablePeriodsNow(): Catalog2Period[] {
+  return CATALOG2_PERIODS.filter(isCurrentlyContractablePeriod);
+}
+
 export const CATALOG2_PERIOD_MONTHS: Record<Catalog2Period, number> = {
   mensal: 1,
   trimestral: 3,
@@ -91,6 +108,17 @@ export async function computePeriodPricing(
   const configured = !!cfg && cfg.is_active;
   const recurring = hasRecurringMonthlyDelivery(product);
 
+  if (!isCurrentlyContractablePeriod(period)) {
+    return {
+      period, months, available: false, discount_percent: cfg?.discount_percent ?? 0,
+      reference_monthly_price: base.lines.commercial_final_price.amount, total_price: null, monthly_equivalent_price: null,
+      commercial_deadline_days: base.deadline.commercial_deadline_days, currency: base.currency,
+      commercial_ready: false,
+      quote_blockers: [`A modalidade "${CATALOG2_PERIOD_LABEL[period]}" está reservada para ativação futura. Nesta etapa, somente a contratação mensal está disponível.`],
+      base,
+    };
+  }
+
   if (!base.commercial_ready) {
     return {
       period, months, available: false, discount_percent: cfg?.discount_percent ?? 0,
@@ -144,7 +172,7 @@ export async function listAvailablePeriods(
   product: { id: string; delivery_recurrence: string | null },
 ): Promise<PeriodPricingResult[]> {
   if (!hasRecurringMonthlyDelivery(product)) return [];
-  const cfgs = await prisma.catalog2ProductPeriod.findMany({ where: { product_id: product.id, is_active: true } });
+  const cfgs = await prisma.catalog2ProductPeriod.findMany({ where: { product_id: product.id, is_active: true, period: { in: contractablePeriodsNow() } } });
   const out: PeriodPricingResult[] = [];
   for (const cfg of cfgs) {
     if (!isCatalog2Period(cfg.period)) continue;
@@ -167,6 +195,8 @@ export async function listPeriodsForAdmin(productId: string) {
       months: CATALOG2_PERIOD_MONTHS[period],
       configured: !!row,
       is_active: row?.is_active ?? false,
+      contractable_now: period === "mensal" && (row?.is_active ?? false),
+      reserved_for_future: period !== "mensal",
       discount_percent: row?.discount_percent ?? null,
       updated_at: row?.updated_at ?? null,
     };

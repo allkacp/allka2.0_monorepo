@@ -25,6 +25,8 @@ export interface PricingSelection {
   variation_option_keys?: string[];
   addon_keys?: string[];
   quantity?: number;
+  /** Lotes da execução: [5] gera uma tarefa de 5; [1,1,3], três tarefas. */
+  delivery_groups?: number[];
   answers?: Record<string, string>;
 }
 

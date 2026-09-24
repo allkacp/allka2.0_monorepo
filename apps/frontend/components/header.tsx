@@ -117,10 +117,17 @@ function reducedUserCode(code?: string) {
   return m ? `User_${parseInt(m[1], 10)}` : code;
 }
 
-export function Header({ transparent = false }: { transparent?: boolean } = {}) {
+export function Header({
+  transparent = false,
+}: { transparent?: boolean } = {}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const { open: notifOpen, setOpen: setNotifOpen, tab: notifTab, setTab: setNotifTab } = useNotificationsPanel();
+  const {
+    open: notifOpen,
+    setOpen: setNotifOpen,
+    tab: notifTab,
+    setTab: setNotifTab,
+  } = useNotificationsPanel();
   // Correção visual (ata 2026-08, revisão do responsável): o sino conta só
   // `category: "notificacao"` — nunca soma alerta (regra "o contador de
   // notificação não pode incluir alertas"). O contador/ícone de Alertas
@@ -140,7 +147,14 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
   }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<
-    { type: string; label: string; sub: string; path: string; icon: any; navState?: Record<string, string> }[]
+    {
+      type: string;
+      label: string;
+      sub: string;
+      path: string;
+      icon: any;
+      navState?: Record<string, string>;
+    }[]
   >([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -148,8 +162,13 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { accountType, unlockAccountType, previewUserName, previewUserEmail, isPartnerActive } =
-    useAccountType();
+  const {
+    accountType,
+    unlockAccountType,
+    previewUserName,
+    previewUserEmail,
+    isPartnerActive,
+  } = useAccountType();
   const { userProfile, updateUserProfile } = useSidebar();
   const partner = usePartner();
   const empresa = useEmpresa();
@@ -381,9 +400,14 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
           } else if (key === "nomadTasks") {
             const normalizedQuery = q.trim().toLocaleLowerCase("pt-BR");
             list
-              .filter((t: any) =>
-                String(t.title ?? "").toLocaleLowerCase("pt-BR").includes(normalizedQuery) ||
-                String(t.project?.title ?? "").toLocaleLowerCase("pt-BR").includes(normalizedQuery),
+              .filter(
+                (t: any) =>
+                  String(t.title ?? "")
+                    .toLocaleLowerCase("pt-BR")
+                    .includes(normalizedQuery) ||
+                  String(t.project?.title ?? "")
+                    .toLocaleLowerCase("pt-BR")
+                    .includes(normalizedQuery),
               )
               .slice(0, 5)
               .forEach((t: any) =>
@@ -402,9 +426,10 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         if (accountType === "empresas") {
           const q2 = q.toLowerCase();
           empresa.tasks
-            .filter((t) =>
-              t.name.toLowerCase().includes(q2) ||
-              t.projectName.toLowerCase().includes(q2)
+            .filter(
+              (t) =>
+                t.name.toLowerCase().includes(q2) ||
+                t.projectName.toLowerCase().includes(q2),
             )
             .slice(0, 5)
             .forEach((t) =>
@@ -415,7 +440,7 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                 path: "/company/tarefas",
                 icon: CheckSquare,
                 navState: { search: t.name },
-              })
+              }),
             );
         }
 
@@ -423,9 +448,10 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         if (accountType === "agencias") {
           const q2 = q.toLowerCase();
           agencia.tasks
-            .filter((t) =>
-              t.name.toLowerCase().includes(q2) ||
-              t.projectName.toLowerCase().includes(q2)
+            .filter(
+              (t) =>
+                t.name.toLowerCase().includes(q2) ||
+                t.projectName.toLowerCase().includes(q2),
             )
             .slice(0, 5)
             .forEach((t) =>
@@ -436,7 +462,7 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                 path: "/agency/tarefas",
                 icon: CheckSquare,
                 navState: { search: t.name },
-              })
+              }),
             );
         }
 
@@ -475,11 +501,16 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
   // sempre a identidade da sessão.
   const selfProfilePath = (() => {
     switch (accountType) {
-      case "empresas": return "/company/perfil";
-      case "agencias": return "/agency/perfil";
-      case "nomades": return "/nomades/perfil";
-      case "lider": return "/leader/perfil";
-      default: return "/admin/perfil";
+      case "empresas":
+        return "/company/perfil";
+      case "agencias":
+        return "/agency/perfil";
+      case "nomades":
+        return "/nomades/perfil";
+      case "lider":
+        return "/leader/perfil";
+      default:
+        return "/admin/perfil";
     }
   })();
   const openProfile = () => {
@@ -649,6 +680,10 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
     month: "long",
     year: "numeric",
   });
+  // As pílulas (pontos/stat/tarefas/carteira) vivem no TOP ROW agora, do
+  // lado da busca — achado do usuário 2026-09-23: "subir lá pra do lado do
+  // pesquisar", nunca remover. O cabeçalho é sempre uma linha só (60px) em
+  // toda tela, sem a segunda linha que existia antes.
   const hasBottomStats = Boolean(
     ctx.points || ctx.stat || ctx.tasks || ctx.wallet,
   );
@@ -659,8 +694,7 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
 
       <header
         className={cn(
-          "px-4 sm:px-8 relative z-90 overflow-visible",
-          hasBottomStats && "pb-2.5",
+          "mt-[5px] px-4 sm:px-8 relative z-90 overflow-visible",
           !transparent && "shadow-xl",
         )}
         style={
@@ -673,12 +707,7 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
         }
       >
         {/* === TOP ROW: greeting + right actions === */}
-        <div
-          className={cn(
-            "flex items-center h-16 gap-4",
-            hasBottomStats && "border-b border-white/8",
-          )}
-        >
+        <div className="flex h-[60px] items-center gap-4">
           {/* Mobile hamburger */}
           <Button
             variant="ghost"
@@ -709,7 +738,9 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                   <Zap className="h-3.5 w-3.5 text-yellow-400" />
                 </div>
                 <div>
-                  <p className="text-[10px] text-white/45 leading-none">Nível</p>
+                  <p className="text-[10px] text-white/45 leading-none">
+                    Nível
+                  </p>
                   <p className="text-xs font-bold text-white leading-tight">
                     {ctx.level}
                   </p>
@@ -727,6 +758,62 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
 
           {/* Right actions */}
           <div className="flex items-center gap-3 shrink-0">
+            {/* Pílulas rápidas (pontos/stat/tarefas/carteira) — subiram pra
+                cá, do lado da busca, ao invés de uma segunda linha própria
+                (achado do usuário 2026-09-23: "subir lá pra do lado do
+                pesquisar", nunca remover — o cabeçalho vira sempre uma
+                linha só, ganhando altura em toda tela, não só no catálogo). */}
+            {hasBottomStats && (
+              <div className="hidden xl:flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+                {ctx.points && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
+                    <div className="h-6 w-6 rounded-lg bg-amber-400/20 flex items-center justify-center shrink-0">
+                      <Star className="h-3.5 w-3.5 text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-white/45 leading-none">Pontos</p>
+                      <p className="text-xs font-bold text-white leading-tight">{ctx.points}</p>
+                    </div>
+                  </div>
+                )}
+                {ctx.stat && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
+                    <div className="h-6 w-6 rounded-lg bg-emerald-400/20 flex items-center justify-center shrink-0">
+                      <ctx.stat.icon className="h-3.5 w-3.5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-white/45 leading-none">{ctx.stat.label}</p>
+                      <p className="text-xs font-bold text-white leading-tight">{ctx.stat.value}</p>
+                    </div>
+                  </div>
+                )}
+                {ctx.tasks && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
+                    <div className="h-6 w-6 rounded-lg bg-blue-400/20 flex items-center justify-center shrink-0">
+                      <Activity className="h-3.5 w-3.5 text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-white/45 leading-none">Status</p>
+                      <p className="text-xs font-bold text-white leading-tight">{ctx.tasks}</p>
+                    </div>
+                  </div>
+                )}
+                {ctx.wallet && (
+                  <button
+                    onClick={() => navigate(ctx.settingsPath)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/20 transition-all active:scale-95 shrink-0"
+                  >
+                    <div className="h-6 w-6 rounded-lg bg-green-400/20 flex items-center justify-center shrink-0">
+                      <ctx.wallet.icon className="h-3.5 w-3.5 text-green-400" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[10px] text-white/45 leading-none">{ctx.wallet.label}</p>
+                      <p className="text-xs font-bold text-white leading-tight">{ctx.wallet.value}</p>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
             <div ref={searchRef} className="relative">
               {/* Input activo */}
               {searchOpen ? (
@@ -738,7 +825,11 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !searchLoading && searchResults[0]) {
+                      if (
+                        e.key === "Enter" &&
+                        !searchLoading &&
+                        searchResults[0]
+                      ) {
                         e.preventDefault();
                         openSearchResult(searchResults[0]);
                       }
@@ -754,7 +845,11 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                     <div className="h-3.5 w-3.5 rounded-full border-2 border-white/50 border-t-transparent animate-spin shrink-0" />
                   )}
                   <button
-                    onClick={() => { setSearchOpen(false); setSearchQuery(""); setSearchResults([]); }}
+                    onClick={() => {
+                      setSearchOpen(false);
+                      setSearchQuery("");
+                      setSearchResults([]);
+                    }}
                     className="p-0.5 rounded hover:bg-white/10"
                   >
                     <X className="h-3.5 w-3.5 text-white/50" />
@@ -785,51 +880,62 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                         Digite para buscar
                       </div>
                     )}
-                    {searchQuery && !searchLoading && searchResults.length === 0 && (
-                      <div className="px-4 py-6 text-center text-sm text-gray-400">
-                        Nenhum resultado para "{searchQuery}"
-                      </div>
-                    )}
+                    {searchQuery &&
+                      !searchLoading &&
+                      searchResults.length === 0 && (
+                        <div className="px-4 py-6 text-center text-sm text-gray-400">
+                          Nenhum resultado para "{searchQuery}"
+                        </div>
+                      )}
                     {searchResults.length > 0 && (
                       <div className="py-1">
-                        {["Usuário", "Empresa", "Projeto", "Tarefa"].map((type) => {
-                          const group = searchResults.filter((r) => r.type === type);
-                          if (!group.length) return null;
-                          const GroupIcon =
-                            type === "Usuário" ? User
-                            : type === "Empresa" ? Building2
-                            : type === "Tarefa" ? CheckSquare
-                            : Briefcase;
-                          return (
-                            <div key={type}>
-                              <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                                {type}s
-                              </p>
-                              {group.map((result, i) => (
-                                <button
-                                  key={i}
-                                  onClick={() => openSearchResult(result)}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                                >
-                                  <div className="h-7 w-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
-                                    <GroupIcon className="h-3.5 w-3.5 text-gray-500" />
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                                      {result.label}
-                                    </p>
-                                    {result.sub && (
-                                      <p className="text-xs text-gray-400 truncate">{result.sub}</p>
-                                    )}
-                                  </div>
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 shrink-0">
-                                    {result.type}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          );
-                        })}
+                        {["Usuário", "Empresa", "Projeto", "Tarefa"].map(
+                          (type) => {
+                            const group = searchResults.filter(
+                              (r) => r.type === type,
+                            );
+                            if (!group.length) return null;
+                            const GroupIcon =
+                              type === "Usuário"
+                                ? User
+                                : type === "Empresa"
+                                  ? Building2
+                                  : type === "Tarefa"
+                                    ? CheckSquare
+                                    : Briefcase;
+                            return (
+                              <div key={type}>
+                                <p className="px-3 pt-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                                  {type}s
+                                </p>
+                                {group.map((result, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => openSearchResult(result)}
+                                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
+                                  >
+                                    <div className="h-7 w-7 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0">
+                                      <GroupIcon className="h-3.5 w-3.5 text-gray-500" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                        {result.label}
+                                      </p>
+                                      {result.sub && (
+                                        <p className="text-xs text-gray-400 truncate">
+                                          {result.sub}
+                                        </p>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 shrink-0">
+                                      {result.type}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            );
+                          },
+                        )}
                       </div>
                     )}
                   </div>
@@ -856,78 +962,81 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                 mesmo quando há itens salvos: sair do catálogo esconde o
                 ícone sem apagar a cesta; voltar mostra de novo. Oculta para
                 líder sempre (não contrata). */}
-            {accountType !== "lider" && isCatalogRoute(location.pathname) && (() => {
-              const totalItems = basket.getTotalItems();
-              const hasItems = totalItems > 0;
-              return (
-                <div className="relative group">
-                  <button
-                    type="button"
-                    onClick={() => basket.setOpen(true)}
-                    aria-label="Cesta do projeto"
-                    className={
-                      hasItems
-                        ? "relative flex items-center gap-2 h-9 pl-3 pr-3.5 rounded-xl border transition-all duration-200 bg-white/15 border-white/30 text-white hover:bg-white/25 hover:border-white/40 shadow-[0_0_12px_rgba(99,102,241,0.35)]"
-                        : "relative flex items-center justify-center h-9 w-9 rounded-xl border transition-all duration-200 bg-white/10 border-white/15 text-white/50 hover:bg-white/20 hover:text-white/80"
-                    }
-                  >
-                    {/* pulse ring when active */}
-                    {hasItems && (
-                      <span className="absolute inset-0 rounded-xl animate-ping bg-indigo-400/20 pointer-events-none" />
-                    )}
-
-                    <Briefcase
+            {accountType !== "lider" &&
+              isCatalogRoute(location.pathname) &&
+              (() => {
+                const totalItems = basket.getTotalItems();
+                const hasItems = totalItems > 0;
+                return (
+                  <div className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => basket.setOpen(true)}
+                      aria-label="Cesta do projeto"
                       className={
                         hasItems
-                          ? "h-4 w-4 shrink-0 text-indigo-200 drop-shadow-sm"
-                          : "h-4 w-4 shrink-0"
+                          ? "relative flex items-center gap-2 h-9 pl-3 pr-3.5 rounded-xl border transition-all duration-200 bg-white/15 border-white/30 text-white hover:bg-white/25 hover:border-white/40 shadow-[0_0_12px_rgba(99,102,241,0.35)]"
+                          : "relative flex items-center justify-center h-9 w-9 rounded-xl border transition-all duration-200 bg-white/10 border-white/15 text-white/50 hover:bg-white/20 hover:text-white/80"
                       }
-                    />
+                    >
+                      {/* pulse ring when active */}
+                      {hasItems && (
+                        <span className="absolute inset-0 rounded-xl animate-ping bg-indigo-400/20 pointer-events-none" />
+                      )}
 
-                    {hasItems && (
-                      <span className="flex items-center gap-1 text-xs font-bold leading-none">
-                        <span
-                          className="inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full text-[10px] font-extrabold leading-none"
-                          style={{
-                            background:
-                              "var(--app-brand-button, linear-gradient(135deg, #6366f1 0%, #c81a7f 100%))",
-                            color: "#fff",
-                          }}
-                        >
-                          {totalItems}
-                        </span>
-                        <span className="hidden sm:inline text-[11px] text-white/80 font-semibold">
-                          {totalItems === 1 ? "item" : "itens"}
-                        </span>
-                      </span>
-                    )}
-                  </button>
+                      <Briefcase
+                        className={
+                          hasItems
+                            ? "h-4 w-4 shrink-0 text-indigo-200 drop-shadow-sm"
+                            : "h-4 w-4 shrink-0"
+                        }
+                      />
 
-                  {/* Tooltip */}
-                  <div className="pointer-events-none absolute top-full right-0 mt-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                    <div className="bg-gray-900/95 text-white text-[11px] rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap border border-white/10">
-                      {hasItems ? (
-                        <>
-                          <span className="font-semibold">
-                            {totalItems}{" "}
-                            {totalItems === 1 ? "produto" : "produtos"} na cesta
+                      {hasItems && (
+                        <span className="flex items-center gap-1 text-xs font-bold leading-none">
+                          <span
+                            className="inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full text-[10px] font-extrabold leading-none"
+                            style={{
+                              background:
+                                "var(--app-brand-button, linear-gradient(135deg, #6366f1 0%, #c81a7f 100%))",
+                              color: "#fff",
+                            }}
+                          >
+                            {totalItems}
                           </span>
-                          <br />
-                          <span className="text-white/60">
-                            Clique para ver e criar projeto
+                          <span className="hidden sm:inline text-[11px] text-white/80 font-semibold">
+                            {totalItems === 1 ? "item" : "itens"}
                           </span>
-                        </>
-                      ) : (
-                        <span className="text-white/70">
-                          Cesta do projeto vazia
                         </span>
                       )}
+                    </button>
+
+                    {/* Tooltip */}
+                    <div className="pointer-events-none absolute top-full right-0 mt-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                      <div className="bg-gray-900/95 text-white text-[11px] rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap border border-white/10">
+                        {hasItems ? (
+                          <>
+                            <span className="font-semibold">
+                              {totalItems}{" "}
+                              {totalItems === 1 ? "produto" : "produtos"} na
+                              cesta
+                            </span>
+                            <br />
+                            <span className="text-white/60">
+                              Clique para ver e criar projeto
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-white/70">
+                            Cesta do projeto vazia
+                          </span>
+                        )}
+                      </div>
+                      <div className="absolute -top-1 right-3.5 h-2 w-2 rotate-45 bg-gray-900/95 border-l border-t border-white/10" />
                     </div>
-                    <div className="absolute -top-1 right-3.5 h-2 w-2 rotate-45 bg-gray-900/95 border-l border-t border-white/10" />
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
 
             {/* Notificações — eventos em tempo real (tarefa atribuída, comentário,
                 mudança de status, convite...). Único acionador aqui no cabeçalho —
@@ -938,7 +1047,10 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                 variant="ghost"
                 size="sm"
                 data-tour-id="notifications-button"
-                onClick={() => { setNotifTab("inbox"); setNotifOpen(true); }}
+                onClick={() => {
+                  setNotifTab("inbox");
+                  setNotifOpen(true);
+                }}
                 className="p-0 h-9 w-9 relative text-white/80 hover:bg-white/20 hover:text-white rounded-xl bg-white/10 border border-white/15"
                 aria-label={`Notificações${bellUnreadCount > 0 ? ` — ${bellUnreadCount} não lida${bellUnreadCount === 1 ? "" : "s"}` : ""}`}
                 title="Notificações"
@@ -955,7 +1067,10 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
             {/* User card */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button data-tour-id="user-profile-menu" className="flex items-center gap-3 pl-2.5 pr-3 py-2 rounded-xl hover:bg-white/10 transition-all group outline-none border border-white/15 hover:border-white/30">
+                <button
+                  data-tour-id="user-profile-menu"
+                  className="flex items-center gap-3 pl-2.5 pr-3 py-2 rounded-xl hover:bg-white/10 transition-all group outline-none border border-white/15 hover:border-white/30"
+                >
                   <Avatar className="h-9 w-9 shrink-0 ring-2 ring-white/30 ring-offset-1 ring-offset-transparent">
                     <AvatarImage src={undefined} />
                     <AvatarFallback className="bg-linear-to-br from-blue-500 to-purple-600 text-white text-sm font-bold">
@@ -1095,7 +1210,10 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
                   Meu Perfil
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => { setNotifTab("prefs"); setNotifOpen(true); }}
+                  onClick={() => {
+                    setNotifTab("prefs");
+                    setNotifOpen(true);
+                  }}
                   className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm text-gray-700 dark:text-gray-300"
                 >
                   <Settings className="h-4 w-4 text-gray-400 shrink-0" />
@@ -1114,70 +1232,6 @@ export function Header({ transparent = false }: { transparent?: boolean } = {}) 
           </div>
         </div>
 
-        {/* === BOTTOM ROW: quick stats pills (level moved up next to greeting) === */}
-        {hasBottomStats && (
-        <div className="hidden lg:flex items-center gap-2 h-12 overflow-x-auto no-scrollbar pt-0.5">
-          {ctx.points && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
-              <div className="h-6 w-6 rounded-lg bg-amber-400/20 flex items-center justify-center shrink-0">
-                <Star className="h-3.5 w-3.5 text-amber-400" />
-              </div>
-              <div>
-                <p className="text-[10px] text-white/45 leading-none">Pontos</p>
-                <p className="text-xs font-bold text-white leading-tight">
-                  {ctx.points}
-                </p>
-              </div>
-            </div>
-          )}
-          {ctx.stat && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
-              <div className="h-6 w-6 rounded-lg bg-emerald-400/20 flex items-center justify-center shrink-0">
-                <ctx.stat.icon className="h-3.5 w-3.5 text-emerald-400" />
-              </div>
-              <div>
-                <p className="text-[10px] text-white/45 leading-none">
-                  {ctx.stat.label}
-                </p>
-                <p className="text-xs font-bold text-white leading-tight">
-                  {ctx.stat.value}
-                </p>
-              </div>
-            </div>
-          )}
-          {ctx.tasks && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
-              <div className="h-6 w-6 rounded-lg bg-blue-400/20 flex items-center justify-center shrink-0">
-                <Activity className="h-3.5 w-3.5 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-[10px] text-white/45 leading-none">Status</p>
-                <p className="text-xs font-bold text-white leading-tight">
-                  {ctx.tasks}
-                </p>
-              </div>
-            </div>
-          )}
-          {ctx.wallet && (
-            <button
-              onClick={() => navigate(ctx.settingsPath)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/20 transition-all active:scale-95 shrink-0"
-            >
-              <div className="h-6 w-6 rounded-lg bg-green-400/20 flex items-center justify-center shrink-0">
-                <ctx.wallet.icon className="h-3.5 w-3.5 text-green-400" />
-              </div>
-              <div className="text-left">
-                <p className="text-[10px] text-white/45 leading-none">
-                  {ctx.wallet.label}
-                </p>
-                <p className="text-xs font-bold text-white leading-tight">
-                  {ctx.wallet.value}
-                </p>
-              </div>
-            </button>
-          )}
-        </div>
-        )}
       </header>
 
       <NotificationsPanel

@@ -1443,6 +1443,13 @@ model ProjectTask {
   // nesta fase — não há hoje quantidade contratada por ProjectProduct.
   occurrence_index  Int      @default(0)
 
+  // Fotografia da divisão de entrega escolhida na contratação. Uma tarefa
+  // com delivery_quantity=5 representa cinco unidades para o mesmo nômade;
+  // grupos diferentes nascem como ProjectTasks diferentes, ainda sem
+  // responsável definido até a operação fazer o encaminhamento.
+  delivery_quantity    Int @default(1)
+  delivery_group_index Int @default(0)
+
   // ── Transferência entre projetos ──────────────────────────────────────
   // Preenchidos só quando a tarefa chegou neste projeto via transferência
   // (POST /api/project-tasks/:id/transfer) em vez de ter nascido aqui.
@@ -1531,6 +1538,10 @@ model ProjectTask {
   // — "<taskId>:<epochMs do início>". Agrupa as ofertas de uma rodada e é a
   // base do dedupe do alerta de esgotamento. Nulo quando não há rodízio.
   rotation_episode_key String?
+  // Administração do encaminhamento automático. O padrão é ligado para
+  // preservar o fluxo existente; Admin Master pode desligá-lo nesta tarefa
+  // sem afetar a política da área nem tarefas já atribuídas.
+  auto_nomad_dispatch_enabled Boolean @default(true)
 
   stages                  ProjectTaskStage[]
   briefing_answers        TaskBriefingAnswer[]
@@ -2524,6 +2535,12 @@ model TaskOffer {
   episode_key          String
   // Ordem da oferta dentro do episódio: 1, 2, 3...
   rotation_order       Int
+  // 1 e 2 = voltas normais; 3 = oferta obrigatória após duas voltas.
+  rotation_round       Int         @default(1)
+  is_mandatory         Boolean     @default(false)
+  // Admin Master que iniciou uma oferta manual/obrigatória. É nulo para o
+  // rodízio puramente automático; nunca se infere um responsável inexistente.
+  assigned_by_user_id  String?
   // pendente | aceita | recusada | expirada | cancelada
   status               String      @default("pendente")
   offered_at           DateTime    @default(now())
@@ -2542,6 +2559,28 @@ model TaskOffer {
   @@index([status, expires_at])
   @@index([episode_key])
   @@map("task_offers")
+}
+
+// Configuração singleton, editável apenas por Admin Master. Persistida no
+// banco para que o prazo de oferta não dependa de variável de ambiente.
+model TaskRoutingSettings {
+  id                        String   @id @default("singleton")
+  offer_timeout_minutes     Int      @default(60)
+  mandatory_decline_alerts  Boolean  @default(true)
+  updated_at                DateTime @updatedAt
+
+  @@map("task_routing_settings")
+}
+
+// Chave é a categoria/área snapshot da tarefa. Ausência de registro = ligada,
+// evitando desligar o encaminhamento das áreas já existentes numa migration.
+model TaskRoutingAreaPolicy {
+  area                        String   @id
+  auto_nomad_dispatch_enabled Boolean  @default(true)
+  updated_by_user_id          String?
+  updated_at                  DateTime @updatedAt
+
+  @@map("task_routing_area_policies")
 }
 
 // ─── SystemAlert ──────────────────────────────────────────────────────────────
@@ -3103,6 +3142,11 @@ model Invoice {
   company        Company?  @relation(fields: [company_id], references: [id])
   project_id     String?
   project        Project?  @relation(fields: [project_id], references: [id])
+  // Payment que originou esta fatura automaticamente (checkout catalog2
+  // confirmado — ver src/lib/confirm-payment.ts). Nulo = fatura criada
+  // manualmente pelo admin (fluxo antigo, continua existindo).
+  payment_id     String?   @unique
+  payment        Payment?  @relation(fields: [payment_id], references: [id])
   amount         Float
   status         String    @default("pending")
   // pending | paid | overdue | cancelled
@@ -3610,6 +3654,7 @@ model Payment {
 
   generated_tasks ProjectTask[] @relation("PaymentGeneratedTasks")
   items           PaymentItem[]
+  invoice         Invoice?
 
   @@map("payments")
 }
@@ -4782,6 +4827,12 @@ model Catalog2Product {
   id            String @id @default(cuid())
   slug          String @unique
   internal_name String
+  // ID numérico curto exposto na URL/link direto do produto
+  // (/catalogo-produtos/:sequence_number) — achado do usuário 2026-09-23:
+  // o slug completo é grande demais pra compartilhar; aqui é só um contador
+  // sequencial, nunca reordenado/reciclado (mesmo padrão de
+  // Company.sequence_number).
+  sequence_number Int @unique @default(autoincrement())
 
   pillar_id   String?
   pillar      Catalog2Pillar?   @relation(fields: [pillar_id], references: [id], onDelete: SetNull)

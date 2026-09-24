@@ -46,6 +46,8 @@ function offerFixture(over: Partial<any> = {}) {
       project: { id: "p1", name: "Projeto X" },
       product: "Anúncios Patrocinados",
       category: "Performance",
+      delivery_quantity: 3,
+      delivery_group_index: 2,
     },
     ...over,
   }
@@ -73,6 +75,7 @@ it("10. mostra a oferta com tarefa, projeto/produto, prazo, contagem e botões",
   expect(screen.getByText(/Projeto X/)).toBeInTheDocument()
   expect(screen.getByText(/Anúncios Patrocinados/)).toBeInTheDocument()
   expect(screen.getByText(/5:0\d/)).toBeInTheDocument()
+  expect(screen.getByText(/Quantidade deste lote: 3 unidades/i)).toBeInTheDocument()
   expect(screen.getByRole("button", { name: /aceitar tarefa/i })).toBeInTheDocument()
   expect(screen.getByRole("button", { name: /recusar/i })).toBeInTheDocument()
 })

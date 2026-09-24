@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Search,
@@ -152,11 +159,11 @@ function ClientCompactStatCard({
     orange: "bg-orange-50 text-[#ff6a1a] ring-orange-100",
   } as const;
   return (
-    <div className="flex min-w-0 items-center gap-3 px-5 py-2.5 first:rounded-l-xl last:rounded-r-xl">
+    <div className="flex h-full min-w-0 items-center gap-3 px-5 first:rounded-l-xl last:rounded-r-xl">
       <div
-        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full ring-1 ${palette[color]}`}
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ring-1 ${palette[color]}`}
       >
-        <Icon className="h-7 w-7 stroke-[2]" />
+        <Icon className="h-6 w-6 stroke-[2]" />
       </div>
       <div className="min-w-0 leading-none">
         <p className="truncate text-[11px] font-bold uppercase tracking-[0.02em] text-[#31578f]">
@@ -274,6 +281,16 @@ const DEFAULT_VISIBLE: ColKey[] = [
   "status",
   "cadastro",
 ];
+const DEFAULT_COLUMN_WIDTHS: Record<ColKey, number> = {
+  id: 112,
+  cliente: 280,
+  segmento: 150,
+  contato: 136,
+  tipo: 94,
+  vinculo: 150,
+  status: 108,
+  cadastro: 122,
+};
 
 // Stat cards agora vêm do shell compartilhado (standard-page-shell.tsx).
 
@@ -328,6 +345,44 @@ export default function AdminClientesPage() {
   const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(
     new Set(DEFAULT_VISIBLE),
   );
+  const [columnWidths, setColumnWidths] = useState<Record<ColKey, number>>(
+    DEFAULT_COLUMN_WIDTHS,
+  );
+  const resizingColumnRef = useRef<{
+    key: ColKey;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+  const beginColumnResize = (
+    key: ColKey,
+    event: ReactMouseEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resizingColumnRef.current = {
+      key,
+      startX: event.clientX,
+      startWidth: columnWidths[key],
+    };
+    const onMove = (moveEvent: MouseEvent) => {
+      const active = resizingColumnRef.current;
+      if (!active) return;
+      setColumnWidths((current) => ({
+        ...current,
+        [active.key]: Math.max(
+          72,
+          active.startWidth + moveEvent.clientX - active.startX,
+        ),
+      }));
+    };
+    const onEnd = () => {
+      resizingColumnRef.current = null;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onEnd);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onEnd);
+  };
   const [pageJumpValue, setPageJumpValue] = useState("");
 
   const navigate = useNavigate();
@@ -747,7 +802,7 @@ export default function AdminClientesPage() {
         onClick={() => setPage((p) => Math.max(1, p - 1))}
         disabled={page === 1}
         title="Página anterior"
-        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        className="h-9 w-9 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
@@ -761,7 +816,7 @@ export default function AdminClientesPage() {
             key={index}
             onClick={() => setPage(Number(p))}
             title={p === page ? "Página atual" : `Ir para a página ${p}`}
-            className={`h-7 w-7 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
+            className={`h-9 w-9 flex items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${
               p === page
                 ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
                 : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400"
@@ -783,7 +838,7 @@ export default function AdminClientesPage() {
         onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
         disabled={page === totalPages}
         title="Próxima página"
-        className="h-7 w-7 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        className="h-9 w-9 flex items-center justify-center rounded-[8px] text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
@@ -802,12 +857,12 @@ export default function AdminClientesPage() {
                 }}
                 placeholder="Pág."
                 aria-label="Ir para a página"
-                className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="h-9 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
               <button
                 onClick={commitPageJump}
                 disabled={!pageJumpValue}
-                className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+                className="group relative h-9 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
@@ -878,6 +933,7 @@ export default function AdminClientesPage() {
             icon={Tag}
             title="Clientes"
             description="Todos os clientes reais da plataforma — vinculados a Agency, Company, Partner ou sem vínculo"
+            contentClassName="lg:h-[65px]"
             actions={
               <>
                 <div className="bg-white rounded-lg">
@@ -911,8 +967,8 @@ export default function AdminClientesPage() {
         </div>
 
         <div className="allka-users-scroll flex-1 min-h-0 overflow-y-scroll">
-          <div className="space-y-2 pr-1">
-            <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 xl:grid-cols-5 xl:divide-x xl:divide-slate-200">
+          <div className="space-y-0 pr-1">
+            <div className="mt-[5px] mb-[5px] grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 xl:h-[65px] xl:grid-cols-5 xl:divide-x xl:divide-slate-200">
               <ClientCompactStatCard
                 label="Total de clientes"
                 value={total}
@@ -994,7 +1050,7 @@ export default function AdminClientesPage() {
                 </div>
 
                 <div className="ml-auto flex flex-wrap items-center gap-2">
-                  <div className="flex overflow-hidden rounded-lg border border-slate-200">
+                  <div className="flex h-9 items-center overflow-hidden rounded-lg border border-slate-200">
                     {[
                       { value: "active", label: "Ativos" },
                       { value: "inactive", label: "Inativos" },
@@ -1013,7 +1069,7 @@ export default function AdminClientesPage() {
                             );
                             setPage(1);
                           }}
-                          className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${selected ? "bg-[linear-gradient(105deg,#061637_0%,#321360_48%,#C5107A_100%)] text-white shadow-sm" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+                          className={`h-9 px-2.5 text-xs font-medium transition-colors ${selected ? "bg-[linear-gradient(105deg,#061637_0%,#321360_48%,#C5107A_100%)] text-white shadow-sm" : "bg-white text-slate-500 hover:bg-slate-50"}`}
                         >
                           {label}
                         </button>
@@ -1096,9 +1152,9 @@ export default function AdminClientesPage() {
                 <div
                   ref={tableScrollRef}
                   onScroll={handleTableScroll}
-                  className="overflow-hidden allka-table-scroll-body"
+                  className="overflow-x-auto allka-table-scroll-body"
                 >
-                  <table className="tabela-cartao w-full table-fixed text-xs">
+                  <table className="tabela-cartao w-full min-w-[960px] text-xs">
                     <thead>
                       <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                         <th
@@ -1128,22 +1184,8 @@ export default function AdminClientesPage() {
                               background: "var(--table-head)",
                               boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                               borderRight: "1px solid rgba(148,163,184,0.16)",
-                              width:
-                                col.key === "id"
-                                  ? "8%"
-                                  : col.key === "cliente"
-                                    ? "27%"
-                                    : col.key === "segmento"
-                                      ? "14%"
-                                      : col.key === "contato"
-                                        ? "9%"
-                                        : col.key === "tipo"
-                                          ? "7%"
-                                          : col.key === "vinculo"
-                                            ? "15%"
-                                            : col.key === "status"
-                                              ? "10%"
-                                              : "10%",
+                              width: columnWidths[col.key],
+                              minWidth: columnWidths[col.key],
                             }}
                           >
                             <div className="inline-flex items-center gap-1">
@@ -1190,6 +1232,15 @@ export default function AdminClientesPage() {
                                 </Tooltip>
                               </TooltipProvider>
                             </div>
+                            <div
+                              role="separator"
+                              aria-orientation="vertical"
+                              aria-label={`Redimensionar coluna ${col.label}`}
+                              onMouseDown={(event) =>
+                                beginColumnResize(col.key, event)
+                              }
+                              className="absolute -right-0.5 top-1/2 z-20 h-7 w-1.5 -translate-y-1/2 cursor-col-resize rounded-full bg-slate-200/90 opacity-70 transition-all hover:w-2 hover:bg-fuchsia-400 hover:opacity-100"
+                            />
                           </th>
                         ))}
                         <th className="w-24 py-2 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">

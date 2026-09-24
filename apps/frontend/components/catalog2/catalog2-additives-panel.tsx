@@ -259,7 +259,7 @@ function RequestAdditiveForm({ catalog2Items, myQuotes, projectId, onCreated, po
         1. Ajuste a configuração (variação, adicional ou quantidade) no{" "}
         <a
           className="inline-flex items-center gap-1 text-blue-600 underline"
-          href={`/${portal}/catalog2`}
+          href={`/${portal}/catalogo-produtos`}
           target="_blank"
           rel="noreferrer"
         >

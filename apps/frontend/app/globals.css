@@ -2008,6 +2008,48 @@
   height: 0;
 }
 
+/* Barra de rolagem interna da tela de Usuários: discreta, no limite direito
+   do conteúdo e alinhada ao degradê institucional. */
+.allka-users-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #7c20d5 #f2f5fa;
+  scrollbar-gutter: stable;
+}
+
+.allka-users-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+
+.allka-users-scroll::-webkit-scrollbar-track {
+  margin: 10px 0;
+  background: #f2f5fa;
+  border-radius: 999px;
+}
+
+.allka-users-scroll::-webkit-scrollbar-thumb {
+  min-height: 42px;
+  background: linear-gradient(180deg, #1b2158 0%, #6520c4 54%, #c41888 100%);
+  border: 2px solid #f2f5fa;
+  border-radius: 999px;
+  box-shadow: 0 1px 5px rgb(69 28 133 / 18%);
+}
+
+.allka-users-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #242967 0%, #7821d4 54%, #d31991 100%);
+}
+
+.dark .allka-users-scroll {
+  scrollbar-color: #a65de4 #1e293b;
+}
+
+.dark .allka-users-scroll::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.dark .allka-users-scroll::-webkit-scrollbar-thumb {
+  border-color: #1e293b;
+}
+
 /* ─── Acabamento de aplicativo no celular ───────────────────────────────────
  *
  * Só o que muda a sensação de uso; nada aqui altera layout no desktop.

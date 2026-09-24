@@ -17,6 +17,7 @@ import {
   Star,
   Upload,
   Camera,
+  MoreVertical,
 } from "lucide-react";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
@@ -46,6 +47,9 @@ interface UserViewHeaderProps {
    * cartão de saldo — este já aparece na topbar global). Mantém avatar,
    * nome, tipo de conta, status e os botões de salvar/cancelar edição. */
   asPage?: boolean;
+  /** Espaçamento e arredondamento do banner quando aberto dentro de uma
+   * tela/painel já existente. */
+  className?: string;
 }
 
 const getInitials = (name: string): string => {
@@ -96,6 +100,7 @@ export function UserViewHeader({
   showBalance,
   onToggleBalance,
   asPage = false,
+  className,
 }: UserViewHeaderProps) {
   const [avatar, setAvatar] = useState<string | null>(user.avatar || null);
   const [showAvatarUpload, setShowAvatarUpload] = useState(false);
@@ -176,6 +181,7 @@ export function UserViewHeader({
 
   return (
     <ModalBrandHeader
+      className={className}
       title={user.name}
       subtitle={formatRole(user.role as string)}
       left={
@@ -353,6 +359,15 @@ export function UserViewHeader({
             </div>
           </TooltipProvider>
           {!asPage && <CopyLinkButton />}
+          {!asPage && (
+            <button
+              type="button"
+              aria-label="Mais opções"
+              className="text-white/70 hover:text-white hover:bg-white/15 p-1.5 rounded-lg transition-colors"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+          )}
         </div>
       }
       onClose={asPage ? undefined : onClose}

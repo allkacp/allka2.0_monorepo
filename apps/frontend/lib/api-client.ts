@@ -629,6 +629,8 @@ class ApiClient {
       data: Array<{
         offer_id: string;
         rotation_order: number;
+        rotation_round: number;
+        is_mandatory: boolean;
         offered_at: string;
         expires_at: string;
         seconds_left: number;
@@ -657,6 +659,30 @@ class ApiClient {
   }
   async restartTaskRotation(taskId: string) {
     return this.post(`/project-tasks/${taskId}/rotation/restart`, {});
+  }
+  async getTaskRoutingSettings() {
+    return this.get<{ offer_timeout_minutes: number; mandatory_decline_alerts: boolean }>("/project-tasks/routing/settings");
+  }
+  async updateTaskRoutingSettings(data: { offer_timeout_minutes: number; mandatory_decline_alerts: boolean }) {
+    return this.put("/project-tasks/routing/settings", data);
+  }
+  async getTaskRoutingAreas() {
+    return this.get<Array<{ area: string; auto_nomad_dispatch_enabled: boolean }>>("/project-tasks/routing/areas");
+  }
+  async updateTaskRoutingArea(area: string, auto_nomad_dispatch_enabled: boolean) {
+    return this.put("/project-tasks/routing/areas", { area, auto_nomad_dispatch_enabled });
+  }
+  async updateTaskRouting(taskId: string, auto_nomad_dispatch_enabled: boolean) {
+    return this.patch(`/project-tasks/${taskId}/routing`, { auto_nomad_dispatch_enabled });
+  }
+  async getTaskRoutingNomades(taskId: string) {
+    return this.get<Array<{ id: string; name: string; user_id: string | null; eligible: boolean }>>(`/project-tasks/${taskId}/routing/nomades`);
+  }
+  async sendTaskManualOffer(taskId: string, nomadeId: string) {
+    return this.post(`/project-tasks/${taskId}/routing/manual-offer`, { nomade_id: nomadeId });
+  }
+  async assignTaskNomadeDirectly(taskId: string, nomadeId: string) {
+    return this.post(`/project-tasks/${taskId}/routing/direct-assign`, { nomade_id: nomadeId });
   }
 
   // ── Canais, campanhas e banners obrigatórios (ata 2026-08, bloco 5/5) ──
@@ -934,6 +960,34 @@ class ApiClient {
   /** Memória de cálculo do preço (computePricing na íntegra) — Admin Master, reunião 10/09. */
   getCatalog2ProductPricingMemory(productId: string) { return this.c2("GET", `/products/${productId}/pricing-memory`); }
 
+  // ── Checkout admin — Admin Master contrata em nome de empresa/agência
+  // (achado do usuário 2026-09-23: "posso vincular a uma agência, dar de
+  // brinde, descontar da carteira, gerar link de pagamento — sempre com
+  // motivo"). ──────────────────────────────────────────────────────────
+  searchAdminCheckoutTargets(q: string) {
+    return this.c2<{ data: Array<{ kind: "company" | "agency"; id: string; name: string; email: string | null; wallet_balance: number }> }>(
+      "GET",
+      `/checkout-targets?q=${encodeURIComponent(q)}`,
+    );
+  }
+  listAdminCheckoutTargetProjects(kind: "company" | "agency", id: string) {
+    return this.c2<{ data: Array<{ id: string; title: string; project_code: string; status: string; created_at: string }> }>(
+      "GET",
+      `/checkout-targets/${kind}/${id}/projects`,
+    );
+  }
+  adminCatalog2Checkout(body: {
+    product: string;
+    selection: Record<string, any>;
+    period?: string | null;
+    target: { kind: "company" | "agency"; id: string };
+    project_id?: string | null;
+    settlement: "ALLKOINS" | "BRINDE" | "LINK_PAGAMENTO";
+    motivo: string;
+  }) {
+    return this.c2("POST", "/checkout", body);
+  }
+
   // ── Catálogo do CLIENTE do catalog2 (sprint de produtos, bloco 5/6) ────
   private cc<T = any>(m: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
     if (m === "GET") return this.get<T>(`/catalog2${path}`);
@@ -1104,6 +1158,12 @@ class ApiClient {
   // ex.: picker de consultor em criar-projeto).
   async getAdminUsers(filters?: Record<string, any>) {
     return this.get("/admin/users", filters);
+  }
+
+  // Admin-only — métricas reais para o perfil de um usuário. Etapas concluídas
+  // são atribuídas pelo backend a quem efetivamente as finalizou.
+  async getAdminUserOverview(id: string | number) {
+    return this.get(`/admin/users/${id}/overview`);
   }
 
   // Admin-only — vincula/desvincula/troca a empresa de um usuário

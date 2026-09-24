@@ -339,6 +339,10 @@ router.get("/me", verifyToken, async (req, res, next) => {
         is_active: true,
         status: true,
         created_at: true,
+        // admin_profile_id (FK escalar) precisa vir junto com o relacionamento
+        // abaixo: a tela "Meu Perfil" (UserViewSlidePanel) lê esse campo pra
+        // saber qual perfil está selecionado, não o objeto aninhado.
+        admin_profile_id: true,
         // Perfil de acesso e as permissoes que ele concede. O frontend usa
         // isto para esconder o que o usuario nao pode fazer; a autorizacao
         // de verdade e no servidor (middleware requirePermission).
@@ -364,6 +368,26 @@ router.get("/me", verifyToken, async (req, res, next) => {
             updated_at: true,
           },
         },
+        // Espelha owned_agency — sem isto, empresa-context.tsx (a única
+        // fonte que "Boa noite, ...!" usa pra achar o nome da empresa no
+        // cabeçalho) dependia de GET /clients, que é escopado pra quem
+        // GERENCIA empresas (admin/agência), não pra própria empresa logada
+        // — o próprio dono nunca aparecia na sua lista, e o perfil nunca
+        // carregava (achado do usuário 2026-09-25, mesma classe de bug já
+        // corrigida pro lado da agência).
+        owned_company: {
+          select: {
+            id: true,
+            name: true,
+            cnpj: true,
+            email: true,
+            phone: true,
+            address: true,
+            status: true,
+            created_at: true,
+            updated_at: true,
+          },
+        },
       },
     });
 
@@ -375,10 +399,10 @@ router.get("/me", verifyToken, async (req, res, next) => {
     // Resposta sempre expôs a agência sob a chave "agency" (consumido por
     // apps/frontend/contexts/agencia-context.tsx e sidebar-context.tsx via
     // currentUser.agency.name) — campo Prisma virou "owned_agency", contrato
-    // externo não muda.
-    const { owned_agency, ...restUser } = user;
+    // externo não muda. "company" é o mesmo padrão pro lado da empresa.
+    const { owned_agency, owned_company, ...restUser } = user;
     const partner_status = await resolvePartnerStatus(user.id);
-    res.json({ ...restUser, agency: owned_agency, partner_status });
+    res.json({ ...restUser, agency: owned_agency, company: owned_company, partner_status });
   } catch (err) {
     next(err);
   }

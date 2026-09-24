@@ -1,4 +1,6 @@
 import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { TooltipContent } from "@/components/ui/tooltip";
 
 import { TooltipTrigger } from "@/components/ui/tooltip";
@@ -56,6 +58,14 @@ import {
   ToggleRight,
   ToggleLeft,
   ChevronsUpDown,
+  ClipboardCheck,
+  Box,
+  ArrowRight,
+  Megaphone,
+  ChevronRight,
+  ExternalLink,
+  AlertTriangle,
+  Crown,
 } from "lucide-react";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Button } from "@/components/ui/button";
@@ -382,7 +392,7 @@ export function UserViewSlidePanel({
   ]);
   const [securityOpenAccordions, setSecurityOpenAccordions] = useState<
     string[]
-  >(["auth"]);
+  >(["auth", "sessions", "2fa", "audit"]);
   const [contaSingleOpen, setContaSingleOpen] = useState(false);
   const [dadosSingleOpen, setDadosSingleOpen] = useState(false);
   const [financialSingleOpen, setFinancialSingleOpen] = useState(false);
@@ -2255,7 +2265,7 @@ export function UserViewSlidePanel({
                 <div className="grid grid-cols-4 gap-3">
                   <div className="flex min-w-0 min-h-[118px] items-start gap-4 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
                     <div className="mt-0.5 flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
-                      <CheckCircle2 className="h-6 w-6" />
+                      <ClipboardCheck className="h-6 w-6" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-600">
@@ -2327,8 +2337,13 @@ export function UserViewSlidePanel({
                             )
                           : "Nunca acessou"}
                       </p>
-                      <p className="mt-3 truncate text-xs text-slate-500">
-                        Registro de login da conta
+                      <p className="mt-3 flex items-center gap-1.5 truncate text-xs text-slate-500">
+                        <span
+                          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${statusColors.dot}`}
+                        />
+                        {statusLabel[onlineStatus as keyof typeof statusLabel]}
+                        {userOverview?.last_login &&
+                          ` há ${formatDistanceToNow(new Date(userOverview.last_login), { locale: ptBR })}`}
                       </p>
                     </div>
                   </div>
@@ -2447,7 +2462,7 @@ export function UserViewSlidePanel({
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-5 flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
-                    <Building2 className="h-5 w-5" />
+                    <Box className="h-5 w-5" />
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-slate-950">
@@ -2497,7 +2512,7 @@ export function UserViewSlidePanel({
               </div>
             </section>
 
-            <section className="grid grid-cols-4 gap-3">
+            <section className="grid grid-cols-2 gap-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-4 flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
@@ -2538,6 +2553,15 @@ export function UserViewSlidePanel({
                     Nenhuma atividade recente.
                   </p>
                 )}
+                {isLocalViniciusDemo && (
+                  <button
+                    type="button"
+                    className="mt-3 flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    Ver toda a atividade
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-4 flex items-center gap-3">
@@ -2575,6 +2599,15 @@ export function UserViewSlidePanel({
                   <p className="flex h-[105px] items-center text-xs text-slate-400">
                     Nenhuma ação pendente.
                   </p>
+                )}
+                {isLocalViniciusDemo && (
+                  <button
+                    type="button"
+                    className="mt-3 flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    Ver todas as ações
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
                 )}
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -2895,7 +2928,7 @@ export function UserViewSlidePanel({
             className="mt-0 flex flex-1 flex-col overflow-hidden bg-white dark:bg-background"
           >
             {/* Accordions */}
-            <div className="allka-users-scroll flex-1 overflow-y-auto px-0 pb-2">
+            <div className="allka-users-scroll flex-1 overflow-y-auto px-0 pt-2 pb-2">
               <Accordion
                 type="multiple"
                 value={dadosOpenAccordions}
@@ -3101,118 +3134,7 @@ export function UserViewSlidePanel({
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* 2. STATUS DA CONTA */}
-                <AccordionItem
-                  value="status-conta"
-                  className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"
-                >
-                  <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-amber-600" />
-                      <span className="text-xs font-semibold text-slate-700">
-                        Status da Conta
-                      </span>
-                      <Badge
-                        className={`ml-auto ${getStatusBadgeColor(getCurrentStatus())} border text-[10px]`}
-                      >
-                        {getCurrentStatus().charAt(0).toUpperCase() +
-                          getCurrentStatus().slice(1)}
-                      </Badge>
-                    </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
-                    <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                        Status da Conta
-                      </p>
-                      {isDataFieldEditing("conta", "status") ? (
-                        <div className="flex flex-wrap gap-2">
-                          {(
-                            [
-                              {
-                                value: "ativo",
-                                label: "Ativo",
-                                active:
-                                  "bg-emerald-500 text-white border-emerald-500",
-                                inactive:
-                                  "bg-white text-slate-600 border-slate-300 hover:border-emerald-400 hover:text-emerald-600",
-                              },
-                              {
-                                value: "inativo",
-                                label: "Inativo",
-                                active:
-                                  "bg-slate-500 text-white border-slate-500",
-                                inactive:
-                                  "bg-white text-slate-600 border-slate-300 hover:border-slate-400",
-                              },
-                              {
-                                value: "pausado",
-                                label: "Pausado",
-                                active:
-                                  "bg-amber-500 text-white border-amber-500",
-                                inactive:
-                                  "bg-white text-slate-600 border-slate-300 hover:border-amber-400 hover:text-amber-600",
-                              },
-                              {
-                                value: "suspenso",
-                                label: "Suspenso",
-                                active: "bg-red-500 text-white border-red-500",
-                                inactive:
-                                  "bg-white text-slate-600 border-slate-300 hover:border-red-400 hover:text-red-600",
-                              },
-                            ] as const
-                          ).map((s) => (
-                            <button
-                              key={s.value}
-                              onClick={() => handleStatusChange(s.value)}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all ${getCurrentStatus() === s.value ? s.active : s.inactive}`}
-                            >
-                              {s.label}
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                            getCurrentStatus() === "ativo"
-                              ? "bg-emerald-500 text-white"
-                              : getCurrentStatus() === "inativo"
-                                ? "bg-slate-300 text-slate-700"
-                                : getCurrentStatus() === "pausado"
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          {getCurrentStatus() === "ativo" && (
-                            <CheckCircle className="h-3.5 w-3.5" />
-                          )}
-                          {getCurrentStatus() === "inativo" && (
-                            <PauseCircle className="h-3.5 w-3.5" />
-                          )}
-                          {getCurrentStatus() === "pausado" && (
-                            <Clock className="h-3.5 w-3.5" />
-                          )}
-                          {getCurrentStatus() === "suspenso" && (
-                            <XCircle className="h-3.5 w-3.5" />
-                          )}
-                          {getCurrentStatus().charAt(0).toUpperCase() +
-                            getCurrentStatus().slice(1)}
-                        </span>
-                      )}
-                      {!isContaEditMode && (
-                        <div className="absolute right-2 top-2">
-                          <InlineFieldEditButton
-                            scope="conta"
-                            field="status"
-                            label="status da conta"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-
-                {/* 3. DADOS PESSOAIS */}
+                {/* 2. DADOS PESSOAIS */}
                 <AccordionItem
                   value="pessoais"
                   className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"
@@ -3419,7 +3341,7 @@ export function UserViewSlidePanel({
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* 5. CONTATO */}
+                {/* 3. CONTATO */}
                 <AccordionItem
                   value="contato"
                   className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"
@@ -3564,7 +3486,7 @@ export function UserViewSlidePanel({
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* 6. ENDEREÇO */}
+                {/* 4. ENDEREÇO */}
                 <AccordionItem
                   value="endereco"
                   className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"
@@ -3848,7 +3770,7 @@ export function UserViewSlidePanel({
                   </AccordionContent>
                 </AccordionItem>
 
-                {/* 7. INFORMAÇÕES ADICIONAIS — visível apenas para admin e partner */}
+                {/* 5. INFORMAÇÕES ADICIONAIS — visível apenas para admin e partner */}
                 {(viewerRole === "admin" || viewerRole === "partner") && (
                   <AccordionItem
                     value="adicionais"
@@ -3938,6 +3860,117 @@ export function UserViewSlidePanel({
                     </AccordionContent>
                   </AccordionItem>
                 )}
+
+                {/* 6. STATUS DA CONTA */}
+                <AccordionItem
+                  value="status-conta"
+                  className="border border-slate-200/80 rounded-xl overflow-hidden shadow-sm"
+                >
+                  <AccordionTrigger className="px-4 py-3 bg-white hover:bg-slate-50 [&[data-state=open]]:bg-slate-50">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-amber-600" />
+                      <span className="text-xs font-semibold text-slate-700">
+                        Status da Conta
+                      </span>
+                      <Badge
+                        className={`ml-auto ${getStatusBadgeColor(getCurrentStatus())} border text-[10px]`}
+                      >
+                        {getCurrentStatus().charAt(0).toUpperCase() +
+                          getCurrentStatus().slice(1)}
+                      </Badge>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-3 py-3 border-t border-slate-100 bg-slate-50/30">
+                    <div className="relative bg-slate-100/70 rounded-lg px-2.5 py-2 pr-12">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                        Status da Conta
+                      </p>
+                      {isDataFieldEditing("conta", "status") ? (
+                        <div className="flex flex-wrap gap-2">
+                          {(
+                            [
+                              {
+                                value: "ativo",
+                                label: "Ativo",
+                                active:
+                                  "bg-emerald-500 text-white border-emerald-500",
+                                inactive:
+                                  "bg-white text-slate-600 border-slate-300 hover:border-emerald-400 hover:text-emerald-600",
+                              },
+                              {
+                                value: "inativo",
+                                label: "Inativo",
+                                active:
+                                  "bg-slate-500 text-white border-slate-500",
+                                inactive:
+                                  "bg-white text-slate-600 border-slate-300 hover:border-slate-400",
+                              },
+                              {
+                                value: "pausado",
+                                label: "Pausado",
+                                active:
+                                  "bg-amber-500 text-white border-amber-500",
+                                inactive:
+                                  "bg-white text-slate-600 border-slate-300 hover:border-amber-400 hover:text-amber-600",
+                              },
+                              {
+                                value: "suspenso",
+                                label: "Suspenso",
+                                active: "bg-red-500 text-white border-red-500",
+                                inactive:
+                                  "bg-white text-slate-600 border-slate-300 hover:border-red-400 hover:text-red-600",
+                              },
+                            ] as const
+                          ).map((s) => (
+                            <button
+                              key={s.value}
+                              onClick={() => handleStatusChange(s.value)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all ${getCurrentStatus() === s.value ? s.active : s.inactive}`}
+                            >
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            getCurrentStatus() === "ativo"
+                              ? "bg-emerald-500 text-white"
+                              : getCurrentStatus() === "inativo"
+                                ? "bg-slate-300 text-slate-700"
+                                : getCurrentStatus() === "pausado"
+                                  ? "bg-amber-100 text-amber-700"
+                                  : "bg-red-100 text-red-700"
+                          }`}
+                        >
+                          {getCurrentStatus() === "ativo" && (
+                            <CheckCircle className="h-3.5 w-3.5" />
+                          )}
+                          {getCurrentStatus() === "inativo" && (
+                            <PauseCircle className="h-3.5 w-3.5" />
+                          )}
+                          {getCurrentStatus() === "pausado" && (
+                            <Clock className="h-3.5 w-3.5" />
+                          )}
+                          {getCurrentStatus() === "suspenso" && (
+                            <XCircle className="h-3.5 w-3.5" />
+                          )}
+                          {getCurrentStatus().charAt(0).toUpperCase() +
+                            getCurrentStatus().slice(1)}
+                        </span>
+                      )}
+                      {!isContaEditMode && (
+                        <div className="absolute right-2 top-2">
+                          <InlineFieldEditButton
+                            scope="conta"
+                            field="status"
+                            label="status da conta"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
               </Accordion>
             </div>
           </TabsContent>
@@ -3947,7 +3980,7 @@ export function UserViewSlidePanel({
             value="permissoes"
             className="mt-0 flex flex-1 flex-col overflow-hidden bg-white dark:bg-background"
           >
-            <div className="allka-users-scroll flex-1 space-y-3 overflow-y-auto px-0 pb-2 pt-2">
+            <div className="allka-users-scroll flex-1 space-y-3 overflow-y-auto px-0 pt-2 pb-2">
               {/* PERFIS DE PERMISSÃO */}
               {(() => {
                 // Perfis reais, vindos de /api/permissions/profiles. Antes
@@ -4077,28 +4110,52 @@ export function UserViewSlidePanel({
                                   profile.id,
                                 )
                               }
-                              className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${isSelected ? "border-blue-300 bg-blue-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}
+                              className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-all ${isPermissionsEditMode ? "cursor-pointer" : "cursor-default"} ${
+                                isSelected
+                                  ? profile.is_master
+                                    ? "border-amber-200 bg-amber-50"
+                                    : "border-blue-300 bg-blue-50"
+                                  : "border-transparent hover:border-slate-200 hover:bg-slate-50"
+                              }`}
                             >
-                              <span
-                                className={`h-2 w-2 rounded-full flex-shrink-0 ${cor.dot}`}
-                              />
+                              {profile.is_master ? (
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                                  <Crown className="h-3.5 w-3.5" />
+                                </div>
+                              ) : (
+                                <span
+                                  className={`h-2 w-2 rounded-full flex-shrink-0 ${cor.dot}`}
+                                />
+                              )}
                               <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium text-slate-900 leading-tight">
-                                  {profile.name}
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm font-medium text-slate-900 leading-tight">
+                                    {profile.name}
+                                  </span>
                                   {profile.is_master && (
-                                    <span className="ml-1.5 text-[10px] font-semibold text-red-600">
+                                    <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 border border-amber-200 flex-shrink-0">
                                       acesso total
-                                    </span>
+                                    </Badge>
                                   )}
                                 </div>
                                 <div className="text-xs text-slate-500 truncate">
-                                  {profile.description || "Sem descrição"}
+                                  {profile.is_master
+                                    ? "Perfil com acesso total ao sistema"
+                                    : profile.description || "Sem descrição"}
                                 </div>
                               </div>
-                              {isSelected && (
-                                <Badge className="text-[10px] px-1.5 py-0 bg-blue-100 text-blue-700 border border-blue-200 flex-shrink-0">
-                                  Ativo
-                                </Badge>
+                              {isSelected && !isPermissionsEditMode && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handlePermissionsEditMode();
+                                  }}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-blue-500 hover:bg-white/60 flex-shrink-0"
+                                  aria-label="Editar perfil de acesso"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </button>
                               )}
                               {isPermissionsEditMode && !isSelected && (
                                 <div className="h-4 w-4 rounded-full border-2 border-slate-300 flex-shrink-0" />
@@ -4111,13 +4168,6 @@ export function UserViewSlidePanel({
                             </div>
                           );
                         })}
-                        {!isPermissionsEditMode &&
-                          perfilSelecionado?.is_master && (
-                            <div className="mx-1 mt-1 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                              <CheckCircle2 className="h-4 w-4" />
-                              <span>Perfil com acesso total ao sistema</span>
-                            </div>
-                          )}
                       </div>
                     </div>
 
@@ -4743,7 +4793,7 @@ export function UserViewSlidePanel({
             value="seguranca"
             className="flex flex-1 flex-col overflow-hidden bg-white dark:bg-background mt-0"
           >
-            <div className="allka-users-scroll flex-1 overflow-y-auto px-0 pb-2 pt-2">
+            <div className="allka-users-scroll flex-1 overflow-y-auto px-0 pt-2 pb-2">
               <div className="mb-3 grid grid-cols-1 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white shadow-sm sm:grid-cols-[minmax(0,1.8fr)_repeat(3,minmax(0,1fr))] sm:divide-x sm:divide-y-0">
                 <div className="flex items-center gap-4 p-4">
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-emerald-500 bg-emerald-50 text-xl font-bold text-slate-900">
@@ -6177,28 +6227,56 @@ function LgpdTabContent({
       value="lgpd"
       className="allka-users-scroll flex-1 overflow-y-auto bg-white px-0 pt-2 pb-2 mt-0"
     >
+      <div className="mb-4 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+        <Info className="h-4 w-4 shrink-0 mt-0.5" />
+        Mantenha suas preferências de privacidade atualizadas para garantir
+        conformidade com a LGPD.
+      </div>
       <div className="grid items-start gap-3 lg:grid-cols-2">
         {/* Status card */}
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-          <div className="flex items-center gap-2 mb-1">
-            <Shield className="h-4 w-4 text-blue-600" />
-            <h3 className="font-semibold text-sm text-slate-800">
-              Consentimento &amp; Base Legal
-            </h3>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+              <FileText className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm text-slate-800">
+                Consentimento e base legal
+              </h3>
+              <p className="text-xs text-slate-500">
+                Gerencie o consentimento para o tratamento dos seus dados
+                pessoais.
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-500">Status:</span>
+          <div
+            className={`flex items-start gap-2 rounded-xl border px-3 py-2.5 ${
+              lgpdData?.consent_given
+                ? "border-emerald-100 bg-emerald-50"
+                : "border-orange-100 bg-orange-50"
+            }`}
+          >
             {lgpdData?.consent_given ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
-                ✓ Consentimento dado
-              </span>
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
-                ⚠ Sem consentimento
-              </span>
+              <AlertTriangle className="h-4 w-4 shrink-0 text-orange-600 mt-0.5" />
             )}
+            <div>
+              <p
+                className={`text-xs font-semibold ${lgpdData?.consent_given ? "text-emerald-700" : "text-orange-700"}`}
+              >
+                {lgpdData?.consent_given
+                  ? "Consentimento dado"
+                  : "Sem consentimento"}
+              </p>
+              <p className="text-xs text-slate-500">
+                {lgpdData?.consent_given
+                  ? "Consentimento registrado para o tratamento dos dados."
+                  : "Você ainda não forneceu consentimento para o tratamento dos seus dados."}
+              </p>
+            </div>
             {lgpdData?.deletion_requested && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+              <span className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
                 ⛔ Exclusão solicitada
               </span>
             )}
@@ -6253,11 +6331,44 @@ function LgpdTabContent({
                 </option>
               </select>
             </div>
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-slate-700">
-                Aceita comunicações da plataforma
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-700">
+                Preferências de comunicação
               </label>
-              <Switch checked={commOptIn} onCheckedChange={setCommOptIn} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                  <Mail className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-slate-700">
+                      Receber comunicações da plataforma
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Novidades, atualizações e avisos importantes.
+                    </p>
+                  </div>
+                  <Switch checked={commOptIn} onCheckedChange={setCommOptIn} />
+                </div>
+                <div className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                  <Megaphone className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-slate-700">
+                      Receber comunicações de marketing
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Conteúdos, dicas e ofertas exclusivas.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={!!lgpdData?.marketing_opt_in}
+                    onCheckedChange={(checked) =>
+                      setLgpdData((prev: any) => ({
+                        ...(prev ?? {}),
+                        marketing_opt_in: checked,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <div className="flex justify-end pt-1">
@@ -6272,7 +6383,7 @@ function LgpdTabContent({
               ) : (
                 <Save className="h-3.5 w-3.5 mr-1.5" />
               )}
-              Salvar consentimento
+              Salvar alterações
             </Button>
           </div>
         </div>
@@ -6292,50 +6403,83 @@ function LgpdTabContent({
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-orange-100 bg-orange-50 p-3">
-              <p className="text-xs font-semibold text-orange-700">
-                {lgpdData?.consent_given
-                  ? "Consentimento ativo"
-                  : "Consentimento pendente"}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {lgpdData?.consent_given
-                  ? "Consentimento registrado"
-                  : "Ainda não fornecido"}
-              </p>
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-orange-100 bg-orange-50 p-3">
+              <div>
+                <p className="text-xs font-semibold text-orange-700">
+                  {lgpdData?.consent_given
+                    ? "Consentimento ativo"
+                    : "Consentimento pendente"}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {lgpdData?.consent_given
+                    ? "Consentimento registrado"
+                    : "Ainda não fornecido"}
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-orange-300" />
             </div>
-            <div className="rounded-xl border border-violet-100 bg-violet-50 p-3">
-              <p className="text-xl font-bold text-slate-900">
-                {purposes.length}
-              </p>
-              <p className="text-xs text-slate-500">Finalidades registradas</p>
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-violet-100 bg-violet-50 p-3">
+              <div>
+                <p className="text-xl font-bold text-slate-900">
+                  {purposes.length}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Finalidades registradas
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-violet-300" />
             </div>
-            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
-              <p className="text-sm font-semibold text-slate-900">
-                {lgpdData?.data_export_requested
-                  ? "Solicitação ativa"
-                  : "Nenhuma"}
-              </p>
-              <p className="text-xs text-slate-500">Exportação de dados</p>
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-blue-100 bg-blue-50 p-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  {lgpdData?.data_export_requested
+                    ? "Solicitação ativa"
+                    : "Nenhuma"}
+                </p>
+                <p className="text-xs text-slate-500">Exportação de dados</p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-blue-300" />
             </div>
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-              <p className="text-sm font-semibold text-slate-900">
-                {lgpdData?.consent_date || "—"}
-              </p>
-              <p className="text-xs text-slate-500">Última atualização</p>
+            <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  {lgpdData?.consent_date || "—"}
+                </p>
+                <p className="text-xs text-slate-500">Última atualização</p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-emerald-300" />
             </div>
           </div>
         </div>
 
         {/* Finalidades */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="font-semibold text-sm text-slate-800 mb-3">
-            Finalidades de Tratamento
-          </h3>
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-sm text-slate-800">
+                Finalidades de tratamento
+              </h3>
+              <p className="text-xs text-slate-500">
+                Cadastre e gerencie as finalidades para o tratamento dos seus
+                dados pessoais.
+              </p>
+            </div>
+            <Button variant="outline" size="sm" className="text-xs h-8 shrink-0">
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              Adicionar finalidade
+            </Button>
+          </div>
           {purposes.length === 0 ? (
-            <p className="text-xs text-slate-400 italic">
-              Nenhuma finalidade registrada.
-            </p>
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+              <FileText className="mx-auto h-6 w-6 text-slate-300" />
+              <p className="mt-2 text-sm font-semibold text-slate-700">
+                Nenhuma finalidade registrada
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Adicione as finalidades de tratamento para manter sua conta em
+                conformidade com a LGPD.
+              </p>
+            </div>
           ) : (
             <ul className="space-y-1.5">
               {purposes.map((p: string, i: number) => (
@@ -6353,13 +6497,25 @@ function LgpdTabContent({
 
         {/* Histórico de consentimento */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="font-semibold text-sm text-slate-800 mb-3">
-            Histórico de Consentimento
-          </h3>
-          {history.length === 0 ? (
-            <p className="text-xs text-slate-400 italic">
-              Nenhum registro encontrado.
+          <div className="mb-3">
+            <h3 className="font-semibold text-sm text-slate-800">
+              Histórico de consentimento
+            </h3>
+            <p className="text-xs text-slate-500">
+              Acompanhe as alterações no seu consentimento.
             </p>
+          </div>
+          {history.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center">
+              <Clock className="mx-auto h-6 w-6 text-slate-300" />
+              <p className="mt-2 text-sm font-semibold text-slate-700">
+                Nenhum registro encontrado
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                O histórico de consentimento será exibido aqui quando houver
+                alterações.
+              </p>
+            </div>
           ) : (
             <div className="space-y-2">
               {history.map((h: any, i: number) => (
@@ -6381,58 +6537,95 @@ function LgpdTabContent({
 
         {/* Solicitações */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
-          <h3 className="font-semibold text-sm text-slate-800">
-            Direitos do Titular (LGPD Art. 18)
-          </h3>
+          <div className="flex items-center gap-2">
+            <UserIcon className="h-4 w-4 text-blue-600" />
+            <h3 className="font-semibold text-sm text-slate-800">
+              Direitos do titular
+            </h3>
+          </div>
           <p className="text-xs text-slate-500">
-            O usuário pode exercer seus direitos de portabilidade e exclusão a
-            qualquer momento.
+            Exerça seus direitos previstos na LGPD, como portabilidade e
+            exclusão de dados.
           </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-8"
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
               onClick={handleExportData}
+              className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50/60 px-3 py-2.5 text-left hover:bg-blue-50"
             >
-              <Download className="h-3.5 w-3.5 mr-1.5" />
-              Exportar dados (portabilidade)
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-8 border-red-200 text-red-600 hover:bg-red-50"
+              <Download className="h-4 w-4 shrink-0 text-blue-600 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-blue-700">
+                  Exportar dados (portabilidade)
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Baixar uma cópia dos seus dados pessoais.
+                </p>
+              </div>
+            </button>
+            <button
+              type="button"
               onClick={handleRequestDeletion}
               disabled={lgpdData?.deletion_requested || isSaving}
+              className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50/60 px-3 py-2.5 text-left hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              {lgpdData?.deletion_requested
-                ? "Exclusão já solicitada"
-                : "Solicitar exclusão de dados"}
-            </Button>
+              <Trash2 className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-red-700">
+                  {lgpdData?.deletion_requested
+                    ? "Exclusão já solicitada"
+                    : "Solicitar exclusão de dados"}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Solicite a exclusão definitiva dos seus dados.
+                </p>
+              </div>
+            </button>
           </div>
           {lgpdData?.deletion_requested_at && (
             <p className="text-xs text-red-500">
               Solicitação registrada em: {lgpdData.deletion_requested_at}
             </p>
           )}
+          <p className="flex items-start gap-1.5 text-[11px] text-slate-400">
+            <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            As solicitações serão analisadas conforme os prazos estabelecidos
+            pela LGPD.
+          </p>
         </div>
 
         {/* Política de Privacidade */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h3 className="font-semibold text-sm text-slate-800 mb-2">
-            Política de Privacidade
-          </h3>
-          <a
-            href="#"
-            className="text-xs text-blue-600 underline underline-offset-2 hover:text-blue-700"
-            onClick={(e) => e.preventDefault()}
-          >
-            Ler Política de Privacidade Allka v1.1
-          </a>
-          <p className="text-xs text-slate-400 mt-1">
-            Última atualização: 01/01/2024 · Base legal: LGPD Lei 13.709/2018
+          <div className="mb-3 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-violet-600" />
+            <h3 className="font-semibold text-sm text-slate-800">
+              Política de privacidade
+            </h3>
+          </div>
+          <p className="text-xs text-slate-500 mb-3">
+            Consulte nossa política de privacidade e saiba como tratamos seus
+            dados.
           </p>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+            <div>
+              <p className="text-xs font-semibold text-slate-800">
+                Versão v1.1
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Última atualização: 01/01/2024 · Base legal: LGPD — Lei nº
+                13.709/2018
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-8 shrink-0"
+              onClick={(e) => e.preventDefault()}
+            >
+              Ver política
+              <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
+            </Button>
+          </div>
         </div>
       </div>
     </TabsContent>

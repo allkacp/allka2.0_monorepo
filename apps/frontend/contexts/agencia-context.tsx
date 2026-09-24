@@ -147,7 +147,33 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
           currentUser?.agency?.name ||
           currentUser?.active_agency_name ||
           "";
-        if (agenciesRes.status === "fulfilled") {
+        // GET /agencies é escopado pra quem GERENCIA agências (admin) — uma
+        // agência logada nunca aparece na sua própria lista, então isto
+        // sempre ficava vazio e o cabeçalho travava em "Carregando..." pra
+        // sempre (achado do usuário 2026-09-25, mesma classe de bug do lado
+        // da empresa — ver empresa-context.tsx). A fonte confiável da
+        // PRÓPRIA agência é /auth/me (campo `agency`, relação owned_agency).
+        // A lista de /agencies vira só fallback (ex.: admin navegando).
+        const own = currentUser?.agency;
+        if (own) {
+          setProfile({
+            id: String(currentUser?.agency_id || currentUser?.active_agency_id || own.id || own.name || ""),
+            name: own.name || "",
+            cnpj: own.document || own.cnpj || "",
+            email: own.email || "",
+            phone: own.phone || own.whatsapp || "",
+            plan: own.plan || own.planType || "",
+            planDiscount: own.planDiscount || 0,
+            partnerName: own.partnerName || "",
+            status: own.status || "active",
+            createdAt: own.created_at || own.createdAt || "",
+            currentMrr: own.currentMrr || 0,
+            totalProjects: own.totalProjects || 0,
+            totalTasks: own.totalTasks || 0,
+            partnerLevel: own.partner_level || "bronze",
+            partnerInviteStatus: own.partner_profile?.status || undefined,
+          });
+        } else if (agenciesRes.status === "fulfilled") {
           const data: any = agenciesRes.value;
           const list = data.data || (Array.isArray(data) ? data : []);
           const matchedAgency = activeAgencyName

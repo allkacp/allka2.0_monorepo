@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Store,
   Loader2,
@@ -14,6 +20,9 @@ import {
   ListChecks,
   SlidersHorizontal,
   X,
+  Clock3,
+  Heart,
+  ArrowRight,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { useIallkaContext } from "@/contexts/iallka-context";
@@ -22,7 +31,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   STANDARD_SHELL_PANEL_CLASS,
+  STANDARD_SHELL_TABLE_CARD_CLASS,
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
@@ -44,9 +58,21 @@ import {
 } from "@/components/ui/tooltip";
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
+import { Catalog2ProductCard } from "@/components/catalog2-product-card";
+import { Catalog2ProductListRow, Catalog2ProductListHeader } from "@/components/catalog2-product-list-row";
 import { ProvisionalBadge } from "@/components/provisional-badge";
-import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
-import { CATALOG2_STATUS_LABEL, CATALOG2_STATUS_TONE } from "@/lib/catalog2-status";
+import {
+  usePersistedViewMode,
+  viewModeGridClass,
+} from "@/lib/use-persisted-view-mode";
+import {
+  catalog2CategoryTone,
+  catalog2EditorialImage,
+} from "@/lib/catalog2-editorial";
+import {
+  CATALOG2_STATUS_LABEL,
+  CATALOG2_STATUS_TONE,
+} from "@/lib/catalog2-status";
 import {
   provisionalPrice,
   provisionalDeadlineDays,
@@ -59,6 +85,7 @@ import {
 import { Info } from "lucide-react";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
+import { useNavigate, useParams } from "react-router-dom";
 
 // Catálogo de Produtos — visão de APRESENTAÇÃO e conferência comercial dos
 // produtos catalog2 (reunião 2026-09, consolidação "catálogo2 como cadastro
@@ -85,14 +112,27 @@ import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 const STATUS_LABEL: Record<string, string> = CATALOG2_STATUS_LABEL;
 const STATUS_TONE: Record<string, string> = CATALOG2_STATUS_TONE;
 const PENDENCY_LABEL: Record<string, string> = {
-  conteudo: "conteúdo", classificacao: "classificação", variacoes: "variações",
-  adicionais: "adicionais", tarefas: "tarefas", etapas: "etapas", preco: "preço",
-  prazo: "prazo", portfolio: "portfólio", revisao_rose: "revisão", publicacao: "publicação",
+  conteudo: "conteúdo",
+  classificacao: "classificação",
+  variacoes: "variações",
+  adicionais: "adicionais",
+  tarefas: "tarefas",
+  etapas: "etapas",
+  preco: "preço",
+  prazo: "prazo",
+  portfolio: "portfólio",
+  revisao_rose: "revisão",
+  publicacao: "publicação",
   esforco_tarefas: "especialidade/horas das tarefas",
 };
 
 interface ReadinessProduct {
   id: string;
+  // ID numérico curto do link direto (/admin/catalogo-produtos/:n) — mesmo
+  // esquema já usado por company/agency/líder (achado do usuário
+  // 2026-09-23: "quando eu clico em produto, ele mostra o ID... pra
+  // qualquer um").
+  sequence_number: number;
   name: string;
   is_test_local: boolean;
   status: string;
@@ -157,6 +197,10 @@ interface ListProduct {
 }
 type Merged = ReadinessProduct & { list?: ListProduct };
 
+function catalogProductShortCode(p: Merged) {
+  return p.sequence_number != null ? String(p.sequence_number) : p.id.slice(-8).toLowerCase();
+}
+
 // Mesmas 7 opções do Catálogo publicado (product-catalog-view.tsx,
 // SORT_OPTIONS) — 4 reais (preço/nome), "Alterado recentemente" some no
 // lugar de "Mais relevantes" (nenhuma métrica de relevância real existe
@@ -168,30 +212,53 @@ type Merged = ReadinessProduct & { list?: ListProduct };
 // os produtos que ainda não têm preço pronto — nunca exibido como se fosse
 // comercial (o card/linha sempre mostra o selo "provisório" ao lado).
 function priceForSort(p: Merged): number {
-  return p.price_amount ?? p.pricing_simulation?.price_amount ?? p.provisional?.price_amount ?? provisionalPrice(p.id).value;
+  return (
+    p.price_amount ??
+    p.pricing_simulation?.price_amount ??
+    p.provisional?.price_amount ??
+    provisionalPrice(p.id).value
+  );
 }
 
 // ── Badge comercial (reunião 10/09) — UM único badge por card, prioridade
 // real: promoção > lançamento > novo > destaque (a mesma ordem de urgência
 // comercial). Real sempre vence; provisório só aparece quando NENHUM campo
 // real de merchandising está definido, e a fixture nunca recebe badge.
-interface MerchBadgeView { kind: MerchBadgeKind; label: string; isProvisional: boolean; promotionText?: string | null }
+interface MerchBadgeView {
+  kind: MerchBadgeKind;
+  label: string;
+  isProvisional: boolean;
+  promotionText?: string | null;
+}
 function resolveMerchBadge(p: Merged): MerchBadgeView | null {
   const m = p.merchandising;
   if (m) {
-    if (m.is_promotion) return { kind: "promocao", label: "Promoção", isProvisional: false, promotionText: m.promotion_text };
-    if (m.is_launch) return { kind: "lancamento", label: "Lançamento", isProvisional: false };
+    if (m.is_promotion)
+      return {
+        kind: "promocao",
+        label: "Promoção",
+        isProvisional: false,
+        promotionText: m.promotion_text,
+      };
+    if (m.is_launch)
+      return { kind: "lancamento", label: "Lançamento", isProvisional: false };
     if (m.is_new) return { kind: "novo", label: "Novo", isProvisional: false };
-    if (m.is_featured) return { kind: "destaque", label: "Destaque", isProvisional: false };
+    if (m.is_featured)
+      return { kind: "destaque", label: "Destaque", isProvisional: false };
   }
   // "Novo" derivado (publicação recente) — mesmo conceito exibido antes num
   // badge separado no canto da imagem; unificado aqui pra nunca duplicar
   // "Novo" em dois lugares do card.
-  if (p.list?.is_new) return { kind: "novo", label: "Novo", isProvisional: false };
+  if (p.list?.is_new)
+    return { kind: "novo", label: "Novo", isProvisional: false };
   if (p.is_test_local) return null; // fixture nunca recebe badge comercial
   const prov = provisionalMerchandising(p.id);
   if (!prov.value) return null;
-  return { kind: prov.value, label: MERCH_KIND_LABEL[prov.value], isProvisional: true };
+  return {
+    kind: prov.value,
+    label: MERCH_KIND_LABEL[prov.value],
+    isProvisional: true,
+  };
 }
 
 const MERCH_TONE: Record<MerchBadgeKind, string> = {
@@ -201,7 +268,9 @@ const MERCH_TONE: Record<MerchBadgeKind, string> = {
   destaque: "bg-amber-500 text-white",
 };
 function MerchBadgeChip({ badge }: { badge: MerchBadgeView }) {
-  const text = badge.isProvisional ? `${badge.label} (provisório)` : badge.label;
+  const text = badge.isProvisional
+    ? `${badge.label} (provisório)`
+    : badge.label;
   return (
     <TooltipProvider delayDuration={300}>
       <Tooltip>
@@ -241,9 +310,15 @@ function ProductCodeInfo({ p }: { p: Merged }) {
           </button>
         </TooltipTrigger>
         <TooltipContent className="text-xs">
-          <p>Código: <span className="font-mono">{p.list?.slug ?? "—"}</span></p>
-          {p.list?.published_version_number != null && <p>Versão publicada: v{p.list.published_version_number}</p>}
-          <p>ID (suporte): <span className="font-mono">{p.id}</span></p>
+          <p>
+            Código: <span className="font-mono">{p.list?.slug ?? "—"}</span>
+          </p>
+          {p.list?.published_version_number != null && (
+            <p>Versão publicada: v{p.list.published_version_number}</p>
+          )}
+          <p>
+            ID (suporte): <span className="font-mono">{p.id}</span>
+          </p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -251,13 +326,27 @@ function ProductCodeInfo({ p }: { p: Merged }) {
 }
 
 const SORTS = {
-  name: { label: "Nome A–Z", fn: (a: Merged, b: Merged) => a.name.localeCompare(b.name) },
-  name_desc: { label: "Nome Z–A", fn: (a: Merged, b: Merged) => b.name.localeCompare(a.name) },
-  price_asc: { label: "Menor preço", fn: (a: Merged, b: Merged) => priceForSort(a) - priceForSort(b) },
-  price_desc: { label: "Maior preço", fn: (a: Merged, b: Merged) => priceForSort(b) - priceForSort(a) },
+  name: {
+    label: "Nome A–Z",
+    fn: (a: Merged, b: Merged) => a.name.localeCompare(b.name),
+  },
+  name_desc: {
+    label: "Nome Z–A",
+    fn: (a: Merged, b: Merged) => b.name.localeCompare(a.name),
+  },
+  price_asc: {
+    label: "Menor preço",
+    fn: (a: Merged, b: Merged) => priceForSort(a) - priceForSort(b),
+  },
+  price_desc: {
+    label: "Maior preço",
+    fn: (a: Merged, b: Merged) => priceForSort(b) - priceForSort(a),
+  },
   updated: {
     label: "Alterado recentemente",
-    fn: (a: Merged, b: Merged) => new Date(b.list?.updated_at ?? 0).getTime() - new Date(a.list?.updated_at ?? 0).getTime(),
+    fn: (a: Merged, b: Merged) =>
+      new Date(b.list?.updated_at ?? 0).getTime() -
+      new Date(a.list?.updated_at ?? 0).getTime(),
   },
 } as const;
 
@@ -269,8 +358,16 @@ const SORTS = {
 // duas mantêm o rótulo original do layout publicado para ficar claro que a
 // opção existia e está apenas aguardando dado real.
 const DISABLED_SORTS = [
-  { label: "Mais vendidos", reason: "Sem dado real de contratações para os produtos novos ainda — existe um vínculo real (ProjectProduct) pra isso quando os primeiros forem publicados e contratados." },
-  { label: "Melhor avaliados", reason: "Catalog2 ainda não tem avaliação de produto — nenhum campo no modelo." },
+  {
+    label: "Mais vendidos",
+    reason:
+      "Sem dado real de contratações para os produtos novos ainda — existe um vínculo real (ProjectProduct) pra isso quando os primeiros forem publicados e contratados.",
+  },
+  {
+    label: "Melhor avaliados",
+    reason:
+      "Catalog2 ainda não tem avaliação de produto — nenhum campo no modelo.",
+  },
 ] as const;
 
 // ── Painel de filtros (reunião 10/09) — só filtros catalog2 REAIS, cada um
@@ -289,20 +386,46 @@ interface CatalogFilters {
   provisionalOnly: boolean;
 }
 const DEFAULT_FILTERS: CatalogFilters = {
-  status: "", hasPrice: false, hasDeadline: false, hasTasks: false,
-  hasSteps: false, hasPendencies: false, provisionalOnly: false,
+  status: "",
+  hasPrice: false,
+  hasDeadline: false,
+  hasTasks: false,
+  hasSteps: false,
+  hasPendencies: false,
+  provisionalOnly: false,
 };
 function countActiveFilters(f: CatalogFilters): number {
-  return (f.status ? 1 : 0) + [f.hasPrice, f.hasDeadline, f.hasTasks, f.hasSteps, f.hasPendencies, f.provisionalOnly].filter(Boolean).length;
+  return (
+    (f.status ? 1 : 0) +
+    [
+      f.hasPrice,
+      f.hasDeadline,
+      f.hasTasks,
+      f.hasSteps,
+      f.hasPendencies,
+      f.provisionalOnly,
+    ].filter(Boolean).length
+  );
 }
-function hasRealPrice(p: Merged) { return !!p.items.preco?.note; }
-function hasRealDeadline(p: Merged) { return !!p.items.prazo?.note; }
-function hasAnyPendency(p: Merged) { return p.blockers.length + p.pendings.length > 0; }
+function hasRealPrice(p: Merged) {
+  return !!p.items.preco?.note;
+}
+function hasRealDeadline(p: Merged) {
+  return !!p.items.prazo?.note;
+}
+function hasAnyPendency(p: Merged) {
+  return p.blockers.length + p.pendings.length > 0;
+}
 // "Campos provisórios" = pelo menos um dos campos comerciais visíveis
 // (preço/prazo/tarefas/etapas) ainda não é real — mesma regra usada nos
 // selos "provisório" dos cards/detalhe.
 function hasAnyProvisionalField(p: Merged) {
-  return !hasRealPrice(p) || !hasRealDeadline(p) || p.task_count === 0 || p.step_count === 0;
+  return (
+    !hasRealPrice(p) ||
+    !hasRealDeadline(p) ||
+    p.task_count === 0 ||
+    p.step_count === 0
+  );
 }
 function matchesFilters(p: Merged, f: CatalogFilters): boolean {
   if (f.status && p.status !== f.status) return false;
@@ -317,17 +440,26 @@ function matchesFilters(p: Merged, f: CatalogFilters): boolean {
 
 export default function AdminCatalogoProdutosPage() {
   const isAdminMaster = useIsAdminMaster();
+  const navigate = useNavigate();
+  const { produtoId: routeProductCode } = useParams<{ produtoId?: string }>();
   const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
-  const [state, setState] = useState<"loading" | "ready" | "forbidden" | "error">("loading");
-  const [readinessProducts, setReadinessProducts] = useState<ReadinessProduct[]>([]);
+  const [state, setState] = useState<
+    "loading" | "ready" | "forbidden" | "error"
+  >("loading");
+  const [readinessProducts, setReadinessProducts] = useState<
+    ReadinessProduct[]
+  >([]);
   const [listById, setListById] = useState<Record<string, ListProduct>>({});
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>(
+    [],
+  );
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("Todos");
   const [sort, setSort] = useState<keyof typeof SORTS>("name");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<CatalogFilters>(DEFAULT_FILTERS);
-  const [draftFilters, setDraftFilters] = useState<CatalogFilters>(DEFAULT_FILTERS);
+  const [draftFilters, setDraftFilters] =
+    useState<CatalogFilters>(DEFAULT_FILTERS);
   const [openProductId, setOpenProductId] = useState<string | null>(null);
   // Detalhe comercial COMPLETO (layout publicado, reparo 2026-09) — bridge a
   // partir do resumo administrativo (ProductDetail), ação separada.
@@ -337,7 +469,10 @@ export default function AdminCatalogoProdutosPage() {
   // interação do catálogo") para quem ainda não escolheu nada; quem já
   // tem uma preferência salva (Grade/2-5 colunas) continua vendo a dela —
   // a hidratação do hook só troca o valor quando existe algo salvo.
-  const [gridMode, setGridMode] = usePersistedViewMode("admin-catalogo-produtos", "list");
+  const [gridMode, setGridMode] = usePersistedViewMode(
+    "admin-catalogo-produtos",
+    3,
+  );
 
   const load = useCallback(async () => {
     setState("loading");
@@ -358,14 +493,40 @@ export default function AdminCatalogoProdutosPage() {
       else setState("error");
     }
   }, []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const merged: Merged[] = useMemo(
     () => readinessProducts.map((p) => ({ ...p, list: listById[p.id] })),
     [readinessProducts, listById],
   );
-  const real = useMemo(() => merged.filter((p) => !p.is_test_local), [merged]);
-  const fixture = useMemo(() => merged.find((p) => p.is_test_local) ?? null, [merged]);
+  useEffect(() => {
+    if (!routeProductCode || merged.length === 0) return;
+    const productFromLink = merged.find(
+      (product) =>
+        product.id === routeProductCode ||
+        catalogProductShortCode(product) === routeProductCode.toLowerCase(),
+    );
+    if (productFromLink) {
+      setOpenProductId(productFromLink.id);
+      setFullDetailId(productFromLink.id);
+    }
+  }, [merged, routeProductCode]);
+  // Abre o detalhe completo E atualiza a URL com o ID numérico curto — achado
+  // do usuário 2026-09-23: "quando eu clico em produto, ele mostra o ID...
+  // pra qualquer um" (o clique não estava navegando, só trocando estado —
+  // link direto nunca refletia o que estava aberto).
+  const openFullDetail = useCallback((p: Merged) => {
+    setOpenProductId(p.id);
+    setFullDetailId(p.id);
+    navigate(`/admin/catalogo-produtos/${catalogProductShortCode(p)}`, { replace: true });
+  }, [navigate]);
+  // O fixture "[TESTE LOCAL]" aparece igual a qualquer outro produto — acha do
+  // usuário 2026-09-23: ele já aparece pra company/agency/líder (é o mesmo
+  // produto que eles usam pra testar o fluxo de compra), então tem que
+  // aparecer aqui também, mesma regra de "tudo igual pra todo mundo".
+  const real = merged;
 
   const categoryTabs = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -375,13 +536,20 @@ export default function AdminCatalogoProdutosPage() {
     }
     return [
       { id: "Todos", label: "Todos", count: real.length },
-      ...Object.entries(counts).map(([name, count]) => ({ id: name, label: name, count })),
+      ...Object.entries(counts).map(([name, count]) => ({
+        id: name,
+        label: name,
+        count,
+      })),
     ];
   }, [real]);
 
   const filtered = useMemo(() => {
     let rows = real;
-    if (category !== "Todos") rows = rows.filter((p) => (p.list?.category?.name ?? "Sem categoria") === category);
+    if (category !== "Todos")
+      rows = rows.filter(
+        (p) => (p.list?.category?.name ?? "Sem categoria") === category,
+      );
     const q = search.trim().toLowerCase();
     if (q) rows = rows.filter((p) => p.name.toLowerCase().includes(q));
     rows = rows.filter((p) => matchesFilters(p, filters));
@@ -389,16 +557,27 @@ export default function AdminCatalogoProdutosPage() {
   }, [real, category, search, sort, filters]);
 
   const activeFilterCount = countActiveFilters(filters);
-  const openFiltersPanel = () => { setDraftFilters(filters); setFiltersOpen(true); };
-  const applyFilters = () => { setFilters(draftFilters); setFiltersOpen(false); };
-  const clearFilters = () => { setFilters(DEFAULT_FILTERS); setDraftFilters(DEFAULT_FILTERS); };
+  const openFiltersPanel = () => {
+    setDraftFilters(filters);
+    setFiltersOpen(true);
+  };
+  const applyFilters = () => {
+    setFilters(draftFilters);
+    setFiltersOpen(false);
+  };
+  const clearFilters = () => {
+    setFilters(DEFAULT_FILTERS);
+    setDraftFilters(DEFAULT_FILTERS);
+  };
   const removeActiveFilter = (key: keyof CatalogFilters) => {
     const next = { ...filters, [key]: key === "status" ? "" : false };
     setFilters(next);
     setDraftFilters(next);
   };
   const FILTER_CHIP_LABEL: Record<string, string> = {
-    status: filters.status ? `Status: ${STATUS_LABEL[filters.status] ?? filters.status}` : "",
+    status: filters.status
+      ? `Status: ${STATUS_LABEL[filters.status] ?? filters.status}`
+      : "",
     hasPrice: "Com preço",
     hasDeadline: "Com prazo",
     hasTasks: "Com tarefas",
@@ -425,19 +604,31 @@ export default function AdminCatalogoProdutosPage() {
       productId: openedProduct?.id,
     });
     return () => setIallkaScreenContext(null);
-  }, [category, search, filtered.length, openedProduct?.name, openedProduct?.id, setIallkaScreenContext]);
+  }, [
+    category,
+    search,
+    filtered.length,
+    openedProduct?.name,
+    openedProduct?.id,
+    setIallkaScreenContext,
+  ]);
 
   if (state === "loading") {
     return (
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-        <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+        <Centered>
+          <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
+        </Centered>
       </div>
     );
   }
   if (state === "forbidden") {
     return (
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-        <Centered><Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master neste momento.</Centered>
+        <Centered>
+          <Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master
+          neste momento.
+        </Centered>
       </div>
     );
   }
@@ -449,10 +640,42 @@ export default function AdminCatalogoProdutosPage() {
             <AlertTriangle className="h-8 w-8 text-red-500" />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-base font-semibold text-foreground">Erro ao carregar o catálogo</h2>
-            <p className="max-w-sm text-sm text-muted-foreground">Não foi possível carregar os produtos agora. Tente novamente.</p>
+            <h2 className="text-base font-semibold text-foreground">
+              Erro ao carregar o catálogo
+            </h2>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Não foi possível carregar os produtos agora. Tente novamente.
+            </p>
           </div>
           <Button onClick={() => void load()}>Tentar novamente</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // O detalhe comercial é uma tela dentro do MESMO container principal.
+  // Não o colocamos em EmbeddedSlideScreen: isso criava um segundo cabeçalho
+  // ("Catálogo de Produtos" + "Detalhe comercial") e quebrava a hierarquia
+  // aprovada para a visão de produto. ESTA é a tela de referência (achado
+  // do usuário 2026-09-23: "a do admin em catálogo de produtos era a
+  // certa") — company/agency/leader usam ESTE MESMO componente
+  // (Catalog2ProductDetail), não uma versão simplificada à parte.
+  if (fullDetailId) {
+    return (
+      <div
+        className={`${STANDARD_SHELL_PANEL_CLASS} !p-1.5 sm:!p-2 lg:!p-2 lg:-mt-3`}
+      >
+        <div className="h-full min-h-[70vh]">
+          <Catalog2ProductDetail
+            productId={fullDetailId}
+            onBack={() => {
+              setFullDetailId(null);
+              setOpenProductId(null);
+              if (routeProductCode)
+                navigate("/admin/catalogo-produtos", { replace: true });
+            }}
+            isAdminMaster={isAdminMaster}
+          />
         </div>
       </div>
     );
@@ -465,7 +688,8 @@ export default function AdminCatalogoProdutosPage() {
           <StandardPageBanner
             icon={Store}
             title="Catálogo de Produtos"
-            description="Visão comercial dos produtos novos (catalog2) — como serão apresentados, e o que falta para cada um."
+            description="Soluções em design, automação e tecnologia para impulsionar o seu negócio."
+            contentClassName="lg:h-[65px]"
             actions={
               <>
                 <a
@@ -474,24 +698,26 @@ export default function AdminCatalogoProdutosPage() {
                 >
                   Visualizar como cliente
                 </a>
-                <PinToTrayButton id="page-catalogo-produtos" label="Catálogo de Produtos" icon={Store} path="/admin/catalogo-produtos" />
+                <PinToTrayButton
+                  id="page-catalogo-produtos"
+                  label="Catálogo de Produtos"
+                  icon={Store}
+                  path="/admin/catalogo-produtos"
+                />
               </>
             }
           />
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="space-y-3">
-            <p className="rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-              O catálogo antigo, com 162 produtos, não aparece mais aqui — ele segue no banco só para não quebrar
-              projetos antigos já ligados a ele. Para editar um produto, use o Cadastro de Produtos.
-            </p>
-
+          <div className="space-y-0">
             {/* ── Cabeçalho reorganizado (reunião 10/09): busca em destaque +
                 filtros + ordenação + alternador NUMA ÚNICA linha; categorias
                 em badges logo abaixo. Nenhum desses controles se repete em
                 outro lugar da tela. ── */}
-            <div className="space-y-3 rounded-xl border border-slate-100 bg-white/80 p-3 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/60">
+            <div
+              className={`${STANDARD_SHELL_TABLE_CARD_CLASS} m-0 space-y-3 p-3`}
+            >
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative min-w-[200px] flex-1">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -503,13 +729,22 @@ export default function AdminCatalogoProdutosPage() {
                     className="h-9 border-slate-200 bg-white pl-9 text-sm dark:border-slate-700 dark:bg-slate-800"
                   />
                   {search && (
-                    <button type="button" onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    <button
+                      type="button"
+                      onClick={() => setSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>
 
-                <Popover open={filtersOpen} onOpenChange={(open) => (open ? openFiltersPanel() : setFiltersOpen(false))}>
+                <Popover
+                  open={filtersOpen}
+                  onOpenChange={(open) =>
+                    open ? openFiltersPanel() : setFiltersOpen(false)
+                  }
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -519,44 +754,73 @@ export default function AdminCatalogoProdutosPage() {
                       <SlidersHorizontal className="h-3.5 w-3.5" />
                       Filtros
                       {activeFilterCount > 0 && (
-                        <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">{activeFilterCount}</span>
+                        <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
+                          {activeFilterCount}
+                        </span>
                       )}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-80 space-y-3 p-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-foreground">Filtros</h3>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        Filtros
+                      </h3>
                       <span className="text-[11px] text-muted-foreground">
-                        {countActiveFilters(draftFilters)} ativo{countActiveFilters(draftFilters) === 1 ? "" : "s"}
+                        {countActiveFilters(draftFilters)} ativo
+                        {countActiveFilters(draftFilters) === 1 ? "" : "s"}
                       </span>
                     </div>
 
                     <div>
-                      <label htmlFor="cat-f-status" className="mb-1 block text-[11px] font-medium text-muted-foreground">Status</label>
+                      <label
+                        htmlFor="cat-f-status"
+                        className="mb-1 block text-[11px] font-medium text-muted-foreground"
+                      >
+                        Status
+                      </label>
                       <select
                         id="cat-f-status"
                         className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800"
                         value={draftFilters.status}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, status: e.target.value }))}
+                        onChange={(e) =>
+                          setDraftFilters((f) => ({
+                            ...f,
+                            status: e.target.value,
+                          }))
+                        }
                       >
                         <option value="">Todos os status</option>
-                        {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        {Object.entries(STATUS_LABEL).map(([v, l]) => (
+                          <option key={v} value={v}>
+                            {l}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
                     <div className="space-y-2">
-                      {([
-                        ["hasPrice", "Com preço"],
-                        ["hasDeadline", "Com prazo"],
-                        ["hasTasks", "Com tarefas"],
-                        ["hasSteps", "Com etapas"],
-                        ["hasPendencies", "Com pendências"],
-                        ["provisionalOnly", "Campos provisórios"],
-                      ] as const).map(([key, label]) => (
-                        <label key={key} className="flex items-center gap-2 text-xs text-foreground">
+                      {(
+                        [
+                          ["hasPrice", "Com preço"],
+                          ["hasDeadline", "Com prazo"],
+                          ["hasTasks", "Com tarefas"],
+                          ["hasSteps", "Com etapas"],
+                          ["hasPendencies", "Com pendências"],
+                          ["provisionalOnly", "Campos provisórios"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <label
+                          key={key}
+                          className="flex items-center gap-2 text-xs text-foreground"
+                        >
                           <Checkbox
                             checked={draftFilters[key]}
-                            onCheckedChange={(v) => setDraftFilters((f) => ({ ...f, [key]: v === true }))}
+                            onCheckedChange={(v) =>
+                              setDraftFilters((f) => ({
+                                ...f,
+                                [key]: v === true,
+                              }))
+                            }
                           />
                           {label}
                         </label>
@@ -564,10 +828,30 @@ export default function AdminCatalogoProdutosPage() {
                     </div>
 
                     <div className="flex items-center justify-between gap-2 border-t border-border/60 pt-3">
-                      <Button variant="ghost" size="sm" className="text-xs" onClick={clearFilters}>Limpar</Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs"
+                        onClick={clearFilters}
+                      >
+                        Limpar
+                      </Button>
                       <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" className="text-xs" onClick={() => setFiltersOpen(false)}>Fechar</Button>
-                        <Button size="sm" className="text-xs" onClick={applyFilters}>Aplicar</Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => setFiltersOpen(false)}
+                        >
+                          Fechar
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="text-xs"
+                          onClick={applyFilters}
+                        >
+                          Aplicar
+                        </Button>
                       </div>
                     </div>
                   </PopoverContent>
@@ -575,7 +859,11 @@ export default function AdminCatalogoProdutosPage() {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1.5 text-xs">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-9 shrink-0 gap-1.5 text-xs"
+                    >
                       <ArrowUpDown className="h-3.5 w-3.5" />
                       {SORTS[sort].label}
                       <ChevronDown className="h-3 w-3 opacity-60" />
@@ -583,26 +871,42 @@ export default function AdminCatalogoProdutosPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     {Object.entries(SORTS).map(([k, v]) => (
-                      <DropdownMenuItem key={k} onClick={() => setSort(k as keyof typeof SORTS)}>{v.label}</DropdownMenuItem>
+                      <DropdownMenuItem
+                        key={k}
+                        onClick={() => setSort(k as keyof typeof SORTS)}
+                      >
+                        {v.label}
+                      </DropdownMenuItem>
                     ))}
                     {DISABLED_SORTS.map((d) => (
-                      <DropdownMenuItem key={d.label} disabled title={d.reason} className="opacity-50">
+                      <DropdownMenuItem
+                        key={d.label}
+                        disabled
+                        title={d.reason}
+                        className="opacity-50"
+                      >
                         {d.label}
                       </DropdownMenuItem>
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">
-                  {filtered.length} {filtered.length === 1 ? "produto" : "produtos"}
+                  {filtered.length}{" "}
+                  {filtered.length === 1 ? "produto" : "produtos"}
                 </span>
-                <ProductViewModeToggle value={gridMode} onChange={setGridMode} />
+                <ProductViewModeToggle
+                  value={gridMode}
+                  onChange={setGridMode}
+                />
               </div>
 
               {/* Badges dos filtros ativos — só aparecem quando há algum. */}
               {activeFilterCount > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5">
                   {(Object.keys(filters) as (keyof CatalogFilters)[])
-                    .filter((k) => (k === "status" ? !!filters[k] : filters[k] === true))
+                    .filter((k) =>
+                      k === "status" ? !!filters[k] : filters[k] === true,
+                    )
                     .map((k) => (
                       <button
                         key={k}
@@ -614,7 +918,11 @@ export default function AdminCatalogoProdutosPage() {
                         <X className="h-3 w-3" />
                       </button>
                     ))}
-                  <button type="button" onClick={clearFilters} className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+                  >
                     Limpar filtros
                   </button>
                 </div>
@@ -632,11 +940,20 @@ export default function AdminCatalogoProdutosPage() {
                         ? "text-white shadow-sm"
                         : "border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
                     }`}
-                    style={category === id ? { background: "linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%)" } : undefined}
+                    style={
+                      category === id
+                        ? {
+                            background:
+                              "linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%)",
+                          }
+                        : undefined
+                    }
                   >
                     <Layers className="h-3 w-3" />
                     {label}
-                    <span className={`rounded-full px-1 py-0.5 text-[10px] leading-none ${category === id ? "bg-white/20 text-white" : "bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-400"}`}>
+                    <span
+                      className={`rounded-full px-1 py-0.5 text-[10px] leading-none ${category === id ? "bg-white/20 text-white" : "bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-400"}`}
+                    >
                       {count}
                     </span>
                   </button>
@@ -648,51 +965,79 @@ export default function AdminCatalogoProdutosPage() {
             {filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center">
                 <Package className="mb-3 h-10 w-10 text-slate-300" />
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Nenhum produto encontrado</p>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                  Nenhum produto encontrado
+                </p>
                 <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-                  {search || category !== "Todos" ? "Tente ajustar a busca ou a categoria." : "Nenhum produto catalog2 cadastrado ainda."}
+                  {search || category !== "Todos"
+                    ? "Tente ajustar a busca ou a categoria."
+                    : "Nenhum produto catalog2 cadastrado ainda."}
                 </p>
               </div>
             ) : gridMode === "list" ? (
-              <ul className="divide-y overflow-hidden rounded-xl border border-slate-200/70 bg-white dark:border-slate-700/60 dark:bg-slate-900">
-                {filtered.map((p) => <ProductListRow key={p.id} product={p} onOpen={() => setOpenProductId(p.id)} onChoose={() => { setOpenProductId(p.id); setFullDetailId(p.id); }} isAdminMaster={isAdminMaster} />)}
-              </ul>
+              <div className="overflow-x-auto rounded-xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+                <div className="min-w-[1120px]">
+                  <Catalog2ProductListHeader showAdminColumns />
+                </div>
+                <ul className="min-w-[1120px] divide-y divide-slate-100 dark:divide-slate-800">
+                  {filtered.map((p) => (
+                    <ProductListRow
+                      key={p.id}
+                      product={p}
+                      onOpen={() => setOpenProductId(p.id)}
+                      onChoose={() => openFullDetail(p)}
+                      isAdminMaster={isAdminMaster}
+                    />
+                  ))}
+                </ul>
+              </div>
             ) : (
               <div className={viewModeGridClass(gridMode)}>
-                {filtered.map((p) => <ProductCard key={p.id} product={p} compact={gridMode === 4 || gridMode === 5} onOpen={() => setOpenProductId(p.id)} onChoose={() => { setOpenProductId(p.id); setFullDetailId(p.id); }} isAdminMaster={isAdminMaster} />)}
+                {filtered.map((p) => (
+                  <ProductCard
+                    key={p.id}
+                    product={p}
+                    compact={gridMode === 4 || gridMode === 5}
+                    onOpen={() => setOpenProductId(p.id)}
+                    onChoose={() => openFullDetail(p)}
+                    isAdminMaster={isAdminMaster}
+                  />
+                ))}
               </div>
             )}
 
-            {fixture && (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Package className="h-3.5 w-3.5" />
-                1 produto de demonstração ("[TESTE LOCAL] …") existe para testes e fica fora desta grade — nunca é um
-                produto real, e nunca aparece no catálogo do cliente.
-              </p>
-            )}
           </div>
         </div>
 
         {/* Detalhe do produto — dentro do container padrão, só leitura. */}
         <EmbeddedSlideScreen
           open={!!openedProduct}
-          onClose={() => { setOpenProductId(null); setFullDetailId(null); }}
-          title={fullDetailId ? "Detalhe comercial completo" : (openedProduct?.name ?? "Produto")}
-          pin={openedProduct ? {
-            id: `catalog2-catalogo-${openedProduct.id}`,
-            label: openedProduct.name,
-            icon: Store,
-            path: "/admin/catalogo-produtos",
-          } : undefined}
+          onClose={() => {
+            setOpenProductId(null);
+            setFullDetailId(null);
+          }}
+          title={
+            fullDetailId
+              ? "Detalhe comercial completo"
+              : (openedProduct?.name ?? "Produto")
+          }
+          pin={
+            openedProduct
+              ? {
+                  id: `catalog2-catalogo-${openedProduct.id}`,
+                  label: openedProduct.name,
+                  icon: Store,
+                  path: "/admin/catalogo-produtos",
+                }
+              : undefined
+          }
         >
           {openedProduct && (
-            fullDetailId ? (
-              <div className="min-h-0 flex-1 overflow-y-auto p-3">
-                <Catalog2ProductDetail productId={fullDetailId} onBack={() => setFullDetailId(null)} isAdminMaster={isAdminMaster} />
-              </div>
-            ) : (
-              <ProductDetail product={openedProduct} onViewFull={() => setFullDetailId(openedProduct.id)} isAdminMaster={isAdminMaster} />
-            )
+            <ProductDetail
+              product={openedProduct}
+              onViewFull={() => openFullDetail(openedProduct)}
+              isAdminMaster={isAdminMaster}
+            />
           )}
         </EmbeddedSlideScreen>
       </div>
@@ -705,130 +1050,132 @@ export default function AdminCatalogoProdutosPage() {
 // de informação) chamam `e.stopPropagation()` pra nunca disparar a MESMA
 // ação duas vezes. Enter/Espaço abrem quando o card está focado; foco
 // visível e cursor de ponteiro deixam claro que é clicável.
-function ProductCard({ product: p, onOpen, onChoose, compact = false, isAdminMaster = false }: { product: Merged; onOpen: () => void; onChoose: () => void; compact?: boolean; isAdminMaster?: boolean }) {
+function ProductCard({
+  product: p,
+  onOpen,
+  onChoose,
+  compact = false,
+  isAdminMaster = false,
+}: {
+  product: Merged;
+  onOpen: () => void;
+  onChoose: () => void;
+  compact?: boolean;
+  isAdminMaster?: boolean;
+}) {
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   // Fonte ÚNICA de provisório: Catalog2ProvisionalPreview (via p.provisional,
   // vindo do backend). O hash local só é usado se o produto não tiver
   // nenhuma linha provisória gravada (reparo 2026-09, seção 11).
-  const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
-  const prazoProv = p.provisional?.deadline_days != null ? { value: p.provisional.deadline_days, label: "Prazo provisório — revisar.", is_provisional: true as const } : provisionalDeadlineDays(p.id);
+  const priceProv =
+    p.provisional?.price_amount != null
+      ? {
+          value: p.provisional.price_amount,
+          label: "Preço provisório — revisar.",
+          is_provisional: true as const,
+        }
+      : provisionalPrice(p.id);
+  const prazoProv =
+    p.provisional?.deadline_days != null
+      ? {
+          value: p.provisional.deadline_days,
+          label: "Prazo provisório — revisar.",
+          is_provisional: true as const,
+        }
+      : provisionalDeadlineDays(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const hasRealTasks = p.task_count > 0;
   const pendCount = p.blockers.length + p.pendings.length;
   const badge = resolveMerchBadge(p);
   const cardLabel = `${p.name} — ver detalhes`;
+  const displayPrice =
+    p.price_amount ?? p.pricing_simulation?.price_amount ?? priceProv.value;
+  const displayDeadline =
+    p.deadline_days ?? p.pricing_simulation?.deadline_days ?? prazoProv.value;
 
+  // Visual do card é o componente compartilhado (Catalog2ProductCard) —
+  // qualquer tela que mostre produto do catalog2 usa o MESMO visual. Só o
+  // mapeamento de dados (pendência/provisório/preço em memória, exclusivos
+  // do admin) continua aqui.
   return (
-    <Card
-      role="button"
-      tabIndex={0}
-      aria-label={cardLabel}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
-        }
-      }}
-      className="group flex cursor-pointer flex-col overflow-hidden border border-slate-200/70 bg-white shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 active:translate-y-0 active:shadow-sm dark:border-slate-700/60 dark:bg-slate-900"
-    >
-      {/* Banner — imagem real reaproveitada provisoriamente (backend,
-          Catalog2ProvisionalPreview) quando existe; ícone/gradiente
-          determinístico só como fallback — ver catalog2-thumbnail.tsx.
-          Badge comercial no canto ESQUERDO (loja virtual); status no
-          canto DIREITO — nunca os dois no mesmo canto, nunca repetidos. */}
-      <div className={`relative shrink-0 ${compact ? "h-20" : "h-32"}`}>
-        <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="lg" showBadge />
-        {badge && (
-          <div className="absolute left-2.5 top-2.5">
-            <MerchBadgeChip badge={badge} />
-          </div>
-        )}
-        <div className="absolute right-2.5 top-2.5">
-          <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-        </div>
-      </div>
-
-      <CardContent className={`flex flex-1 flex-col gap-2.5 ${compact ? "p-3" : "p-4"}`}>
-        <div className="flex items-start justify-between gap-1.5">
-          <h3 title={p.name} className="line-clamp-2 text-base font-bold leading-snug text-slate-900 transition-colors group-hover:text-blue-600 dark:text-slate-100">
-            {p.name}
-          </h3>
-          <ProductCodeInfo p={p} />
-        </div>
-        {!compact && (
-          <p title={p.list?.summary ?? undefined} className="line-clamp-2 text-xs leading-relaxed text-slate-400">
-            {p.list?.summary || "Descrição ainda não escrita — produto em preparação."}
-          </p>
-        )}
-
-        <div className="flex items-center gap-1.5 text-xs text-slate-400">
-          <Layers className="h-3.5 w-3.5 shrink-0" />
-          <span title={categoryName} className="truncate font-medium">{categoryName}</span>
-        </div>
-
-        <div className="flex items-center gap-1.5 text-xs text-slate-500">
-          <ListChecks className="h-3.5 w-3.5 shrink-0" />
-          {hasRealTasks ? (
-            <span className="truncate">
-              {p.task_count} tarefa(s){p.step_count > 0 ? ` · ${p.step_count} etapa(s)` : ""}
-            </span>
-          ) : (
-            <>
-              <span className="truncate text-slate-400">{taskProv.value} tarefa(s)</span>
-              <ProvisionalBadge label={taskProv.label + " Pendência real de tarefas continua registrada."} />
-            </>
-          )}
+    <Catalog2ProductCard
+      name={p.name}
+      description={p.list?.summary}
+      categoryName={categoryName}
+      compact={compact}
+      onOpen={onChoose}
+      cornerBadgeLeft={badge ? <MerchBadgeChip badge={badge} /> : undefined}
+      cornerBadgeRight={
+        <Badge className={`border-0 px-2.5 py-1 text-[10px] font-bold shadow-sm ${STATUS_TONE[p.status] ?? "bg-white/90 text-slate-700"}`}>
+          {STATUS_LABEL[p.status] ?? p.status}
+        </Badge>
+      }
+      taskCount={
+        hasRealTasks ? (
+          <span>{p.task_count} tarefa(s)</span>
+        ) : (
+          <>
+            <span className="text-slate-400">{taskProv.value} tarefa(s)</span>
+            <ProvisionalBadge label={taskProv.label + " Pendência real de tarefas continua registrada."} />
+          </>
+        )
+      }
+      extraTags={
+        <>
           {p.functional_for_test && (
             <ProvisionalBadge label="Especialidade e tempo provisórios para teste — funcional para teste, pendente de revisão. Nunca usado para aprovar preço comercial ou publicação." />
           )}
-        </div>
-
-        {p.list?.inactivation_scheduled_at && (
-          <span className="inline-flex w-fit items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 dark:bg-red-900/40 dark:text-red-200">
-            Inativação programada para {new Date(p.list.inactivation_effective_at).toLocaleDateString("pt-BR")}
-          </span>
-        )}
-
-        {pendCount > 0 && (
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span tabIndex={0} onClick={(e) => e.stopPropagation()} className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                  {pendCount} pendência{pendCount === 1 ? "" : "s"}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-[220px] text-xs">
-                {[...p.blockers, ...p.pendings].map((k) => PENDENCY_LABEL[k] ?? k).join(", ")}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
-
-        <div className="mt-auto space-y-1 border-t border-slate-100 pt-2.5 dark:border-slate-800">
-          <PriceOrProvisional p={p} priceProv={priceProv} isAdminMaster={isAdminMaster} />
-          <DeadlineOrProvisional p={p} prazoProv={prazoProv} />
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2 w-full border-blue-200 bg-transparent text-xs text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-            onClick={(e) => { e.stopPropagation(); onChoose(); }}
-          >
-            Escolher
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          {pendCount > 0 && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    tabIndex={0}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-100 dark:bg-amber-900/40 dark:text-amber-200"
+                  >
+                    {pendCount} pendência{pendCount === 1 ? "" : "s"}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-[220px] text-xs">
+                  {[...p.blockers, ...p.pendings].map((k) => PENDENCY_LABEL[k] ?? k).join(", ")}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </>
+      }
+      deadlineDays={displayDeadline}
+      price={displayPrice}
+      priceExtra={
+        <Catalog2PricingMemoryPopover
+          productId={p.id}
+          isAdminMaster={isAdminMaster}
+          provisionalPriceAmount={p.price_amount == null && !p.pricing_simulation ? priceProv.value : undefined}
+        />
+      }
+    />
   );
 }
 
-function PriceOrProvisional({ p, priceProv, isAdminMaster = false }: { p: Merged; priceProv: ReturnType<typeof provisionalPrice>; isAdminMaster?: boolean }) {
+function PriceOrProvisional({
+  p,
+  priceProv,
+  isAdminMaster = false,
+}: {
+  p: Merged;
+  priceProv: ReturnType<typeof provisionalPrice>;
+  isAdminMaster?: boolean;
+}) {
   if (p.pricing_simulation?.price_amount != null && p.price_amount == null) {
     return (
       <p className="flex items-center gap-1 text-xs font-semibold text-violet-600 dark:text-violet-300">
         R$ {p.pricing_simulation.price_amount.toFixed(2)}
         <ProvisionalBadge label="Preço final simulado para teste. Não vale para cotação, checkout, publicação ou contratação." />
-        <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
+        <Catalog2PricingMemoryPopover
+          productId={p.id}
+          isAdminMaster={isAdminMaster}
+        />
       </p>
     );
   }
@@ -836,19 +1183,36 @@ function PriceOrProvisional({ p, priceProv, isAdminMaster = false }: { p: Merged
     return (
       <p className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
         {p.items.preco.note}
-        <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
+        <Catalog2PricingMemoryPopover
+          productId={p.id}
+          isAdminMaster={isAdminMaster}
+        />
       </p>
     );
   }
   return (
     <p className="flex items-center gap-1 text-xs font-medium text-slate-400">
       R$ {priceProv.value.toFixed(2)}
-      <ProvisionalBadge label={priceProv.label + " Não vale para cotação, checkout ou publicação."} />
-      <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} provisionalPriceAmount={priceProv.value} />
+      <ProvisionalBadge
+        label={
+          priceProv.label + " Não vale para cotação, checkout ou publicação."
+        }
+      />
+      <Catalog2PricingMemoryPopover
+        productId={p.id}
+        isAdminMaster={isAdminMaster}
+        provisionalPriceAmount={priceProv.value}
+      />
     </p>
   );
 }
-function DeadlineOrProvisional({ p, prazoProv }: { p: Merged; prazoProv: ReturnType<typeof provisionalDeadlineDays> }) {
+function DeadlineOrProvisional({
+  p,
+  prazoProv,
+}: {
+  p: Merged;
+  prazoProv: ReturnType<typeof provisionalDeadlineDays>;
+}) {
   if (p.pricing_simulation?.deadline_days != null && p.deadline_days == null) {
     return (
       <p className="flex items-center gap-1 text-[11px] font-medium text-violet-600 dark:text-violet-300">
@@ -871,76 +1235,113 @@ function DeadlineOrProvisional({ p, prazoProv }: { p: Merged; prazoProv: ReturnT
 // Modo Lista — mesma apresentação comercial, densidade maior (linha em vez
 // de card). Restaurado 2026-09 junto do alternador Lista/Grade; reunião
 // 10/09: a linha inteira também abre o detalhe (mesmo padrão do card).
-function ProductListRow({ product: p, onOpen, onChoose, isAdminMaster = false }: { product: Merged; onOpen: () => void; onChoose: () => void; isAdminMaster?: boolean }) {
-  const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
-  const taskProv = provisionalTaskCount(p.id);
-  const categoryName = p.list?.category?.name ?? "Sem categoria";
-  const badge = resolveMerchBadge(p);
-  const cardLabel = `${p.name} — ver detalhes`;
-  return (
-    <li
-      role="button"
-      tabIndex={0}
-      aria-label={cardLabel}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onOpen();
+function ProductListRow({
+  product: p,
+  onOpen,
+  onChoose,
+  isAdminMaster = false,
+}: {
+  product: Merged;
+  onOpen: () => void;
+  onChoose: () => void;
+  isAdminMaster?: boolean;
+}) {
+  const priceProv =
+    p.provisional?.price_amount != null
+      ? {
+          value: p.provisional.price_amount,
+          label: "Preço provisório — revisar.",
+          is_provisional: true as const,
         }
-      }}
-      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 active:bg-slate-100 dark:hover:bg-slate-800/40 dark:active:bg-slate-800"
-    >
-      <div className="relative shrink-0">
-        <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="sm" showBadge={false} />
-        {badge && (
-          <div className="absolute -left-1 -top-1">
-            <MerchBadgeChip badge={badge} />
-          </div>
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span title={p.name} className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{p.name}</span>
-          <ProductCodeInfo p={p} />
-        </div>
-        <p title={categoryName} className="truncate text-xs text-slate-400">
-          {categoryName} · {p.task_count > 0 ? `${p.task_count} tarefa(s)` : `${taskProv.value} tarefa(s) (provisório)`}
-          {p.functional_for_test ? " · especialidade/tempo provisórios (teste)" : ""}
-        </p>
-      </div>
-      {p.list?.inactivation_scheduled_at && (
-        <Badge className="shrink-0 bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">
-          Inativação em {new Date(p.list.inactivation_effective_at).toLocaleDateString("pt-BR")}
-        </Badge>
-      )}
-      <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-      <span className="hidden w-40 shrink-0 items-center justify-end gap-1 truncate text-right text-xs text-slate-500 sm:inline-flex">
-        {p.price_amount != null
-          ? `R$ ${p.price_amount.toFixed(2)}`
-          : p.pricing_simulation?.price_amount != null
-            ? `R$ ${p.pricing_simulation.price_amount.toFixed(2)} (simulação)`
-            : p.items.preco?.note ?? `R$ ${priceProv.value.toFixed(2)} (provisório)`}
+      : provisionalPrice(p.id);
+  const taskProv = provisionalTaskCount(p.id);
+  const prazoProv =
+    p.provisional?.deadline_days != null
+      ? {
+          value: p.provisional.deadline_days,
+          label: "Prazo provisório — revisar.",
+          is_provisional: true as const,
+        }
+      : provisionalDeadlineDays(p.id);
+  const categoryName = p.list?.category?.name ?? "Sem categoria";
+  const pendCount = p.blockers.length + p.pendings.length;
+  const displayPrice =
+    p.price_amount ?? p.pricing_simulation?.price_amount ?? priceProv.value;
+  const displayDeadline =
+    p.deadline_days ?? p.pricing_simulation?.deadline_days ?? prazoProv.value;
+  return (
+    <Catalog2ProductListRow
+      name={p.name}
+      description={p.list?.summary}
+      categoryName={categoryName}
+      showAdminColumns
+      onOpen={onChoose}
+      taskCount={p.task_count > 0 ? `${p.task_count} tarefa(s)` : `${taskProv.value} tarefa(s)`}
+      pendencyBadge={
+        pendCount > 0 ? (
+          <TooltipProvider delayDuration={250}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="w-fit rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-100">
+                  {pendCount} pendência(s)
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[220px] text-xs">
+                {[...p.blockers, ...p.pendings].map((k) => PENDENCY_LABEL[k] ?? k).join(", ")}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <span className="text-[11px] text-emerald-600">Sem pendências</span>
+        )
+      }
+      deadlineDays={displayDeadline}
+      price={displayPrice}
+      priceExtra={
         <Catalog2PricingMemoryPopover
           productId={p.id}
           isAdminMaster={isAdminMaster}
           provisionalPriceAmount={!p.items.preco?.note && !p.pricing_simulation ? priceProv.value : undefined}
         />
-      </span>
-      <Button variant="outline" size="sm" className="shrink-0 border-blue-200 text-xs text-blue-600 hover:bg-blue-50" onClick={(e) => { e.stopPropagation(); onChoose(); }}>
-        Escolher
-      </Button>
-    </li>
+      }
+      statusBadge={
+        <Badge className={`w-fit border-0 px-2 py-1 text-[10px] font-semibold ${STATUS_TONE[p.status] ?? "bg-slate-100 text-slate-700"}`}>
+          {STATUS_LABEL[p.status] ?? p.status}
+        </Badge>
+      }
+    />
   );
 }
 
 // Detalhe comercial — só leitura; nenhum controle de edição aparece aqui de
 // propósito (edição é função do Cadastro de Produtos).
-function ProductDetail({ product: p, onViewFull, isAdminMaster = false }: { product: Merged; onViewFull?: () => void; isAdminMaster?: boolean }) {
+function ProductDetail({
+  product: p,
+  onViewFull,
+  isAdminMaster = false,
+}: {
+  product: Merged;
+  onViewFull?: () => void;
+  isAdminMaster?: boolean;
+}) {
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   const pendencias = [...p.blockers, ...p.pendings];
-  const priceProv = p.provisional?.price_amount != null ? { value: p.provisional.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
-  const prazoProv = p.provisional?.deadline_days != null ? { value: p.provisional.deadline_days, label: "Prazo provisório — revisar.", is_provisional: true as const } : provisionalDeadlineDays(p.id);
+  const priceProv =
+    p.provisional?.price_amount != null
+      ? {
+          value: p.provisional.price_amount,
+          label: "Preço provisório — revisar.",
+          is_provisional: true as const,
+        }
+      : provisionalPrice(p.id);
+  const prazoProv =
+    p.provisional?.deadline_days != null
+      ? {
+          value: p.provisional.deadline_days,
+          label: "Prazo provisório — revisar.",
+          is_provisional: true as const,
+        }
+      : provisionalDeadlineDays(p.id);
   const taskProv = provisionalTaskCount(p.id);
   const stepProv = provisionalStepCount(p.id, taskProv.value);
   const hasRealPrice = p.price_amount != null;
@@ -954,48 +1355,99 @@ function ProductDetail({ product: p, onViewFull, isAdminMaster = false }: { prod
       <div className="mx-auto max-w-2xl space-y-5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
+            <Badge
+              className={
+                STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"
+              }
+            >
+              {STATUS_LABEL[p.status] ?? p.status}
+            </Badge>
             <Badge variant="outline">{categoryName}</Badge>
-            {p.list?.published_version_number && <Badge variant="outline">v{p.list.published_version_number} publicada</Badge>}
+            {p.list?.published_version_number && (
+              <Badge variant="outline">
+                v{p.list.published_version_number} publicada
+              </Badge>
+            )}
             {p.list?.inactivation_scheduled_at && (
               <Badge className="bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">
-                Inativação programada para {new Date(p.list.inactivation_effective_at).toLocaleDateString("pt-BR")}
+                Inativação programada para{" "}
+                {new Date(p.list.inactivation_effective_at).toLocaleDateString(
+                  "pt-BR",
+                )}
               </Badge>
             )}
           </div>
           {onViewFull && (
-            <Button size="sm" variant="outline" onClick={onViewFull} className="text-xs">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onViewFull}
+              className="text-xs"
+            >
               Ver detalhe comercial completo
             </Button>
           )}
         </div>
 
         <div className="h-40">
-          <Catalog2Thumbnail productId={p.id} imagePath={p.provisional?.image_path} size="lg" showBadge />
+          <Catalog2Thumbnail
+            productId={p.id}
+            imagePath={p.provisional?.image_path}
+            size="lg"
+            showBadge
+          />
         </div>
 
         <div>
           <h2 className="text-lg font-semibold text-foreground">Descrição</h2>
           <p className="mt-1 flex items-start gap-1.5 text-sm text-muted-foreground">
-            <span>{p.list?.summary || "Descrição ainda não escrita — produto em preparação."}</span>
-            {!hasRealSummary && <ProvisionalBadge label="Sem resumo real ainda — cadastre pelo Cadastro de Produtos." />}
+            <span>
+              {p.list?.summary ||
+                "Descrição ainda não escrita — produto em preparação."}
+            </span>
+            {!hasRealSummary && (
+              <ProvisionalBadge label="Sem resumo real ainda — cadastre pelo Cadastro de Produtos." />
+            )}
           </p>
         </div>
 
         {/* Resumo real × provisório × ausente — pra Admin Master entender
             exatamente o que precisa ser substituído (reparo 2026-09). */}
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Campos reais × provisórios</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            Campos reais × provisórios
+          </h2>
           <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            <FieldStatusChip label="Descrição" status={hasRealSummary ? "real" : "provisorio"} />
-            <FieldStatusChip label="Preço" status={hasRealPrice ? "real" : "provisorio"} />
-            <FieldStatusChip label="Prazo" status={hasRealPrazo ? "real" : "provisorio"} />
-            <FieldStatusChip label="Tarefas" status={hasRealTasks ? "real" : "provisorio"} />
-            <FieldStatusChip label="Etapas" status={hasRealSteps ? "real" : "provisorio"} />
+            <FieldStatusChip
+              label="Descrição"
+              status={hasRealSummary ? "real" : "provisorio"}
+            />
+            <FieldStatusChip
+              label="Preço"
+              status={hasRealPrice ? "real" : "provisorio"}
+            />
+            <FieldStatusChip
+              label="Prazo"
+              status={hasRealPrazo ? "real" : "provisorio"}
+            />
+            <FieldStatusChip
+              label="Tarefas"
+              status={hasRealTasks ? "real" : "provisorio"}
+            />
+            <FieldStatusChip
+              label="Etapas"
+              status={hasRealSteps ? "real" : "provisorio"}
+            />
             <FieldStatusChip label="Imagem" status="provisorio" />
             <FieldStatusChip
               label="Especialidade/Tempo"
-              status={p.effort_data_state === "real_reviewed" ? "real" : p.effort_data_state === "provisional" ? "provisorio" : "ausente"}
+              status={
+                p.effort_data_state === "real_reviewed"
+                  ? "real"
+                  : p.effort_data_state === "provisional"
+                    ? "provisorio"
+                    : "ausente"
+              }
             />
           </div>
           {p.functional_for_test && (
@@ -1009,29 +1461,65 @@ function ProductDetail({ product: p, onViewFull, isAdminMaster = false }: { prod
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <DetailStat
             label="Preço"
-            value={hasRealPrice
-              ? `R$ ${p.price_amount!.toFixed(2)}`
-              : p.pricing_simulation?.price_amount != null
-                ? `R$ ${p.pricing_simulation.price_amount.toFixed(2)}`
-                : `R$ ${priceProv.value.toFixed(2)}`}
-            provisional={!hasRealPrice ? (p.pricing_simulation ? "Simulação provisória para teste" : priceProv.label) : undefined}
-            extra={<Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} provisionalPriceAmount={!hasRealPrice && !p.pricing_simulation ? priceProv.value : undefined} />}
+            value={
+              hasRealPrice
+                ? `R$ ${p.price_amount!.toFixed(2)}`
+                : p.pricing_simulation?.price_amount != null
+                  ? `R$ ${p.pricing_simulation.price_amount.toFixed(2)}`
+                  : `R$ ${priceProv.value.toFixed(2)}`
+            }
+            provisional={
+              !hasRealPrice
+                ? p.pricing_simulation
+                  ? "Simulação provisória para teste"
+                  : priceProv.label
+                : undefined
+            }
+            extra={
+              <Catalog2PricingMemoryPopover
+                productId={p.id}
+                isAdminMaster={isAdminMaster}
+                provisionalPriceAmount={
+                  !hasRealPrice && !p.pricing_simulation
+                    ? priceProv.value
+                    : undefined
+                }
+              />
+            }
           />
           <DetailStat
             label="Prazo"
-            value={hasRealPrazo
-              ? `${p.deadline_days} dia(s)`
-              : p.pricing_simulation?.deadline_days != null
-                ? `${p.pricing_simulation.deadline_days} dia(s)`
-                : `${prazoProv.value} dia(s)`}
-            provisional={!hasRealPrazo ? (p.pricing_simulation ? "Simulação provisória para teste" : prazoProv.label) : undefined}
+            value={
+              hasRealPrazo
+                ? `${p.deadline_days} dia(s)`
+                : p.pricing_simulation?.deadline_days != null
+                  ? `${p.pricing_simulation.deadline_days} dia(s)`
+                  : `${prazoProv.value} dia(s)`
+            }
+            provisional={
+              !hasRealPrazo
+                ? p.pricing_simulation
+                  ? "Simulação provisória para teste"
+                  : prazoProv.label
+                : undefined
+            }
           />
-          <DetailStat label="Tarefas" value={hasRealTasks ? String(p.task_count) : String(taskProv.value)} provisional={!hasRealTasks ? taskProv.label : undefined} />
-          <DetailStat label="Etapas" value={hasRealSteps ? String(p.step_count) : String(stepProv.value)} provisional={!hasRealSteps ? stepProv.label : undefined} />
+          <DetailStat
+            label="Tarefas"
+            value={hasRealTasks ? String(p.task_count) : String(taskProv.value)}
+            provisional={!hasRealTasks ? taskProv.label : undefined}
+          />
+          <DetailStat
+            label="Etapas"
+            value={hasRealSteps ? String(p.step_count) : String(stepProv.value)}
+            provisional={!hasRealSteps ? stepProv.label : undefined}
+          />
         </div>
 
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Variações e adicionais</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            Variações e adicionais
+          </h2>
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             <span className="rounded-full border bg-background px-2.5 py-1 text-xs text-muted-foreground">
               {p.items.variacoes?.note ?? "Sem informação de variações."}
@@ -1043,50 +1531,94 @@ function ProductDetail({ product: p, onViewFull, isAdminMaster = false }: { prod
         </div>
 
         <div>
-          <h2 className="text-sm font-semibold text-foreground">O que falta para publicar</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            O que falta para publicar
+          </h2>
           {pendencias.length === 0 ? (
-            <p className="mt-1.5 text-xs text-emerald-700 dark:text-emerald-300">Nenhuma pendência — pronto para revisão final.</p>
+            <p className="mt-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+              Nenhuma pendência — pronto para revisão final.
+            </p>
           ) : (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {p.blockers.map((b) => (
-                <Badge key={b} className="bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">{PENDENCY_LABEL[b] ?? b}</Badge>
+                <Badge
+                  key={b}
+                  className="bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+                >
+                  {PENDENCY_LABEL[b] ?? b}
+                </Badge>
               ))}
               {p.pendings.map((b) => (
-                <Badge key={b} className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{PENDENCY_LABEL[b] ?? b}</Badge>
+                <Badge
+                  key={b}
+                  className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                >
+                  {PENDENCY_LABEL[b] ?? b}
+                </Badge>
               ))}
             </div>
           )}
         </div>
 
         <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
-          Esta é uma visualização comercial, só leitura. Para editar tarefas, etapas, preço ou publicar, use o
-          Cadastro de Produtos. Valores provisórios nunca entram em cotação, checkout ou publicação — servem só
-          pra conferência visual.
+          Esta é uma visualização comercial, só leitura. Para editar tarefas,
+          etapas, preço ou publicar, use o Cadastro de Produtos. Valores
+          provisórios nunca entram em cotação, checkout ou publicação — servem
+          só pra conferência visual.
         </p>
       </div>
     </div>
   );
 }
-function DetailStat({ label, value, provisional, extra }: { label: string; value: string; provisional?: string; extra?: ReactNode }) {
+function DetailStat({
+  label,
+  value,
+  provisional,
+  extra,
+}: {
+  label: string;
+  value: string;
+  provisional?: string;
+  extra?: ReactNode;
+}) {
   return (
     <div className="rounded-lg border bg-background p-2.5">
       <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
       <div className="mt-0.5 flex items-center gap-1">
-        <p className={`text-xs ${provisional ? "text-slate-400" : "text-foreground"}`}>{value}</p>
+        <p
+          className={`text-xs ${provisional ? "text-slate-400" : "text-foreground"}`}
+        >
+          {value}
+        </p>
         {provisional && <ProvisionalBadge label={provisional} />}
         {extra}
       </div>
     </div>
   );
 }
-function FieldStatusChip({ label, status }: { label: string; status: "real" | "provisorio" | "ausente" }) {
+function FieldStatusChip({
+  label,
+  status,
+}: {
+  label: string;
+  status: "real" | "provisorio" | "ausente";
+}) {
   const tone =
-    status === "real" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-      : status === "provisorio" ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+    status === "real"
+      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+      : status === "provisorio"
+        ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
         : "bg-muted text-muted-foreground";
-  const statusLabel = status === "real" ? "Real" : status === "provisorio" ? "Provisório" : "Ausente";
+  const statusLabel =
+    status === "real"
+      ? "Real"
+      : status === "provisorio"
+        ? "Provisório"
+        : "Ausente";
   return (
-    <div className={`flex items-center justify-between rounded-md px-2 py-1 text-[11px] ${tone}`}>
+    <div
+      className={`flex items-center justify-between rounded-md px-2 py-1 text-[11px] ${tone}`}
+    >
       <span>{label}</span>
       <span className="font-semibold">{statusLabel}</span>
     </div>
@@ -1094,5 +1626,9 @@ function FieldStatusChip({ label, status }: { label: string; status: "real" | "p
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="flex h-full items-center justify-center gap-2 py-12 text-sm text-muted-foreground">{children}</div>;
+  return (
+    <div className="flex h-full items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+      {children}
+    </div>
+  );
 }

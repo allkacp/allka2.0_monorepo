@@ -15,6 +15,8 @@ const POLL_MS = 12_000;
 
 interface Offer {
   offer_id: string;
+  rotation_round?: number;
+  is_mandatory?: boolean;
   seconds_left: number;
   expires_at: string;
   already_taken: boolean;
@@ -26,6 +28,8 @@ interface Offer {
     project: { id: string; name: string } | null;
     product: string | null;
     category: string | null;
+    delivery_quantity?: number;
+    delivery_group_index?: number;
   };
 }
 
@@ -170,6 +174,7 @@ export function TaskOfferPrompt() {
               <div>
                 <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 uppercase">Nova tarefa oferecida a você</p>
                 <p className="text-sm font-semibold text-slate-800 dark:text-white leading-tight">{offer.task.title}</p>
+                {offer.is_mandatory && <p className="mt-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">Oferta obrigatória — se não recusar até o prazo, ela ficará atribuída a você.</p>}
               </div>
             </div>
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 shrink-0">
@@ -185,6 +190,7 @@ export function TaskOfferPrompt() {
               {offer.task.category ? ` · ${offer.task.category}` : ""}
             </p>
             <p>Prazo: {fmtDate(offer.task.due_date)}</p>
+            <p>Quantidade deste lote: {offer.task.delivery_quantity ?? 1} unidade{(offer.task.delivery_quantity ?? 1) === 1 ? "" : "s"}</p>
           </div>
           {offer.task.description && (
             <p className="mt-2 text-xs text-slate-600 dark:text-slate-300 line-clamp-3">{offer.task.description}</p>

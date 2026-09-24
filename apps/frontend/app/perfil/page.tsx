@@ -29,23 +29,20 @@ import { useAgencia } from "@/contexts/agencia-context";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
+import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
 
 type ViewerRole = "admin" | "agency" | "company" | "nomad";
 
 // Admin, Company, Agency e Partner já usam ESTE MESMO ARQUIVO e o mesmo
-// `UserViewSlidePanel` (nunca 4 cópias) — o wrapper abaixo é intencionalmente
-// PRÓPRIO (não `STANDARD_SHELL_PANEL_CLASS`, que embute padding pensado para
-// telas de tabela) porque o `UserViewSlidePanel` já gerencia seu próprio
-// espaçamento interno de ponta a ponta (cabeçalho `UserViewHeader` incluído)
-// — envolvê-lo num shell com padding recriaria margens indesejadas ao redor
-// do cabeçalho do painel. Nômade/Líder permanecem como páginas próprias
-// (`STANDARD_SHELL_PANEL_CLASS`) por terem modelo de dados totalmente
-// diferente (CPF/PIX/habilitações vs. áreas de atuação) — não por
-// incompatibilidade de container; unificar exigiria estender o modelo de
-// dados do `UserViewSlidePanel`, fora do escopo deste lote.
+// `UserViewSlidePanel` (nunca 4 cópias). Usa `STANDARD_SHELL_PANEL_CLASS` —
+// o mesmo painel branco flutuante com a "margenzinha" interna (p-1.5/p-2)
+// de qualquer outra tela do padrão "Tela Global com tabela principal" (ex.
+// /admin/usuarios) — achado do usuário 2026-09-23: o self-perfil estava sem
+// essa margem, com o cabeçalho do `UserViewHeader` colado na borda
+// arredondada do painel, destoando do resto da plataforma.
 function CardShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="w-full h-full relative flex flex-col overflow-hidden bg-white dark:bg-slate-900 rounded-2xl lg:rounded-[1.5rem] border border-slate-200/70 dark:border-slate-700/60 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.18),0_4px_16px_-4px_rgba(15,23,42,0.10)]">
+    <div className={`${STANDARD_SHELL_PANEL_CLASS} relative flex flex-col`}>
       {children}
     </div>
   );

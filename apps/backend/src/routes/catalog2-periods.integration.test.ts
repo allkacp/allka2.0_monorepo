@@ -10,6 +10,11 @@ import { config } from "../config";
 import { seedCatalog2Classifications, seedCatalog2FourFForTests } from "../lib/catalog2-classifications-seed";
 import { publishVersion } from "../lib/catalog2-service";
 
+// Estas provas exercitam a capacidade preparada para uma liberação futura
+// de contratos com mais de um mês. Em ambiente normal, a chave não existe e
+// só o período mensal é contratável (decisão da reunião de 18/09/2026).
+process.env.CATALOG2_ENABLE_MULTI_PERIOD_CONTRACTS = "true";
+
 // Item 6 (reunião 2026-09-14, "Modalidades de contratação por período") —
 // mensal/trimestral/semestral/anual, com desconto progressivo configurado
 // pelo admin, pagamento antecipado e proteção de preço durante o período.

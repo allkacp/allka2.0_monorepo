@@ -58,6 +58,7 @@ export const STANDARD_SHELL_ROUTES = [
   "/agency/projetos",
   "/agency/tarefas",
   "/agency/catalogo",
+  "/agency/catalogo-produtos",
   "/agency/combos",
   "/agency/financeiro",
   "/agency/relatorios",
@@ -77,6 +78,7 @@ export const STANDARD_SHELL_ROUTES = [
   "/company/tarefas",
   "/company/faturas",
   "/company/produtos",
+  "/company/catalogo-produtos",
   "/company/relatorios",
   "/company/clientes",
   "/company/usuarios",
@@ -100,6 +102,7 @@ export const STANDARD_SHELL_ROUTES = [
   "/leader/relatorios",
   "/leader/nomades",
   "/leader/catalogo",
+  "/leader/catalogo-produtos",
   "/leader/projetos",
   "/leader/clientes",
 ];
@@ -292,14 +295,20 @@ export function StandardPageBanner({
   title,
   description,
   actions,
+  className = "",
+  contentClassName = "",
 }: {
   icon: React.ElementType;
   title: string;
   description: string;
   actions?: React.ReactNode;
+  className?: string;
+  contentClassName?: string;
 }) {
   return (
-    <div className="relative mb-2 overflow-hidden rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] sm:mb-3">
+    <div
+      className={`relative mb-2 overflow-hidden rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] sm:mb-3 ${className}`}
+    >
       <div
         className="absolute inset-0"
         style={{
@@ -314,7 +323,9 @@ export function StandardPageBanner({
             "radial-gradient(circle at 88% 15%, rgba(255,255,255,0.35), transparent 45%)",
         }}
       />
-      <div className="relative z-10 flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:px-4 sm:py-3">
+      <div
+        className={`relative z-10 flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:px-4 sm:py-3 lg:h-[65px] ${contentClassName}`}
+      >
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-fuchsia-600 shadow-md">
             <Icon className="h-4 w-4 text-white" />

@@ -33,6 +33,7 @@ import type { ReactNode, Ref } from "react";
 import { X } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
+import { cn } from "@/lib/utils";
 
 interface StandardModalDialogProps {
   open: boolean;
@@ -56,6 +57,9 @@ interface StandardModalDialogProps {
    * (ver AlertDetailDrawer: sem isso, o mesmo nó DOM persiste entre
    * aberturas e reaproveita o scrollTop do alerta anterior). */
   scrollRef?: Ref<HTMLDivElement>;
+  /** Ajustes visuais locais para o banner, sem alterar o padrão dos outros
+   * diálogos. Útil quando o conteúdo é uma tela de perfil. */
+  headerClassName?: string;
 }
 
 export function StandardModalDialog({
@@ -69,6 +73,7 @@ export function StandardModalDialog({
   size = "large",
   overlayClassName,
   scrollRef,
+  headerClassName,
 }: StandardModalDialogProps) {
   const { sidebarWidth } = useAppFrameMetrics();
   const sidebarWidthPx =
@@ -106,7 +111,7 @@ export function StandardModalDialog({
             padrão recua o banner gradiente das outras telas. */}
         <div className="shrink-0 pt-[15px] px-[15px]">
           <div
-            className="flex items-center gap-3 px-6 py-4 rounded-2xl"
+            className={cn("flex items-center gap-3 px-6 py-4 rounded-2xl", headerClassName)}
             style={{
               background:
                 "var(--app-brand-gradient, var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)))",

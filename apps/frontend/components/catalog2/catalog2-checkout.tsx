@@ -8,10 +8,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CreditCard, Loader2, ShieldCheck } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { useIallkaContext } from "@/contexts/iallka-context";
+import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
+import { cn } from "@/lib/utils";
 
 type Portal = "company" | "agency";
 
@@ -21,6 +23,20 @@ function money(v: number | null | undefined, currency = "BRL") {
 }
 
 type Step = "review" | "quoting" | "confirm" | "result";
+
+// Cartões fake sandbox — achado do usuário 2026-09-23: "já tinha um cartão
+// cadastrado, que a gente usa um cartão fake" (mesma referência de
+// checkout-flow.tsx, o checkout do catálogo antigo). Últimos 4 dígitos
+// batendo exatamente com a simulação real do gateway
+// (apps/backend/src/lib/payment-gateway.ts, DECLINE_BY_LAST_DIGITS) — nunca
+// inventado; um cartão aprova, os outros recusam com o motivo real do
+// gateway, pra testar os dois caminhos.
+const SANDBOX_CARDS = [
+  { id: "sandbox-approve", lastDigits: "4242", holder: "TESTE ALLKA", expiry: "12/30", brand: "Visa", outcome: "Aprova" },
+  { id: "sandbox-decline-funds", lastDigits: "0002", holder: "TESTE ALLKA", expiry: "12/30", brand: "Visa", outcome: "Recusa — saldo insuficiente" },
+  { id: "sandbox-decline-expired", lastDigits: "0069", holder: "TESTE ALLKA", expiry: "12/30", brand: "Visa", outcome: "Recusa — cartão expirado" },
+  { id: "sandbox-decline-cvv", lastDigits: "0127", holder: "TESTE ALLKA", expiry: "12/30", brand: "Visa", outcome: "Recusa — CVV inválido" },
+];
 
 export function Catalog2Checkout({ portal }: { portal: Portal }) {
   const navigate = useNavigate();
@@ -33,6 +49,7 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
   const [result, setResult] = useState<{ project: any; project_products: any[] } | null>(null);
   const [paying, setPaying] = useState(false);
   const [paid, setPaid] = useState(false);
+  const [selectedCardId, setSelectedCardId] = useState<string>(SANDBOX_CARDS[0].id);
   const actionIdRef = useRef<string>(crypto.randomUUID());
 
   useEffect(() => {
@@ -102,17 +119,27 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
 
   const simulatePayment = useCallback(async () => {
     if (!result) return;
+    const card = SANDBOX_CARDS.find((c) => c.id === selectedCardId) ?? SANDBOX_CARDS[0];
     setPaying(true);
     setError(null);
     try {
-      await apiClient.fakeSandboxCheckout({ project_id: result.project.id, amount: 0 });
+      await apiClient.fakeSandboxCheckout({
+        project_id: result.project.id,
+        amount: 0,
+        card_last_digits: card.lastDigits,
+        card_holder: card.holder,
+      });
       setPaid(true);
     } catch (e: any) {
+      // Cartão de propósito recusado (ex.: "0002") devolve 402 com o motivo
+      // REAL do gateway fake (payment-gateway.ts) — apiClient já extrai
+      // isso em e.message, nunca um erro genérico. Achado do usuário
+      // 2026-09-23: "tem que dar o motivo exato, sempre".
       setError(e?.message ?? "Não foi possível confirmar o pagamento simulado.");
     } finally {
       setPaying(false);
     }
-  }, [result]);
+  }, [result, selectedCardId]);
 
   const totalPrice = quotes.reduce((sum, q) => sum + (q.commercial_price ?? 0), 0);
   const maxDeadline = quotes.reduce((max, q) => Math.max(max, q.commercial_deadline_days ?? 0), 0);
@@ -120,9 +147,10 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
   const projectListPath = portal === "agency" ? "/agency/projetos" : "/company/projetos";
 
   return (
-    <div className="mx-auto max-w-2xl p-4 md:p-6">
+    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div className="mx-auto h-full max-w-2xl overflow-y-auto p-4 md:p-6">
       <div className="mb-4 flex items-center gap-3" data-tour-id="catalog2-checkout-header">
-        <Button size="sm" variant="ghost" onClick={() => navigate(`/${portal}/catalog2`)}>
+        <Button size="sm" variant="ghost" onClick={() => navigate(`/${portal}/catalogo-produtos`)}>
           <ArrowLeft className="h-4 w-4" /> Voltar ao catálogo
         </Button>
         <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-50">Finalizar pedido</h1>
@@ -192,6 +220,35 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
               <p className="text-sm text-neutral-500">
                 Este é o seu <strong>pedido</strong> — ele ainda não virou projeto de execução. Confirme o pagamento simulado (ambiente local) para ativá-lo.
               </p>
+              {/* Cartão fake sandbox — achado do usuário 2026-09-23: "já
+                  tinha um cartão cadastrado, cartão fake" (mesmo padrão do
+                  checkout antigo). Escolher um cartão de recusa testa o
+                  caminho de erro de verdade, com o motivo real do gateway. */}
+              <div>
+                <h3 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-neutral-500">Forma de pagamento (sandbox)</h3>
+                <div className="space-y-1.5">
+                  {SANDBOX_CARDS.map((card) => {
+                    const selected = selectedCardId === card.id;
+                    return (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => setSelectedCardId(card.id)}
+                        className={cn(
+                          "flex w-full items-center gap-2.5 rounded-lg border-2 px-3 py-2 text-left text-sm transition-all",
+                          selected ? "border-violet-500 bg-violet-50 dark:bg-violet-950/30" : "border-neutral-200 hover:border-violet-300 dark:border-neutral-700",
+                        )}
+                      >
+                        <CreditCard className="h-4 w-4 shrink-0 text-neutral-400" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium">{card.brand} •••• {card.lastDigits}</span>
+                          <span className="block text-[11px] text-neutral-500">{card.holder} · {card.expiry} · {card.outcome}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <Button size="sm" disabled={paying} onClick={simulatePayment}>
                 {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Simular pagamento
               </Button>
@@ -206,6 +263,7 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
           )}
         </div>
       )}
+    </div>
     </div>
   );
 }

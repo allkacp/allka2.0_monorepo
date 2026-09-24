@@ -98,10 +98,68 @@ describe("Catálogo do cliente", () => {
     expect(screen.getAllByText(/BRL 300\.00/).length).toBeGreaterThan(0);
   });
 
+  it("organiza a configuração em etapas e recalcula ao alterar opção ou quantidade", async () => {
+    const user = userEvent.setup();
+    renderStore();
+    await user.click(await screen.findByText("Serviço Demo"));
+    expect(await screen.findByText("1. Escolha o que você precisa")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Adicionar à cesta/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Carrossel" }));
+    await waitFor(() => expect(api.configureClientCatalog2).toHaveBeenLastCalledWith(
+      "servico-demo",
+      expect.objectContaining({ variation_option_keys: expect.arrayContaining(["carrossel", "autorizado"]) }),
+      false,
+      null,
+    ));
+
+    await user.click(screen.getByRole("button", { name: "2. Quantidade" }));
+    await user.clear(screen.getByRole("spinbutton", { name: /Quantidade/i }));
+    await user.type(screen.getByRole("spinbutton", { name: /Quantidade/i }), "3");
+    await waitFor(() => expect(api.configureClientCatalog2).toHaveBeenLastCalledWith(
+      "servico-demo",
+      expect.objectContaining({ quantity: 3 }),
+      false,
+      null,
+    ));
+  });
+
+  it("guarda a distribuição: mesmo profissional gera um lote; profissionais diferentes permitem 1 + 1 + 3", async () => {
+    const user = userEvent.setup();
+    renderStore();
+    await user.click(await screen.findByText("Serviço Demo"));
+    await user.click(screen.getByRole("button", { name: "2. Quantidade" }));
+    const quantity = screen.getByRole("spinbutton", { name: /Quantidade/i });
+    await user.clear(quantity);
+    await user.type(quantity, "5");
+    await waitFor(() => expect(api.configureClientCatalog2).toHaveBeenLastCalledWith(
+      "servico-demo",
+      expect.objectContaining({ quantity: 5, delivery_groups: [5] }),
+      false,
+      null,
+    ));
+
+    await user.click(screen.getByRole("button", { name: "Profissionais diferentes" }));
+    await user.click(screen.getByRole("button", { name: "Adicionar tarefa" }));
+    const groups = screen.getAllByRole("spinbutton", { name: /Unidades da tarefa/i });
+    await user.clear(groups[1]);
+    await user.type(groups[1], "1");
+    await user.clear(groups[2]);
+    await user.type(groups[2], "3");
+    await waitFor(() => expect(api.configureClientCatalog2).toHaveBeenLastCalledWith(
+      "servico-demo",
+      expect.objectContaining({ quantity: 5, delivery_groups: [1, 1, 3] }),
+      false,
+      null,
+    ));
+    expect(screen.getByText(/Total distribuído: 5 de 5 unidades/i)).toBeInTheDocument();
+  });
+
   it("adiciona à cesta e mostra 'Já está na cesta' na repetição", async () => {
     const user = userEvent.setup();
     renderStore();
     await user.click(await screen.findByText("Serviço Demo"));
+    await user.click(await screen.findByRole("button", { name: "3. Contratação" }));
     const addBtn = await screen.findByRole("button", { name: /Adicionar à cesta/i });
     await user.click(addBtn);
     await waitFor(() => expect(api.addClientCatalog2CartItem).toHaveBeenCalledWith("servico-demo", expect.any(Object), null));
@@ -117,6 +175,7 @@ describe("Catálogo do cliente", () => {
     const user = userEvent.setup();
     renderStore();
     await user.click(await screen.findByText("Serviço Demo"));
+    await user.click(await screen.findByRole("button", { name: "3. Contratação" }));
     await user.click(await screen.findByRole("button", { name: /Gerar pré-cotação/i }));
     await waitFor(() => expect(api.createClientCatalog2Quote).toHaveBeenCalled());
     expect(await screen.findByText(/Pré-cotação valida gerada/i)).toBeInTheDocument();
@@ -212,6 +271,7 @@ describe("Catálogo do cliente", () => {
     api.configureClientCatalog2.mockResolvedValue({ ...CONFIG, can_generate_quote: false, quote_blockers: ["produto em pré-lançamento — contratação ainda não liberada"] });
     renderStore();
     await user.click(await screen.findByText("Serviço Demo"));
+    await user.click(await screen.findByRole("button", { name: "3. Contratação" }));
     expect(await screen.findByRole("heading", { name: "Serviço Demo" })).toBeInTheDocument();
     expect(screen.getByText("Pré-lançamento")).toBeInTheDocument();
     expect(screen.getByText(/Contratação bloqueada: produto em pré-lançamento/)).toBeInTheDocument();

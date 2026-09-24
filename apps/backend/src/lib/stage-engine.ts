@@ -32,7 +32,7 @@
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
-import { selecionarNomadeParaTarefa } from "./selecionar-nomade";
+import { startTaskRotation } from "./task-rotation-engine";
 import { atribuirLiderParaTarefa } from "./atribuir-lider";
 import { nestedAlertEventCreate } from "./alert-events";
 
@@ -527,7 +527,11 @@ export async function atribuirExecutorDaEtapa(
   }
 
   if (stage.executor_type === "nomad") {
-    await selecionarNomadeParaTarefa(stage.project_task_id).catch(() => null);
+    // A etapa não escolhe mais um nômade silenciosamente. A tarefa entra no
+    // mesmo rodízio de oferta usado pelas tarefas sem etapas, para que o
+    // nômade aceite ou recuse. Isso também preserva cada lote contratado:
+    // um lote de 3 unidades é UMA oferta/tarefa; 1+1+3 são três ofertas.
+    await startTaskRotation(stage.project_task_id).catch(() => null);
     const tarefa = await prisma.projectTask.findUnique({
       where: { id: stage.project_task_id },
       select: { nomade_responsavel_id: true },

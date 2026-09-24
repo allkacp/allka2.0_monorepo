@@ -59,6 +59,24 @@ async function mkUser(kind: "master" | "common_admin" | "plain") {
   return u;
 }
 
+// Estes cenários testam os guards de uma versão JÁ publicada; não testam a
+// validação de publicação (coberta em catalog2-builder.integration.test.ts).
+// Marcamos a versão diretamente no banco descartável para não depender de
+// `force`, que agora não pode ignorar pendências estruturais reais.
+async function markVersionPublishedForStatusScenario(productId: string, versionId: string, actorUserId: string) {
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.catalog2ProductVersion.update({
+      where: { id: versionId },
+      data: { state: "publicada", published_at: now, published_by_user_id: actorUserId, updated_by_user_id: actorUserId },
+    }),
+    prisma.catalog2Product.update({
+      where: { id: productId },
+      data: { published_version_id: versionId, status: "disponivel" },
+    }),
+  ]);
+}
+
 describe("Novo catálogo — fundação", () => {
   before(async () => {
     requireTestDatabaseUrl();
@@ -255,10 +273,7 @@ describe("Novo catálogo — fundação", () => {
     catProducts.push(p.id);
     const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id, version_number: 1 } });
 
-    // publica a v1 (force: este teste não monta o produto completo — o
-    // bloco 3 adicionou a validação de publicação; ver catalog2-builder.*)
-    const pubRes = await api(`/api/admin/catalog2/versions/${v1.id}/publish`, { method: "POST", token: tokenFor(master), body: { force: true } });
-    assert.equal(pubRes.status, 200);
+    await markVersionPublishedForStatusScenario(p.id, v1.id, master.id);
 
     // editar a v1 publicada → 409
     const editPub = await api(`/api/admin/catalog2/versions/${v1.id}`, { method: "PUT", token: tokenFor(master), body: { title: "hackeado" } });
@@ -330,7 +345,7 @@ describe("Novo catálogo — fundação", () => {
     assert.equal(bad.status, 409);
 
     const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
-    await publishVersion(v1.id, master.id, { force: true });
+    await markVersionPublishedForStatusScenario(p.id, v1.id, master.id);
     prod = await prisma.catalog2Product.findUniqueOrThrow({ where: { id: p.id } });
     assert.equal(prod.status, "disponivel");
 
@@ -356,7 +371,7 @@ describe("Novo catálogo — fundação", () => {
     assert.equal(blockedEsg.status, 409);
 
     const v1 = await prisma.catalog2ProductVersion.findFirstOrThrow({ where: { product_id: p.id } });
-    await publishVersion(v1.id, master.id, { force: true });
+    await markVersionPublishedForStatusScenario(p.id, v1.id, master.id);
 
     const okPre = await api(`/api/admin/catalog2/products/${p.id}/status`, { method: "PATCH", token: tokenFor(master), body: { status: "pre_lancamento" } });
     assert.equal(okPre.status, 200);

@@ -159,6 +159,9 @@ const Catalog2CompanyPage = React.lazy(() =>
 const Catalog2AgencyPage = React.lazy(() =>
   import("@/app/catalog2/page").then((m) => ({ default: m.Catalog2AgencyPage })),
 );
+const Catalog2LeaderPage = React.lazy(() =>
+  import("@/app/catalog2/page").then((m) => ({ default: m.Catalog2LeaderPage })),
+);
 // Checkout do novo catálogo (sprint de produtos, bloco 6/6).
 const Catalog2CheckoutCompanyPage = React.lazy(() =>
   import("@/app/catalog2-checkout/page").then((m) => ({ default: m.Catalog2CheckoutCompanyPage })),
@@ -972,6 +975,10 @@ export default function App() {
                     element={<Catalog2AdminPreviewPage />}
                   />
                   <Route
+                    path="/admin/catalog2/:produtoId"
+                    element={<Catalog2AdminPreviewPage />}
+                  />
+                  <Route
                     path="/admin/clientes"
                     element={<AdminClientesPage />}
                   />
@@ -1122,15 +1129,20 @@ export default function App() {
                     path="/company/produtos/:produtoId"
                     element={<EmpresaProdutosPage />}
                   />
-                  {/* Novo catálogo do cliente (bloco 5/6) — coexiste com o
-                      catálogo operacional acima; produto aberto via ?produto=. */}
+                  {/* Novo catálogo do cliente (bloco 5/6) — produto aberto via
+                      link direto compartilhável (/catalogo-produtos/:id),
+                      igual ao padrão já usado pelo admin. */}
                   <Route
-                    path="/company/catalog2"
+                    path="/company/catalogo-produtos"
+                    element={<Catalog2CompanyPage />}
+                  />
+                  <Route
+                    path="/company/catalogo-produtos/:produtoId"
                     element={<Catalog2CompanyPage />}
                   />
                   {/* Checkout do novo catálogo (bloco 6/6). */}
                   <Route
-                    path="/company/catalog2/checkout"
+                    path="/company/catalogo-produtos/checkout"
                     element={<Catalog2CheckoutCompanyPage />}
                   />
                   <Route
@@ -1190,15 +1202,20 @@ export default function App() {
                     path="/agency/catalogo/:produtoId"
                     element={<AgencyCatalogoPage />}
                   />
-                  {/* Novo catálogo do cliente (bloco 5/6) — coexiste com o
-                      catálogo operacional acima; produto aberto via ?produto=. */}
+                  {/* Novo catálogo do cliente (bloco 5/6) — produto aberto via
+                      link direto compartilhável (/catalogo-produtos/:id),
+                      igual ao padrão já usado pelo admin. */}
                   <Route
-                    path="/agency/catalog2"
+                    path="/agency/catalogo-produtos"
+                    element={<Catalog2AgencyPage />}
+                  />
+                  <Route
+                    path="/agency/catalogo-produtos/:produtoId"
                     element={<Catalog2AgencyPage />}
                   />
                   {/* Checkout do novo catálogo (bloco 6/6). */}
                   <Route
-                    path="/agency/catalog2/checkout"
+                    path="/agency/catalogo-produtos/checkout"
                     element={<Catalog2CheckoutAgencyPage />}
                   />
                   <Route
@@ -1309,6 +1326,14 @@ export default function App() {
                   <Route
                     path="/leader/catalogo"
                     element={<LiderCatalogoPage />}
+                  />
+                  <Route
+                    path="/leader/catalogo-produtos"
+                    element={<Catalog2LeaderPage />}
+                  />
+                  <Route
+                    path="/leader/catalogo-produtos/:produtoId"
+                    element={<Catalog2LeaderPage />}
                   />
                   <Route
                     path="/leader/projetos"

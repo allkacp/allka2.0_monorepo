@@ -3,6 +3,8 @@ import { getNextTaskCode } from "./task-code";
 import { computePricing, type PricingSelection } from "./catalog2-pricing";
 import type { GerarTarefasResult } from "./generate-tasks";
 import { addMonths } from "./catalog2-checkout";
+import { getPaymentGateway } from "./payment-gateway";
+import { getNextSequenceValue, formatInvoiceNumber } from "./sequence";
 
 export interface GerarTarefasCatalog2Options {
   // Obrigatórios: geração só acontece a partir de um pagamento confirmado —
@@ -16,6 +18,7 @@ export interface GerarTarefasCatalog2Options {
 }
 
 const projectProductInclude = {
+  project: { select: { client_id: true } },
   catalog2_product: { select: { delivery_recurrence: true } },
   catalog2_version: {
     include: {
@@ -183,6 +186,8 @@ async function materializeTasksForProjectProduct(
   // 6.1: assim, cada ciclo usa exatamente "a versão e as condições
   // contratadas" (nunca uma versão/condição mais recente do produto).
   let activeTaskKeys: Set<string> | null = null;
+  // A divisão vem da cotação congelada, nunca do cadastro atual.
+  let deliveryGroups = [1];
   if (pp.origin_catalog2_quote_id) {
     const quote = await tx.catalog2Quote.findUnique({
       where: { id: pp.origin_catalog2_quote_id },
@@ -192,6 +197,13 @@ async function materializeTasksForProjectProduct(
       const sel = JSON.parse(quote.selection_json) as PricingSelection;
       const pricing = await computePricing(version.id, sel);
       activeTaskKeys = new Set(pricing.active_task_keys);
+      const quantity = Math.max(1, Math.floor(Number(sel.quantity ?? 1)) || 1);
+      const requestedGroups = Array.isArray(sel.delivery_groups) ? sel.delivery_groups : [quantity];
+      const validGroups = requestedGroups.every((group) => Number.isInteger(group) && group > 0)
+        && requestedGroups.reduce((sum, group) => sum + group, 0) === quantity;
+      // Cotações antigas e qualquer valor inválido preservam o fluxo antigo:
+      // uma tarefa única para a quantidade inteira.
+      deliveryGroups = validGroups ? requestedGroups : [quantity];
     }
   }
   // Sem cotação de origem rastreável (não deveria acontecer no fluxo
@@ -215,8 +227,12 @@ async function materializeTasksForProjectProduct(
 
   for (let idx = 0; idx < orderedTasks.length; idx++) {
     const ct = orderedTasks[idx];
+    for (let groupIndex = 0; groupIndex < deliveryGroups.length; groupIndex++) {
+    const deliveryQuantity = deliveryGroups[groupIndex];
     const occurrenceIndex = opts.occurrenceIndex;
-    const generationKey = `c2:${opts.paymentId}:${pp.id}:${ct.id}:${occurrenceIndex}`;
+    // Preserva a chave histórica quando há somente um lote; os grupos
+    // separados ganham uma chave própria, sem perder a idempotência.
+    const generationKey = `c2:${opts.paymentId}:${pp.id}:${ct.id}:${occurrenceIndex}${deliveryGroups.length > 1 ? `:${groupIndex}` : ""}`;
 
     const existing = await tx.projectTask.findUnique({
       where: { generation_key: generationKey },
@@ -271,16 +287,21 @@ async function materializeTasksForProjectProduct(
         description: ct.description ?? ct.objective ?? null,
         status: "PARA_LANCAMENTO",
         exige_aprovacao_cliente: ct.requires_client_approval,
-        sort_order: idx,
+        sort_order: idx * deliveryGroups.length + groupIndex,
         checklist_snapshot: null,
         steps_snapshot: null,
         briefing_snapshot: briefingSnapshot,
-        observations: dependencyNames.length > 0 ? `Depende de: ${dependencyNames.join(", ")}` : null,
+        observations: [
+          `Lote de entrega: ${deliveryQuantity} unidade${deliveryQuantity === 1 ? "" : "s"}${deliveryGroups.length > 1 ? ` (${groupIndex + 1}/${deliveryGroups.length})` : ""}.`,
+          dependencyNames.length > 0 ? `Depende de: ${dependencyNames.join(", ")}` : null,
+        ].filter(Boolean).join(" "),
         lancamento_expires_at: new Date(opts.paidAt.getTime() + 30 * 24 * 60 * 60 * 1000),
         origin_payment_id: opts.paymentId,
         generation_key: generationKey,
         billing_cycle_key: opts.billingCycleKey,
         occurrence_index: occurrenceIndex,
+        delivery_quantity: deliveryQuantity,
+        delivery_group_index: groupIndex,
       },
     });
     generated++;
@@ -318,6 +339,7 @@ async function materializeTasksForProjectProduct(
     if (stagesToCreate.length > 0) {
       await tx.projectTaskStage.createMany({ data: stagesToCreate });
       stages_generated += stagesToCreate.length;
+    }
     }
   }
 
@@ -390,8 +412,74 @@ export async function releaseCatalog2DeliveryCycle(tx: DbClient, cycleId: string
   }
 
   const billingCycleKey = cycle.scheduled_at.toISOString().slice(0, 7); // "YYYY-MM"
+
+  // ── Cobrança recorrente — antes disto, um contrato "mensal" era cobrado
+  // UMA vez só e as tarefas dos meses seguintes eram liberadas de graça,
+  // sempre reaproveitando cycle.origin_payment_id (achado da auditoria de
+  // lançamento; violava "nenhuma tarefa sem condição financeira correta").
+  // Agora cada ciclo cobra de novo, no mesmo gateway/adapter do checkout
+  // inicial. Falha na cobrança nunca gera tarefa — o ciclo fica "skipped"
+  // (nunca "not_due"/"pending" de novo: decidir se tenta de novo é decisão
+  // humana, não automática, então fica visível pro admin revisar).
+  const gateway = getPaymentGateway();
+  const cycleAmount = pp.preco_final_cliente_snapshot ?? 0;
+  const charge = await gateway.charge({
+    amount: cycleAmount,
+    referenceId: `${cycle.id}:${billingCycleKey}`,
+    description: `Cobrança recorrente ${billingCycleKey} — ${pp.product_name_snapshot ?? pp.id}`,
+  });
+
+  const recurringPayment = await tx.payment.create({
+    data: {
+      project_id: pp.project_id,
+      amount: cycleAmount,
+      payment_method: "RECORRENCIA_AUTOMATICA",
+      status: charge.approved ? "PAGO" : "FALHOU",
+      gateway: charge.gateway,
+      fake_transaction_id: charge.transactionId,
+      paid_at: charge.approved ? cycle.scheduled_at : null,
+      idempotency_key: `recurring:${cycle.id}:${billingCycleKey}`,
+      billing_cycle_key: billingCycleKey,
+      notes: charge.approved
+        ? `Cobrança recorrente automática do ciclo ${cycle.id}`
+        : `Cobrança recorrente recusada: ${charge.declineReason ?? "motivo não informado"}`,
+    },
+  });
+
+  if (!charge.approved) {
+    await tx.catalog2ProjectDeliveryCycle.update({ where: { id: cycle.id }, data: { status: "skipped" } });
+    return "skipped";
+  }
+
+  await tx.paymentItem.create({
+    data: {
+      payment_id: recurringPayment.id,
+      project_product_id: pp.id,
+      product_id: null,
+      product_name_snapshot: pp.product_name_snapshot ?? "",
+      unit_price_snapshot: cycleAmount,
+      quantity_snapshot: 1,
+      total_snapshot: cycleAmount,
+      recurrence_snapshot: pp.recurrence_snapshot,
+      billing_cycle_key: billingCycleKey,
+    },
+  });
+
+  await tx.invoice.create({
+    data: {
+      payment_id: recurringPayment.id,
+      project_id: pp.project_id,
+      company_id: pp.project.client_id,
+      amount: cycleAmount,
+      status: "paid",
+      paid_at: cycle.scheduled_at,
+      invoice_number: formatInvoiceNumber(await getNextSequenceValue(tx, "invoice_number")),
+      description: `Fatura recorrente automática — ciclo ${billingCycleKey}`,
+    },
+  });
+
   const result = await materializeTasksForProjectProduct(tx, pp.project_id, pp, {
-    paymentId: cycle.origin_payment_id,
+    paymentId: recurringPayment.id,
     paidAt: cycle.scheduled_at,
     billingCycleKey,
     occurrenceIndex: cycle.occurrence_index,

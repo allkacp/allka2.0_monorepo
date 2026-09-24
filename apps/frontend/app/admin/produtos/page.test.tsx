@@ -334,6 +334,45 @@ it("clicar na aba 'Ativos' filtra a listagem (status=disponivel) sem precisar ab
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ status: "disponivel" })))
 })
 
+it("editor: mostra os seis status em português e só persiste a escolha ao clicar em Salvar status", async () => {
+  const user = userEvent.setup()
+  api.setCatalog2ProductStatus.mockResolvedValue({ ok: true, status: "pre_lancamento" })
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+
+  const status = await screen.findByRole("combobox", { name: "Status do produto" })
+  expect(within(status).getByRole("option", { name: "Em preparação" })).toBeInTheDocument()
+  expect(within(status).getByRole("option", { name: "Pré-lançamento" })).toBeInTheDocument()
+  expect(within(status).getByRole("option", { name: "Ativo" })).toBeInTheDocument()
+  expect(within(status).getByRole("option", { name: "Pausado" })).toBeInTheDocument()
+  expect(within(status).getByRole("option", { name: "Esgotado temporariamente" })).toBeInTheDocument()
+  expect(within(status).getByRole("option", { name: "Inativo" })).toBeInTheDocument()
+
+  await user.selectOptions(status, "pre_lancamento")
+  expect(api.setCatalog2ProductStatus).not.toHaveBeenCalled()
+  await user.click(screen.getByRole("button", { name: "Salvar status" }))
+  await waitFor(() => expect(api.setCatalog2ProductStatus).toHaveBeenCalledWith("prod1", "pre_lancamento"))
+})
+
+it("editor: publicação fica bloqueada quando há pendência estrutural, mesmo que também exista pendência comercial", async () => {
+  const user = userEvent.setup()
+  api.validateCatalog2Version.mockResolvedValue({
+    ok: false,
+    issues: ["Selecione um pilar.", "Preço comercial pendente."],
+    pricing_pending: true,
+    force_allowed: false,
+  })
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  await user.click(await screen.findByRole("button", { name: /abrir\/editar produto|continuar configuração/i }))
+  await user.click(screen.getByRole("tab", { name: "Revisão e publicação" }))
+  await user.click(screen.getByRole("tab", { name: "Publicação e versões" }))
+
+  expect(await screen.findByText("Selecione um pilar.")).toBeInTheDocument()
+  expect(screen.getByRole("button", { name: "Publicar versão" })).toBeDisabled()
+})
+
 // Bug real reportado 2026-09-11: "Com pendências" reusava o mesmo estado
 // de "Categorias" — clicar nela nunca filtrava nada, só reabria/fechava o
 // painel de "Categorias" (a interface "permanecia ou retornava para

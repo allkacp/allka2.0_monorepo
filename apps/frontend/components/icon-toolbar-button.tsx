@@ -33,7 +33,7 @@ export function IconToolbarButton({
           <button
             onClick={onClick}
             className={cn(
-              "group relative flex items-center justify-center h-11 w-11 rounded-[12px] border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden transition-all flex-shrink-0",
+              "group relative flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 transition-all hover:border-transparent dark:border-slate-700",
               className,
             )}
           >
@@ -44,7 +44,7 @@ export function IconToolbarButton({
                   "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
               }}
             />
-            <Icon className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
+            <Icon className="relative z-10 h-4 w-4 text-[#7d1b6a] transition-colors group-hover:text-white dark:text-[#c07ab0]" />
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>

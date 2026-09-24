@@ -15,5 +15,11 @@ export function Catalog2CompanyPage() {
 export function Catalog2AgencyPage() {
   return <Catalog2Store portal="agency" />;
 }
+// Líder: mesmo catálogo, mas enxerga tudo (ativo + em preparação) e não
+// compra — ver always_sees_all_products em catalog2-client.ts (backend) e
+// canBuy=false no Catalog2Store (esconde cesta/checkout).
+export function Catalog2LeaderPage() {
+  return <Catalog2Store portal="leader" />;
+}
 
 export default Catalog2CompanyPage;

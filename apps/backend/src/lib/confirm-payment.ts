@@ -5,6 +5,9 @@ import { recalculateProjectValue } from "./project-value";
 import { gerarTarefasDoProjeto, type GerarTarefasResult } from "./generate-tasks";
 import { gerarTarefasCatalog2DoProjeto, mergeGerarTarefasResults } from "./generate-tasks-catalog2";
 import { satisfyPaymentTriggersByReference } from "./task-release-service";
+import { getPaymentGateway } from "./payment-gateway";
+import { getNextSequenceValue, formatInvoiceNumber } from "./sequence";
+import { findOrCreateWalletTx, createLedgerEntryTx } from "./wallet-service";
 
 export class PaymentValidationError extends Error {
   statusCode: number;
@@ -28,6 +31,11 @@ export interface ConfirmPaymentParams {
   cardLastDigits?: string;
   cardHolder?: string;
   notes?: string;
+  // Preenchido só quando paymentMethod === "ALLKOINS": de QUAL carteira o
+  // valor sai — contratação em nome de empresa/agência feita pelo Admin
+  // Master (achado do usuário 2026-09-23: "posso descontar da carteira da
+  // própria agência"). Nunca a carteira do admin que está operando.
+  walletDebit?: { ownerType: "company" | "agency"; ownerId: string };
 }
 
 export interface ConfirmPaymentResult {
@@ -35,6 +43,9 @@ export interface ConfirmPaymentResult {
   project: Project;
   alreadyProcessed: boolean;
   tasksResult: GerarTarefasResult | null;
+  /** true quando o gateway recusou a cobrança — payment volta FALHOU, nada mais avança. */
+  declined?: boolean;
+  declineReason?: string;
 }
 
 const NON_REUSABLE_PAYMENT_STATUSES = ["CANCELADO", "FALHOU"];
@@ -183,6 +194,89 @@ export async function confirmPaymentAndGenerateProjectTasks(
   }
   const amount = paymentItemsData.reduce((sum, item) => sum + item.total_snapshot, 0);
 
+  // ── Cobra de verdade no gateway ativo (hoje: FakeSandboxGateway) ────────
+  // Ponto único de chamada ao gateway — ver src/lib/payment-gateway.ts.
+  // Cartão de teste com final "recusado" (ver DECLINE_BY_LAST_DIGITS) faz o
+  // Payment ir para FALHOU aqui mesmo, sem gerar tarefa nem mexer no
+  // projeto — a transação AINDA COMMITA (não lançamos), pra deixar rastro
+  // real da tentativa recusada em vez de sumir com ela num rollback.
+  // ── Formas de acerto que NUNCA passam pelo gateway de cartão ────────────
+  // BRINDE (cortesia do Admin Master) e ALLKOINS (débito direto da carteira
+  // allkoin da empresa/agência-alvo) — achado do usuário 2026-09-23:
+  // contratação em nome de empresa/agência precisa poder ser cortesia ou
+  // descontar da carteira, sem cartão nenhum envolvido. `amount` continua
+  // sendo o valor real dos produtos (nunca zerado) — é só a FORMA de
+  // liquidação que muda; BRINDE fica registrado como cortesia sem mover
+  // dinheiro nenhum, ALLKOINS debita de verdade, atomicamente, dentro desta
+  // MESMA transação (ao contrário do lançamento best-effort de
+  // recordWalletEvent usado pelo fluxo de cartão em payments.ts).
+  let chargeResult: { approved: boolean; gateway: string; transactionId: string; declineReason?: string };
+  if (params.paymentMethod === "BRINDE") {
+    chargeResult = { approved: true, gateway: "BRINDE", transactionId: `brinde_${payment.id}` };
+  } else if (params.paymentMethod === "ALLKOINS") {
+    if (!params.walletDebit) {
+      throw new PaymentValidationError("Carteira de origem do débito não informada.", 400);
+    }
+    const wallet = await findOrCreateWalletTx(tx, params.walletDebit.ownerType, params.walletDebit.ownerId);
+    if (wallet.status === "closed") {
+      throw new PaymentValidationError("A carteira allkoin desta conta está fechada.", 409);
+    }
+    if (wallet.balance < amount) {
+      throw new PaymentValidationError(
+        `Saldo insuficiente na carteira allkoin (saldo atual: R$ ${wallet.balance.toFixed(2)}, necessário: R$ ${amount.toFixed(2)}).`,
+        402,
+      );
+    }
+    await createLedgerEntryTx(tx, {
+      walletId: wallet.id,
+      type: "admin_checkout_debit",
+      direction: "debit",
+      amount,
+      description: params.notes ? `Contratação (admin) — ${params.notes}` : "Contratação (admin) via carteira allkoin",
+      idempotencyKey: `admin_wallet_debit_${payment.id}`,
+      referenceType: "payment",
+      referenceId: payment.id,
+      createdBy: params.requesterUser.id,
+      metadata: { project_id: project.id, payment_id: payment.id },
+    });
+    chargeResult = { approved: true, gateway: "ALLKOINS", transactionId: `allkoins_${payment.id}` };
+  } else {
+    const gateway = getPaymentGateway();
+    chargeResult = await gateway.charge({
+      amount,
+      cardLastDigits: params.cardLastDigits ?? payment.card_last_digits ?? "4242",
+      cardHolder: params.cardHolder ?? payment.card_holder ?? undefined,
+      referenceId: payment.id,
+      description: params.notes,
+    });
+  }
+
+  if (!chargeResult.approved) {
+    const failedPayment = await tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: "FALHOU",
+        amount,
+        gateway: chargeResult.gateway,
+        idempotency_key: `failed:${payment.id}:${Date.now()}`,
+        billing_cycle_key: cycleKey,
+        payment_method: params.paymentMethod ?? payment.payment_method,
+        card_last_digits: params.cardLastDigits ?? payment.card_last_digits ?? "4242",
+        card_holder: params.cardHolder ?? payment.card_holder ?? "Cartão de Teste",
+        fake_transaction_id: chargeResult.transactionId,
+        notes: `${params.notes ?? ""}\n[Recusado: ${chargeResult.declineReason ?? "motivo não informado"}]`.trim(),
+      },
+    });
+    return {
+      payment: failedPayment,
+      project,
+      alreadyProcessed: false,
+      tasksResult: null,
+      declined: true,
+      declineReason: chargeResult.declineReason,
+    };
+  }
+
   // Mantém Project.value/budget sincronizados com os produtos vinculados —
   // regra independente deste Payment específico, da fase anterior.
   await recalculateProjectValue(tx, project.id);
@@ -207,9 +301,8 @@ export async function confirmPaymentAndGenerateProjectTasks(
       payment_method: params.paymentMethod ?? payment.payment_method,
       card_last_digits: params.cardLastDigits ?? payment.card_last_digits ?? "4242",
       card_holder: params.cardHolder ?? payment.card_holder ?? "Cartão de Teste",
-      fake_transaction_id:
-        payment.fake_transaction_id ??
-        `FAKE_${Date.now()}_${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+      gateway: chargeResult.gateway,
+      fake_transaction_id: payment.fake_transaction_id ?? chargeResult.transactionId,
     },
   });
 
@@ -224,6 +317,25 @@ export async function confirmPaymentAndGenerateProjectTasks(
   }
 
   const confirmedPayment = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
+
+  // ── Fatura automática — antes disto, Payment e Invoice eram modelos
+  // desconectados: nenhuma fatura nascia sozinha de um pagamento confirmado
+  // (achado da auditoria de lançamento). Um Payment só gera UMA Invoice
+  // (payment_id é @unique no schema) — idempotente por natureza: se este
+  // Payment já tem invoice (caminho "alreadyProcessed", tratado acima antes
+  // de chegar aqui), este bloco nunca roda de novo.
+  await tx.invoice.create({
+    data: {
+      payment_id: confirmedPayment.id,
+      project_id: project.id,
+      company_id: project.client_id,
+      amount,
+      status: "paid",
+      paid_at: paidAt,
+      invoice_number: formatInvoiceNumber(await getNextSequenceValue(tx, "invoice_number")),
+      description: `Fatura gerada automaticamente — pagamento ${confirmedPayment.id} (${cycleKey})`,
+    },
+  });
 
   // Produtos cobertos por este pagamento entram em execução — mesmo
   // comportamento que o fake-checkout já tinha antes desta fase.

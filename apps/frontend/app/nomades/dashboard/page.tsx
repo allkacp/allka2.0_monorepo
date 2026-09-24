@@ -1736,20 +1736,23 @@ export default function NomadeDashboardPage() {
 
       <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="p-6 space-y-6" ref={dashboardRef} id="dashboard-export-area">
-        {/* Dashboard Header — unified toolbar */}
-        <div className="flex flex-wrap items-center gap-x-1 gap-y-2 bg-background border border-border/70 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10),0_1px_6px_-2px_rgba(0,0,0,0.06)]">
+        {/* Dashboard Header — unified toolbar — mesma paleta gradiente do admin */}
+        <div
+          className="relative overflow-hidden flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] lg:h-[65px]"
+          style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
+        >
           {/* Title + info tooltip */}
           <div className="flex items-center gap-1 shrink-0 mr-2">
             <div className="overflow-hidden">
-              <h1 className="font-bold text-slate-900 dark:text-white tracking-tight text-2xl sm:text-3xl lg:text-4xl xl:text-[46px] transition-all duration-300">
+              <h1 className="font-bold text-white tracking-tight text-2xl sm:text-3xl lg:text-4xl xl:text-[46px] transition-all duration-300">
                 Dashboard
               </h1>
             </div>
             <TooltipProvider delayDuration={200}>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-muted transition-colors shrink-0 self-center">
-                    <Info className="h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                  <button className="flex items-center justify-center h-5 w-5 rounded-full hover:bg-white/15 transition-colors shrink-0 self-center text-white/70 hover:text-white">
+                    <Info className="h-3.5 w-3.5" strokeWidth={2.5} />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-[220px] p-3" sideOffset={6}>

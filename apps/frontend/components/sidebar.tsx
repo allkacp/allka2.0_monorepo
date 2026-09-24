@@ -112,8 +112,16 @@ const navigationConfig = {
         current: false,
       },
       {
+        // 2026-09-25 (achado durante teste do fluxo principal): apontava pra
+        // /company/produtos, a tela do catálogo ANTIGO (162 produtos legados,
+        // useProducts()/apiClient.getProducts()) — o cliente via produto que
+        // devia estar só no Legacy. A rota certa do catalog2 pro portal
+        // Company já existia (App.tsx: /company/catalogo-produtos -> Catalog2Store
+        // portal="company"), só o link daqui nunca foi atualizado quando o
+        // catalog2 virou o catálogo definitivo (mesma consolidação que já
+        // corrigiu os links do admin, ver comentário mais abaixo).
         name: "Catálogo de Produtos",
-        href: "/company/produtos",
+        href: "/company/catalogo-produtos",
         icon: Package,
         current: false,
       },
@@ -152,8 +160,11 @@ const navigationConfig = {
       current: false,
     },
     {
+      // Mesmo achado/correção do link de Company acima — apontava pro
+      // catálogo antigo (/agency/catalogo, useProducts()). Rota certa já
+      // existia: /agency/catalogo-produtos -> Catalog2Store portal="agency".
       name: "Catálogo",
-      href: "/agency/catalogo",
+      href: "/agency/catalogo-produtos",
       icon: Package,
       current: false,
     },
@@ -319,7 +330,7 @@ const navigationConfig = {
     },
     {
       name: "Catálogo",
-      href: "/leader/catalogo",
+      href: "/leader/catalogo-produtos",
       icon: BookOpen,
       current: false,
     },
@@ -548,6 +559,11 @@ const navigationConfig = {
           icon: History,
           current: false,
           masterOnly: true,
+          // Achado do usuário 2026-09-24: a base de teste foi zerada e o
+          // Legacy vai ser reconstruído do zero quando o dump atualizado
+          // subir — até lá, "Em breve" piscando pra deixar claro que a tela
+          // ainda não reflete o conteúdo final.
+          badge: "Em breve",
         },
       ],
     },
@@ -1763,7 +1779,10 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                                 ) : subitem.badge ? (
                                   <Badge
                                     variant="secondary"
-                                    className="bg-white/20 text-white text-xs"
+                                    className={cn(
+                                      "bg-white/20 text-white text-xs",
+                                      subitem.badge === "Em breve" && "animate-pulse bg-amber-500/80",
+                                    )}
                                   >
                                     {subitem.badge}
                                   </Badge>
@@ -1895,11 +1914,12 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                                 ) : subitem.badge ? (
                                   <Badge
                                     variant="secondary"
-                                    className={
+                                    className={cn(
                                       isActive
                                         ? "text-white text-xs font-semibold px-2 border-0"
-                                        : "bg-white/15 text-white/70 text-xs font-semibold px-2 border-0"
-                                    }
+                                        : "bg-white/15 text-white/70 text-xs font-semibold px-2 border-0",
+                                      subitem.badge === "Em breve" && "animate-pulse bg-amber-500/80 text-white",
+                                    )}
                                     style={
                                       isActive
                                         ? {

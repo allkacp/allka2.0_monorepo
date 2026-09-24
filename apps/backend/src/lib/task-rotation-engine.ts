@@ -1,6 +1,5 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
-import { config } from "../config";
 import { onlineUserIds } from "./presence-service";
 import { recordAlertEvent } from "./alert-events";
 import { listActiveAdminMasterIds } from "./notification-group-service";
@@ -13,7 +12,6 @@ import { writeAccessAudit } from "./product-feedback-service";
 // Nunca uma lista disputada. Aceitou → atribui de verdade (fluxo oficial).
 // Recusou/expirou → próximo. Esgotou → alerta ao responsável real.
 
-const OFFER_TTL_MS = config.TASK_OFFER_TTL_MS;
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // "ofertas recentes" p/ o desempate do rodízio
 
 export type RotationCloseReason =
@@ -36,6 +34,28 @@ export class RotationError extends Error {
 
 function newEpisodeKey(taskId: string): string {
   return `${taskId}:${Date.now()}`;
+}
+
+async function routingSettings() {
+  return prisma.taskRoutingSettings.upsert({
+    where: { id: "singleton" },
+    create: { id: "singleton", offer_timeout_minutes: 60, mandatory_decline_alerts: true },
+    update: {},
+  });
+}
+
+async function isAutomaticDispatchEnabled(task: {
+  auto_nomad_dispatch_enabled: boolean;
+  category_snapshot: string | null;
+}): Promise<boolean> {
+  if (!task.auto_nomad_dispatch_enabled) return false;
+  const area = task.category_snapshot?.trim();
+  if (!area) return true;
+  const policy = await prisma.taskRoutingAreaPolicy.findUnique({
+    where: { area },
+    select: { auto_nomad_dispatch_enabled: true },
+  });
+  return policy?.auto_nomad_dispatch_enabled ?? true;
 }
 
 // ── Candidatos elegíveis (sem o filtro de presença) ─────────────────────
@@ -324,9 +344,21 @@ export async function advanceRotation(taskId: string): Promise<{ action: "waitin
       nomade_responsavel_id: true,
       lider_responsavel_id: true,
       rotation_episode_key: true,
+      auto_nomad_dispatch_enabled: true,
+      category_snapshot: true,
     },
   });
   if (!task) return { action: "closed" };
+
+  // O desligamento por tarefa/área nunca desfaz atribuições existentes. Só
+  // impede novas ofertas e limpa uma oferta ainda pendente com honestidade.
+  if (!(await isAutomaticDispatchEnabled(task))) {
+    await prisma.taskOffer.updateMany({
+      where: { project_task_id: taskId, status: "pendente" },
+      data: { status: "cancelada", close_reason: "cancelled_restart", responded_at: new Date() },
+    });
+    return { action: "closed" };
+  }
 
   // Tarefa saiu de AGUARDANDO_NOMADE ou já tem responsável → encerra ofertas pendentes.
   if (task.status !== "AGUARDANDO_NOMADE" || task.nomade_responsavel_id) {
@@ -339,7 +371,31 @@ export async function advanceRotation(taskId: string): Promise<{ action: "waitin
 
   const now = new Date();
 
-  // Expira ofertas pendentes vencidas.
+  // Expira ofertas normais. A oferta obrigatória é diferente: ao fim do
+  // prazo configurado, se não houver recusa explícita, ela é aceita e a
+  // tarefa fica com aquele Nômade, como definido na reunião.
+  const expiredMandatory = await prisma.taskOffer.findFirst({
+    where: { project_task_id: taskId, status: "pendente", is_mandatory: true, expires_at: { lt: now } },
+  });
+  if (expiredMandatory) {
+    const accepted = await prisma.$transaction(async (tx) => {
+      const swap = await tx.projectTask.updateMany({
+        where: { id: taskId, status: "AGUARDANDO_NOMADE", nomade_responsavel_id: null },
+        data: { nomade_responsavel_id: expiredMandatory.nomade_id, status: "EM_EXECUCAO", data_inicio_execucao: now, rotation_episode_key: null },
+      });
+      if (!swap.count) return false;
+      await tx.taskOffer.update({ where: { id: expiredMandatory.id }, data: { status: "aceita", close_reason: "accepted", responded_at: now } });
+      await tx.taskOffer.updateMany({
+        where: { project_task_id: taskId, status: "pendente", id: { not: expiredMandatory.id } },
+        data: { status: "cancelada", close_reason: "cancelled_task_assigned", responded_at: now },
+      });
+      await tx.taskAssignmentHistory.create({
+        data: { project_task_id: taskId, nomade_id: expiredMandatory.nomade_id, criterio: "rodizio_obrigatorio", automatico: true, resultado: "atribuido", detalhes: JSON.stringify({ offer_id: expiredMandatory.id, accepted_on_timeout: true }) },
+      });
+      return true;
+    });
+    if (accepted) return { action: "closed" };
+  }
   await prisma.taskOffer.updateMany({
     where: { project_task_id: taskId, status: "pendente", expires_at: { lt: now } },
     data: { status: "expirada", close_reason: "expired", responded_at: now },
@@ -359,18 +415,41 @@ export async function advanceRotation(taskId: string): Promise<{ action: "waitin
     await prisma.projectTask.update({ where: { id: taskId }, data: { rotation_episode_key: episodeKey } });
   }
 
-  // Quem já foi ofertado NESTE episódio não volta imediatamente.
+  // Quem recusou sai deste rodízio. Quem apenas deixou expirar volta à fila
+  // na segunda volta; é exatamente a diferença comercial combinada.
   const offeredThisEpisode = await prisma.taskOffer.findMany({
     where: { episode_key: episodeKey },
-    select: { nomade_id: true },
+    select: { nomade_id: true, rotation_round: true, is_mandatory: true, status: true },
   });
-  const alreadyOffered = new Set(offeredThisEpisode.map((o) => o.nomade_id));
+  const declined = new Set(offeredThisEpisode.filter((o) => o.status === "recusada").map((o) => o.nomade_id));
+  const currentRound = Math.max(1, ...offeredThisEpisode.map((o) => o.rotation_round));
+  const alreadyOfferedThisRound = new Set(
+    offeredThisEpisode.filter((o) => o.rotation_round === currentRound).map((o) => o.nomade_id),
+  );
   const nextOrder = offeredThisEpisode.length + 1;
 
   const candidates = await eligibleCandidatesForTask(taskId);
   const userIds = candidates.map((c) => c.userId).filter((x): x is string => !!x);
   const online = await onlineUserIds(prisma, userIds, now);
-  const pool = candidates.filter((c) => c.userId && online.has(c.userId) && !alreadyOffered.has(c.nomadeId));
+  const eligibleOnline = candidates.filter((c) => c.userId && online.has(c.userId) && !declined.has(c.nomadeId));
+  let round = currentRound;
+  let isMandatory = false;
+  let pool = eligibleOnline.filter((c) => !alreadyOfferedThisRound.has(c.nomadeId));
+
+  // Duas voltas normais. Na terceira, a primeira pessoa ainda elegível
+  // recebe oferta obrigatória. Recusas obrigatórias continuam a fila, sem
+  // aprisionar a tarefa nem o Nômade.
+  if (pool.length === 0 && currentRound < 2) {
+    round = currentRound + 1;
+    pool = eligibleOnline;
+  } else if (pool.length === 0 && currentRound >= 2) {
+    round = 3;
+    isMandatory = true;
+    const mandatoryOffered = new Set(
+      offeredThisEpisode.filter((o) => o.is_mandatory).map((o) => o.nomade_id),
+    );
+    pool = eligibleOnline.filter((c) => !mandatoryOffered.has(c.nomadeId));
+  }
 
   if (pool.length === 0) {
     const noOneOnline = candidates.filter((c) => c.userId && online.has(c.userId)).length === 0;
@@ -380,6 +459,7 @@ export async function advanceRotation(taskId: string): Promise<{ action: "waitin
 
   const ordered = await orderCandidates(pool);
   const chosen = ordered[0];
+  const settings = await routingSettings();
   const offer = await prisma.taskOffer.create({
     data: {
       project_task_id: taskId,
@@ -387,9 +467,11 @@ export async function advanceRotation(taskId: string): Promise<{ action: "waitin
       nomade_user_id: chosen.userId,
       episode_key: episodeKey,
       rotation_order: nextOrder,
+      rotation_round: round,
+      is_mandatory: isMandatory,
       status: "pendente",
       offered_at: now,
-      expires_at: new Date(now.getTime() + OFFER_TTL_MS),
+      expires_at: new Date(now.getTime() + settings.offer_timeout_minutes * 60_000),
     },
   });
   return { action: "offered", offerId: offer.id };
@@ -399,9 +481,17 @@ export async function advanceRotation(taskId: string): Promise<{ action: "waitin
 export async function startTaskRotation(taskId: string): Promise<void> {
   const task = await prisma.projectTask.findUnique({
     where: { id: taskId },
-    select: { id: true, status: true, nomade_responsavel_id: true },
+    select: { id: true, status: true, nomade_responsavel_id: true, rotation_episode_key: true, auto_nomad_dispatch_enabled: true, category_snapshot: true },
   });
   if (!task || task.nomade_responsavel_id) return;
+
+  // O motor de etapas pode reavaliar uma etapa enquanto ela aguarda a
+  // resposta. Não recrie o episódio nem cancele a oferta já pendente: só
+  // avance se ela tiver expirado. Isso torna a chamada segura/idempotente.
+  if (task.status === "AGUARDANDO_NOMADE" && task.rotation_episode_key) {
+    await advanceRotation(taskId);
+    return;
+  }
 
   await prisma.$transaction([
     prisma.taskOffer.updateMany({
@@ -445,6 +535,21 @@ export async function acceptOffer(offerId: string, sessionUserId: string): Promi
         data: { status: "cancelada", close_reason: "cancelled_task_assigned", responded_at: new Date() },
       });
       throw new RotationError("Esta tarefa já foi assumida por outra pessoa.", 409, "task_already_assigned");
+    }
+
+    // Se a tarefa está sendo conduzida por etapas, esta é a primeira etapa
+    // de nômade aguardando executor. O aceite é a única ação que a inicia;
+    // nunca avançamos uma etapa que ainda não foi aceita pelo profissional.
+    const waitingStage = await tx.projectTaskStage.findFirst({
+      where: { project_task_id: offer.project_task_id, executor_type: "nomad", status: "AGUARDANDO_EXECUTOR" },
+      orderBy: { ordem: "asc" },
+      select: { id: true },
+    });
+    if (waitingStage) {
+      await tx.projectTaskStage.update({
+        where: { id: waitingStage.id },
+        data: { nomade_id: offer.nomade_id, status: "EM_ANDAMENTO" },
+      });
     }
 
     await tx.taskOffer.update({
@@ -493,6 +598,37 @@ export async function declineOffer(offerId: string, sessionUserId: string, reaso
       decline_reason: reason?.trim() ? reason.trim().slice(0, 1000) : null,
     },
   });
+  if (offer.is_mandatory && (await routingSettings()).mandatory_decline_alerts) {
+    const task = await prisma.projectTask.findUnique({
+      where: { id: offer.project_task_id },
+      select: { id: true, title: true, lider_responsavel_id: true, project_id: true },
+    });
+    const project = task
+      ? await prisma.project.findUnique({ where: { id: task.project_id }, select: { admin_responsible_user_id: true } })
+      : null;
+    const recipients = new Set<string>([
+      ...(await listActiveAdminMasterIds(prisma)),
+      ...(task?.lider_responsavel_id ? [task.lider_responsavel_id] : []),
+      ...(project?.admin_responsible_user_id ? [project.admin_responsible_user_id] : []),
+      ...(offer.assigned_by_user_id ? [offer.assigned_by_user_id] : []),
+    ]);
+    for (const userId of recipients) {
+      await prisma.systemAlert.create({
+        data: {
+          type: "task.mandatory_offer_declined",
+          title: "Oferta obrigatória recusada",
+          message: `O Nômade recusou a oferta obrigatória da tarefa "${task?.title ?? offer.project_task_id}". O rodízio seguirá para o próximo Nômade elegível.`,
+          severity: "warning",
+          category: "alerta",
+          user_id: userId,
+          entity_type: "project_task",
+          entity_id: offer.project_task_id,
+          action_url: `/admin/tarefas/${offer.project_task_id}`,
+          dedupe_key: `task_mandatory_declined:${offer.id}:${userId}`,
+        },
+      });
+    }
+  }
   // Avança imediatamente para o próximo (o job de fundo também cobriria).
   await advanceRotation(offer.project_task_id).catch(() => null);
   return { taskId: offer.project_task_id };
@@ -519,6 +655,8 @@ export interface RotationStatus {
     nomade_id: string;
     nomade_name: string | null;
     rotation_order: number;
+    rotation_round: number;
+    is_mandatory: boolean;
     status: string;
     offered_at: Date;
     expires_at: Date;
@@ -532,7 +670,7 @@ export interface RotationStatus {
 export async function getRotationStatus(taskId: string): Promise<RotationStatus | null> {
   const task = await prisma.projectTask.findUnique({
     where: { id: taskId },
-    select: { id: true, status: true, nomade_responsavel_id: true, rotation_episode_key: true },
+    select: { id: true, status: true, nomade_responsavel_id: true, rotation_episode_key: true, auto_nomad_dispatch_enabled: true, category_snapshot: true },
   });
   if (!task) return null;
 
@@ -561,6 +699,7 @@ export async function getRotationStatus(taskId: string): Promise<RotationStatus 
 
   let phase: RotationStatus["phase"];
   if (task.nomade_responsavel_id) phase = "atribuida";
+  else if (!(await isAutomaticDispatchEnabled(task))) phase = "inativo";
   else if (task.status !== "AGUARDANDO_NOMADE") phase = "inativo";
   else if (escalated) phase = "escalada";
   else if (pending) phase = "oferta_enviada";
@@ -583,6 +722,8 @@ export async function getRotationStatus(taskId: string): Promise<RotationStatus 
       nomade_id: o.nomade_id,
       nomade_name: nomadeNames.get(o.nomade_id) ?? null,
       rotation_order: o.rotation_order,
+      rotation_round: o.rotation_round,
+      is_mandatory: o.is_mandatory,
       status: o.status,
       offered_at: o.offered_at,
       expires_at: o.expires_at,
@@ -628,6 +769,63 @@ export async function restartRotation(taskId: string, actorUserId: string, actor
   ]);
   await resolveExhaustedAlert(taskId, prevEpisode, actorUserId, "Rodízio reiniciado pelo responsável.");
   await advanceRotation(taskId);
+}
+
+// ── Intervenção explícita do Admin Master ──────────────────────────────
+// A oferta manual continua sendo uma OFERTA, salvo quando o Master registra
+// expressamente que o aceite já foi combinado. A permissão fica na rota;
+// estas funções mantêm a invariável de uma única oferta pendente.
+export async function sendManualOffer(taskId: string, nomadeId: string, actorUserId: string): Promise<{ offerId: string }> {
+  const [task, nomade, settings] = await Promise.all([
+    prisma.projectTask.findUnique({ where: { id: taskId }, select: { id: true, nomade_responsavel_id: true, rotation_episode_key: true } }),
+    prisma.nomade.findUnique({ where: { id: nomadeId }, select: { id: true, user_id: true, status: true, user: { select: { is_active: true } } } }),
+    routingSettings(),
+  ]);
+  if (!task) throw new RotationError("Tarefa não encontrada.", 404);
+  if (task.nomade_responsavel_id) throw new RotationError("A tarefa já possui Nômade responsável.", 409, "task_already_assigned");
+  if (!nomade || nomade.status !== "ativo" || !nomade.user?.is_active) throw new RotationError("Nômade indisponível.", 422, "nomade_unavailable");
+  const now = new Date();
+  const episodeKey = task.rotation_episode_key ?? newEpisodeKey(taskId);
+  const previous = await prisma.taskOffer.count({ where: { episode_key: episodeKey } });
+  const offer = await prisma.$transaction(async (tx) => {
+    await tx.taskOffer.updateMany({
+      where: { project_task_id: taskId, status: "pendente" },
+      data: { status: "cancelada", close_reason: "cancelled_restart", responded_at: now },
+    });
+    await tx.projectTask.update({ where: { id: taskId }, data: { status: "AGUARDANDO_NOMADE", rotation_episode_key: episodeKey } });
+    return tx.taskOffer.create({
+      data: {
+        project_task_id: taskId, nomade_id: nomade.id, nomade_user_id: nomade.user_id,
+        episode_key: episodeKey, rotation_order: previous + 1, rotation_round: 0,
+        assigned_by_user_id: actorUserId, status: "pendente", offered_at: now,
+        expires_at: new Date(now.getTime() + settings.offer_timeout_minutes * 60_000),
+      },
+    });
+  });
+  return { offerId: offer.id };
+}
+
+export async function assignNomadeDirectly(taskId: string, nomadeId: string, actorUserId: string): Promise<void> {
+  const nomade = await prisma.nomade.findUnique({ where: { id: nomadeId }, select: { id: true, status: true } });
+  if (!nomade || nomade.status !== "ativo") throw new RotationError("Nômade indisponível.", 422, "nomade_unavailable");
+  const now = new Date();
+  const changed = await prisma.$transaction(async (tx) => {
+    const update = await tx.projectTask.updateMany({
+      where: { id: taskId, nomade_responsavel_id: null },
+      data: { nomade_responsavel_id: nomadeId, status: "EM_EXECUCAO", data_inicio_execucao: now, rotation_episode_key: null },
+    });
+    if (!update.count) return false;
+    const waitingStage = await tx.projectTaskStage.findFirst({
+      where: { project_task_id: taskId, executor_type: "nomad", status: "AGUARDANDO_EXECUTOR" },
+      orderBy: { ordem: "asc" }, select: { id: true },
+    });
+    if (waitingStage) await tx.projectTaskStage.update({ where: { id: waitingStage.id }, data: { nomade_id: nomadeId, status: "EM_ANDAMENTO" } });
+    await tx.taskOffer.updateMany({ where: { project_task_id: taskId, status: "pendente" }, data: { status: "cancelada", close_reason: "cancelled_task_assigned", responded_at: now } });
+    await tx.taskAssignmentHistory.create({ data: { project_task_id: taskId, nomade_id: nomadeId, criterio: "admin_master", automatico: false, resultado: "atribuido", detalhes: JSON.stringify({ accepted_previously_confirmed: true, actor_user_id: actorUserId }) } });
+    return true;
+  });
+  if (!changed) throw new RotationError("A tarefa já foi atribuída ou não existe.", 409, "task_already_assigned");
+  await resolveExhaustedAlert(taskId, null, actorUserId, "Admin Master registrou uma atribuição direta.");
 }
 
 // ── Job de fundo ──────────────────────────────────────────────────────

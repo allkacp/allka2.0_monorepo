@@ -1114,8 +1114,13 @@ export function TarefaDetailDrawer({
 
                 {/* Rodízio de ofertas de Nômade (ata 2026-08, bloco 4/5) —
                     só relevante enquanto a tarefa procura executor. */}
-                {tarefa.status === "AGUARDANDO_NOMADE" && !tarefa.nomade_responsavel_id && (
-                  <TaskRotationPanel taskId={tarefa.id} />
+                {!tarefa.nomade_responsavel_id && (
+                  <TaskRotationPanel
+                    taskId={tarefa.id}
+                    category={tarefa.category_snapshot}
+                    taskAutomaticEnabled={tarefa.auto_nomad_dispatch_enabled !== false}
+                    taskStatus={tarefa.status}
+                  />
                 )}
 
                 {/* Liberação automática por dependência/gatilho (bloco 4/4,

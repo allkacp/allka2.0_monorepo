@@ -2,7 +2,6 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
-import { config } from "../config";
 import { acceptOffer, declineOffer, RotationError } from "../lib/task-rotation-engine";
 
 const router = Router();
@@ -24,6 +23,11 @@ function handleRotationError(err: unknown, res: import("express").Response): boo
 router.get("/mine", async (req, res, next) => {
   try {
     const now = Date.now();
+    const routing = await prisma.taskRoutingSettings.upsert({
+      where: { id: "singleton" },
+      create: { id: "singleton", offer_timeout_minutes: 60, mandatory_decline_alerts: true },
+      update: {},
+    });
     const offers = await prisma.taskOffer.findMany({
       where: { nomade_user_id: req.user!.id, status: "pendente", expires_at: { gt: new Date() } },
       orderBy: { offered_at: "asc" },
@@ -38,6 +42,8 @@ router.get("/mine", async (req, res, next) => {
             description: true,
             due_date: true,
             category_snapshot: true,
+            delivery_quantity: true,
+            delivery_group_index: true,
             name_snapshot: true,
             nomade_responsavel_id: true,
             status: true,
@@ -55,6 +61,8 @@ router.get("/mine", async (req, res, next) => {
         return {
           offer_id: o.id,
           rotation_order: o.rotation_order,
+          rotation_round: o.rotation_round,
+          is_mandatory: o.is_mandatory,
           offered_at: o.offered_at,
           expires_at: o.expires_at,
           seconds_left: Math.max(0, Math.round((o.expires_at.getTime() - now) / 1000)),
@@ -69,12 +77,14 @@ router.get("/mine", async (req, res, next) => {
             project: t.project ? { id: t.project.id, name: t.project.title } : null,
             product: t.project_product?.product?.name ?? t.name_snapshot ?? null,
             category: t.category_snapshot ?? t.project_product?.product?.category ?? null,
+            delivery_quantity: t.delivery_quantity,
+            delivery_group_index: t.delivery_group_index,
           },
         };
       })
       .filter(Boolean);
 
-    res.json({ data, offer_ttl_ms: config.TASK_OFFER_TTL_MS });
+    res.json({ data, offer_ttl_ms: routing.offer_timeout_minutes * 60_000 });
   } catch (err) {
     next(err);
   }

@@ -17,7 +17,12 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Handshake } from "lucide-react";
 import {
   STANDARD_SHELL_PANEL_CLASS,
@@ -383,559 +388,576 @@ export default function ProgramaPartnerPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="relative h-full min-h-0 flex flex-col">
-      <div className="shrink-0 -mb-[11px]">
-      <StandardPageBanner
-        icon={Handshake}
-        title="Programa Partner"
-        description="Gerencie convites e parceiros ativos do Programa Partner de agências"
-        actions={
-          <>
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => setIsInviteSheetOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                  >
-                    <Plus className="h-3.5 w-3.5 shrink-0" />
-                    Novo Convite
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Criar novo convite</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <PinToTrayButton id="page-programa-partner" label="Programa Partner" icon={Handshake} path="/admin/programa-partner" />
-          </>
-        }
-      />
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-6">
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {[
-          {
-            label: "Convites Enviados",
-            value: stats.total_invites,
-            icon: Send,
-            color: "from-blue-500 to-blue-700",
-          },
-          {
-            label: "Pendentes",
-            value: stats.pending,
-            icon: Clock,
-            color: "from-amber-400 to-orange-500",
-          },
-          {
-            label: "Aceitos",
-            value: stats.accepted,
-            icon: CheckCircle2,
-            color: "from-emerald-500 to-teal-600",
-          },
-          {
-            label: "Recusados",
-            value: stats.declined,
-            icon: XCircle,
-            color: "from-red-400 to-rose-600",
-          },
-          {
-            label: "Partners Ativos",
-            value: stats.active_partners,
-            icon: Award,
-            color: "from-violet-500 to-purple-700",
-          },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div
-            key={label}
-            className={`rounded-xl bg-linear-to-br ${color} p-3 text-white shadow-sm`}
-          >
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-medium text-white/70">{label}</p>
-              <div className="bg-white/20 rounded-md p-1">
-                <Icon className="h-3 w-3 text-white" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="invites">
-        <TabsList className="bg-slate-100 dark:bg-slate-800">
-          <TabsTrigger value="invites" className="gap-1.5">
-            <Send className="h-3.5 w-3.5" />
-            Convites
-            {stats.pending > 0 && (
-              <span className="ml-1 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                {stats.pending}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="partners" className="gap-1.5">
-            <Crown className="h-3.5 w-3.5" />
-            Partners Ativos
-            <span className="ml-1 bg-violet-100 text-violet-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-              {stats.active_partners}
-            </span>
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ─── Convites Tab ─── */}
-        <TabsContent value="invites" className="mt-4">
-          <Card className="border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Buscar por agência ou e-mail..."
-                  autoComplete="new-password"
-                  value={searchInvites}
-                  onChange={(e) => setSearchInvites(e.target.value)}
-                  className="pl-9 h-9 text-sm"
+      <div className="relative h-full min-h-0 flex flex-col">
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={Handshake}
+            title="Programa Partner"
+            description="Gerencie convites e parceiros ativos do Programa Partner de agências"
+            contentClassName="lg:h-[65px]"
+            actions={
+              <>
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setIsInviteSheetOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                      >
+                        <Plus className="h-3.5 w-3.5 shrink-0" />
+                        Novo Convite
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Criar novo convite
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <PinToTrayButton
+                  id="page-programa-partner"
+                  label="Programa Partner"
+                  icon={Handshake}
+                  path="/admin/programa-partner"
                 />
-              </div>
-              <Select
-                value={filterStatus}
-                onValueChange={(v) => setFilterStatus(v as any)}
-              >
-                <SelectTrigger className="w-36 h-9 text-sm">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="pending">Pendente</SelectItem>
-                  <SelectItem value="accepted">Aceito</SelectItem>
-                  <SelectItem value="declined">Recusado</SelectItem>
-                  <SelectItem value="expired">Expirado</SelectItem>
-                </SelectContent>
-              </Select>
-              <span className="text-xs text-slate-400 shrink-0">
-                {filteredInvites.length} convite
-                {filteredInvites.length !== 1 ? "s" : ""}
-              </span>
+              </>
+            }
+          />
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="space-y-0">
+            {/* Stats */}
+            <div className="mt-[5px] mb-[5px] grid grid-cols-2 gap-3 sm:h-[65px] sm:grid-cols-5">
+              {[
+                {
+                  label: "Convites Enviados",
+                  value: stats.total_invites,
+                  icon: Send,
+                  color: "from-blue-500 to-blue-700",
+                },
+                {
+                  label: "Pendentes",
+                  value: stats.pending,
+                  icon: Clock,
+                  color: "from-amber-400 to-orange-500",
+                },
+                {
+                  label: "Aceitos",
+                  value: stats.accepted,
+                  icon: CheckCircle2,
+                  color: "from-emerald-500 to-teal-600",
+                },
+                {
+                  label: "Recusados",
+                  value: stats.declined,
+                  icon: XCircle,
+                  color: "from-red-400 to-rose-600",
+                },
+                {
+                  label: "Partners Ativos",
+                  value: stats.active_partners,
+                  icon: Award,
+                  color: "from-violet-500 to-purple-700",
+                },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div
+                  key={label}
+                  className={`h-full rounded-xl bg-linear-to-br ${color} p-2.5 text-white shadow-sm`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[10px] font-medium text-white/70">
+                      {label}
+                    </p>
+                    <div className="bg-white/20 rounded-md p-1">
+                      <Icon className="h-3 w-3 text-white" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-bold">{value}</p>
+                </div>
+              ))}
             </div>
 
-            <div className="divide-y divide-slate-100">
-              {filteredInvites.length === 0 && (
-                <div className="py-16 text-center text-slate-400">
-                  <Send className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Nenhum convite encontrado</p>
-                </div>
-              )}
-              {filteredInvites.map((invite) => (
-                <div
-                  key={invite.id}
-                  className="flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 transition-colors"
-                >
-                  {/* Agency avatar */}
-                  <div className="shrink-0 w-9 h-9 rounded-xl bg-linear-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                    {invite.agency_name
-                      .split(" ")
-                      .slice(0, 2)
-                      .map((w) => w[0])
-                      .join("")
-                      .toUpperCase()}
-                  </div>
-
-                  {/* Agency info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-slate-800 truncate">
-                      {invite.agency_name}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {invite.agency_email} · {invite.agency_location}
-                    </p>
-                  </div>
-
-                  {/* Dates */}
-                  <div className="hidden sm:flex flex-col items-end text-xs text-slate-400 shrink-0">
-                    <span className="flex items-center gap-1">
-                      <CalendarDays className="h-3 w-3" />
-                      Enviado{" "}
-                      {new Date(invite.sent_at).toLocaleDateString("pt-BR")}
+            {/* Tabs */}
+            <Tabs defaultValue="invites" className="!mt-0 gap-0">
+              <TabsList className="bg-slate-100 dark:bg-slate-800">
+                <TabsTrigger value="invites" className="gap-1.5">
+                  <Send className="h-3.5 w-3.5" />
+                  Convites
+                  {stats.pending > 0 && (
+                    <span className="ml-1 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                      {stats.pending}
                     </span>
-                    {invite.status === "pending" && (
-                      <span className="text-amber-600 mt-0.5">
-                        Expira{" "}
-                        {new Date(invite.expires_at).toLocaleDateString(
-                          "pt-BR",
-                        )}
-                      </span>
-                    )}
-                    {invite.accepted_at && (
-                      <span className="text-emerald-600 mt-0.5">
-                        Aceito{" "}
-                        {new Date(invite.accepted_at).toLocaleDateString(
-                          "pt-BR",
-                        )}
-                      </span>
-                    )}
-                    {invite.declined_at && (
-                      <span className="text-red-500 mt-0.5">
-                        Recusado{" "}
-                        {new Date(invite.declined_at).toLocaleDateString(
-                          "pt-BR",
-                        )}
-                      </span>
-                    )}
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="partners" className="gap-1.5">
+                  <Crown className="h-3.5 w-3.5" />
+                  Partners Ativos
+                  <span className="ml-1 bg-violet-100 text-violet-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    {stats.active_partners}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+
+              {/* ─── Convites Tab ─── */}
+              <TabsContent value="invites" className="mt-0">
+                <Card className="border border-slate-200 shadow-sm">
+                  <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Buscar por agência ou e-mail..."
+                        autoComplete="new-password"
+                        value={searchInvites}
+                        onChange={(e) => setSearchInvites(e.target.value)}
+                        className="pl-9 h-9 text-sm"
+                      />
+                    </div>
+                    <Select
+                      value={filterStatus}
+                      onValueChange={(v) => setFilterStatus(v as any)}
+                    >
+                      <SelectTrigger className="w-36 h-9 text-sm">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="pending">Pendente</SelectItem>
+                        <SelectItem value="accepted">Aceito</SelectItem>
+                        <SelectItem value="declined">Recusado</SelectItem>
+                        <SelectItem value="expired">Expirado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-xs text-slate-400 shrink-0">
+                      {filteredInvites.length} convite
+                      {filteredInvites.length !== 1 ? "s" : ""}
+                    </span>
                   </div>
 
-                  {/* Status badge */}
-                  <div className="shrink-0">
-                    <StatusBadge status={invite.status} />
+                  <div className="divide-y divide-slate-100">
+                    {filteredInvites.length === 0 && (
+                      <div className="py-16 text-center text-slate-400">
+                        <Send className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">Nenhum convite encontrado</p>
+                      </div>
+                    )}
+                    {filteredInvites.map((invite) => (
+                      <div
+                        key={invite.id}
+                        className="flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 transition-colors"
+                      >
+                        {/* Agency avatar */}
+                        <div className="shrink-0 w-9 h-9 rounded-xl bg-linear-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                          {invite.agency_name
+                            .split(" ")
+                            .slice(0, 2)
+                            .map((w) => w[0])
+                            .join("")
+                            .toUpperCase()}
+                        </div>
+
+                        {/* Agency info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm text-slate-800 truncate">
+                            {invite.agency_name}
+                          </p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {invite.agency_email} · {invite.agency_location}
+                          </p>
+                        </div>
+
+                        {/* Dates */}
+                        <div className="hidden sm:flex flex-col items-end text-xs text-slate-400 shrink-0">
+                          <span className="flex items-center gap-1">
+                            <CalendarDays className="h-3 w-3" />
+                            Enviado{" "}
+                            {new Date(invite.sent_at).toLocaleDateString(
+                              "pt-BR",
+                            )}
+                          </span>
+                          {invite.status === "pending" && (
+                            <span className="text-amber-600 mt-0.5">
+                              Expira{" "}
+                              {new Date(invite.expires_at).toLocaleDateString(
+                                "pt-BR",
+                              )}
+                            </span>
+                          )}
+                          {invite.accepted_at && (
+                            <span className="text-emerald-600 mt-0.5">
+                              Aceito{" "}
+                              {new Date(invite.accepted_at).toLocaleDateString(
+                                "pt-BR",
+                              )}
+                            </span>
+                          )}
+                          {invite.declined_at && (
+                            <span className="text-red-500 mt-0.5">
+                              Recusado{" "}
+                              {new Date(invite.declined_at).toLocaleDateString(
+                                "pt-BR",
+                              )}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Status badge */}
+                        <div className="shrink-0">
+                          <StatusBadge status={invite.status} />
+                        </div>
+
+                        {/* Actions */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 text-slate-400 hover:text-slate-700"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem
+                              onClick={() => setViewingInvite(invite)}
+                              className="gap-2"
+                            >
+                              <Eye className="h-3.5 w-3.5" /> Ver detalhes
+                            </DropdownMenuItem>
+                            {(invite.status === "declined" ||
+                              invite.status === "expired") && (
+                              <DropdownMenuItem
+                                onClick={() => handleResendInvite(invite.id)}
+                                className="gap-2"
+                              >
+                                <RefreshCw className="h-3.5 w-3.5" /> Reenviar
+                                convite
+                              </DropdownMenuItem>
+                            )}
+                            {invite.status === "pending" && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setCancelDialog({
+                                    open: true,
+                                    id: invite.id,
+                                    name: invite.agency_name,
+                                  })
+                                }
+                                className="gap-2 text-red-600 focus:text-red-600"
+                              >
+                                <Ban className="h-3.5 w-3.5" /> Cancelar convite
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </TabsContent>
+
+              {/* ─── Partners Ativos Tab ─── */}
+              <TabsContent value="partners" className="mt-0">
+                <Card className="border border-slate-200 shadow-sm">
+                  <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Buscar partner..."
+                        value={searchPartners}
+                        onChange={(e) => setSearchPartners(e.target.value)}
+                        className="pl-9 h-9 text-sm"
+                      />
+                    </div>
+                    <span className="text-xs text-slate-400 shrink-0">
+                      {filteredPartners.length} partner
+                      {filteredPartners.length !== 1 ? "s" : ""}
+                    </span>
                   </div>
 
-                  {/* Actions */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0 text-slate-400 hover:text-slate-700"
+                  <div className="divide-y divide-slate-100">
+                    {filteredPartners.length === 0 && (
+                      <div className="py-16 text-center text-slate-400">
+                        <Crown className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">Nenhum partner ativo</p>
+                      </div>
+                    )}
+                    {filteredPartners.map((partner) => (
+                      <div
+                        key={partner.id}
+                        className="flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 transition-colors"
                       >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuItem
-                        onClick={() => setViewingInvite(invite)}
-                        className="gap-2"
-                      >
-                        <Eye className="h-3.5 w-3.5" /> Ver detalhes
-                      </DropdownMenuItem>
-                      {(invite.status === "declined" ||
-                        invite.status === "expired") && (
-                        <DropdownMenuItem
-                          onClick={() => handleResendInvite(invite.id)}
-                          className="gap-2"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" /> Reenviar convite
-                        </DropdownMenuItem>
-                      )}
-                      {invite.status === "pending" && (
-                        <DropdownMenuItem
+                        {/* Avatar */}
+                        <div className="shrink-0 w-9 h-9 rounded-xl bg-linear-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                          {partner.agency_name
+                            .split(" ")
+                            .slice(0, 2)
+                            .map((w) => w[0])
+                            .join("")
+                            .toUpperCase()}
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-sm text-slate-800">
+                              {partner.agency_name}
+                            </p>
+                            <LevelBadge level={partner.program_level} />
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-50 text-rose-700 border-rose-200">
+                              <Award className="h-3 w-3" /> Partner
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {partner.agency_email} · {partner.agency_location}
+                          </p>
+                        </div>
+
+                        {/* Stats */}
+                        <div className="hidden md:flex items-center gap-6 shrink-0">
+                          <div className="text-center">
+                            <p className="text-xs text-slate-400">MRR</p>
+                            <p className="text-sm font-semibold text-slate-700">
+                              R$ {partner.mrr.toLocaleString("pt-BR")}
+                            </p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-slate-400">
+                              Ag. Lideradas
+                            </p>
+                            <p className="text-sm font-semibold text-slate-700">
+                              {partner.led_agencies}
+                            </p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-xs text-slate-400">
+                              Partner desde
+                            </p>
+                            <p className="text-sm font-semibold text-slate-700">
+                              {new Date(partner.accepted_at).toLocaleDateString(
+                                "pt-BR",
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Revoke */}
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() =>
-                            setCancelDialog({
+                            setRevokeDialog({
                               open: true,
-                              id: invite.id,
-                              name: invite.agency_name,
+                              id: partner.id,
+                              name: partner.agency_name,
                             })
                           }
-                          className="gap-2 text-red-600 focus:text-red-600"
+                          className="shrink-0 h-8 border-red-100 text-red-500 hover:bg-red-50 hover:text-red-700 gap-1.5"
                         >
-                          <Ban className="h-3.5 w-3.5" /> Cancelar convite
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </TabsContent>
-
-        {/* ─── Partners Ativos Tab ─── */}
-        <TabsContent value="partners" className="mt-4">
-          <Card className="border border-slate-200 shadow-sm">
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-slate-50/60">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Buscar partner..."
-                  value={searchPartners}
-                  onChange={(e) => setSearchPartners(e.target.value)}
-                  className="pl-9 h-9 text-sm"
-                />
-              </div>
-              <span className="text-xs text-slate-400 shrink-0">
-                {filteredPartners.length} partner
-                {filteredPartners.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-
-            <div className="divide-y divide-slate-100">
-              {filteredPartners.length === 0 && (
-                <div className="py-16 text-center text-slate-400">
-                  <Crown className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">Nenhum partner ativo</p>
-                </div>
-              )}
-              {filteredPartners.map((partner) => (
-                <div
-                  key={partner.id}
-                  className="flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 transition-colors"
-                >
-                  {/* Avatar */}
-                  <div className="shrink-0 w-9 h-9 rounded-xl bg-linear-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                    {partner.agency_name
-                      .split(" ")
-                      .slice(0, 2)
-                      .map((w) => w[0])
-                      .join("")
-                      .toUpperCase()}
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-sm text-slate-800">
-                        {partner.agency_name}
-                      </p>
-                      <LevelBadge level={partner.program_level} />
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-rose-50 text-rose-700 border-rose-200">
-                        <Award className="h-3 w-3" /> Partner
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      {partner.agency_email} · {partner.agency_location}
-                    </p>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="hidden md:flex items-center gap-6 shrink-0">
-                    <div className="text-center">
-                      <p className="text-xs text-slate-400">MRR</p>
-                      <p className="text-sm font-semibold text-slate-700">
-                        R$ {partner.mrr.toLocaleString("pt-BR")}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-slate-400">Ag. Lideradas</p>
-                      <p className="text-sm font-semibold text-slate-700">
-                        {partner.led_agencies}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-xs text-slate-400">Partner desde</p>
-                      <p className="text-sm font-semibold text-slate-700">
-                        {new Date(partner.accepted_at).toLocaleDateString(
-                          "pt-BR",
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Revoke */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      setRevokeDialog({
-                        open: true,
-                        id: partner.id,
-                        name: partner.agency_name,
-                      })
-                    }
-                    className="shrink-0 h-8 border-red-100 text-red-500 hover:bg-red-50 hover:text-red-700 gap-1.5"
-                  >
-                    <Shield className="h-3.5 w-3.5" />
-                    Revogar
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* ─── New Invite Sheet ─── */}
-      <EmbeddedSlideScreen
-        open={isInviteSheetOpen}
-        onClose={() => setIsInviteSheetOpen(false)}
-        title="Novo Convite Partner"
-        subtitle="Envie um convite para uma agência ingressar no Programa Partner"
-      >
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50 w-full">
-            <div className="max-w-3xl mx-auto">
-              <InviteForm
-                availableAgencies={AVAILABLE_AGENCIES}
-                onSend={(data) => {
-                  const today = new Date();
-                  const expires = new Date(today);
-                  expires.setDate(expires.getDate() + data.expires_days);
-                  const newInvite: PartnerInvite = {
-                    id: `inv-${Date.now()}`,
-                    agency_id: data.agency.id,
-                    agency_name: data.agency.name,
-                    agency_email: data.agency.email,
-                    agency_location: data.agency.location,
-                    sent_at: today.toISOString().split("T")[0],
-                    expires_at: expires.toISOString().split("T")[0],
-                    status: "pending",
-                    message: data.message,
-                    sent_by: "Administrador",
-                  };
-                  setInvites((prev) => [newInvite, ...prev]);
-                  setIsInviteSheetOpen(false);
-                }}
-                onCancel={() => setIsInviteSheetOpen(false)}
-              />
-            </div>
-        </div>
-      </EmbeddedSlideScreen>
-
-      {/* ─── View Invite Sheet ─── */}
-      <EmbeddedSlideScreen
-        open={!!viewingInvite}
-        onClose={() => setViewingInvite(null)}
-        title="Detalhes do Convite"
-      >
-        <div className="flex-1 overflow-y-auto w-full">
-            {viewingInvite && (
-              <div className="p-6">
-              <div className="max-w-3xl mx-auto space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-linear-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white font-bold shadow">
-                    {viewingInvite.agency_name
-                      .split(" ")
-                      .slice(0, 2)
-                      .map((w) => w[0])
-                      .join("")
-                      .toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-800">
-                      {viewingInvite.agency_name}
-                    </p>
-                    <p className="text-sm text-slate-500">
-                      {viewingInvite.agency_location}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    {
-                      label: "E-mail",
-                      value: viewingInvite.agency_email,
-                      icon: Mail,
-                    },
-                    {
-                      label: "Status",
-                      node: <StatusBadge status={viewingInvite.status} />,
-                      icon: Clock,
-                    },
-                    {
-                      label: "Enviado em",
-                      value: new Date(viewingInvite.sent_at).toLocaleDateString(
-                        "pt-BR",
-                      ),
-                      icon: CalendarDays,
-                    },
-                    {
-                      label: "Expira em",
-                      value: new Date(
-                        viewingInvite.expires_at,
-                      ).toLocaleDateString("pt-BR"),
-                      icon: CalendarDays,
-                    },
-                    ...(viewingInvite.accepted_at
-                      ? [
-                          {
-                            label: "Aceito em",
-                            value: new Date(
-                              viewingInvite.accepted_at,
-                            ).toLocaleDateString("pt-BR"),
-                            icon: CheckCircle2,
-                          },
-                        ]
-                      : []),
-                    ...(viewingInvite.declined_at
-                      ? [
-                          {
-                            label: "Recusado em",
-                            value: new Date(
-                              viewingInvite.declined_at,
-                            ).toLocaleDateString("pt-BR"),
-                            icon: XCircle,
-                          },
-                        ]
-                      : []),
-                    {
-                      label: "Enviado por",
-                      value: viewingInvite.sent_by,
-                      icon: Users,
-                    },
-                  ].map(({ label, value, node, icon: Icon }) => (
-                    <div
-                      key={label}
-                      className="p-3 rounded-lg bg-slate-50 border border-slate-200"
-                    >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Icon className="h-3 w-3 text-slate-400" />
-                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
-                          {label}
-                        </p>
+                          <Shield className="h-3.5 w-3.5" />
+                          Revogar
+                        </Button>
                       </div>
-                      {node || (
-                        <p className="text-sm font-medium text-slate-700 truncate">
-                          {value}
-                        </p>
+                    ))}
+                  </div>
+                </Card>
+              </TabsContent>
+            </Tabs>
+
+            {/* ─── New Invite Sheet ─── */}
+            <EmbeddedSlideScreen
+              open={isInviteSheetOpen}
+              onClose={() => setIsInviteSheetOpen(false)}
+              title="Novo Convite Partner"
+              subtitle="Envie um convite para uma agência ingressar no Programa Partner"
+            >
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50 w-full">
+                <div className="max-w-3xl mx-auto">
+                  <InviteForm
+                    availableAgencies={AVAILABLE_AGENCIES}
+                    onSend={(data) => {
+                      const today = new Date();
+                      const expires = new Date(today);
+                      expires.setDate(expires.getDate() + data.expires_days);
+                      const newInvite: PartnerInvite = {
+                        id: `inv-${Date.now()}`,
+                        agency_id: data.agency.id,
+                        agency_name: data.agency.name,
+                        agency_email: data.agency.email,
+                        agency_location: data.agency.location,
+                        sent_at: today.toISOString().split("T")[0],
+                        expires_at: expires.toISOString().split("T")[0],
+                        status: "pending",
+                        message: data.message,
+                        sent_by: "Administrador",
+                      };
+                      setInvites((prev) => [newInvite, ...prev]);
+                      setIsInviteSheetOpen(false);
+                    }}
+                    onCancel={() => setIsInviteSheetOpen(false)}
+                  />
+                </div>
+              </div>
+            </EmbeddedSlideScreen>
+
+            {/* ─── View Invite Sheet ─── */}
+            <EmbeddedSlideScreen
+              open={!!viewingInvite}
+              onClose={() => setViewingInvite(null)}
+              title="Detalhes do Convite"
+            >
+              <div className="flex-1 overflow-y-auto w-full">
+                {viewingInvite && (
+                  <div className="p-6">
+                    <div className="max-w-3xl mx-auto space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-linear-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white font-bold shadow">
+                          {viewingInvite.agency_name
+                            .split(" ")
+                            .slice(0, 2)
+                            .map((w) => w[0])
+                            .join("")
+                            .toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-800">
+                            {viewingInvite.agency_name}
+                          </p>
+                          <p className="text-sm text-slate-500">
+                            {viewingInvite.agency_location}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          {
+                            label: "E-mail",
+                            value: viewingInvite.agency_email,
+                            icon: Mail,
+                          },
+                          {
+                            label: "Status",
+                            node: <StatusBadge status={viewingInvite.status} />,
+                            icon: Clock,
+                          },
+                          {
+                            label: "Enviado em",
+                            value: new Date(
+                              viewingInvite.sent_at,
+                            ).toLocaleDateString("pt-BR"),
+                            icon: CalendarDays,
+                          },
+                          {
+                            label: "Expira em",
+                            value: new Date(
+                              viewingInvite.expires_at,
+                            ).toLocaleDateString("pt-BR"),
+                            icon: CalendarDays,
+                          },
+                          ...(viewingInvite.accepted_at
+                            ? [
+                                {
+                                  label: "Aceito em",
+                                  value: new Date(
+                                    viewingInvite.accepted_at,
+                                  ).toLocaleDateString("pt-BR"),
+                                  icon: CheckCircle2,
+                                },
+                              ]
+                            : []),
+                          ...(viewingInvite.declined_at
+                            ? [
+                                {
+                                  label: "Recusado em",
+                                  value: new Date(
+                                    viewingInvite.declined_at,
+                                  ).toLocaleDateString("pt-BR"),
+                                  icon: XCircle,
+                                },
+                              ]
+                            : []),
+                          {
+                            label: "Enviado por",
+                            value: viewingInvite.sent_by,
+                            icon: Users,
+                          },
+                        ].map(({ label, value, node, icon: Icon }) => (
+                          <div
+                            key={label}
+                            className="p-3 rounded-lg bg-slate-50 border border-slate-200"
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Icon className="h-3 w-3 text-slate-400" />
+                              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                                {label}
+                              </p>
+                            </div>
+                            {node || (
+                              <p className="text-sm font-medium text-slate-700 truncate">
+                                {value}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {viewingInvite.message && (
+                        <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                          <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                            Mensagem enviada
+                          </p>
+                          <p className="text-sm text-slate-700 leading-relaxed">
+                            {viewingInvite.message}
+                          </p>
+                        </div>
+                      )}
+
+                      {viewingInvite.declined_reason && (
+                        <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+                          <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wide mb-2">
+                            Motivo da recusa
+                          </p>
+                          <p className="text-sm text-red-700 leading-relaxed">
+                            {viewingInvite.declined_reason}
+                          </p>
+                        </div>
                       )}
                     </div>
-                  ))}
-                </div>
-
-                {viewingInvite.message && (
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">
-                      Mensagem enviada
-                    </p>
-                    <p className="text-sm text-slate-700 leading-relaxed">
-                      {viewingInvite.message}
-                    </p>
-                  </div>
-                )}
-
-                {viewingInvite.declined_reason && (
-                  <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-                    <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wide mb-2">
-                      Motivo da recusa
-                    </p>
-                    <p className="text-sm text-red-700 leading-relaxed">
-                      {viewingInvite.declined_reason}
-                    </p>
                   </div>
                 )}
               </div>
-              </div>
-            )}
+            </EmbeddedSlideScreen>
+
+            {/* Confirmations */}
+            <ConfirmationDialog
+              open={revokeDialog.open}
+              onClose={() => setRevokeDialog({ open: false, id: 0, name: "" })}
+              onConfirm={() => {
+                handleRevokePartner(revokeDialog.id);
+                setRevokeDialog({ open: false, id: 0, name: "" });
+              }}
+              title="Revogar status Partner"
+              message={`Tem certeza que deseja revogar o status Partner de "${revokeDialog.name}"? A agência perderá todos os benefícios associados.`}
+              confirmText="Revogar"
+              cancelText="Cancelar"
+              destructive
+            />
+            <ConfirmationDialog
+              open={cancelDialog.open}
+              onClose={() => setCancelDialog({ open: false, id: "", name: "" })}
+              onConfirm={() => {
+                handleCancelInvite(cancelDialog.id);
+                setCancelDialog({ open: false, id: "", name: "" });
+              }}
+              title="Cancelar convite"
+              message={`Cancelar o convite enviado para "${cancelDialog.name}"?`}
+              confirmText="Cancelar convite"
+              cancelText="Voltar"
+              destructive
+            />
+          </div>
         </div>
-      </EmbeddedSlideScreen>
-
-      {/* Confirmations */}
-      <ConfirmationDialog
-        open={revokeDialog.open}
-        onClose={() => setRevokeDialog({ open: false, id: 0, name: "" })}
-        onConfirm={() => {
-          handleRevokePartner(revokeDialog.id);
-          setRevokeDialog({ open: false, id: 0, name: "" });
-        }}
-        title="Revogar status Partner"
-        message={`Tem certeza que deseja revogar o status Partner de "${revokeDialog.name}"? A agência perderá todos os benefícios associados.`}
-        confirmText="Revogar"
-        cancelText="Cancelar"
-        destructive
-      />
-      <ConfirmationDialog
-        open={cancelDialog.open}
-        onClose={() => setCancelDialog({ open: false, id: "", name: "" })}
-        onConfirm={() => {
-          handleCancelInvite(cancelDialog.id);
-          setCancelDialog({ open: false, id: "", name: "" });
-        }}
-        title="Cancelar convite"
-        message={`Cancelar o convite enviado para "${cancelDialog.name}"?`}
-        confirmText="Cancelar convite"
-        cancelText="Voltar"
-        destructive
-      />
-    </div>
-    </div>
-    </div>
+      </div>
     </div>
   );
 }

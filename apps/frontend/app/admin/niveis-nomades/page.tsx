@@ -40,7 +40,12 @@ import {
   Gem,
   Crown,
 } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   StandardPageBanner,
@@ -667,11 +672,21 @@ export default function NiveisNomadesPage() {
     let cancelled = false;
     apiClient
       .getCurrentUser()
-      .then((me: any) => { if (!cancelled) setAdminProfile(me?.admin_profile ?? null); })
-      .catch(() => { if (!cancelled) setAdminProfile(null); });
-    return () => { cancelled = true; };
+      .then((me: any) => {
+        if (!cancelled) setAdminProfile(me?.admin_profile ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAdminProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  const canDeleteLevel = hasAdminModulePermission(adminProfile, "sistema", "delete");
+  const canDeleteLevel = hasAdminModulePermission(
+    adminProfile,
+    "sistema",
+    "delete",
+  );
 
   // Sync API levels into local state (parse benefits JSON string if needed).
   // Sempre sincroniza, mesmo quando `apiLevels` fica vazio — antes, o guard
@@ -746,381 +761,418 @@ export default function NiveisNomadesPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="relative h-full min-h-0 flex flex-col">
-      <div className="shrink-0 -mb-[11px]">
-      <StandardPageBanner
-        icon={Award}
-        title="Níveis de Nômades"
-        description="Configure os níveis de gamificação dos nômades com critérios de performance, bônus e benefícios"
-        actions={
-          <>
-            {activeTab === "config" && (
-              <TooltipProvider delayDuration={400}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => openEditDialog()}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                    >
-                      <Plus className="h-3.5 w-3.5 shrink-0" />
-                      Novo Nível
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>Criar novo nível</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            <PinToTrayButton id="page-niveis-nomades" label="Níveis de Nômades" icon={Award} path="/admin/niveis-nomades" />
-          </>
-        }
-      />
-      </div>
+      <div className="relative h-full min-h-0 flex flex-col">
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={Award}
+            title="Níveis de Nômades"
+            description="Configure os níveis de gamificação dos nômades com critérios de performance, bônus e benefícios"
+            contentClassName="lg:h-[65px]"
+            actions={
+              <>
+                {activeTab === "config" && (
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => openEditDialog()}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                        >
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                          Novo Nível
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Criar novo nível
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                <PinToTrayButton
+                  id="page-niveis-nomades"
+                  label="Níveis de Nômades"
+                  icon={Award}
+                  path="/admin/niveis-nomades"
+                />
+              </>
+            }
+          />
+        </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-2">
-          <TabsTrigger value="config">Configuração de Níveis</TabsTrigger>
-          <TabsTrigger value="revisao">Revisão Trimestral</TabsTrigger>
-        </TabsList>
-        <TabsContent value="config">
-          <div className="grid gap-4">
-            {levelsLoading && <PageLoader text="Carregando níveis…" compact />}
+        <div className="flex-1 min-h-0 overflow-y-auto lg:h-[500px] lg:flex-none">
+          <div className="space-y-6">
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="!mt-0 w-full gap-0"
+            >
+              <TabsList className="mb-0 grid w-full grid-cols-2 p-0">
+                <TabsTrigger value="config">Configuração de Níveis</TabsTrigger>
+                <TabsTrigger value="revisao">Revisão Trimestral</TabsTrigger>
+              </TabsList>
+              <TabsContent value="config">
+                <div className="grid gap-4">
+                  {levelsLoading && (
+                    <PageLoader text="Carregando níveis…" compact />
+                  )}
 
-            {!levelsLoading && levelsError && (
-              <div className="flex flex-col items-center justify-center py-16 gap-4">
-                <div className="rounded-xl bg-red-50 border border-red-200 px-6 py-5 max-w-md text-center">
-                  <p className="text-sm font-semibold text-red-700 mb-1">
-                    Erro ao carregar níveis
-                  </p>
-                  <p className="text-xs text-red-500 font-mono">
-                    {levelsError}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={refetchLevels}
-                  className="gap-2"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Tentar novamente
-                </Button>
-              </div>
-            )}
+                  {!levelsLoading && levelsError && (
+                    <div className="flex flex-col items-center justify-center py-16 gap-4">
+                      <div className="rounded-xl bg-red-50 border border-red-200 px-6 py-5 max-w-md text-center">
+                        <p className="text-sm font-semibold text-red-700 mb-1">
+                          Erro ao carregar níveis
+                        </p>
+                        <p className="text-xs text-red-500 font-mono">
+                          {levelsError}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={refetchLevels}
+                        className="gap-2"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Tentar novamente
+                      </Button>
+                    </div>
+                  )}
 
-            {!levelsLoading && !levelsError && nomadLevels.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
-                <Award className="h-10 w-10 opacity-30" />
-                <p className="text-sm">Nenhum nível cadastrado ainda.</p>
-                <Button
-                  size="sm"
-                  onClick={() => openEditDialog()}
-                  className="btn-brand gap-2"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Criar primeiro nível
-                </Button>
-              </div>
-            )}
+                  {!levelsLoading &&
+                    !levelsError &&
+                    nomadLevels.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+                        <Award className="h-10 w-10 opacity-30" />
+                        <p className="text-sm">
+                          Nenhum nível cadastrado ainda.
+                        </p>
+                        <Button
+                          size="sm"
+                          onClick={() => openEditDialog()}
+                          className="btn-brand gap-2"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Criar primeiro nível
+                        </Button>
+                      </div>
+                    )}
 
-            {!levelsLoading &&
-              !levelsError &&
-              nomadLevels.map((level, index) => {
-                const theme = LEVEL_THEMES[level.name] ?? DEFAULT_THEME;
-                const levelConfig = LEVEL_ICON_MAP[level.name] ?? {
-                  gradient: "from-blue-500 to-indigo-600",
-                  Icon: Award,
-                };
-                const LevelIcon = levelConfig.Icon;
-                return (
-                  <div
-                    key={level.id}
-                    className="animate-in fade-in slide-in-from-bottom duration-500"
-                    style={{ animationDelay: `${index * 80}ms` }}
-                  >
-                    <Card
-                      className={`overflow-hidden bg-white dark:bg-slate-900 border-0 border-l-4 ${theme.accent} ${theme.neonRing} ${theme.glowShadow} transition-all duration-200`}
-                    >
-                      {/* ── HEADER ── */}
-                      <CardHeader className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-4 min-w-0">
-                            {/* Gradient icon badge */}
-                            <div className="relative shrink-0">
-                              <div
-                                className={`w-12 h-12 rounded-xl bg-linear-to-br ${levelConfig.gradient} flex items-center justify-center shadow-md`}
-                              >
-                                <LevelIcon className="h-6 w-6 text-white drop-shadow-sm" />
-                              </div>
-                              <span
-                                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow border-2 border-white dark:border-slate-900"
-                                style={{
-                                  backgroundColor: level.color ?? "#6B7280",
-                                }}
-                              >
-                                {level.sort_order ?? index + 1}
-                              </span>
-                            </div>
-
-                            {/* Name + badges + description */}
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h3 className="text-base font-bold text-slate-800 dark:text-white">
-                                  {level.name}
-                                </h3>
-                                {level.is_leader_level && (
-                                  <Badge
-                                    className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                                  >
-                                    <Crown className="h-3 w-3 mr-1" />
-                                    Liderança
-                                  </Badge>
-                                )}
-                                {level.bonus_percentage > 0 && (
-                                  <Badge className="border text-xs font-medium bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
-                                    <TrendingUp className="h-3 w-3 mr-1" />+
-                                    {level.bonus_percentage}% bônus
-                                  </Badge>
-                                )}
-                                {level.min_tasks_quarter === 0 &&
-                                  !level.is_leader_level && (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                  {!levelsLoading &&
+                    !levelsError &&
+                    nomadLevels.map((level, index) => {
+                      const theme = LEVEL_THEMES[level.name] ?? DEFAULT_THEME;
+                      const levelConfig = LEVEL_ICON_MAP[level.name] ?? {
+                        gradient: "from-blue-500 to-indigo-600",
+                        Icon: Award,
+                      };
+                      const LevelIcon = levelConfig.Icon;
+                      return (
+                        <div
+                          key={level.id}
+                          className="animate-in fade-in slide-in-from-bottom duration-500"
+                          style={{ animationDelay: `${index * 80}ms` }}
+                        >
+                          <Card
+                            className={`overflow-hidden bg-white dark:bg-slate-900 border-0 border-l-4 ${theme.accent} ${theme.neonRing} ${theme.glowShadow} transition-all duration-200`}
+                          >
+                            {/* ── HEADER ── */}
+                            <CardHeader className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-4 min-w-0">
+                                  {/* Gradient icon badge */}
+                                  <div className="relative shrink-0">
+                                    <div
+                                      className={`w-12 h-12 rounded-xl bg-linear-to-br ${levelConfig.gradient} flex items-center justify-center shadow-md`}
                                     >
-                                      Nível base
-                                    </Badge>
-                                  )}
-                              </div>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                {level.description}
-                              </p>
-                            </div>
-                          </div>
+                                      <LevelIcon className="h-6 w-6 text-white drop-shadow-sm" />
+                                    </div>
+                                    <span
+                                      className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow border-2 border-white dark:border-slate-900"
+                                      style={{
+                                        backgroundColor:
+                                          level.color ?? "#6B7280",
+                                      }}
+                                    >
+                                      {level.sort_order ?? index + 1}
+                                    </span>
+                                  </div>
 
-                          {/* Actions */}
-                          <div className="flex gap-1.5 shrink-0">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openEditDialog(level)}
-                              className="h-7 w-7 p-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100"
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                            </Button>
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
+                                  {/* Name + badges + description */}
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h3 className="text-base font-bold text-slate-800 dark:text-white">
+                                        {level.name}
+                                      </h3>
+                                      {level.is_leader_level && (
+                                        <Badge
+                                          className={`border text-xs font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                                        >
+                                          <Crown className="h-3 w-3 mr-1" />
+                                          Liderança
+                                        </Badge>
+                                      )}
+                                      {level.bonus_percentage > 0 && (
+                                        <Badge className="border text-xs font-medium bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-700/40 text-emerald-700 dark:text-emerald-400">
+                                          <TrendingUp className="h-3 w-3 mr-1" />
+                                          +{level.bonus_percentage}% bônus
+                                        </Badge>
+                                      )}
+                                      {level.min_tasks_quarter === 0 &&
+                                        !level.is_leader_level && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-xs text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
+                                          >
+                                            Nível base
+                                          </Badge>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                      {level.description}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex gap-1.5 shrink-0">
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() =>
-                                      canDeleteLevel &&
-                                      setDeleteDialog({
-                                        open: true,
-                                        id: level.id,
-                                        name: level.name,
-                                      })
-                                    }
-                                    disabled={!canDeleteLevel}
-                                    aria-label={canDeleteLevel ? "Excluir nível" : "Sem permissão para excluir níveis"}
-                                    className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 disabled:opacity-40 disabled:pointer-events-none"
+                                    onClick={() => openEditDialog(level)}
+                                    className="h-7 w-7 p-0 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-700/50 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100"
                                   >
-                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <Edit className="h-3.5 w-3.5" />
                                   </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={6}>
-                                  {canDeleteLevel ? "Excluir nível" : "Sem permissão para excluir níveis"}
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        </div>
-                      </CardHeader>
+                                  <TooltipProvider delayDuration={400}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() =>
+                                            canDeleteLevel &&
+                                            setDeleteDialog({
+                                              open: true,
+                                              id: level.id,
+                                              name: level.name,
+                                            })
+                                          }
+                                          disabled={!canDeleteLevel}
+                                          aria-label={
+                                            canDeleteLevel
+                                              ? "Excluir nível"
+                                              : "Sem permissão para excluir níveis"
+                                          }
+                                          className="h-7 w-7 p-0 border-red-100 dark:border-red-900/40 bg-white dark:bg-slate-800/50 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-400 hover:text-red-600 disabled:opacity-40 disabled:pointer-events-none"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="bottom"
+                                        sideOffset={6}
+                                      >
+                                        {canDeleteLevel
+                                          ? "Excluir nível"
+                                          : "Sem permissão para excluir níveis"}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
+                              </div>
+                            </CardHeader>
 
-                      <CardContent className="px-4 py-3 space-y-3 dark:bg-slate-900">
-                        {/* ── CRITÉRIOS DE PERFORMANCE ── */}
-                        <div>
-                          <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
-                            Critérios de Performance
-                          </p>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            <div
-                              className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
-                            >
-                              <div className="flex items-center gap-1 mb-1">
-                                <ClipboardCheck
-                                  className={`h-3 w-3 ${theme.statIconColor}`}
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
-                                  Tarefas/Trim.
-                                </span>
+                            <CardContent className="px-4 py-3 space-y-3 dark:bg-slate-900">
+                              {/* ── CRITÉRIOS DE PERFORMANCE ── */}
+                              <div>
+                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
+                                  Critérios de Performance
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                  <div
+                                    className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                                  >
+                                    <div className="flex items-center gap-1 mb-1">
+                                      <ClipboardCheck
+                                        className={`h-3 w-3 ${theme.statIconColor}`}
+                                      />
+                                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                                        Tarefas/Trim.
+                                      </span>
+                                    </div>
+                                    <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                                      {level.min_tasks_quarter > 0
+                                        ? `≥ ${level.min_tasks_quarter}`
+                                        : "—"}
+                                    </p>
+                                  </div>
+                                  <div
+                                    className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                                  >
+                                    <div className="flex items-center gap-1 mb-1">
+                                      <Star
+                                        className={`h-3 w-3 ${theme.statIconColor}`}
+                                      />
+                                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                                        Avaliação Mín.
+                                      </span>
+                                    </div>
+                                    <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                                      {level.min_rating > 0
+                                        ? `≥ ${level.min_rating.toFixed(1)} ★`
+                                        : "—"}
+                                    </p>
+                                  </div>
+                                  <div
+                                    className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                                  >
+                                    <div className="flex items-center gap-1 mb-1">
+                                      <Target
+                                        className={`h-3 w-3 ${theme.statIconColor}`}
+                                      />
+                                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                                        Entrega Prazo
+                                      </span>
+                                    </div>
+                                    <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                                      {level.min_ontime_rate > 0
+                                        ? `≥ ${level.min_ontime_rate}%`
+                                        : "—"}
+                                    </p>
+                                  </div>
+                                  <div
+                                    className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
+                                  >
+                                    <div className="flex items-center gap-1 mb-1">
+                                      <BarChart3
+                                        className={`h-3 w-3 ${theme.statIconColor}`}
+                                      />
+                                      <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                                        Rejeição Máx.
+                                      </span>
+                                    </div>
+                                    <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
+                                      {level.max_rejection_rate < 100
+                                        ? `≤ ${level.max_rejection_rate}%`
+                                        : "—"}
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
-                              <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
-                                {level.min_tasks_quarter > 0
-                                  ? `≥ ${level.min_tasks_quarter}`
-                                  : "—"}
-                              </p>
-                            </div>
-                            <div
-                              className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
-                            >
-                              <div className="flex items-center gap-1 mb-1">
-                                <Star
-                                  className={`h-3 w-3 ${theme.statIconColor}`}
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
-                                  Avaliação Mín.
-                                </span>
-                              </div>
-                              <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
-                                {level.min_rating > 0
-                                  ? `≥ ${level.min_rating.toFixed(1)} ★`
-                                  : "—"}
-                              </p>
-                            </div>
-                            <div
-                              className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
-                            >
-                              <div className="flex items-center gap-1 mb-1">
-                                <Target
-                                  className={`h-3 w-3 ${theme.statIconColor}`}
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
-                                  Entrega Prazo
-                                </span>
-                              </div>
-                              <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
-                                {level.min_ontime_rate > 0
-                                  ? `≥ ${level.min_ontime_rate}%`
-                                  : "—"}
-                              </p>
-                            </div>
-                            <div
-                              className={`rounded-lg p-2.5 border ${theme.statBg} ${theme.statBorder}`}
-                            >
-                              <div className="flex items-center gap-1 mb-1">
-                                <BarChart3
-                                  className={`h-3 w-3 ${theme.statIconColor}`}
-                                />
-                                <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
-                                  Rejeição Máx.
-                                </span>
-                              </div>
-                              <p className="text-[13px] font-bold text-slate-700 dark:text-slate-100">
-                                {level.max_rejection_rate < 100
-                                  ? `≤ ${level.max_rejection_rate}%`
-                                  : "—"}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
 
-                        {/* ── PERKS ── */}
-                        {(level.bonus_percentage > 0 ||
-                          level.level_up_bonus_credits > 0) && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {level.bonus_percentage > 0 && (
-                              <span
-                                className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                              >
-                                <Zap className="h-2.5 w-2.5" />+
-                                {level.bonus_percentage}% de bônus nas tarefas
-                              </span>
-                            )}
-                            {level.level_up_bonus_credits > 0 && (
-                              <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-700/40 text-purple-700 dark:text-purple-400">
-                                <Gift className="h-2.5 w-2.5" />
-                                R${" "}
-                                {level.level_up_bonus_credits.toLocaleString(
-                                  "pt-BR",
-                                )}{" "}
-                                em créditos ao atingir nível
-                              </span>
-                            )}
-                          </div>
-                        )}
+                              {/* ── PERKS ── */}
+                              {(level.bonus_percentage > 0 ||
+                                level.level_up_bonus_credits > 0) && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {level.bonus_percentage > 0 && (
+                                    <span
+                                      className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                                    >
+                                      <Zap className="h-2.5 w-2.5" />+
+                                      {level.bonus_percentage}% de bônus nas
+                                      tarefas
+                                    </span>
+                                  )}
+                                  {level.level_up_bonus_credits > 0 && (
+                                    <span className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full border font-semibold bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-700/40 text-purple-700 dark:text-purple-400">
+                                      <Gift className="h-2.5 w-2.5" />
+                                      R${" "}
+                                      {level.level_up_bonus_credits.toLocaleString(
+                                        "pt-BR",
+                                      )}{" "}
+                                      em créditos ao atingir nível
+                                    </span>
+                                  )}
+                                </div>
+                              )}
 
-                        {/* ── BENEFÍCIOS DESBLOQUEADOS ── */}
-                        {(Array.isArray(level.benefits) ? level.benefits : [])
-                          .length > 0 && (
-                          <div>
-                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
-                              Benefícios Desbloqueados
-                            </p>
-                            <div className="flex flex-wrap gap-1.5">
+                              {/* ── BENEFÍCIOS DESBLOQUEADOS ── */}
                               {(Array.isArray(level.benefits)
                                 ? level.benefits
                                 : []
-                              ).map((benefit, i) => (
-                                <span
-                                  key={i}
-                                  className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
-                                >
-                                  <CheckCircle2 className="h-2.5 w-2.5 opacity-70 shrink-0" />
-                                  {benefit}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-                );
-              })}
-          </div>
-        </TabsContent>
-        <TabsContent value="revisao">
-          <RevisionTab />
-        </TabsContent>
-      </Tabs>
+                              ).length > 0 && (
+                                <div>
+                                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">
+                                    Benefícios Desbloqueados
+                                  </p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {(Array.isArray(level.benefits)
+                                      ? level.benefits
+                                      : []
+                                    ).map((benefit, i) => (
+                                      <span
+                                        key={i}
+                                        className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${theme.badgeBg} ${theme.badgeBorder} ${theme.badgeText}`}
+                                      >
+                                        <CheckCircle2 className="h-2.5 w-2.5 opacity-70 shrink-0" />
+                                        {benefit}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </div>
+                      );
+                    })}
+                </div>
+              </TabsContent>
+              <TabsContent value="revisao">
+                <RevisionTab />
+              </TabsContent>
+            </Tabs>
 
-      <EmbeddedSlideScreen
-        open={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
-        title={editingLevel?.id ? "Editar Nível" : "Novo Nível de Nômade"}
-        subtitle="Configure critérios de performance e benefícios"
-        pin={{
-          id: `niveis-nomades-${editingLevel?.id ?? "novo"}`,
-          label: editingLevel?.id ? "Editar Nível" : "Novo Nível de Nômade",
-          icon: TrendingUp,
-          path: "/admin/niveis-nomades",
-          activateKey: editingLevel?.id ? `edit:${editingLevel.id}` : "create",
-        }}
-      >
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950 w-full">
-            <div className="max-w-3xl mx-auto">
-              {editingLevel && (
-                <LevelForm
-                  level={editingLevel}
-                  onSave={handleSaveLevel}
-                  onCancel={() => setIsDialogOpen(false)}
-                />
-              )}
-            </div>
-          </div>
-      </EmbeddedSlideScreen>
+            <EmbeddedSlideScreen
+              open={isDialogOpen}
+              onClose={() => setIsDialogOpen(false)}
+              title={editingLevel?.id ? "Editar Nível" : "Novo Nível de Nômade"}
+              subtitle="Configure critérios de performance e benefícios"
+              pin={{
+                id: `niveis-nomades-${editingLevel?.id ?? "novo"}`,
+                label: editingLevel?.id
+                  ? "Editar Nível"
+                  : "Novo Nível de Nômade",
+                icon: TrendingUp,
+                path: "/admin/niveis-nomades",
+                activateKey: editingLevel?.id
+                  ? `edit:${editingLevel.id}`
+                  : "create",
+              }}
+            >
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50 dark:bg-slate-950 w-full">
+                <div className="max-w-3xl mx-auto">
+                  {editingLevel && (
+                    <LevelForm
+                      level={editingLevel}
+                      onSave={handleSaveLevel}
+                      onCancel={() => setIsDialogOpen(false)}
+                    />
+                  )}
+                </div>
+              </div>
+            </EmbeddedSlideScreen>
 
-      <ConfirmationDialog
-        open={deleteDialog.open}
-        onClose={() => setDeleteDialog({ open: false, id: null, name: "" })}
-        onConfirm={confirmDeleteLevel}
-        title="Excluir nível de Nômade"
-        message="Esta ação é permanente e não pode ser desfeita."
-        twoStep
-        targetName={deleteDialog.name}
-        targetDetail="Nível do Programa de Nômades"
-        consequences={[
-          "O nível sai da lista de configuração de Nômades imediatamente.",
-          "Se houver nômades ou vínculos associados a este nível, a exclusão será recusada.",
-        ]}
-        finalConfirmText="Excluir nível de Nômade definitivamente"
-      />
-    </div>
-    </div>
-    </div>
+            <ConfirmationDialog
+              open={deleteDialog.open}
+              onClose={() =>
+                setDeleteDialog({ open: false, id: null, name: "" })
+              }
+              onConfirm={confirmDeleteLevel}
+              title="Excluir nível de Nômade"
+              message="Esta ação é permanente e não pode ser desfeita."
+              twoStep
+              targetName={deleteDialog.name}
+              targetDetail="Nível do Programa de Nômades"
+              consequences={[
+                "O nível sai da lista de configuração de Nômades imediatamente.",
+                "Se houver nômades ou vínculos associados a este nível, a exclusão será recusada.",
+              ]}
+              finalConfirmText="Excluir nível de Nômade definitivamente"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

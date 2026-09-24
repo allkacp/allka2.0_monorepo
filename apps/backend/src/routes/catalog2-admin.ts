@@ -13,7 +13,7 @@ import { prisma } from "../lib/prisma";
 import { verifyToken, evaluateAdminMasterAccess } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { logCommercialChangeEvent } from "../lib/catalog2-commercial-change-log";
-import { CATALOG2_PERIODS, isCatalog2Period, listPeriodsForAdmin } from "../lib/catalog2-periods";
+import { CATALOG2_PERIODS, isCatalog2Period, isCurrentlyContractablePeriod, listPeriodsForAdmin } from "../lib/catalog2-periods";
 import { recordCatalog2ProductHistory, listCatalog2ProductHistory } from "../lib/catalog2-product-history";
 import { maybeCreateCatalog2ActivationJobOnStatusTransition, notifyValidQuoteOwnersOfCommercialChange } from "../lib/catalog2-notifications";
 import { summarizeCatalog2ProductHistory } from "../lib/catalog2-product-history-ai";
@@ -48,6 +48,11 @@ import {
   validateVersionForPublish,
 } from "../lib/catalog2-service";
 import { computePricing, defaultSelection } from "../lib/catalog2-pricing";
+import { type ClientContext, configureProduct, createQuote } from "../lib/catalog2-client";
+import { createProjectWithSequentialCode } from "../lib/create-project";
+import { attachCatalog2QuoteToProject } from "../lib/catalog2-checkout";
+import { recalculateProjectValue } from "../lib/project-value";
+import { confirmPaymentAndGenerateProjectTasks, withIdempotentRetry, PaymentValidationError } from "../lib/confirm-payment";
 
 const router = Router();
 
@@ -943,7 +948,7 @@ router.patch("/products/:id/status", async (req, res, next) => {
         await recordCatalog2ProductHistory(tx, {
           productId: u.id,
           eventType: "status_changed",
-          description: `Situação alterada de "${CATALOG2_STATUS_LABEL[before.status as Catalog2Status] ?? before.status}" para "${CATALOG2_STATUS_LABEL[u.status as Catalog2Status] ?? u.status}".`,
+          description: `Status alterado de "${CATALOG2_STATUS_LABEL[before.status as Catalog2Status] ?? before.status}" para "${CATALOG2_STATUS_LABEL[u.status as Catalog2Status] ?? u.status}".`,
           before: { status: before.status },
           after: { status: u.status },
           actorUserId: req.user!.id,
@@ -1124,6 +1129,10 @@ router.put("/products/:id/periods/:period", async (req, res, next) => {
     const product = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true } });
     if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
     const months = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 }[period];
+    // Reunião 18/09/2026: guardamos a configuração dos períodos futuros,
+    // mas impedimos que sejam ativados antes da decisão de lançamento.
+    // A regra fica no backend para uma chamada direta nunca contornar a UI.
+    const effectiveIsActive = isCurrentlyContractablePeriod(period) ? (d.is_active ?? true) : false;
     const before = await prisma.catalog2ProductPeriod.findUnique({ where: { product_id_period: { product_id: product.id, period } } });
     // Item 7.1: upsert + evento de histórico confirmados juntos. O
     // logCommercialChangeEvent (Item 4.1, âncora de proteção de preço —
@@ -1134,8 +1143,8 @@ router.put("/products/:id/periods/:period", async (req, res, next) => {
     const row = await prisma.$transaction(async (tx) => {
       const r = await tx.catalog2ProductPeriod.upsert({
         where: { product_id_period: { product_id: product.id, period } },
-        create: { product_id: product.id, period, months, discount_percent: d.discount_percent, is_active: d.is_active ?? true, updated_by_user_id: req.user!.id },
-        update: { discount_percent: d.discount_percent, ...(d.is_active !== undefined ? { is_active: d.is_active } : {}), updated_by_user_id: req.user!.id },
+        create: { product_id: product.id, period, months, discount_percent: d.discount_percent, is_active: effectiveIsActive, updated_by_user_id: req.user!.id },
+        update: { discount_percent: d.discount_percent, is_active: effectiveIsActive, updated_by_user_id: req.user!.id },
       });
       // Item 7: registro DEDICADO ao histórico legível (antes/depois +
       // categoria filtrável "períodos") — coexiste de propósito com o
@@ -1145,7 +1154,7 @@ router.put("/products/:id/periods/:period", async (req, res, next) => {
         eventType: "period_configured",
         description: `Desconto do período "${period}" ${label}.`,
         before: before ? { discount_percent: before.discount_percent, is_active: before.is_active } : null,
-        after: { discount_percent: d.discount_percent, is_active: d.is_active ?? true },
+        after: { discount_percent: d.discount_percent, is_active: effectiveIsActive },
         actorUserId: req.user!.id,
       });
       return r;
@@ -2283,7 +2292,19 @@ async function computeProductReadiness(p: ReadinessProduct) {
   return {
     id: p.id,
     slug: p.slug,
-    name: p.internal_name,
+    // ID numérico curto do link direto (/admin/catalogo-produtos/:n) — achado
+    // do usuário 2026-09-23: "quando eu clico em produto, ele mostra o ID...
+    // pra qualquer um" — mesmo esquema já usado por company/agency/líder,
+    // agora também no admin (substitui o antigo código p<n> do slug).
+    sequence_number: p.sequence_number,
+    // Nome COMERCIAL (o mesmo que company/agency/líder veem) — achado do
+    // usuário 2026-09-23: "o admin tem que ver o mesmo nome... senão como é
+    // que eu vou identificar por nome". `internal_name` (nome interno,
+    // geralmente com prefixo "[TESTE LOCAL]"/rascunho) fica como campo
+    // separado — mostrado como extra pro admin, nunca no lugar do
+    // comercial. Mesma regra do cliente: version.title || internal_name.
+    name: targetVersion?.title || p.internal_name,
+    internal_name: p.internal_name,
     is_test_local: p.internal_name.startsWith(TEST_LOCAL_PREFIX),
     imported: !!p.import_origin,
     source_index: p.import_origin?.source_index ?? null,
@@ -2442,6 +2463,216 @@ router.get("/products/:id/detail-preview", async (req, res, next) => {
     if (!p) throw new Catalog2Error("Produto não encontrado.", 404);
     const readiness = await computeProductReadiness(p);
     res.json({ product, readiness });
+  } catch (e) { handle(e, res, next); }
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// CHECKOUT ADMIN — Admin Master contrata EM NOME de uma empresa/agência
+// (achado do usuário 2026-09-23: "como administrador eu posso conseguir
+// contratar... vincular a uma agência, dar de brinde, descontar da
+// carteira, gerar link de pagamento — sempre com motivo"). Reaproveita o
+// MESMO motor de configuração/cotação/checkout do cliente (configureProduct/
+// createQuote/attachCatalog2QuoteToProject), construindo um ClientContext de
+// IMPERSONATION para a conta-alvo — nunca uma segunda implementação de
+// preço/regra de contratação. Admin nunca contrata "para si mesmo" — sempre
+// precisa de um alvo (empresa ou agência) e de um motivo.
+// ═══════════════════════════════════════════════════════════════════════
+
+router.get("/checkout-targets", async (req, res, next) => {
+  try {
+    const q = String(req.query.q ?? "").trim();
+    const companyWhere = q ? { OR: [{ name: { contains: q } }, { email: { contains: q } }] } : {};
+    const agencyWhere = q ? { name: { contains: q } } : {};
+    const [companies, agencies] = await Promise.all([
+      prisma.company.findMany({ where: companyWhere, select: { id: true, name: true, email: true, owner_user_id: true }, take: 10, orderBy: { name: "asc" } }),
+      prisma.agency.findMany({ where: agencyWhere, select: { id: true, name: true, owner_user_id: true }, take: 10, orderBy: { name: "asc" } }),
+    ]);
+    const wallets = companies.length + agencies.length > 0
+      ? await prisma.wallet.findMany({
+          where: {
+            OR: [
+              ...companies.map((c) => ({ owner_type: "company", owner_id: c.id })),
+              ...agencies.map((a) => ({ owner_type: "agency", owner_id: a.id })),
+            ],
+          },
+          select: { owner_type: true, owner_id: true, balance: true },
+        })
+      : [];
+    const balanceOf = (kind: string, id: string) => wallets.find((w) => w.owner_type === kind && w.owner_id === id)?.balance ?? 0;
+    res.json({
+      data: [
+        ...companies.map((c) => ({ kind: "company" as const, id: c.id, name: c.name, email: c.email, wallet_balance: balanceOf("company", c.id) })),
+        ...agencies.map((a) => ({ kind: "agency" as const, id: a.id, name: a.name, email: null, wallet_balance: balanceOf("agency", a.id) })),
+      ],
+    });
+  } catch (e) { handle(e, res, next); }
+});
+
+router.get("/checkout-targets/:kind/:id/projects", async (req, res, next) => {
+  try {
+    const kind = req.params.kind as string;
+    const id = req.params.id as string;
+    if (kind !== "company" && kind !== "agency") throw new Catalog2Error("Tipo de conta inválido.", 400);
+    const where = kind === "company" ? { company_id: id } : { agency_id: id };
+    const projects = await prisma.project.findMany({
+      where: { ...where, status: { notIn: ["cancelled"] } },
+      select: { id: true, title: true, project_code: true, status: true, created_at: true },
+      orderBy: { created_at: "desc" },
+      take: 30,
+    });
+    res.json({ data: projects });
+  } catch (e) { handle(e, res, next); }
+});
+
+const adminCheckoutSchema = z.object({
+  product: z.string().min(1),
+  selection: z.record(z.any()).default({}),
+  period: z.string().nullable().optional(),
+  target: z.object({ kind: z.enum(["company", "agency"]), id: z.string().min(1) }),
+  project_id: z.string().min(1).nullable().optional(),
+  settlement: z.enum(["ALLKOINS", "BRINDE", "LINK_PAGAMENTO"]),
+  motivo: z.string().trim().min(5, "Descreva o motivo da contratação (mínimo 5 caracteres)."),
+});
+
+router.post("/checkout", async (req, res, next) => {
+  try {
+    const body = adminCheckoutSchema.parse(req.body ?? {});
+    const admin = req.user!;
+
+    const targetOwner = body.target.kind === "company"
+      ? await prisma.company.findUnique({ where: { id: body.target.id }, select: { id: true, name: true, owner_user_id: true } })
+      : await prisma.agency.findUnique({ where: { id: body.target.id }, select: { id: true, name: true, owner_user_id: true } });
+    if (!targetOwner) throw new Catalog2Error("Empresa/agência de destino não encontrada.", 404);
+
+    const ctx: ClientContext = {
+      user_id: admin.id,
+      kind: body.target.kind,
+      account_kind: body.target.kind,
+      account_id: body.target.id,
+      can_view: true,
+      can_configure: true,
+      can_contract: true,
+      can_preview_drafts: false,
+      always_sees_all_products: false,
+    };
+
+    const configured = await configureProduct(ctx, body.product, body.selection, { preview: false, period: body.period ?? undefined });
+    if (!configured.can_generate_quote) {
+      throw new Catalog2Error(`Não é possível gerar cotação: ${configured.quote_blockers.join("; ")}`, 409, "not_quotable");
+    }
+    const quote: any = await createQuote(ctx, body.product, body.selection, body.period ?? undefined);
+
+    const project = await prisma.$transaction(async (tx) => {
+      let proj;
+      if (body.project_id) {
+        proj = await tx.project.findUnique({ where: { id: body.project_id } });
+        if (!proj) throw new Catalog2Error("Projeto de destino não encontrado.", 404);
+        const belongsToTarget = body.target.kind === "company" ? proj.company_id === body.target.id : proj.agency_id === body.target.id;
+        if (!belongsToTarget) throw new Catalog2Error("Este projeto não pertence à conta selecionada.", 409);
+      } else {
+        proj = await createProjectWithSequentialCode(tx, {
+          title: `Pedido Catálogo 2.0 (admin) — ${targetOwner.name}`,
+          status: "draft",
+          lifecycle: "avulso",
+          agency_id: body.target.kind === "agency" ? body.target.id : null,
+          company_id: body.target.kind === "company" ? body.target.id : null,
+          created_by_user_id: admin.id,
+        });
+      }
+      await attachCatalog2QuoteToProject(tx, {
+        projectId: proj.id,
+        quoteId: quote.id,
+        origin: "CATALOG2",
+        pagadorSnapshot: body.target.kind === "agency" ? "AGENCIA" : "CLIENTE",
+      });
+      await recalculateProjectValue(tx, proj.id);
+      return tx.project.findUniqueOrThrow({ where: { id: proj.id } });
+    });
+
+    await writeAccessAudit({
+      actorId: admin.id,
+      action: "catalog2.admin_checkout",
+      after: { project_id: project.id, target: body.target, settlement: body.settlement, motivo: body.motivo, quote_id: quote.id },
+    });
+
+    if (body.settlement === "LINK_PAGAMENTO") {
+      if (targetOwner.owner_user_id) {
+        await prisma.systemAlert.create({
+          data: {
+            type: "catalog2.admin_checkout_link",
+            title: "Contratação aguardando pagamento",
+            message: `O administrador criou o pedido "${project.title}" (${project.project_code}) para ${targetOwner.name}. Motivo: ${body.motivo}. Acesse o projeto para finalizar o pagamento.`,
+            severity: "info",
+            category: "alerta",
+            entity_type: "project",
+            entity_id: project.id,
+            user_id: targetOwner.owner_user_id,
+            action_url: `/${body.target.kind === "agency" ? "agencia" : "company"}/projetos?produto=${project.id}`,
+          },
+        });
+      }
+      res.status(201).json({
+        project,
+        target: { kind: body.target.kind, id: targetOwner.id, name: targetOwner.name },
+        settlement: body.settlement,
+        message: "Pedido criado e pendente de pagamento. O responsável foi notificado.",
+      });
+      return;
+    }
+
+    let paymentResult;
+    try {
+      paymentResult = await withIdempotentRetry(() =>
+        prisma.$transaction((tx) =>
+          confirmPaymentAndGenerateProjectTasks(tx, {
+            projectId: project.id,
+            requesterUser: admin,
+            paymentMethod: body.settlement,
+            notes: body.motivo,
+            walletDebit: body.settlement === "ALLKOINS" ? { ownerType: body.target.kind, ownerId: body.target.id } : undefined,
+          }),
+        ),
+      );
+    } catch (err) {
+      if (err instanceof PaymentValidationError) {
+        res.status(err.statusCode).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
+
+    if (paymentResult.declined) {
+      res.status(402).json({ success: false, declined: true, message: paymentResult.declineReason ?? "Não foi possível concluir a contratação.", project });
+      return;
+    }
+
+    if (targetOwner.owner_user_id) {
+      await prisma.systemAlert.create({
+        data: {
+          type: "catalog2.admin_checkout_settled",
+          title: body.settlement === "BRINDE" ? "Contratação cortesia (brinde)" : "Contratação paga com sua carteira allkoin",
+          message: `O administrador contratou "${project.title}" (${project.project_code}) em nome de ${targetOwner.name}${body.settlement === "BRINDE" ? ", como cortesia (sem cobrança)" : ", debitado da carteira allkoin"}. Motivo: ${body.motivo}.`,
+          severity: "info",
+          category: "notificacao",
+          entity_type: "project",
+          entity_id: project.id,
+          user_id: targetOwner.owner_user_id,
+          action_url: `/${body.target.kind === "agency" ? "agencia" : "company"}/projetos?produto=${project.id}`,
+        },
+      });
+    }
+
+    const invoice = await prisma.invoice.findUnique({ where: { payment_id: paymentResult.payment.id } });
+
+    res.status(201).json({
+      success: true,
+      project: paymentResult.project,
+      payment: paymentResult.payment,
+      invoice,
+      target: { kind: body.target.kind, id: targetOwner.id, name: targetOwner.name },
+      settlement: body.settlement,
+      message: "Contratação concluída.",
+    });
   } catch (e) { handle(e, res, next); }
 });
 

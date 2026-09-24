@@ -386,7 +386,7 @@ export default function AcessoAosChamadosPage() {
   // enquanto a permissão ainda está sendo resolvida.
   const header = (
     <div
-      className="relative overflow-hidden flex flex-wrap items-center gap-3 rounded-xl px-4 py-3 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]"
+      className="relative overflow-hidden flex flex-wrap items-center gap-3 rounded-xl px-4 py-3 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] lg:h-[65px]"
       style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
     >
       <div className="flex items-center gap-2.5 min-w-0 flex-1">

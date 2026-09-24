@@ -549,6 +549,26 @@ describe("Checkout, pedido, financeiro, tarefas e aditivos do catalog2 (bloco 6/
     assert.ok(!raw.includes("imposto"));
   });
 
+  it("distribuição congelada 1 + 1 + 3 materializa três tarefas com as quantidades corretas", async () => {
+    const { product } = await mkPublishedProduct(`delivery-groups-${crypto.randomBytes(4).toString("hex")}`);
+    const quote = await api("/api/catalog2/quotes", {
+      method: "POST", token: CO_A.token,
+      body: { product: product.id, selection: { variation_option_keys: [], addon_keys: [], quantity: 5, delivery_groups: [1, 1, 3], answers: {} } },
+    });
+    assert.equal(quote.status, 201, JSON.stringify(quote.json));
+    const checkout = await api("/api/catalog2/checkout", { method: "POST", token: CO_A.token, body: { quote_ids: [quote.json.id], checkout_client_action_id: crypto.randomUUID() } });
+    assert.equal(checkout.status, 201, JSON.stringify(checkout.json));
+    const projectId = checkout.json.project.id;
+    projects.push(projectId);
+    const payment = await api("/api/payments/fake-checkout", { method: "POST", token: CO_A.token, body: { project_id: projectId } });
+    assert.equal(payment.status, 201, JSON.stringify(payment.json));
+
+    const tasks = await prisma.projectTask.findMany({ where: { project_id: projectId }, orderBy: { delivery_group_index: "asc" } });
+    assert.deepEqual(tasks.map((task) => task.delivery_quantity), [1, 1, 3]);
+    assert.deepEqual(tasks.map((task) => task.delivery_group_index), [0, 1, 2]);
+    assert.equal(new Set(tasks.map((task) => task.generation_key)).size, 3, "cada lote tem chave idempotente própria");
+  });
+
   // Item 3.2 (reunião 2026-09-14, "Conectar questionários à execução"):
   // fluxo completo cotação → checkout → pagamento → ProjectTask materializada
   // com briefing_snapshot fotografado do Catalog2Questionnaire da versão

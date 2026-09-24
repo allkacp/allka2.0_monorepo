@@ -246,7 +246,7 @@ describe("Construtor: regras, prazos e precificação", () => {
     assert.equal(detail.json.published_version_id, v1, "produto ainda aponta pra v1");
   });
 
-  it("validate: aponta pendências antes de publicar; força permite publicar com pendência comercial", async () => {
+  it("validate: aponta pendências antes de publicar; force não ignora pendências estruturais", async () => {
     const p = await api(`/api/admin/catalog2/products`, { method: "POST", token: TOKEN, body: { internal_name: `[TESTE LOCAL] Valida ${crypto.randomBytes(3).toString("hex")}` } });
     products.push(p.json.id);
     const v1 = p.json.versions[0].id;
@@ -257,6 +257,11 @@ describe("Construtor: regras, prazos e precificação", () => {
     // publicar sem force → 422
     const pub = await api(`/api/admin/catalog2/versions/${v1}/publish`, { method: "POST", token: TOKEN, body: {} });
     assert.equal(pub.status, 422);
+    // Force não pode mascarar título/classificação/tarefas ausentes. Só é
+    // aceito quando a validação reporta exclusivamente pendência comercial.
+    const forced = await api(`/api/admin/catalog2/versions/${v1}/publish`, { method: "POST", token: TOKEN, body: { force: true } });
+    assert.equal(forced.status, 422);
+    assert.equal(forced.json.code, "validation_force_not_allowed");
   });
 
   it("computePricing (unidade) é puro e determinístico dado o mesmo input", async () => {

@@ -15,7 +15,10 @@ import {
   MANUAL_WIDGET_MAP,
   mergeManualData,
 } from "./constants/admin-dashboard.constants";
-import { generatePublicToken, buildShareUrl } from "./services/admin-dashboard-service";
+import {
+  generatePublicToken,
+  buildShareUrl,
+} from "./services/admin-dashboard-service";
 import { AlertsCenter } from "./components/admin-dashboard-alerts-center";
 import type {
   WidgetType,
@@ -152,22 +155,34 @@ import { Switch } from "@/components/ui/switch"; // Added Switch
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import { getDashboardStorageKey, getSensitiveDashboardStorageKey } from "@/lib/dashboard-storage-scope";
+import {
+  getDashboardStorageKey,
+  getSensitiveDashboardStorageKey,
+} from "@/lib/dashboard-storage-scope";
 import { ShareLinksPanel } from "@/features/dashboards/shared/share-links-panel";
-import { ShareSlugField, previewNormalizeSlug, suggestAvailableSlug } from "@/features/dashboards/shared/share-slug-field";
+import {
+  ShareSlugField,
+  previewNormalizeSlug,
+  suggestAvailableSlug,
+} from "@/features/dashboards/shared/share-slug-field";
 import { ShareCreateForm } from "@/features/dashboards/shared/share-create-form";
 import { useDashboardExport } from "@/features/dashboards/shared/use-dashboard-export";
 import { DashboardExportOverlay } from "@/features/dashboards/shared/dashboard-export-overlay";
-import { useDashboardTemplate, TEMPLATE_DASHBOARD_ID } from "@/features/dashboards/shared/use-dashboard-template";
+import {
+  useDashboardTemplate,
+  TEMPLATE_DASHBOARD_ID,
+} from "@/features/dashboards/shared/use-dashboard-template";
 import { useDashboardWidgetEditor } from "@/features/dashboards/shared/dashboard-widget-editor";
-import { normalizeWidgetsColSpan, serializeWidgetConfig } from "@/features/dashboards/shared/dashboard-widget-colspan";
+import {
+  normalizeWidgetsColSpan,
+  serializeWidgetConfig,
+} from "@/features/dashboards/shared/dashboard-widget-colspan";
 import { DashboardEditorScreen } from "@/features/dashboards/shared/dashboard-editor-screen";
 import { DashboardTemplateContentList } from "@/features/dashboards/shared/dashboard-template-content";
 import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-control";
 import { dashboardToolbarControlClass } from "@/features/dashboards/shared/dashboard-toolbar";
 import { DashboardInfoHint } from "@/features/dashboards/shared/dashboard-info-hint";
 import { useGlobalDashboardPeriod } from "@/features/dashboards/shared/use-dashboard-period";
-
 
 const formatDate = (date: Date, formatStr: string) => {
   const pad = (n: number) => n.toString().padStart(2, "0");
@@ -194,210 +209,207 @@ const formatDate = (date: Date, formatStr: string) => {
 // )
 
 export const ADMIN_WIDGET_LIBRARY: WidgetLibraryItem[] = [
-    {
-      id: "metrics",
-      name: "Cards de Métricas",
-      description: "Principais métricas (Usuários, Empresas, Projetos, etc.)",
-      icon: LayoutGrid,
-      color: "blue",
-    },
-    {
-      id: "accountsReceivable",
-      name: "À Receber",
-      description:
-        "Valores garantidos a receber por tipo (Planos, Pós-pagos, Outros)",
-      icon: DollarSign,
-      color: "green",
-    },
-    {
-      id: "platformActivities",
-      name: "Atividades da Plataforma",
-      description: "Agências ativas, tempo de uso, MAU e DAU com crescimento",
-      icon: Activity,
-      color: "blue",
-    },
-    {
-      id: "tasks",
-      name: "Tarefas (Resumo)",
-      description: "Tarefas executadas, em execução e contratadas com SLA",
-      icon: CheckSquare,
-      color: "green",
-    },
-    {
-      id: "nomads",
-      name: "Nômades",
-      description: "Total, ativos e inativos com variações percentuais",
-      icon: Users,
-      color: "indigo",
-    },
-    {
-      id: "nomadsIndicators",
-      name: "Indicadores dos Nômades",
-      description: "KPIs de desempenho, atividade e qualidade dos nômades",
-      icon: Users,
-      color: "purple",
-    },
-    {
-      id: "nomadsRanking",
-      name: "Ranking de Nômades",
-      description: "Top 10 nômades por avaliação e projetos concluídos",
-      icon: Trophy,
-      color: "yellow",
-    },
-    {
-      id: "agenciesRanking",
-      name: "Ranking de Agências",
-      description: "Top 10 agências por projetos e contribuição",
-      icon: Building2,
-      color: "cyan",
-    },
-    {
-      id: "statusOverview",
-      name: "Visão Geral por Status",
-      description: "Quantidade de Projetos, Tarefas e Leads por status",
-      icon: LayoutGrid,
-      color: "blue",
-    },
-    {
-      id: "cmv",
-      name: "CMV (Custo de Mercadoria Vendida)",
-      description:
-        "Custos diretos (nômades, impostos, comissões) vs faturamento",
-      icon: Calculator,
-      color: "orange",
-    },
-    {
-      id: "ltv",
-      name: "LTV (Lifetime Value)",
-      description:
-        "Valor médio que um cliente gera durante todo o relacionamento",
-      icon: TrendingUp,
-      color: "purple",
-    },
-    {
-      id: "mrr",
-      name: "MRR (Receita Recorrente)",
-      description:
-        "Monthly Recurring Revenue com New, Expansion, Contraction e Churn",
-      icon: TrendingUp,
-      color: "red",
-    },
-    {
-      id: "churn",
-      name: "CHURN",
-      description: "Inativações de contas por tipo e projetos cancelados",
-      icon: TrendingDown,
-      color: "red",
-    },
-    {
-      id: "revenue",
-      name: "Receita",
-      description: "Receita total por tipo (Plano, Recorrente, Avulsa)",
-      icon: DollarSign,
-      color: "emerald",
-    },
-    {
-      id: "averageTicket",
-      name: "Ticket Médio",
-      description: "Ticket médio geral, por tipo de conta e por projeto",
-      icon: DollarSign,
-      color: "teal",
-    },
-    {
-      id: "activeProjectsWidget",
-      name: "Projetos Ativos",
-      description:
-        "Projetos ativos por tipo (Agências e Lead Premium) com novos projetos",
-      icon: Briefcase,
-      color: "indigo",
-    },
-    {
-      id: "creditPlans",
-      name: "Planos de Crédito",
-      description:
-        "Entrada de receita por tipo de plano com novas contratações",
-      icon: CreditCard,
-      color: "slate",
-    },
-    {
-      id: "activity",
-      name: "Atividade Recente",
-      description: "Últimas ações e eventos no sistema",
-      icon: Activity,
-      color: "amber",
-    },
-    {
-      id: "alerts",
-      name: "Alertas Rápidos",
-      description: "Notificações importantes que requerem atenção",
-      icon: Bell,
-      color: "orange",
-    },
-    {
-      id: "performers",
-      name: "Melhores Nômades",
-      description: "Top performers baseado em avaliações e projetos",
-      icon: Award,
-      color: "yellow",
-    },
-    {
-      id: "quickActions",
-      name: "Ações Rápidas",
-      description: "Atalhos para tarefas administrativas comuns",
-      icon: Zap,
-      color: "sky",
-    },
-    {
-      id: "userDistribution",
-      name: "Distribuição de Usuários",
-      description: "Breakdown por tipo de conta",
-      icon: Users,
-      color: "blue",
-    },
-    {
-      id: "activeUsers",
-      name: "Usuários Ativos",
-      description: "Usuários ativos por tipo de conta no período",
-      icon: UserCheck,
-      color: "green",
-    },
-    {
-      id: "systemAlerts",
-      name: "Alertas do Sistema",
-      description: "Avisos importantes sobre o sistema",
-      icon: AlertTriangle,
-      color: "red",
-    },
-    {
-      id: "adminProfiles",
-      name: "Perfis Admin",
-      description: "Membros da equipe administrativa",
-      icon: Shield,
-      color: "purple",
-    },
-    {
-      id: "permissionMatrix",
-      name: "Matriz de Permissões",
-      description: "Visualização das permissões por módulo e perfil",
-      icon: Lock,
-      color: "orange",
-    },
-    {
-      id: "managementTools",
-      name: "Ferramentas de Gestão",
-      description: "Acesso rápido a ferramentas administrativas essenciais",
-      icon: Settings,
-      color: "gray",
-    },
-    {
-      id: "partnerProgram",
-      name: "Programa Partner",
-      description:
-        "Convites enviados, partners ativos e distribuição por nível",
-      icon: Award,
-      color: "amber",
-    },
-  ];
+  {
+    id: "metrics",
+    name: "Cards de Métricas",
+    description: "Principais métricas (Usuários, Empresas, Projetos, etc.)",
+    icon: LayoutGrid,
+    color: "blue",
+  },
+  {
+    id: "accountsReceivable",
+    name: "À Receber",
+    description:
+      "Valores garantidos a receber por tipo (Planos, Pós-pagos, Outros)",
+    icon: DollarSign,
+    color: "green",
+  },
+  {
+    id: "platformActivities",
+    name: "Atividades da Plataforma",
+    description: "Agências ativas, tempo de uso, MAU e DAU com crescimento",
+    icon: Activity,
+    color: "blue",
+  },
+  {
+    id: "tasks",
+    name: "Tarefas (Resumo)",
+    description: "Tarefas executadas, em execução e contratadas com SLA",
+    icon: CheckSquare,
+    color: "green",
+  },
+  {
+    id: "nomads",
+    name: "Nômades",
+    description: "Total, ativos e inativos com variações percentuais",
+    icon: Users,
+    color: "indigo",
+  },
+  {
+    id: "nomadsIndicators",
+    name: "Indicadores dos Nômades",
+    description: "KPIs de desempenho, atividade e qualidade dos nômades",
+    icon: Users,
+    color: "purple",
+  },
+  {
+    id: "nomadsRanking",
+    name: "Ranking de Nômades",
+    description: "Top 10 nômades por avaliação e projetos concluídos",
+    icon: Trophy,
+    color: "yellow",
+  },
+  {
+    id: "agenciesRanking",
+    name: "Ranking de Agências",
+    description: "Top 10 agências por projetos e contribuição",
+    icon: Building2,
+    color: "cyan",
+  },
+  {
+    id: "statusOverview",
+    name: "Visão Geral por Status",
+    description: "Quantidade de Projetos, Tarefas e Leads por status",
+    icon: LayoutGrid,
+    color: "blue",
+  },
+  {
+    id: "cmv",
+    name: "CMV (Custo de Mercadoria Vendida)",
+    description: "Custos diretos (nômades, impostos, comissões) vs faturamento",
+    icon: Calculator,
+    color: "orange",
+  },
+  {
+    id: "ltv",
+    name: "LTV (Lifetime Value)",
+    description:
+      "Valor médio que um cliente gera durante todo o relacionamento",
+    icon: TrendingUp,
+    color: "purple",
+  },
+  {
+    id: "mrr",
+    name: "MRR (Receita Recorrente)",
+    description:
+      "Monthly Recurring Revenue com New, Expansion, Contraction e Churn",
+    icon: TrendingUp,
+    color: "red",
+  },
+  {
+    id: "churn",
+    name: "CHURN",
+    description: "Inativações de contas por tipo e projetos cancelados",
+    icon: TrendingDown,
+    color: "red",
+  },
+  {
+    id: "revenue",
+    name: "Receita",
+    description: "Receita total por tipo (Plano, Recorrente, Avulsa)",
+    icon: DollarSign,
+    color: "emerald",
+  },
+  {
+    id: "averageTicket",
+    name: "Ticket Médio",
+    description: "Ticket médio geral, por tipo de conta e por projeto",
+    icon: DollarSign,
+    color: "teal",
+  },
+  {
+    id: "activeProjectsWidget",
+    name: "Projetos Ativos",
+    description:
+      "Projetos ativos por tipo (Agências e Lead Premium) com novos projetos",
+    icon: Briefcase,
+    color: "indigo",
+  },
+  {
+    id: "creditPlans",
+    name: "Planos de Crédito",
+    description: "Entrada de receita por tipo de plano com novas contratações",
+    icon: CreditCard,
+    color: "slate",
+  },
+  {
+    id: "activity",
+    name: "Atividade Recente",
+    description: "Últimas ações e eventos no sistema",
+    icon: Activity,
+    color: "amber",
+  },
+  {
+    id: "alerts",
+    name: "Alertas Rápidos",
+    description: "Notificações importantes que requerem atenção",
+    icon: Bell,
+    color: "orange",
+  },
+  {
+    id: "performers",
+    name: "Melhores Nômades",
+    description: "Top performers baseado em avaliações e projetos",
+    icon: Award,
+    color: "yellow",
+  },
+  {
+    id: "quickActions",
+    name: "Ações Rápidas",
+    description: "Atalhos para tarefas administrativas comuns",
+    icon: Zap,
+    color: "sky",
+  },
+  {
+    id: "userDistribution",
+    name: "Distribuição de Usuários",
+    description: "Breakdown por tipo de conta",
+    icon: Users,
+    color: "blue",
+  },
+  {
+    id: "activeUsers",
+    name: "Usuários Ativos",
+    description: "Usuários ativos por tipo de conta no período",
+    icon: UserCheck,
+    color: "green",
+  },
+  {
+    id: "systemAlerts",
+    name: "Alertas do Sistema",
+    description: "Avisos importantes sobre o sistema",
+    icon: AlertTriangle,
+    color: "red",
+  },
+  {
+    id: "adminProfiles",
+    name: "Perfis Admin",
+    description: "Membros da equipe administrativa",
+    icon: Shield,
+    color: "purple",
+  },
+  {
+    id: "permissionMatrix",
+    name: "Matriz de Permissões",
+    description: "Visualização das permissões por módulo e perfil",
+    icon: Lock,
+    color: "orange",
+  },
+  {
+    id: "managementTools",
+    name: "Ferramentas de Gestão",
+    description: "Acesso rápido a ferramentas administrativas essenciais",
+    icon: Settings,
+    color: "gray",
+  },
+  {
+    id: "partnerProgram",
+    name: "Programa Partner",
+    description: "Convites enviados, partners ativos e distribuição por nível",
+    icon: Award,
+    color: "amber",
+  },
+];
 
 export function AdminDashboardPage() {
   const { sidebarCollapsed } = useSidebar(); // Get sidebar collapse state
@@ -414,7 +426,16 @@ export function AdminDashboardPage() {
   // hidratado do localStorage já no 1º render e persistido por perfil,
   // sem a corrida entre o padrão e o efeito de gravação (ver
   // useGlobalDashboardPeriod em features/dashboards/shared/use-dashboard-period.ts).
-  type GlobalDashboardPeriodType = "today" | "yesterday" | "last_7_days" | "last_30_days" | "this_month" | "last_month" | "this_quarter" | "all_time" | "custom";
+  type GlobalDashboardPeriodType =
+    | "today"
+    | "yesterday"
+    | "last_7_days"
+    | "last_30_days"
+    | "this_month"
+    | "last_month"
+    | "this_quarter"
+    | "all_time"
+    | "custom";
   const [globalPeriod, setGlobalPeriod] =
     useGlobalDashboardPeriod<GlobalDashboardPeriodType>("admin");
 
@@ -428,9 +449,16 @@ export function AdminDashboardPage() {
 
   // Real revenue data from API — replaces generateDashboardData().revenue when loaded.
   const [revenueData, setRevenueData] = useState<{
-    total: number; creditPlan: number; recurring: number; oneTime: number;
-    projected: number; growth: number;
-    totalGrowth: number; creditPlanGrowth: number; recurringGrowth: number; oneTimeGrowth: number;
+    total: number;
+    creditPlan: number;
+    recurring: number;
+    oneTime: number;
+    projected: number;
+    growth: number;
+    totalGrowth: number;
+    creditPlanGrowth: number;
+    recurringGrowth: number;
+    oneTimeGrowth: number;
   } | null>(null);
   const [revenueLoading, setRevenueLoading] = useState(false);
   const [revenueError, setRevenueError] = useState(false);
@@ -507,7 +535,10 @@ export function AdminDashboardPage() {
   const [historicalData, setHistoricalData] = useState<
     Record<string, ManualDataEntry>
   >(() => {
-    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "admin");
+    const key = getSensitiveDashboardStorageKey(
+      "dashboard_historical_data",
+      "admin",
+    );
     if (!key) return {};
     try {
       const saved = localStorage.getItem(key);
@@ -561,8 +592,10 @@ export function AdminDashboardPage() {
   // (adminExtras.accountsReceivableBreakdown.creditPlans, mesma fonte do
   // card "Contas a Receber"). Não existe segmentação por nível de plano
   // (Básico/Partner/Premium) no schema — nunca incluída aqui de propósito.
-  const creditPlanTotal = adminExtras?.accountsReceivableBreakdown?.creditPlans as number | undefined;
-  const creditPlanViewData = typeof creditPlanTotal === "number" ? { total: creditPlanTotal } : null;
+  const creditPlanTotal = adminExtras?.accountsReceivableBreakdown
+    ?.creditPlans as number | undefined;
+  const creditPlanViewData =
+    typeof creditPlanTotal === "number" ? { total: creditPlanTotal } : null;
   // Ticket Médio: só o geral e por-projeto (POST /dashboard/widgets) são
   // reais. Segmentação por tipo de conta não existe (nenhuma invoice tem
   // projeto/agência vinculado) — nunca incluída aqui.
@@ -570,30 +603,50 @@ export function AdminDashboardPage() {
     ? {
         general: wd.averageTicket.general as number,
         perProject: wd.averageTicket.perProject as number,
-        trendData: (wd.averageTicket.trendData as number[] | undefined) ?? Array(6).fill(wd.averageTicket.general),
+        trendData:
+          (wd.averageTicket.trendData as number[] | undefined) ??
+          Array(6).fill(wd.averageTicket.general),
       }
     : null;
 
-  const apW = wd ? { ...dashboardData.activeProjects, ...wd.activeProjects } : dashboardData.activeProjects;
+  const apW = wd
+    ? { ...dashboardData.activeProjects, ...wd.activeProjects }
+    : dashboardData.activeProjects;
   const mrrW = wd ? { ...dashboardData.mrr, ...wd.mrr } : dashboardData.mrr;
-  const churnW = wd ? { ...dashboardData.churn, ...wd.churn } : dashboardData.churn;
+  const churnW = wd
+    ? { ...dashboardData.churn, ...wd.churn }
+    : dashboardData.churn;
   const ltvW = wd ? { ...dashboardData.ltv, ...wd.ltv } : dashboardData.ltv;
-  const paW = wd ? { ...dashboardData.platformActivities, ...wd.platformActivities } : dashboardData.platformActivities;
-  const nmW = wd ? { ...dashboardData.nomads, ...wd.nomads } : dashboardData.nomads;
-  const soW = wd ? { ...dashboardData.statusOverview, ...wd.statusOverview } : dashboardData.statusOverview;
-  const arW = wd ? { ...dashboardData.accountsReceivable, ...wd.accountsReceivable } : dashboardData.accountsReceivable;
+  const paW = wd
+    ? { ...dashboardData.platformActivities, ...wd.platformActivities }
+    : dashboardData.platformActivities;
+  const nmW = wd
+    ? { ...dashboardData.nomads, ...wd.nomads }
+    : dashboardData.nomads;
+  const soW = wd
+    ? { ...dashboardData.statusOverview, ...wd.statusOverview }
+    : dashboardData.statusOverview;
+  const arW = wd
+    ? { ...dashboardData.accountsReceivable, ...wd.accountsReceivable }
+    : dashboardData.accountsReceivable;
   // Igual a arW, mas também traz o breakdown por categoria (creditPlans/
   // postPaid/others) de GET /dashboard/admin-widgets — usado tanto pelo
   // card da grade (wArW) quanto pelo WidgetDetailsModal, pra não ter duas
   // fontes divergentes pro mesmo widget "Contas a Receber".
-  const arWFull = wd ? { ...arW, ...(adminExtras?.accountsReceivableBreakdown ?? {}) } : arW;
-  const tasksW = wd ? { ...dashboardData.tasks, ...wd.tasks } : dashboardData.tasks;
+  const arWFull = wd
+    ? { ...arW, ...(adminExtras?.accountsReceivableBreakdown ?? {}) }
+    : arW;
+  const tasksW = wd
+    ? { ...dashboardData.tasks, ...wd.tasks }
+    : dashboardData.tasks;
   const niW = dashboardData.nomadsIndicators;
   // Distribuição real de usuários por tipo de conta (GET
   // /api/dashboard/admin-widgets) — antes 100% mock hardcoded.
-  const realUserDist: { type: string; count: number }[] | undefined = adminExtras?.userDistribution;
+  const realUserDist: { type: string; count: number }[] | undefined =
+    adminExtras?.userDistribution;
   const userDistTotal = realUserDist?.reduce((acc, r) => acc + r.count, 0) ?? 0;
-  const byType = (type: string) => realUserDist?.find((r) => r.type === type)?.count ?? 0;
+  const byType = (type: string) =>
+    realUserDist?.find((r) => r.type === type)?.count ?? 0;
   const auW = realUserDist
     ? {
         total: userDistTotal,
@@ -619,11 +672,23 @@ export function AdminDashboardPage() {
               pending: adminExtras.partnerProgram.invited,
               accepted: adminExtras.partnerProgram.active,
               mrrGenerated: adminExtras.partnerProgram.revenueGenerated,
-              diamond: adminExtras.partnerProgram.byLevel?.diamante ?? adminExtras.partnerProgram.byLevel?.diamond ?? 0,
+              diamond:
+                adminExtras.partnerProgram.byLevel?.diamante ??
+                adminExtras.partnerProgram.byLevel?.diamond ??
+                0,
               platinum: adminExtras.partnerProgram.byLevel?.platinum ?? 0,
-              gold: adminExtras.partnerProgram.byLevel?.gold ?? adminExtras.partnerProgram.byLevel?.ouro ?? 0,
-              silver: adminExtras.partnerProgram.byLevel?.silver ?? adminExtras.partnerProgram.byLevel?.prata ?? 0,
-              bronze: adminExtras.partnerProgram.byLevel?.bronze ?? adminExtras.partnerProgram.byLevel?.bronze ?? 0,
+              gold:
+                adminExtras.partnerProgram.byLevel?.gold ??
+                adminExtras.partnerProgram.byLevel?.ouro ??
+                0,
+              silver:
+                adminExtras.partnerProgram.byLevel?.silver ??
+                adminExtras.partnerProgram.byLevel?.prata ??
+                0,
+              bronze:
+                adminExtras.partnerProgram.byLevel?.bronze ??
+                adminExtras.partnerProgram.byLevel?.bronze ??
+                0,
             }
           : {}),
       }
@@ -637,7 +702,10 @@ export function AdminDashboardPage() {
     { type: "this_month" as const, label: "Este mês" },
     { type: "last_month" as const, label: "Mês passado" },
     { type: "this_quarter" as const, label: "Trimestre atual" },
-    { type: "all_time" as const, label: "Todo o período (inclui plataforma antiga)" },
+    {
+      type: "all_time" as const,
+      label: "Todo o período (inclui plataforma antiga)",
+    },
     { type: "custom" as const, label: "Intervalo personalizado" },
   ];
 
@@ -816,13 +884,21 @@ export function AdminDashboardPage() {
     apiClient
       .getRevenue(from.toISOString(), to.toISOString())
       .then((d: any) => {
-        if (!cancelled) { setRevenueData(d); setRevenueLoading(false); }
+        if (!cancelled) {
+          setRevenueData(d);
+          setRevenueLoading(false);
+        }
       })
       .catch((err: any) => {
         console.error("[Receita] falha ao buscar /dashboard/revenue:", err);
-        if (!cancelled) { setRevenueLoading(false); setRevenueError(true); }
+        if (!cancelled) {
+          setRevenueLoading(false);
+          setRevenueError(true);
+        }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [globalPeriod, widgetPeriods]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch real data for all widgets whenever the global period changes.
@@ -830,46 +906,81 @@ export function AdminDashboardPage() {
     if (typeof (apiClient as any).getDashboardWidgets !== "function") return;
     let cancelled = false;
     setWidgetDataError(false);
-    const { from, to } = getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to);
+    const { from, to } = getDateRangeFromPeriod(
+      globalPeriod.type,
+      globalPeriod.from,
+      globalPeriod.to,
+    );
     (apiClient as any)
       .getDashboardWidgets(from, to)
-      .then((d: any) => { if (!cancelled) setWidgetData(d); })
+      .then((d: any) => {
+        if (!cancelled) setWidgetData(d);
+      })
       .catch((err: any) => {
         if (cancelled) return;
-        console.error("[AdminDashboard] Falha ao carregar /dashboard/widgets:", err);
+        console.error(
+          "[AdminDashboard] Falha ao carregar /dashboard/widgets:",
+          err,
+        );
         setWidgetDataError(true);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [globalPeriod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Métricas adicionais reais do Admin (rankings, breakdown financeiro,
   // perfis administrativos) — ver GET /api/dashboard/admin-widgets.
   useEffect(() => {
-    if (typeof (apiClient as any).getAdminDashboardWidgets !== "function") return;
+    if (typeof (apiClient as any).getAdminDashboardWidgets !== "function")
+      return;
     let cancelled = false;
     setAdminExtrasError(false);
-    const { from, to } = getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to);
+    const { from, to } = getDateRangeFromPeriod(
+      globalPeriod.type,
+      globalPeriod.from,
+      globalPeriod.to,
+    );
     (apiClient as any)
       .getAdminDashboardWidgets(from, to)
-      .then((d: any) => { if (!cancelled) setAdminExtras(d); })
+      .then((d: any) => {
+        if (!cancelled) setAdminExtras(d);
+      })
       .catch((err: any) => {
         if (cancelled) return;
-        console.error("[AdminDashboard] Falha ao carregar /dashboard/admin-widgets:", err);
+        console.error(
+          "[AdminDashboard] Falha ao carregar /dashboard/admin-widgets:",
+          err,
+        );
         setAdminExtrasError(true);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [globalPeriod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false;
-    const { from, to } = getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to);
+    const { from, to } = getDateRangeFromPeriod(
+      globalPeriod.type,
+      globalPeriod.from,
+      globalPeriod.to,
+    );
     apiClient
       .getDRE(from.toISOString(), to.toISOString())
-      .then((d: any) => { if (!cancelled) setDreData(d); })
+      .then((d: any) => {
+        if (!cancelled) setDreData(d);
+      })
       .catch((err: any) => {
-        if (!cancelled) console.error("[AdminDashboard] Falha ao carregar /dashboard/dre:", err);
+        if (!cancelled)
+          console.error(
+            "[AdminDashboard] Falha ao carregar /dashboard/dre:",
+            err,
+          );
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [globalPeriod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setWidgetCustomPeriod = (widgetId: string, period: string) => {
@@ -1402,14 +1513,23 @@ export function AdminDashboardPage() {
   );
   // Exportação — ponto único reutilizado pelas 6 telas (ver
   // features/dashboards/shared/use-dashboard-export.ts).
-  const exportDashboardTitle = savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Admin";
-  const { state: exportState, exportAs: handleExportAs, reset: resetExportState } = useDashboardExport(
-    "dashboard-export-area",
-    exportDashboardTitle,
-  );
-  const isExporting = exportState.stage !== "idle" && exportState.stage !== "success" && exportState.stage !== "error";
-  const { template: profileTemplate, visibleContents: templateContents, dismissContent: dismissTemplateContent, reload: reloadTemplate } =
-    useDashboardTemplate("ADMIN");
+  const exportDashboardTitle =
+    savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Admin";
+  const {
+    state: exportState,
+    exportAs: handleExportAs,
+    reset: resetExportState,
+  } = useDashboardExport("dashboard-export-area", exportDashboardTitle);
+  const isExporting =
+    exportState.stage !== "idle" &&
+    exportState.stage !== "success" &&
+    exportState.stage !== "error";
+  const {
+    template: profileTemplate,
+    visibleContents: templateContents,
+    dismissContent: dismissTemplateContent,
+    reload: reloadTemplate,
+  } = useDashboardTemplate("ADMIN");
   const appliedTemplateRef = useRef<string | null>(null);
   const [showSaveDashboardDialog, setShowSaveDashboardDialog] = useState(false);
   const [newDashboardName, setNewDashboardName] = useState("");
@@ -1451,7 +1571,8 @@ export function AdminDashboardPage() {
   // (mesmo mecanismo usado em agency/company/leader/partner).
   const [shareRefreshSignal, setShareRefreshSignal] = useState(0);
   const [shareSlug, setShareSlug] = useState("");
-  const [sharePendingLink, setSharePendingLink] = useState<DashboardShareLink | null>(null);
+  const [sharePendingLink, setSharePendingLink] =
+    useState<DashboardShareLink | null>(null);
   // ──────────────────────────────────────────────────────────────────────────
 
   // ── Historical modal states ──────────────────────────────────────────────────
@@ -1470,7 +1591,8 @@ export function AdminDashboardPage() {
   // Por isso o valor "grudento" usa um nome diferente (visibleDetailsWidgetId).
   const detailsWidgetStickyRef = useRef<string | null>(null);
   if (detailsWidgetId) detailsWidgetStickyRef.current = detailsWidgetId;
-  const visibleDetailsWidgetId = detailsWidgetId ?? detailsWidgetStickyRef.current;
+  const visibleDetailsWidgetId =
+    detailsWidgetId ?? detailsWidgetStickyRef.current;
   const [showHistoricalModal, setShowHistoricalModal] = useState(false);
   // Reabre a tela certa quando o usuário chega aqui clicando num pin de
   // sub-tela na Bandeja de Telas (ex.: pinnou "Histórico", navegou pra
@@ -1556,7 +1678,10 @@ export function AdminDashboardPage() {
       [histModalKey]: histFormData as ManualDataEntry,
     };
     setHistoricalData(updated);
-    const key = getSensitiveDashboardStorageKey("dashboard_historical_data", "admin");
+    const key = getSensitiveDashboardStorageKey(
+      "dashboard_historical_data",
+      "admin",
+    );
     if (key) localStorage.setItem(key, JSON.stringify(updated));
     setShowHistoricalModal(false);
     const [y, m] = histModalKey.split("-").map(Number);
@@ -1570,7 +1695,10 @@ export function AdminDashboardPage() {
     const updated = { ...historicalData };
     delete updated[key];
     setHistoricalData(updated);
-    const storageKey = getSensitiveDashboardStorageKey("dashboard_historical_data", "admin");
+    const storageKey = getSensitiveDashboardStorageKey(
+      "dashboard_historical_data",
+      "admin",
+    );
     if (storageKey) localStorage.setItem(storageKey, JSON.stringify(updated));
   };
   const handleOpenShareDialog = (dashboardId: string) => {
@@ -1634,7 +1762,11 @@ export function AdminDashboardPage() {
     const effectivePeriod =
       shareTarget.type === "widget"
         ? getWidgetPeriod(shareTarget.id)
-        : getDateRangeFromPeriod(globalPeriod.type, globalPeriod.from, globalPeriod.to);
+        : getDateRangeFromPeriod(
+            globalPeriod.type,
+            globalPeriod.from,
+            globalPeriod.to,
+          );
     setShareGenerating(true);
     try {
       const { token, slug, link } = await generatePublicToken(config, {
@@ -1756,7 +1888,10 @@ export function AdminDashboardPage() {
         getDashboardStorageKey("saved-dashboards", "admin"),
         JSON.stringify(updatedDashboards),
       );
-      localStorage.setItem(getDashboardStorageKey("current-dashboard-id", "admin"), newDashboard.id);
+      localStorage.setItem(
+        getDashboardStorageKey("current-dashboard-id", "admin"),
+        newDashboard.id,
+      );
       setCurrentDashboardId(newDashboard.id);
       setWidgets(updated);
       localStorage.setItem(
@@ -1819,7 +1954,8 @@ export function AdminDashboardPage() {
           normalizeWidgetsColSpan(
             parsedConfig.map((w) => ({
               ...w,
-              id: w.id || `${w.type}-${Math.random().toString(36).substr(2, 9)}`,
+              id:
+                w.id || `${w.type}-${Math.random().toString(36).substr(2, 9)}`,
             })),
           ),
         ); // Ensure id + colSpan exist
@@ -1957,7 +2093,9 @@ export function AdminDashboardPage() {
     if (currentDashboard) {
       setCurrentDashboardId(currentDashboard.id);
       setWidgets(normalizeWidgetsColSpan(currentDashboard.widgets));
-      setWidgetPeriods(currentDashboard.widgetPeriods ?? legacyFlatWidgetPeriods);
+      setWidgetPeriods(
+        currentDashboard.widgetPeriods ?? legacyFlatWidgetPeriods,
+      );
     }
   }, []);
 
@@ -1966,9 +2104,15 @@ export function AdminDashboardPage() {
   // `widgets`, já que a coluna é Json livre — sem migration). Templates
   // antigos não têm esse campo em nenhum widget: filter() não acha nada,
   // volta [] e todo widget cai no fallback Global — compatível por padrão.
-  function templateWidgetPeriods(templateWidgets: any[] | undefined): WidgetPeriodOverride[] {
+  function templateWidgetPeriods(
+    templateWidgets: any[] | undefined,
+  ): WidgetPeriodOverride[] {
     return (templateWidgets ?? [])
-      .filter((w) => w?.periodOverride?.mode === "custom" && w?.periodOverride?.customPeriod)
+      .filter(
+        (w) =>
+          w?.periodOverride?.mode === "custom" &&
+          w?.periodOverride?.customPeriod,
+      )
       .map((w) => ({
         widgetId: w.id,
         mode: "custom" as const,
@@ -1984,7 +2128,9 @@ export function AdminDashboardPage() {
     if (appliedTemplateRef.current === marker) return;
     appliedTemplateRef.current = marker;
     setCurrentDashboardId(TEMPLATE_DASHBOARD_ID);
-    setWidgets(normalizeWidgetsColSpan(profileTemplate.widgets as WidgetState[]));
+    setWidgets(
+      normalizeWidgetsColSpan(profileTemplate.widgets as WidgetState[]),
+    );
     setWidgetPeriods(templateWidgetPeriods(profileTemplate.widgets));
   }, [profileTemplate]);
 
@@ -2015,7 +2161,10 @@ export function AdminDashboardPage() {
       );
       return next;
     });
-    localStorage.setItem(getDashboardStorageKey("current-dashboard-id", "admin"), id);
+    localStorage.setItem(
+      getDashboardStorageKey("current-dashboard-id", "admin"),
+      id,
+    );
     setCurrentDashboardId(id);
     setWidgets(widgetsCopy);
     setWidgetPeriods(periodsCopy);
@@ -2040,7 +2189,10 @@ export function AdminDashboardPage() {
       getDashboardStorageKey("dashboard-metric-cards", "admin"),
       JSON.stringify(metricCards),
     );
-    localStorage.setItem(getDashboardStorageKey("dashboard-widget-size", "admin"), widgetSize);
+    localStorage.setItem(
+      getDashboardStorageKey("dashboard-widget-size", "admin"),
+      widgetSize,
+    );
     // Save widget period overrides to localStorage
     localStorage.setItem(
       getDashboardStorageKey("dashboard-widget-periods", "admin"),
@@ -2075,7 +2227,10 @@ export function AdminDashboardPage() {
     setSavedDashboards((prev) => {
       const current = prev.find((d) => d.id === currentDashboardId);
       if (!current) return prev;
-      if (JSON.stringify(current.widgetPeriods ?? []) === JSON.stringify(widgetPeriods)) {
+      if (
+        JSON.stringify(current.widgetPeriods ?? []) ===
+        JSON.stringify(widgetPeriods)
+      ) {
         return prev;
       }
       const next = prev.map((d) =>
@@ -2247,22 +2402,30 @@ export function AdminDashboardPage() {
     // getMetricsForPeriod(); sem crescimento inventado (change:0/trend neutro).
     const realOnly = {
       totalProjects: {
-        value: apiStats ? (apiStats.projects?.total ?? 0).toLocaleString("pt-BR") : "—",
+        value: apiStats
+          ? (apiStats.projects?.total ?? 0).toLocaleString("pt-BR")
+          : "—",
         change: 0,
         trend: "up" as const,
       },
       pendingPayments: {
-        value: apiStats ? (apiStats.payments?.pendingCount ?? 0).toLocaleString("pt-BR") : "—",
+        value: apiStats
+          ? (apiStats.payments?.pendingCount ?? 0).toLocaleString("pt-BR")
+          : "—",
         change: 0,
         trend: "up" as const,
       },
       linkedProducts: {
-        value: apiStats ? (apiStats.projectProducts?.total ?? 0).toLocaleString("pt-BR") : "—",
+        value: apiStats
+          ? (apiStats.projectProducts?.total ?? 0).toLocaleString("pt-BR")
+          : "—",
         change: 0,
         trend: "up" as const,
       },
       catalogProducts: {
-        value: apiStats ? (apiStats.catalogProducts?.total ?? 0).toLocaleString("pt-BR") : "—",
+        value: apiStats
+          ? (apiStats.catalogProducts?.total ?? 0).toLocaleString("pt-BR")
+          : "—",
         change: 0,
         trend: "up" as const,
       },
@@ -2288,9 +2451,13 @@ export function AdminDashboardPage() {
     // carregou OU se a resposta do backend vier sem payments.paidAmount como número —
     // um campo ausente é uma resposta incompleta, não "confirmado zero".
     const hasRealPaidAmount =
-      !!apiStats && !!apiStats.payments && Number.isFinite(apiStats.payments.paidAmount);
+      !!apiStats &&
+      !!apiStats.payments &&
+      Number.isFinite(apiStats.payments.paidAmount);
     const revenueReal = {
-      value: hasRealPaidAmount ? `R$ ${(apiStats!.payments!.paidAmount / 1000).toFixed(1)}k` : "—",
+      value: hasRealPaidAmount
+        ? `R$ ${(apiStats!.payments!.paidAmount / 1000).toFixed(1)}k`
+        : "—",
       change: 0,
       trend: "up" as const,
     };
@@ -2299,24 +2466,34 @@ export function AdminDashboardPage() {
     const hasRealActiveUsers =
       !!apiStats && !!apiStats.users && Number.isFinite(apiStats.users.active);
     const activeUsersReal = {
-      value: hasRealActiveUsers ? apiStats!.users!.active!.toLocaleString("pt-BR") : "—",
+      value: hasRealActiveUsers
+        ? apiStats!.users!.active!.toLocaleString("pt-BR")
+        : "—",
       change: 0,
       trend: "up" as const,
     };
     // Total de Usuários = apiStats.users.total. Sem série histórica no endpoint pra
     // calcular crescimento real vs. período anterior — estado neutro (0%), nunca o
     // +12,5% hardcoded de getMetricsForPeriod(). "—" se ausente/não-numérico.
-    const hasRealTotalUsers = !!apiStats && !!apiStats.users && Number.isFinite(apiStats.users.total);
+    const hasRealTotalUsers =
+      !!apiStats && !!apiStats.users && Number.isFinite(apiStats.users.total);
     const totalUsersReal = {
-      value: hasRealTotalUsers ? apiStats!.users!.total.toLocaleString("pt-BR") : "—",
+      value: hasRealTotalUsers
+        ? apiStats!.users!.total.toLocaleString("pt-BR")
+        : "—",
       change: 0,
       trend: "up" as const,
     };
     // Empresas = apiStats.companies.total. Sem série histórica no endpoint pra
     // calcular crescimento real — 0% neutro, nunca o +5,6% hardcoded. "—" se ausente/não-numérico.
-    const hasRealCompanies = !!apiStats && !!apiStats.companies && Number.isFinite(apiStats.companies.total);
+    const hasRealCompanies =
+      !!apiStats &&
+      !!apiStats.companies &&
+      Number.isFinite(apiStats.companies.total);
     const companiesReal = {
-      value: hasRealCompanies ? apiStats!.companies!.total.toLocaleString("pt-BR") : "—",
+      value: hasRealCompanies
+        ? apiStats!.companies!.total.toLocaleString("pt-BR")
+        : "—",
       change: 0,
       trend: "up" as const,
     };
@@ -2329,9 +2506,13 @@ export function AdminDashboardPage() {
     // (completed/cancelled/draft/...). Não é bug de query nem rótulo
     // trocado: confirmado via groupBy direto no banco.
     const hasRealActiveProjects =
-      !!apiStats && !!apiStats.projects && Number.isFinite(apiStats.projects.active);
+      !!apiStats &&
+      !!apiStats.projects &&
+      Number.isFinite(apiStats.projects.active);
     const activeProjectsReal = {
-      value: hasRealActiveProjects ? apiStats!.projects!.active.toLocaleString("pt-BR") : "—",
+      value: hasRealActiveProjects
+        ? apiStats!.projects!.active.toLocaleString("pt-BR")
+        : "—",
       change: 0,
       trend: "up" as const,
     };
@@ -2995,17 +3176,21 @@ export function AdminDashboardPage() {
     orgPartners: "Agências & Parceiros",
   };
 
-
   const metricDescriptions: Record<MetricType, string> = {
-    totalUsers: "Total de usuários cadastrados na plataforma no período selecionado.",
+    totalUsers:
+      "Total de usuários cadastrados na plataforma no período selecionado.",
     activeUsers: "Usuários que realizaram login ou ação nos últimos 30 dias.",
     companies: "Total de empresas com conta ativa na plataforma.",
     activeProjects: "Projetos com status ativo ou em andamento no momento.",
     revenue: "Receita confirmada — soma dos Payments com status PAGO.",
-    avgRating: "Média de avaliação dos nômades pelas empresas em tarefas concluídas.",
-    totalProjects: "Total de projetos cadastrados, em qualquer status (rascunho, negociação, aguardando pagamento, em andamento, concluído ou cancelado).",
-    pendingPayments: "Quantidade de pagamentos com status PENDENTE aguardando confirmação.",
-    linkedProducts: "Produtos vinculados a projetos (ProjectProduct) atualmente cadastrados.",
+    avgRating:
+      "Média de avaliação dos nômades pelas empresas em tarefas concluídas.",
+    totalProjects:
+      "Total de projetos cadastrados, em qualquer status (rascunho, negociação, aguardando pagamento, em andamento, concluído ou cancelado).",
+    pendingPayments:
+      "Quantidade de pagamentos com status PENDENTE aguardando confirmação.",
+    linkedProducts:
+      "Produtos vinculados a projetos (ProjectProduct) atualmente cadastrados.",
     catalogProducts: "Produtos ativos no catálogo da plataforma.",
     orgPartners: "Agências e parceiros (partners) cadastrados na plataforma.",
   };
@@ -3130,7 +3315,8 @@ export function AdminDashboardPage() {
         bgColor = "from-fuchsia-400 to-fuchsia-600";
         gradientFrom = "from-fuchsia-600/10";
         cardBgGradient = "from-fuchsia-500 to-purple-700";
-        borderClass = "border-2 border-fuchsia-300/70 dark:border-fuchsia-300/50";
+        borderClass =
+          "border-2 border-fuchsia-300/70 dark:border-fuchsia-300/50";
         shadowClass = "";
         break;
       default:
@@ -3223,7 +3409,9 @@ export function AdminDashboardPage() {
                     {metric.trend === "up" ? "+" : "-"}
                     {Math.abs(metric.change)}%
                   </div>
-                  <span className="text-[10px] text-white/60">vs. anterior</span>
+                  <span className="text-[10px] text-white/60">
+                    vs. anterior
+                  </span>
                 </div>
               </div>
             </Link>
@@ -3258,11 +3446,20 @@ export function AdminDashboardPage() {
             <div className="absolute bottom-2 right-2 z-20">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button type="button" aria-label={`Mais informações sobre ${metricName}`} className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                  <button
+                    type="button"
+                    aria-label={`Mais informações sobre ${metricName}`}
+                    className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help"
+                  >
                     <Info className="h-3 w-3 text-white" aria-hidden="true" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="end" collisionPadding={8} className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+                <TooltipContent
+                  side="top"
+                  align="end"
+                  collisionPadding={8}
+                  className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed"
+                >
                   {metricDescriptions[metricType]}
                 </TooltipContent>
               </Tooltip>
@@ -3377,11 +3574,20 @@ export function AdminDashboardPage() {
           <div className="absolute bottom-2 right-2 z-20">
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" aria-label={`Mais informações sobre ${metricName}`} className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help">
+                <button
+                  type="button"
+                  aria-label={`Mais informações sobre ${metricName}`}
+                  className="flex items-center justify-center w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 transition-colors cursor-help"
+                >
                   <Info className="h-3 w-3 text-white" aria-hidden="true" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top" align="end" collisionPadding={8} className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed">
+              <TooltipContent
+                side="top"
+                align="end"
+                collisionPadding={8}
+                className="max-w-[240px] bg-slate-900 text-white border-slate-700 text-[11px] leading-relaxed"
+              >
                 {metricDescriptions[metricType]}
               </TooltipContent>
             </Tooltip>
@@ -3401,7 +3607,9 @@ export function AdminDashboardPage() {
     const title = getWidgetTitle(visibleDetailsWidgetId);
 
     // Resolve effective period for this widget (uses per-widget override if any)
-    const widgetInstance = widgets.find((w) => w.type === visibleDetailsWidgetId);
+    const widgetInstance = widgets.find(
+      (w) => w.type === visibleDetailsWidgetId,
+    );
     const modalPeriod = widgetInstance
       ? getWidgetPeriod(widgetInstance.id)
       : {
@@ -4053,7 +4261,9 @@ export function AdminDashboardPage() {
             return (
               <div className="p-6 rounded-xl border border-dashed border-border/60 bg-muted/20 text-center">
                 <p className="text-sm text-muted-foreground">
-                  {widgetDataError ? "Não foi possível carregar os dados." : "Carregando dados..."}
+                  {widgetDataError
+                    ? "Não foi possível carregar os dados."
+                    : "Carregando dados..."}
                 </p>
               </div>
             );
@@ -4107,7 +4317,9 @@ export function AdminDashboardPage() {
                       R$ {mArW.total.toLocaleString("pt-BR")},00
                     </p>
                   </div>
-                  <span className="text-[11px] text-muted-foreground shrink-0">Comparação não calculada</span>
+                  <span className="text-[11px] text-muted-foreground shrink-0">
+                    Comparação não calculada
+                  </span>
                 </div>
               </div>
 
@@ -4179,7 +4391,8 @@ export function AdminDashboardPage() {
                   inventar. */}
               <div className="p-4 rounded-xl bg-muted/30 border border-dashed border-border/50 text-center">
                 <p className="text-xs text-muted-foreground">
-                  Aging de recebíveis: dados insuficientes (sem data de vencimento rastreada por categoria hoje).
+                  Aging de recebíveis: dados insuficientes (sem data de
+                  vencimento rastreada por categoria hoje).
                 </p>
               </div>
             </div>
@@ -4662,8 +4875,8 @@ export function AdminDashboardPage() {
               </div>
               <div className="p-3 rounded-xl border border-dashed border-border/60 bg-muted/20 text-center">
                 <p className="text-xs text-muted-foreground">
-                  Dados insuficientes para segmentar por tipo de conta:
-                  nenhuma fatura está vinculada a projeto/agência hoje.
+                  Dados insuficientes para segmentar por tipo de conta: nenhuma
+                  fatura está vinculada a projeto/agência hoje.
                 </p>
               </div>
               {/* Per Project */}
@@ -4830,11 +5043,17 @@ export function AdminDashboardPage() {
           if (!dreData) {
             return (
               <div className="p-6 rounded-xl border border-dashed border-border/60 bg-muted/20 text-center">
-                <p className="text-sm text-muted-foreground">Carregando dados...</p>
+                <p className="text-sm text-muted-foreground">
+                  Carregando dados...
+                </p>
               </div>
             );
           }
-          const cmvPercent = dreData.receita > 0 ? Math.round((dreData.custosDiretos / dreData.receita) * 1000) / 10 : 0;
+          const cmvPercent =
+            dreData.receita > 0
+              ? Math.round((dreData.custosDiretos / dreData.receita) * 1000) /
+                10
+              : 0;
           return (
             <div className="space-y-4">
               <div
@@ -4843,7 +5062,9 @@ export function AdminDashboardPage() {
                 <div className="flex items-end justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">CMV</p>
-                    <p className="text-3xl font-bold mt-0.5">{cmvPercent.toFixed(1)}%</p>
+                    <p className="text-3xl font-bold mt-0.5">
+                      {cmvPercent.toFixed(1)}%
+                    </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Custos{" "}
                       <span className="font-semibold text-foreground">
@@ -4856,16 +5077,22 @@ export function AdminDashboardPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className="text-[11px] text-muted-foreground">Comparação não calculada</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Comparação não calculada
+                    </span>
                     {cmvPercent > 30 && (
-                      <p className="text-xs text-warning font-medium mt-1">⚠ CMV alto</p>
+                      <p className="text-xs text-warning font-medium mt-1">
+                        ⚠ CMV alto
+                      </p>
                     )}
                   </div>
                 </div>
               </div>
               <div className="p-4 rounded-xl bg-muted/30 border border-dashed border-border/50 text-center">
                 <p className="text-xs text-muted-foreground">
-                  Breakdown por categoria (nômades/impostos/comissões): dados insuficientes — não há classificação de custo por categoria registrada hoje.
+                  Breakdown por categoria (nômades/impostos/comissões): dados
+                  insuficientes — não há classificação de custo por categoria
+                  registrada hoje.
                 </p>
               </div>
             </div>
@@ -5117,12 +5344,19 @@ export function AdminDashboardPage() {
           // dado registrado no sistema — antes eram números fixos
           // inventados, removidos em vez de mantidos.
           const realNomads = adminExtras?.nomads as
-            | { avgRating: number | null; avgOnTimeRate: number | null; retention30d: number | null; retention30dReason?: string }
+            | {
+                avgRating: number | null;
+                avgOnTimeRate: number | null;
+                retention30d: number | null;
+                retention30dReason?: string;
+              }
             | undefined;
           if (!realNomads) {
             return (
               <div className="p-6 rounded-xl border border-dashed border-border/60 bg-muted/20 text-center">
-                <p className="text-sm text-muted-foreground">Carregando dados...</p>
+                <p className="text-sm text-muted-foreground">
+                  Carregando dados...
+                </p>
               </div>
             );
           }
@@ -5143,28 +5377,48 @@ export function AdminDashboardPage() {
               chip: "text-amber-700 dark:text-amber-300",
               bg: "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800",
             },
-          ].filter(Boolean) as { label: string; display: string; pct: number; color: string; chip: string; bg: string }[];
+          ].filter(Boolean) as {
+            label: string;
+            display: string;
+            pct: number;
+            color: string;
+            chip: string;
+            bg: string;
+          }[];
           return (
             <div className="space-y-4">
               {kpis.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">Dados insuficientes.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Dados insuficientes.
+                </p>
               )}
               <div className="space-y-3">
                 {kpis.map((kpi) => (
-                  <div key={kpi.label} className={`p-4 rounded-xl border ${kpi.bg}`}>
+                  <div
+                    key={kpi.label}
+                    className={`p-4 rounded-xl border ${kpi.bg}`}
+                  >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-muted-foreground">{kpi.label}</span>
-                      <span className={`text-base font-bold ${kpi.chip}`}>{kpi.display}</span>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {kpi.label}
+                      </span>
+                      <span className={`text-base font-bold ${kpi.chip}`}>
+                        {kpi.display}
+                      </span>
                     </div>
                     <div className="h-2 bg-secondary/60 rounded-full overflow-hidden">
-                      <div className={`h-2 ${kpi.color} rounded-full`} style={{ width: `${kpi.pct}%` }} />
+                      <div
+                        className={`h-2 ${kpi.color} rounded-full`}
+                        style={{ width: `${kpi.pct}%` }}
+                      />
                     </div>
                   </div>
                 ))}
               </div>
               <div className="p-3 rounded-xl bg-muted/30 border border-dashed border-border/50 text-center">
                 <p className="text-xs text-muted-foreground">
-                  Tempo médio por tarefa, certificações e retenção de 90 dias: dados insuficientes (não registrados hoje).
+                  Tempo médio por tarefa, certificações e retenção de 90 dias:
+                  dados insuficientes (não registrados hoje).
                 </p>
               </div>
             </div>
@@ -5177,15 +5431,23 @@ export function AdminDashboardPage() {
           // real, é derivado da posição (top 3 = ouro/prata/bronze), não é
           // um dado fabricado, é só a regra de apresentação do pódio.
           const realNomadsRanking = adminExtras?.nomadsRanking as
-            | { id: string; name: string; level: string; rating: number; tasksApproved: number }[]
+            | {
+                id: string;
+                name: string;
+                level: string;
+                rating: number;
+                tasksApproved: number;
+              }[]
             | undefined;
-          const perfList = (realNomadsRanking ?? mData.performers).map((p: any, i: number) => ({
-            id: p.id,
-            name: p.name,
-            rating: p.rating ?? 0,
-            projects: p.tasksApproved ?? p.projects ?? 0,
-            badge: i === 0 ? "gold" : i === 1 ? "silver" : "bronze",
-          }));
+          const perfList = (realNomadsRanking ?? mData.performers).map(
+            (p: any, i: number) => ({
+              id: p.id,
+              name: p.name,
+              rating: p.rating ?? 0,
+              projects: p.tasksApproved ?? p.projects ?? 0,
+              badge: i === 0 ? "gold" : i === 1 ? "silver" : "bronze",
+            }),
+          );
           const medals = [
             "text-yellow-500",
             "text-slate-400",
@@ -5260,15 +5522,25 @@ export function AdminDashboardPage() {
           // (GET /dashboard/admin-widgets). Não existe avaliação (rating)
           // por agência no schema hoje — fica 0, nunca inventada.
           const realAgenciesRanking = adminExtras?.agenciesRanking as
-            | { id: string; name: string; level: string; revenue: number; billedProjects: number }[]
+            | {
+                id: string;
+                name: string;
+                level: string;
+                revenue: number;
+                billedProjects: number;
+              }[]
             | undefined;
-          const agList = (realAgenciesRanking ?? mData.agenciesRanking).map((a: any) => ({
-            id: a.id,
-            name: a.name,
-            rating: a.rating ?? 0,
-            projects: a.billedProjects ?? a.projects ?? 0,
-            contribution: a.contribution ?? `R$ ${((a.revenue ?? 0) / 1000).toFixed((a.revenue ?? 0) >= 1000 ? 0 : 1)}k`,
-          }));
+          const agList = (realAgenciesRanking ?? mData.agenciesRanking).map(
+            (a: any) => ({
+              id: a.id,
+              name: a.name,
+              rating: a.rating ?? 0,
+              projects: a.billedProjects ?? a.projects ?? 0,
+              contribution:
+                a.contribution ??
+                `R$ ${((a.revenue ?? 0) / 1000).toFixed((a.revenue ?? 0) >= 1000 ? 0 : 1)}k`,
+            }),
+          );
           const agMedals = [
             "text-yellow-500",
             "text-slate-400",
@@ -6494,10 +6766,7 @@ export function AdminDashboardPage() {
                         <ChevronDown className="h-3 w-3 opacity-70" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="w-52 z-[9999]"
-                    >
+                    <DropdownMenuContent align="end" className="w-52 z-[9999]">
                       <DropdownMenuLabel className="text-xs text-muted-foreground">
                         Período do widget
                       </DropdownMenuLabel>
@@ -6506,8 +6775,7 @@ export function AdminDashboardPage() {
                         const isSelected =
                           opt.key === "global"
                             ? !isCustom
-                            : isCustom &&
-                              wp!.customPeriod!.label === opt.label;
+                            : isCustom && wp!.customPeriod!.label === opt.label;
                         return (
                           <DropdownMenuItem
                             key={opt.key}
@@ -6538,14 +6806,18 @@ export function AdminDashboardPage() {
             {/* Action icon buttons */}
             <div className="flex items-center gap-1 shrink-0">
               <button
-                onClick={() => openWidgetShareDialog(visibleDetailsWidgetId!, title)}
+                onClick={() =>
+                  openWidgetShareDialog(visibleDetailsWidgetId!, title)
+                }
                 title="Compartilhar"
                 className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150"
               >
                 <Share2 className="h-4 w-4" />
               </button>
               <button
-                onClick={() => exportWidgetToPng(visibleDetailsWidgetId!, title)}
+                onClick={() =>
+                  exportWidgetToPng(visibleDetailsWidgetId!, title)
+                }
                 title="Exportar PNG"
                 className="flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-violet-600 dark:hover:text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-900/40 active:scale-90 transition-all duration-150"
               >
@@ -6728,22 +7000,38 @@ export function AdminDashboardPage() {
                     );
                     const widgetRealOnly = {
                       totalProjects: {
-                        value: apiStats ? (apiStats.projects?.total ?? 0).toLocaleString("pt-BR") : "—",
+                        value: apiStats
+                          ? (apiStats.projects?.total ?? 0).toLocaleString(
+                              "pt-BR",
+                            )
+                          : "—",
                         change: 0,
                         trend: "up" as const,
                       },
                       pendingPayments: {
-                        value: apiStats ? (apiStats.payments?.pendingCount ?? 0).toLocaleString("pt-BR") : "—",
+                        value: apiStats
+                          ? (
+                              apiStats.payments?.pendingCount ?? 0
+                            ).toLocaleString("pt-BR")
+                          : "—",
                         change: 0,
                         trend: "up" as const,
                       },
                       linkedProducts: {
-                        value: apiStats ? (apiStats.projectProducts?.total ?? 0).toLocaleString("pt-BR") : "—",
+                        value: apiStats
+                          ? (
+                              apiStats.projectProducts?.total ?? 0
+                            ).toLocaleString("pt-BR")
+                          : "—",
                         change: 0,
                         trend: "up" as const,
                       },
                       catalogProducts: {
-                        value: apiStats ? (apiStats.catalogProducts?.total ?? 0).toLocaleString("pt-BR") : "—",
+                        value: apiStats
+                          ? (
+                              apiStats.catalogProducts?.total ?? 0
+                            ).toLocaleString("pt-BR")
+                          : "—",
                         change: 0,
                         trend: "up" as const,
                       },
@@ -6756,47 +7044,71 @@ export function AdminDashboardPage() {
                       },
                       // Avaliação Média — mesma regra do strip principal: sem fonte real
                       // implementada em nenhum endpoint usado pelo dashboard. "—" sempre.
-                      avgRating: { value: "—", change: 0, trend: "up" as const },
+                      avgRating: {
+                        value: "—",
+                        change: 0,
+                        trend: "up" as const,
+                      },
                     };
                     // Mesma regra da Receita Confirmada do strip principal: payments.paidAmount, nunca financial.totalRevenue.
                     // "—" tanto sem apiStats quanto com apiStats.payments.paidAmount ausente/não-numérico.
                     const hasWidgetRealPaidAmount =
-                      !!apiStats && !!apiStats.payments && Number.isFinite(apiStats.payments.paidAmount);
+                      !!apiStats &&
+                      !!apiStats.payments &&
+                      Number.isFinite(apiStats.payments.paidAmount);
                     const widgetRevenueReal = {
-                      value: hasWidgetRealPaidAmount ? `R$ ${(apiStats!.payments!.paidAmount / 1000).toFixed(1)}k` : "—",
+                      value: hasWidgetRealPaidAmount
+                        ? `R$ ${(apiStats!.payments!.paidAmount / 1000).toFixed(1)}k`
+                        : "—",
                       change: 0,
                       trend: "up" as const,
                     };
                     // Mesma regra do strip principal: users.active (User.is_active=true), nunca nomades.active.
                     const hasWidgetRealActiveUsers =
-                      !!apiStats && !!apiStats.users && Number.isFinite(apiStats.users.active);
+                      !!apiStats &&
+                      !!apiStats.users &&
+                      Number.isFinite(apiStats.users.active);
                     const widgetActiveUsersReal = {
-                      value: hasWidgetRealActiveUsers ? apiStats!.users!.active!.toLocaleString("pt-BR") : "—",
+                      value: hasWidgetRealActiveUsers
+                        ? apiStats!.users!.active!.toLocaleString("pt-BR")
+                        : "—",
                       change: 0,
                       trend: "up" as const,
                     };
                     // Mesma regra do strip principal: sem série histórica pra crescimento real — 0% neutro.
                     const hasWidgetRealTotalUsers =
-                      !!apiStats && !!apiStats.users && Number.isFinite(apiStats.users.total);
+                      !!apiStats &&
+                      !!apiStats.users &&
+                      Number.isFinite(apiStats.users.total);
                     const widgetTotalUsersReal = {
-                      value: hasWidgetRealTotalUsers ? apiStats!.users!.total.toLocaleString("pt-BR") : "—",
+                      value: hasWidgetRealTotalUsers
+                        ? apiStats!.users!.total.toLocaleString("pt-BR")
+                        : "—",
                       change: 0,
                       trend: "up" as const,
                     };
                     // Mesma regra do strip principal: companies.total, 0% neutro, "—" se ausente.
                     const hasWidgetRealCompanies =
-                      !!apiStats && !!apiStats.companies && Number.isFinite(apiStats.companies.total);
+                      !!apiStats &&
+                      !!apiStats.companies &&
+                      Number.isFinite(apiStats.companies.total);
                     const widgetCompaniesReal = {
-                      value: hasWidgetRealCompanies ? apiStats!.companies!.total.toLocaleString("pt-BR") : "—",
+                      value: hasWidgetRealCompanies
+                        ? apiStats!.companies!.total.toLocaleString("pt-BR")
+                        : "—",
                       change: 0,
                       trend: "up" as const,
                     };
                     // Mesma regra do strip principal: projects.active (definição atual do
                     // backend, não alterada), 0% neutro, "—" se ausente/não-numérico.
                     const hasWidgetRealActiveProjects =
-                      !!apiStats && !!apiStats.projects && Number.isFinite(apiStats.projects.active);
+                      !!apiStats &&
+                      !!apiStats.projects &&
+                      Number.isFinite(apiStats.projects.active);
                     const widgetActiveProjectsReal = {
-                      value: hasWidgetRealActiveProjects ? apiStats!.projects!.active.toLocaleString("pt-BR") : "—",
+                      value: hasWidgetRealActiveProjects
+                        ? apiStats!.projects!.active.toLocaleString("pt-BR")
+                        : "—",
                       change: 0,
                       trend: "up" as const,
                     };
@@ -8029,8 +8341,17 @@ export function AdminDashboardPage() {
 
       case "activeProjectsWidget": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const _mockApW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).activeProjects;
-        const wApW = wd && !widgetPeriods.some((p: any) => p.widgetId === widget.id && p.mode !== "global") ? { ..._mockApW, ...wd.activeProjects } : _mockApW;
+        const _mockApW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).activeProjects;
+        const wApW =
+          wd &&
+          !widgetPeriods.some(
+            (p: any) => p.widgetId === widget.id && p.mode !== "global",
+          )
+            ? { ..._mockApW, ...wd.activeProjects }
+            : _mockApW;
         const apTypes = [
           {
             label: "Agências",
@@ -8291,9 +8612,9 @@ export function AdminDashboardPage() {
                     não existem como campo no banco hoje. */}
                 <div className="p-3 rounded-xl border border-dashed border-border/60 bg-muted/20 text-center">
                   <p className="text-xs text-muted-foreground">
-                    Não há segmentação por nível de plano disponível nos
-                    dados hoje — este total é a soma de todas as faturas sem
-                    projeto vinculado.
+                    Não há segmentação por nível de plano disponível nos dados
+                    hoje — este total é a soma de todas as faturas sem projeto
+                    vinculado.
                   </p>
                 </div>
                 {/* Actions */}
@@ -8326,18 +8647,24 @@ export function AdminDashboardPage() {
 
       case "mrr": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const _mockMrrW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).mrr;
-        const isGlobalPeriodWidget = !widgetPeriods.some((p: any) => p.widgetId === widget.id && p.mode !== "global");
+        const _mockMrrW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).mrr;
+        const isGlobalPeriodWidget = !widgetPeriods.some(
+          (p: any) => p.widgetId === widget.id && p.mode !== "global",
+        );
         const mrrBreakdown = adminExtras?.mrrBreakdown;
-        const wMrrW = wd && isGlobalPeriodWidget
-          ? {
-              ..._mockMrrW,
-              ...wd.mrr,
-              ...(mrrBreakdown
-                ? { ...mrrBreakdown, churnRevenue: mrrBreakdown.churn }
-                : {}),
-            }
-          : _mockMrrW;
+        const wMrrW =
+          wd && isGlobalPeriodWidget
+            ? {
+                ..._mockMrrW,
+                ...wd.mrr,
+                ...(mrrBreakdown
+                  ? { ...mrrBreakdown, churnRevenue: mrrBreakdown.churn }
+                  : {}),
+              }
+            : _mockMrrW;
         const mrrComposition = [
           {
             label: "New",
@@ -8590,8 +8917,17 @@ export function AdminDashboardPage() {
 
       case "churn": {
         const effectivePeriod = getWidgetPeriod(widget.id);
-        const _mockChW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).churn;
-        const wChW = wd && !widgetPeriods.some((p: any) => p.widgetId === widget.id && p.mode !== "global") ? { ..._mockChW, ...wd.churn } : _mockChW;
+        const _mockChW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).churn;
+        const wChW =
+          wd &&
+          !widgetPeriods.some(
+            (p: any) => p.widgetId === widget.id && p.mode !== "global",
+          )
+            ? { ..._mockChW, ...wd.churn }
+            : _mockChW;
         return (
           <div
             key={widget.id}
@@ -8674,8 +9010,7 @@ export function AdminDashboardPage() {
                     removido em vez de manter fabricado. */}
                 <div className="p-3 rounded-xl border border-dashed border-border/60 bg-muted/20 text-center">
                   <p className="text-xs text-muted-foreground">
-                    Dados insuficientes para segmentar churn por tipo de
-                    conta.
+                    Dados insuficientes para segmentar churn por tipo de conta.
                   </p>
                 </div>
                 {/* Projetos cancelados */}
@@ -8911,7 +9246,9 @@ export function AdminDashboardPage() {
         // DRE real (GET /api/dashboard/dre) — antes este widget nunca
         // chamava essa rota, apesar dela já existir com custos reais
         // (pagamentos a nômades + despesas operacionais por categoria).
-        const dreIsGlobalPeriod = !widgetPeriods.some((p: any) => p.widgetId === widget.id && p.mode !== "global");
+        const dreIsGlobalPeriod = !widgetPeriods.some(
+          (p: any) => p.widgetId === widget.id && p.mode !== "global",
+        );
         const dre = dreIsGlobalPeriod ? dreData : null;
         // margemBruta do DRE vem 0 tanto quando a margem real é 0% quanto
         // quando não há receita nenhuma (sentinela) — sem checar receita>0
@@ -8920,7 +9257,9 @@ export function AdminDashboardPage() {
         const wCmvW = dre
           ? {
               totalCosts: dre.custosDiretos + dre.despesasOperacionais,
-              cmvPercent: hasRevenue ? Math.round((100 - dre.margemBruta) * 10) / 10 : null,
+              cmvPercent: hasRevenue
+                ? Math.round((100 - dre.margemBruta) * 10) / 10
+                : null,
               revenue: dre.receita,
               variation: { cmvPercent: 0 }, // sem período anterior calculado nesta chamada
             }
@@ -8930,15 +9269,28 @@ export function AdminDashboardPage() {
         // Pessoas...) — não os 4 baldes fixos fictícios de antes. Sem
         // "Comissões" como categoria própria: não existe essa despesa
         // separada nos dados hoje.
-        const dreCategories: { category: string; amount: number }[] = dre?.despesasPorCategoria ?? [];
-        const barColors = ["bg-amber-500", "bg-violet-500", "bg-slate-400", "bg-emerald-500", "bg-sky-500", "bg-rose-500", "bg-orange-500", "bg-teal-500"];
+        const dreCategories: { category: string; amount: number }[] =
+          dre?.despesasPorCategoria ?? [];
+        const barColors = [
+          "bg-amber-500",
+          "bg-violet-500",
+          "bg-slate-400",
+          "bg-emerald-500",
+          "bg-sky-500",
+          "bg-rose-500",
+          "bg-orange-500",
+          "bg-teal-500",
+        ];
         const cmvCategories = dre
           ? [
               {
                 key: "nomades",
                 label: "Nômades (custo direto)",
                 value: dre.custosDiretos,
-                pct: wCmvW.totalCosts > 0 ? (dre.custosDiretos / wCmvW.totalCosts) * 100 : 0,
+                pct:
+                  wCmvW.totalCosts > 0
+                    ? (dre.custosDiretos / wCmvW.totalCosts) * 100
+                    : 0,
                 bg: "bg-blue-500/10",
                 text: "text-blue-600 dark:text-blue-400",
                 bar: "bg-blue-500",
@@ -8948,7 +9300,10 @@ export function AdminDashboardPage() {
                 key: c.category,
                 label: c.category,
                 value: c.amount,
-                pct: wCmvW.totalCosts > 0 ? (c.amount / wCmvW.totalCosts) * 100 : 0,
+                pct:
+                  wCmvW.totalCosts > 0
+                    ? (c.amount / wCmvW.totalCosts) * 100
+                    : 0,
                 bg: "bg-muted",
                 text: "text-foreground",
                 bar: barColors[i % barColors.length],
@@ -8956,47 +9311,47 @@ export function AdminDashboardPage() {
               })),
             ]
           : [
-          {
-            key: "nomades",
-            label: "Nômades",
-            value: _mockCmvW.nomades.value,
-            pct: _mockCmvW.nomades.percent,
-            bg: "bg-blue-500/10",
-            text: "text-blue-600 dark:text-blue-400",
-            bar: "bg-blue-500",
-            border: "border-blue-200 dark:border-blue-800",
-          },
-          {
-            key: "impostos",
-            label: "Impostos",
-            value: _mockCmvW.impostos.value,
-            pct: _mockCmvW.impostos.percent,
-            bg: "bg-amber-500/10",
-            text: "text-amber-600 dark:text-amber-400",
-            bar: "bg-amber-500",
-            border: "border-amber-200 dark:border-amber-800",
-          },
-          {
-            key: "comissoes",
-            label: "Comissões",
-            value: _mockCmvW.comissoes.value,
-            pct: _mockCmvW.comissoes.percent,
-            bg: "bg-violet-500/10",
-            text: "text-violet-600 dark:text-violet-400",
-            bar: "bg-violet-500",
-            border: "border-violet-200 dark:border-violet-800",
-          },
-          {
-            key: "outros",
-            label: "Outros",
-            value: _mockCmvW.outros.value,
-            pct: _mockCmvW.outros.percent,
-            bg: "bg-slate-500/10",
-            text: "text-slate-600 dark:text-slate-400",
-            bar: "bg-slate-400",
-            border: "border-slate-200 dark:border-slate-700",
-          },
-        ];
+              {
+                key: "nomades",
+                label: "Nômades",
+                value: _mockCmvW.nomades.value,
+                pct: _mockCmvW.nomades.percent,
+                bg: "bg-blue-500/10",
+                text: "text-blue-600 dark:text-blue-400",
+                bar: "bg-blue-500",
+                border: "border-blue-200 dark:border-blue-800",
+              },
+              {
+                key: "impostos",
+                label: "Impostos",
+                value: _mockCmvW.impostos.value,
+                pct: _mockCmvW.impostos.percent,
+                bg: "bg-amber-500/10",
+                text: "text-amber-600 dark:text-amber-400",
+                bar: "bg-amber-500",
+                border: "border-amber-200 dark:border-amber-800",
+              },
+              {
+                key: "comissoes",
+                label: "Comissões",
+                value: _mockCmvW.comissoes.value,
+                pct: _mockCmvW.comissoes.percent,
+                bg: "bg-violet-500/10",
+                text: "text-violet-600 dark:text-violet-400",
+                bar: "bg-violet-500",
+                border: "border-violet-200 dark:border-violet-800",
+              },
+              {
+                key: "outros",
+                label: "Outros",
+                value: _mockCmvW.outros.value,
+                pct: _mockCmvW.outros.percent,
+                bg: "bg-slate-500/10",
+                text: "text-slate-600 dark:text-slate-400",
+                bar: "bg-slate-400",
+                border: "border-slate-200 dark:border-slate-700",
+              },
+            ];
         const cmvDown = wCmvW.variation.cmvPercent < 0;
         return (
           <div
@@ -9053,7 +9408,9 @@ export function AdminDashboardPage() {
                       CMV Total
                     </p>
                     <p className="text-3xl font-bold tracking-tight">
-                      {wCmvW.cmvPercent == null ? "—" : `${wCmvW.cmvPercent.toFixed(1)}%`}
+                      {wCmvW.cmvPercent == null
+                        ? "—"
+                        : `${wCmvW.cmvPercent.toFixed(1)}%`}
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       {wCmvW.cmvPercent == null ? (
@@ -9084,7 +9441,9 @@ export function AdminDashboardPage() {
                         )}
                         {Math.abs(wCmvW.variation.cmvPercent).toFixed(1)}pp
                       </div>
-                      <p className="text-xs text-muted-foreground">vs anterior</p>
+                      <p className="text-xs text-muted-foreground">
+                        vs anterior
+                      </p>
                       {wCmvW.cmvPercent > 30 && (
                         <div className="mt-1 flex items-center gap-1 text-[10px] text-warning font-medium">
                           <AlertTriangle className="h-3 w-3" />
@@ -9162,8 +9521,17 @@ export function AdminDashboardPage() {
       }
 
       case "platformActivities": {
-        const _mockPaW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).platformActivities;
-        const wPaW = wd && !widgetPeriods.some((p: any) => p.widgetId === widget.id && p.mode !== "global") ? { ..._mockPaW, ...wd.platformActivities } : _mockPaW;
+        const _mockPaW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).platformActivities;
+        const wPaW =
+          wd &&
+          !widgetPeriods.some(
+            (p: any) => p.widgetId === widget.id && p.mode !== "global",
+          )
+            ? { ..._mockPaW, ...wd.platformActivities }
+            : _mockPaW;
         const paMetrics = [
           {
             label: "MAU",
@@ -9319,16 +9687,26 @@ export function AdminDashboardPage() {
       }
 
       case "nomads": {
-        const _mockNmW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).nomads;
-        const wNmW = wd && !widgetPeriods.some((p: any) => p.widgetId === widget.id && p.mode !== "global")
-          ? {
-              ..._mockNmW,
-              ...wd.nomads,
-              ...(adminExtras?.nomads
-                ? { inactive: adminExtras.nomads.inactive, retention30d: null }
-                : {}),
-            }
-          : _mockNmW;
+        const _mockNmW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).nomads;
+        const wNmW =
+          wd &&
+          !widgetPeriods.some(
+            (p: any) => p.widgetId === widget.id && p.mode !== "global",
+          )
+            ? {
+                ..._mockNmW,
+                ...wd.nomads,
+                ...(adminExtras?.nomads
+                  ? {
+                      inactive: adminExtras.nomads.inactive,
+                      retention30d: null,
+                    }
+                  : {}),
+              }
+            : _mockNmW;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -9438,8 +9816,17 @@ export function AdminDashboardPage() {
                     <p className="text-[10px] text-muted-foreground mb-1 leading-tight">
                       Retenção 30d
                     </p>
-                    <p className="text-xl font-bold text-success" title={wNmW.retention30d == null ? "Ainda não calculável: falta definição de janela de atividade por nômade" : undefined}>
-                      {wNmW.retention30d == null ? "—" : `${wNmW.retention30d}%`}
+                    <p
+                      className="text-xl font-bold text-success"
+                      title={
+                        wNmW.retention30d == null
+                          ? "Ainda não calculável: falta definição de janela de atividade por nômade"
+                          : undefined
+                      }
+                    >
+                      {wNmW.retention30d == null
+                        ? "—"
+                        : `${wNmW.retention30d}%`}
                     </p>
                   </div>
                 </div>
@@ -9494,10 +9881,23 @@ export function AdminDashboardPage() {
         // reais. "specialty" usa o nível real do nômade (não existe uma
         // especialidade cadastrada por nômade hoje).
         const realNomadsRanking = adminExtras?.nomadsRanking as
-          | { id: string; name: string; level: string; avatar: string | null; rating: number; tasksApproved: number }[]
+          | {
+              id: string;
+              name: string;
+              level: string;
+              avatar: string | null;
+              rating: number;
+              tasksApproved: number;
+            }[]
           | undefined;
         const initials = (name: string) =>
-          name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
+          name
+            .split(" ")
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((p) => p[0])
+            .join("")
+            .toUpperCase();
         const wPerfW = realNomadsRanking
           ? realNomadsRanking.map((n) => ({
               id: n.id,
@@ -9509,7 +9909,8 @@ export function AdminDashboardPage() {
               rating: n.rating,
               projects: n.tasksApproved,
             }))
-          : generateDashboardData(effectivePeriod.from, effectivePeriod.to).performers;
+          : generateDashboardData(effectivePeriod.from, effectivePeriod.to)
+              .performers;
         const top3 = wPerfW.slice(0, 3);
         const rest = wPerfW.slice(3);
         const podiumOrder =
@@ -9685,11 +10086,29 @@ export function AdminDashboardPage() {
         // avaliação (rating) por agência no schema hoje — fica em 0 (sem
         // estrelas preenchidas), não inventamos uma nota.
         const realAgenciesRanking = adminExtras?.agenciesRanking as
-          | { id: string; name: string; level: string; revenue: number; billedProjects: number }[]
+          | {
+              id: string;
+              name: string;
+              level: string;
+              revenue: number;
+              billedProjects: number;
+            }[]
           | undefined;
         const agInitials = (name: string) =>
-          name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
-        const agColors = ["from-blue-500 to-indigo-500", "from-emerald-500 to-teal-500", "from-violet-500 to-purple-500", "from-amber-500 to-orange-500", "from-pink-500 to-rose-500"];
+          name
+            .split(" ")
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((p) => p[0])
+            .join("")
+            .toUpperCase();
+        const agColors = [
+          "from-blue-500 to-indigo-500",
+          "from-emerald-500 to-teal-500",
+          "from-violet-500 to-purple-500",
+          "from-amber-500 to-orange-500",
+          "from-pink-500 to-rose-500",
+        ];
         const wAgRankW = realAgenciesRanking
           ? realAgenciesRanking.map((a, i) => ({
               id: a.id,
@@ -9701,7 +10120,8 @@ export function AdminDashboardPage() {
               projects: a.billedProjects,
               contribution: `R$ ${(a.revenue / 1000).toFixed(a.revenue >= 1000 ? 0 : 1)}k`,
             }))
-          : generateDashboardData(effectivePeriod.from, effectivePeriod.to).agenciesRanking;
+          : generateDashboardData(effectivePeriod.from, effectivePeriod.to)
+              .agenciesRanking;
         const agTop3 = wAgRankW.slice(0, 3);
         const agRest = wAgRankW.slice(3);
         const agMedalIcons = ["🥇", "🥈", "🥉"];
@@ -9855,7 +10275,10 @@ export function AdminDashboardPage() {
       }
 
       case "statusOverview": {
-        const _mockSoW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).statusOverview;
+        const _mockSoW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).statusOverview;
         // Mapeamento real a partir de Project.status / ProjectTask.status
         // (GET /api/dashboard/admin-widgets). "Aprovados" (projeto) e
         // "Atraso" ficam em 0: não existe um status de projeto equivalente
@@ -9870,15 +10293,32 @@ export function AdminDashboardPage() {
         const wSoW = realSo
           ? {
               projects: {
-                ongoing: sum(realSo.projects, ["draft", "negotiation", "awaiting-payment", "planning", "in-progress", "paused"]),
+                ongoing: sum(realSo.projects, [
+                  "draft",
+                  "negotiation",
+                  "awaiting-payment",
+                  "planning",
+                  "in-progress",
+                  "paused",
+                ]),
                 approved: 0,
                 completed: sum(realSo.projects, ["completed", "paid"]),
                 cancelled: sum(realSo.projects, ["cancelled"]),
                 delayed: 0,
               },
               tasks: {
-                contracted: sum(realSo.tasks, ["PARA_LANCAMENTO", "EM_LANCAMENTO", "AGUARDANDO_INFORMACOES", "LIBERADA_PARA_EXECUCAO", "AGUARDANDO_NOMADE"]),
-                inProgress: sum(realSo.tasks, ["EM_EXECUCAO", "EM_REVISAO", "EM_APROVACAO"]),
+                contracted: sum(realSo.tasks, [
+                  "PARA_LANCAMENTO",
+                  "EM_LANCAMENTO",
+                  "AGUARDANDO_INFORMACOES",
+                  "LIBERADA_PARA_EXECUCAO",
+                  "AGUARDANDO_NOMADE",
+                ]),
+                inProgress: sum(realSo.tasks, [
+                  "EM_EXECUCAO",
+                  "EM_REVISAO",
+                  "EM_APROVACAO",
+                ]),
                 completed: sum(realSo.tasks, ["CONCLUIDA"]),
                 archived: sum(realSo.tasks, ["CANCELADA"]),
               },
@@ -10067,10 +10507,21 @@ export function AdminDashboardPage() {
       }
 
       case "accountsReceivable": {
-        const _mockArW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).accountsReceivable;
-        const wArW = wd && !widgetPeriods.some((p: any) => p.widgetId === widget.id && p.mode !== "global")
-          ? { ..._mockArW, ...wd.accountsReceivable, ...(adminExtras?.accountsReceivableBreakdown ?? {}) }
-          : _mockArW;
+        const _mockArW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).accountsReceivable;
+        const wArW =
+          wd &&
+          !widgetPeriods.some(
+            (p: any) => p.widgetId === widget.id && p.mode !== "global",
+          )
+            ? {
+                ..._mockArW,
+                ...wd.accountsReceivable,
+                ...(adminExtras?.accountsReceivableBreakdown ?? {}),
+              }
+            : _mockArW;
         return (
           <div
             key={widget.id}
@@ -10221,8 +10672,17 @@ export function AdminDashboardPage() {
       }
 
       case "tasks": {
-        const _mockTasksW = generateDashboardData(effectivePeriod.from, effectivePeriod.to).tasks;
-        const wTasksW = wd && !widgetPeriods.some((p: any) => p.widgetId === widget.id && p.mode !== "global") ? { ..._mockTasksW, ...wd.tasks } : _mockTasksW;
+        const _mockTasksW = generateDashboardData(
+          effectivePeriod.from,
+          effectivePeriod.to,
+        ).tasks;
+        const wTasksW =
+          wd &&
+          !widgetPeriods.some(
+            (p: any) => p.widgetId === widget.id && p.mode !== "global",
+          )
+            ? { ..._mockTasksW, ...wd.tasks }
+            : _mockTasksW;
         return (
           <Card className="overflow-hidden" data-widget-id={widget.type}>
             <CardHeader className="pb-4 relative">
@@ -10255,15 +10715,33 @@ export function AdminDashboardPage() {
                   de variação removidos: eram 100% mock, nunca comparados a
                   período anterior de verdade. */}
               {[
-                { label: "Concluídas", value: wTasksW.completed, color: "text-success" },
-                { label: "Em Execução", value: wTasksW.inProgress, color: "text-info" },
-                { label: "Contratadas", value: wTasksW.contracted, color: "text-warning" },
+                {
+                  label: "Concluídas",
+                  value: wTasksW.completed,
+                  color: "text-success",
+                },
+                {
+                  label: "Em Execução",
+                  value: wTasksW.inProgress,
+                  color: "text-info",
+                },
+                {
+                  label: "Contratadas",
+                  value: wTasksW.contracted,
+                  color: "text-warning",
+                },
                 {
                   label: "Em Aprovação",
-                  value: (wTasksW.agencyApproval ?? 0) + (wTasksW.clientApproval ?? 0),
+                  value:
+                    (wTasksW.agencyApproval ?? 0) +
+                    (wTasksW.clientApproval ?? 0),
                   color: "text-violet-600 dark:text-violet-400",
                 },
-                { label: "Canceladas", value: wTasksW.cancelled, color: "text-destructive" },
+                {
+                  label: "Canceladas",
+                  value: wTasksW.cancelled,
+                  color: "text-destructive",
+                },
               ].map((item) => (
                 <div
                   key={item.label}
@@ -10282,8 +10760,8 @@ export function AdminDashboardPage() {
                   seria fabricar dado, não "sem dados". */}
               <div className="pt-2 border-t">
                 <p className="text-xs text-muted-foreground text-center">
-                  Cumprimento de SLA: dados insuficientes (requer comparar
-                  prazo x conclusão por tarefa — não calculado hoje).
+                  Cumprimento de SLA: dados insuficientes (requer comparar prazo
+                  x conclusão por tarefa — não calculado hoje).
                 </p>
               </div>
             </CardContent>
@@ -10665,7 +11143,10 @@ export function AdminDashboardPage() {
       getDashboardStorageKey("saved-dashboards", "admin"),
       JSON.stringify(updatedDashboards),
     );
-    localStorage.setItem(getDashboardStorageKey("current-dashboard-id", "admin"), newDashboard.id);
+    localStorage.setItem(
+      getDashboardStorageKey("current-dashboard-id", "admin"),
+      newDashboard.id,
+    );
 
     setCurrentDashboardId(newDashboard.id);
     setNewDashboardName("");
@@ -10736,7 +11217,10 @@ export function AdminDashboardPage() {
         getDashboardStorageKey("dashboard-widget-config", "admin"),
         JSON.stringify(serializeWidgetConfig(dashboard.widgets)),
       );
-      localStorage.setItem(getDashboardStorageKey("current-dashboard-id", "admin"), dashboardId);
+      localStorage.setItem(
+        getDashboardStorageKey("current-dashboard-id", "admin"),
+        dashboardId,
+      );
     }
   };
 
@@ -10869,681 +11353,861 @@ export function AdminDashboardPage() {
 
   return (
     <>
-    <DashboardShellFrame ref={dashboardScrollRef}>
-      {/* Aviso de erro de carregamento — distinto de "zero real"/"sem dados".
+      <DashboardShellFrame ref={dashboardScrollRef}>
+        {/* Aviso de erro de carregamento — distinto de "zero real"/"sem dados".
           Alguns widgets (revenue/tarefas/rankings/etc.) dependem destas duas
           chamadas; se falharem, os números seguem no mock de fallback local,
           então o aviso é essencial pra não passar a impressão de dado real. */}
-      {(widgetDataError || adminExtrasError || revenueError) && (
-        <div className="mb-3 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm text-destructive">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span className="flex-1">
-            Não foi possível carregar alguns dados do dashboard. Os números
-            afetados podem não refletir a realidade atual.
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs shrink-0"
-            onClick={() => setGlobalPeriod((p) => ({ ...p }))}
-          >
-            Tentar novamente
-          </Button>
-        </div>
-      )}
-      {/* Sticky Dashboard Header */}
-      <div
-        className={cn(
-          "sticky top-0 z-20 transition-all duration-300",
-          isHeaderCompact
-            ? "bg-background/95 backdrop-blur-sm border-b border-border/40 shadow-sm"
-            : "bg-transparent",
+        {(widgetDataError || adminExtrasError || revenueError) && (
+          <div className="mb-3 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="flex-1">
+              Não foi possível carregar alguns dados do dashboard. Os números
+              afetados podem não refletir a realidade atual.
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs shrink-0"
+              onClick={() => setGlobalPeriod((p) => ({ ...p }))}
+            >
+              Tentar novamente
+            </Button>
+          </div>
         )}
-      >
-        {/* Dashboard Header */}
+        {/* Sticky Dashboard Header */}
         <div
           className={cn(
-            "flex items-center gap-3",
-            isHeaderCompact ? "py-2" : "pt-0 pb-5",
+            "sticky top-0 z-20 transition-all duration-300",
+            isHeaderCompact
+              ? "bg-background/95 backdrop-blur-sm border-b border-border/40 shadow-sm"
+              : "bg-transparent",
           )}
         >
-          {/* ── Unified toolbar (inclui o título) — mesma paleta gradiente do banner padrão ── */}
+          {/* Dashboard Header */}
           <div
-            className="relative overflow-hidden flex-1 min-w-0 flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]"
-            style={{
-              background:
-                "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)",
-            }}
+            className={cn(
+              "flex items-center gap-3",
+              isHeaderCompact ? "py-2" : "pt-0 pb-5",
+            )}
           >
-
-            {/* Título + info */}
-            <div className="flex items-center gap-1 shrink-0 mr-2">
-              <div className="overflow-hidden">
-                <h1
-                  className={cn(
-                    "font-bold text-white tracking-tight transition-all duration-300",
-                    isHeaderCompact ? "text-base" : "text-2xl sm:text-3xl lg:text-4xl xl:text-[46px]",
-                  )}
+            {/* ── Unified toolbar (inclui o título) — mesma paleta gradiente do banner padrão ── */}
+            <div
+              className="relative overflow-hidden flex-1 min-w-0 flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] lg:h-[65px]"
+              style={{
+                background:
+                  "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)",
+              }}
+            >
+              {/* Título + info */}
+              <div className="flex items-center gap-1 shrink-0 mr-2">
+                <div className="overflow-hidden">
+                  <h1
+                    className={cn(
+                      "font-bold text-white tracking-tight transition-all duration-300",
+                      isHeaderCompact
+                        ? "text-base"
+                        : "text-2xl sm:text-3xl lg:text-4xl xl:text-[46px]",
+                    )}
+                  >
+                    Dashboard
+                  </h1>
+                </div>
+                <DashboardInfoHint
+                  label="Mais informações sobre o painel"
+                  triggerClassName="self-center hover:bg-white/15 text-white/70 hover:text-white"
+                  contentClassName="max-w-[220px] p-3"
                 >
-                  Dashboard
-                </h1>
+                  <p className="font-semibold text-xs mb-1.5">
+                    Painel Administrativo
+                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Visão geral da plataforma em tempo real.
+                  </p>
+                </DashboardInfoHint>
               </div>
-              <DashboardInfoHint
-                label="Mais informações sobre o painel"
-                triggerClassName="self-center hover:bg-white/15 text-white/70 hover:text-white"
-                contentClassName="max-w-[220px] p-3"
-              >
-                    <p className="font-semibold text-xs mb-1.5">Painel Administrativo</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      Visão geral da plataforma em tempo real.
-                    </p>
-              </DashboardInfoHint>
-            </div>
 
-            {/* Divider */}
-            <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
+              {/* Divider */}
+              <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
 
-            {/* Item 1 (reunião 09/09/2026) — "Período global" do painel num
+              {/* Item 1 (reunião 09/09/2026) — "Período global" do painel num
                 componente compartilhado (variante escura do cabeçalho admin).
                 Antes: um selo decorativo "GLOBAL" solto + um seletor "Período:"
                 separado, com o alcance "painel inteiro" só explicado no hover. */}
-            <GlobalPeriodControl
-              variant="dark"
-              periodLabel={globalPeriod.label}
-              periodType={globalPeriod.type}
-              open={isPeriodPickerOpen}
-              onOpenChange={setIsPeriodPickerOpen}
-              options={periodOptions}
-              onSelectPreset={handlePeriodChange}
-              onSelectLast90Days={() => {
-                const today = new Date();
-                const d = new Date(today);
-                d.setDate(d.getDate() - 90);
-                setGlobalPeriod({ type: "custom", from: d, to: today, label: "Últimos 90 dias" });
-                setIsPeriodPickerOpen(false);
-              }}
-              customFrom={customPeriodFrom}
-              customTo={customPeriodTo}
-              onCustomFromChange={setCustomPeriodFrom}
-              onCustomToChange={setCustomPeriodTo}
-              onApplyCustom={applyCustomPeriod}
-            />
+              <GlobalPeriodControl
+                variant="dark"
+                periodLabel={globalPeriod.label}
+                periodType={globalPeriod.type}
+                open={isPeriodPickerOpen}
+                onOpenChange={setIsPeriodPickerOpen}
+                options={periodOptions}
+                onSelectPreset={handlePeriodChange}
+                onSelectLast90Days={() => {
+                  const today = new Date();
+                  const d = new Date(today);
+                  d.setDate(d.getDate() - 90);
+                  setGlobalPeriod({
+                    type: "custom",
+                    from: d,
+                    to: today,
+                    label: "Últimos 90 dias",
+                  });
+                  setIsPeriodPickerOpen(false);
+                }}
+                customFrom={customPeriodFrom}
+                customTo={customPeriodTo}
+                onCustomFromChange={setCustomPeriodFrom}
+                onCustomToChange={setCustomPeriodTo}
+                onApplyCustom={applyCustomPeriod}
+              />
 
-            {/* Divider */}
-            <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
+              {/* Divider */}
+              <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
 
-            {/* Dashboard selector */}
-            <div className="flex items-center gap-1 shrink-0">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className={cn("group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors max-w-[200px]", dashboardToolbarControlClass({ theme: "dark", menu: true }))}>
-                          <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-white" />
-                          <span className="text-xs font-semibold truncate text-white">
-                            {isViewingTemplateDefault
-                              ? `${profileTemplate?.name ?? "Padrão"} (Padrão)`
-                              : savedDashboards.find((d) => d.id === currentDashboardId)?.name ?? "Selecionar dashboard"}
-                          </span>
-                          <ChevronDown className="h-3 w-3 shrink-0 ml-auto text-white transition-transform group-data-[state=open]:rotate-180" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-auto min-w-48 max-w-72 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60">
-                        {/* Header */}
-                        <div className="px-3 py-2 border-b border-border/50">
-                          <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">Dashboards salvos</p>
+              {/* Dashboard selector */}
+              <div className="flex items-center gap-1 shrink-0">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className={cn(
+                        "group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors max-w-[200px]",
+                        dashboardToolbarControlClass({
+                          theme: "dark",
+                          menu: true,
+                        }),
+                      )}
+                    >
+                      <LayoutGrid className="h-3.5 w-3.5 shrink-0 text-white" />
+                      <span className="text-xs font-semibold truncate text-white">
+                        {isViewingTemplateDefault
+                          ? `${profileTemplate?.name ?? "Padrão"} (Padrão)`
+                          : (savedDashboards.find(
+                              (d) => d.id === currentDashboardId,
+                            )?.name ?? "Selecionar dashboard")}
+                      </span>
+                      <ChevronDown className="h-3 w-3 shrink-0 ml-auto text-white transition-transform group-data-[state=open]:rotate-180" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-auto min-w-48 max-w-72 p-0 overflow-hidden rounded-xl shadow-[0_8px_32px_-4px_rgba(0,0,0,0.18),0_2px_8px_-2px_rgba(0,0,0,0.10)] border border-border/60"
+                  >
+                    {/* Header */}
+                    <div className="px-3 py-2 border-b border-border/50">
+                      <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-widest">
+                        Dashboards salvos
+                      </p>
+                    </div>
+                    {/* Dashboard list */}
+                    <div className="p-1">
+                      {profileTemplate && (
+                        <div className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
+                          <button
+                            className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:bg-muted/60"
+                            onClick={() => {
+                              setCurrentDashboardId(TEMPLATE_DASHBOARD_ID);
+                              setWidgets(
+                                normalizeWidgetsColSpan(
+                                  profileTemplate.widgets as WidgetState[],
+                                ),
+                              );
+                              toast({
+                                title: "Dashboard carregado",
+                                description: `${profileTemplate.name} (Padrão)`,
+                              });
+                            }}
+                          >
+                            <Lock
+                              className={cn(
+                                "h-3.5 w-3.5 shrink-0 transition-colors",
+                                isViewingTemplateDefault
+                                  ? "text-[#7d1b6a]"
+                                  : "text-muted-foreground group-hover:text-[#7d1b6a]",
+                              )}
+                            />
+                            <span
+                              className={cn(
+                                "text-xs font-medium transition-colors truncate",
+                                isViewingTemplateDefault
+                                  ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                  : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]",
+                              )}
+                            >
+                              {profileTemplate.name} (Padrão)
+                            </span>
+                            {isViewingTemplateDefault && (
+                              <Check className="h-3 w-3 shrink-0 ml-auto text-[#c81a7f]" />
+                            )}
+                          </button>
                         </div>
-                        {/* Dashboard list */}
-                        <div className="p-1">
-                          {profileTemplate && (
-                            <div className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
-                              <button
-                                className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:bg-muted/60"
-                                onClick={() => {
-                                  setCurrentDashboardId(TEMPLATE_DASHBOARD_ID);
-                                  setWidgets(normalizeWidgetsColSpan(profileTemplate.widgets as WidgetState[]));
-                                  toast({ title: "Dashboard carregado", description: `${profileTemplate.name} (Padrão)` });
-                                }}
-                              >
-                                <Lock className={cn("h-3.5 w-3.5 shrink-0 transition-colors", isViewingTemplateDefault ? "text-[#7d1b6a]" : "text-muted-foreground group-hover:text-[#7d1b6a]")} />
-                                <span className={cn(
-                                  "text-xs font-medium transition-colors truncate",
-                                  isViewingTemplateDefault
+                      )}
+                      {profileTemplate && savedDashboards.length > 0 && (
+                        <div className="my-1 h-px bg-border/50" />
+                      )}
+                      {savedDashboards.map((db) => {
+                        const isActive = currentDashboardId === db.id;
+                        return (
+                          <div
+                            key={db.id}
+                            className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all"
+                          >
+                            <button
+                              className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:bg-muted/60"
+                              onClick={() => {
+                                handleLoadDashboard(db.id);
+                                toast({
+                                  title: "Dashboard carregado",
+                                  description: db.name,
+                                });
+                              }}
+                            >
+                              <LayoutGrid
+                                className={cn(
+                                  "h-3.5 w-3.5 shrink-0 transition-colors",
+                                  isActive
+                                    ? "text-[#7d1b6a]"
+                                    : "text-muted-foreground group-hover:text-[#7d1b6a]",
+                                )}
+                              />
+                              <span
+                                className={cn(
+                                  "text-xs font-medium transition-colors",
+                                  isActive
                                     ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                                    : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                                )}>
-                                  {profileTemplate.name} (Padrão)
-                                </span>
-                                {isViewingTemplateDefault && <Check className="h-3 w-3 shrink-0 ml-auto text-[#c81a7f]" />}
+                                    : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]",
+                                )}
+                              >
+                                {db.name}
+                              </span>
+                              {isActive && (
+                                <Check className="h-3 w-3 shrink-0 ml-auto text-[#c81a7f]" />
+                              )}
+                            </button>
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-1.5 shrink-0">
+                              <button
+                                onClick={() => handleSetDefaultDashboard(db.id)}
+                                className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                                title={
+                                  db.isDefault
+                                    ? "Dashboard padrão"
+                                    : "Definir como padrão"
+                                }
+                              >
+                                <Star
+                                  className={cn(
+                                    "h-3 w-3",
+                                    db.isDefault
+                                      ? "fill-amber-400 text-amber-400"
+                                      : "text-muted-foreground hover:text-amber-400",
+                                  )}
+                                />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setDeletingDashboardId(db.id);
+                                  setShowDeleteDashboardDialog(true);
+                                }}
+                                className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                title="Excluir dashboard"
+                              >
+                                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-500" />
                               </button>
                             </div>
-                          )}
-                          {profileTemplate && savedDashboards.length > 0 && (
-                            <div className="my-1 h-px bg-border/50" />
-                          )}
-                          {savedDashboards.map((db) => {
-                            const isActive = currentDashboardId === db.id;
-                            return (
-                              <div key={db.id} className="group flex items-center gap-1 rounded-lg hover:bg-muted/50 transition-all">
-                                <button
-                                  className="flex items-center gap-2 flex-1 text-left px-2.5 py-1.5 min-w-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:bg-muted/60"
-                                  onClick={() => {
-                                    handleLoadDashboard(db.id);
-                                    toast({ title: "Dashboard carregado", description: db.name });
-                                  }}
-                                >
-                                  <LayoutGrid className={cn("h-3.5 w-3.5 shrink-0 transition-colors", isActive ? "text-[#7d1b6a]" : "text-muted-foreground group-hover:text-[#7d1b6a]")} />
-                                  <span className={cn(
-                                    "text-xs font-medium transition-colors",
-                                    isActive
-                                      ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                                      : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                                  )}>
-                                    {db.name}
-                                  </span>
-                                  {isActive && <Check className="h-3 w-3 shrink-0 ml-auto text-[#c81a7f]" />}
-                                </button>
-                                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity pr-1.5 shrink-0">
-                                  <button
-                                    onClick={() => handleSetDefaultDashboard(db.id)}
-                                    className="p-1 rounded hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                                    title={db.isDefault ? "Dashboard padrão" : "Definir como padrão"}
-                                  >
-                                    <Star className={cn("h-3 w-3", db.isDefault ? "fill-amber-400 text-amber-400" : "text-muted-foreground hover:text-amber-400")} />
-                                  </button>
-                                  <button
-                                    onClick={() => { setDeletingDashboardId(db.id); setShowDeleteDashboardDialog(true); }}
-                                    className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                                    title="Excluir dashboard"
-                                  >
-                                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-500" />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {savedDashboards.length === 0 && !profileTemplate && (
-                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">Nenhum dashboard salvo</p>
-                          )}
-                        </div>
-                        {/* Footer action */}
-                        <div className="border-t border-border/50 p-1">
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              editor.reset([]);
-                              editor.setMode("adicionar");
-                              setEditHeaderName("");
-                              setIsEditingHeaderName(true);
-                              setIsNewDashboardMode(true);
-                              setIsEditDashboardModalOpen(true);
-                            }}
-                            className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer hover:bg-muted/50 transition-all"
-                          >
-                            <Plus className="h-3.5 w-3.5 text-[#7d1b6a]" />
-                            <span className="bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]">
-                              Criar novo dashboard
-                            </span>
-                          </DropdownMenuItem>
-                        </div>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <DashboardInfoHint
-                      label="Mais informações sobre os dashboards salvos"
-                      contentClassName="max-w-[220px] p-3"
-                    >
-                  <p className="font-semibold text-xs mb-1.5">Selecionar dashboard</p>
+                          </div>
+                        );
+                      })}
+                      {savedDashboards.length === 0 && !profileTemplate && (
+                        <p className="px-3 py-3 text-xs text-muted-foreground text-center">
+                          Nenhum dashboard salvo
+                        </p>
+                      )}
+                    </div>
+                    {/* Footer action */}
+                    <div className="border-t border-border/50 p-1">
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          editor.reset([]);
+                          editor.setMode("adicionar");
+                          setEditHeaderName("");
+                          setIsEditingHeaderName(true);
+                          setIsNewDashboardMode(true);
+                          setIsEditDashboardModalOpen(true);
+                        }}
+                        className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer hover:bg-muted/50 transition-all"
+                      >
+                        <Plus className="h-3.5 w-3.5 text-[#7d1b6a]" />
+                        <span className="bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]">
+                          Criar novo dashboard
+                        </span>
+                      </DropdownMenuItem>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DashboardInfoHint
+                  label="Mais informações sobre os dashboards salvos"
+                  contentClassName="max-w-[220px] p-3"
+                >
+                  <p className="font-semibold text-xs mb-1.5">
+                    Selecionar dashboard
+                  </p>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Escolha entre os dashboards salvos para alternar a <strong>visão geral da área</strong>.
+                    Escolha entre os dashboards salvos para alternar a{" "}
+                    <strong>visão geral da área</strong>.
                   </p>
                   <div className="mt-2 pt-2 border-t border-border/50">
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Use <strong>"Criar novo dashboard"</strong> para organizar diferentes configurações de widgets.
+                      Use <strong>"Criar novo dashboard"</strong> para organizar
+                      diferentes configurações de widgets.
                     </p>
                   </div>
                 </DashboardInfoHint>
-            </div>
+              </div>
 
-            {/* Divider */}
-            <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
+              {/* Divider */}
+              <div className="hidden xl:block w-px h-5 bg-white/20 mx-1 shrink-0" />
 
-            {/* Ações (Export/Histórico/Compartilhar/Editar) — colam à direita no desktop, quebram no mobile.
+              {/* Ações (Export/Histórico/Compartilhar/Editar) — colam à direita no desktop, quebram no mobile.
                 data-export-ignore: nenhum desses controles deve aparecer no PDF/PNG exportado. */}
-            <div className="flex items-center gap-1 shrink-0 xl:ml-auto" data-export-ignore="">
+              <div
+                className="flex items-center gap-1 shrink-0 xl:ml-auto"
+                data-export-ignore=""
+              >
+                {/* Item 8/9 — o padrão do Admin não se edita direto. */}
+                {profileTemplate && (
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          aria-label={
+                            isViewingTemplateDefault
+                              ? "Criar visão personalizada"
+                              : "Restaurar para o padrão"
+                          }
+                          onClick={() => {
+                            if (isViewingTemplateDefault) {
+                              createPersonalViewFromTemplate();
+                              toast({
+                                title:
+                                  "Visão pessoal criada a partir do padrão",
+                              });
+                            } else if (
+                              confirm(
+                                "Restaurar esta visão para o template padrão atual? Isso substitui os widgets dela.",
+                              )
+                            ) {
+                              const seeded = normalizeWidgetsColSpan(
+                                (profileTemplate.widgets as WidgetState[]).map(
+                                  (w) => ({ ...w }),
+                                ),
+                              );
+                              setWidgets(seeded);
+                              setSavedDashboards((prev) => {
+                                const next = prev.map((d) =>
+                                  d.id === currentDashboardId
+                                    ? { ...d, widgets: seeded }
+                                    : d,
+                                );
+                                localStorage.setItem(
+                                  getDashboardStorageKey(
+                                    "saved-dashboards",
+                                    "admin",
+                                  ),
+                                  JSON.stringify(next),
+                                );
+                                return next;
+                              });
+                            }
+                          }}
+                          className={cn(
+                            "group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all",
+                            dashboardToolbarControlClass({ theme: "dark" }),
+                          )}
+                        >
+                          <span
+                            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                            style={{
+                              background:
+                                "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                            }}
+                          />
+                          <RotateCcw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {isViewingTemplateDefault
+                          ? "Criar visão personalizada"
+                          : "Restaurar para o padrão"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
 
-            {/* Item 8/9 — o padrão do Admin não se edita direto. */}
-            {profileTemplate && (
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    aria-label={isViewingTemplateDefault ? "Criar visão personalizada" : "Restaurar para o padrão"}
-                    onClick={() => {
-                      if (isViewingTemplateDefault) {
-                        createPersonalViewFromTemplate();
-                        toast({ title: "Visão pessoal criada a partir do padrão" });
-                      } else if (
-                        confirm("Restaurar esta visão para o template padrão atual? Isso substitui os widgets dela.")
-                      ) {
-                        const seeded = normalizeWidgetsColSpan(
-                          (profileTemplate.widgets as WidgetState[]).map((w) => ({ ...w })),
-                        );
-                        setWidgets(seeded);
-                        setSavedDashboards((prev) => {
-                          const next = prev.map((d) => (d.id === currentDashboardId ? { ...d, widgets: seeded } : d));
-                          localStorage.setItem(
-                            getDashboardStorageKey("saved-dashboards", "admin"),
-                            JSON.stringify(next),
-                          );
-                          return next;
-                        });
-                      }
-                    }}
-                    className={cn("group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "dark" }))}
-                  >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
-                    <RotateCcw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {isViewingTemplateDefault ? "Criar visão personalizada" : "Restaurar para o padrão"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            )}
+                {/* Export */}
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <Popover
+                      open={showExportMenu}
+                      onOpenChange={setShowExportMenu}
+                    >
+                      <PopoverTrigger asChild>
+                        <TooltipTrigger asChild>
+                          <button
+                            aria-label="Exportar dashboard"
+                            disabled={isExporting}
+                            className={cn(
+                              "flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50",
+                              dashboardToolbarControlClass({
+                                theme: "dark",
+                                menu: true,
+                              }),
+                            )}
+                          >
+                            <Download
+                              className={cn(
+                                "h-4 w-4 text-white",
+                                isExporting && "animate-pulse",
+                              )}
+                            />
+                          </button>
+                        </TooltipTrigger>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-48 p-1.5" align="end">
+                        <button
+                          onClick={() => {
+                            setShowExportMenu(false);
+                            handleExportAs("pdf");
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+                        >
+                          <FileText className="h-3.5 w-3.5 text-red-500" />
+                          Exportar como PDF
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowExportMenu(false);
+                            handleExportAs("png");
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
+                        >
+                          <ImageDown className="h-3.5 w-3.5 text-blue-500" />
+                          Exportar como PNG
+                        </button>
+                      </PopoverContent>
+                    </Popover>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Exportar
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
 
-            {/* Export */}
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <Popover open={showExportMenu} onOpenChange={setShowExportMenu}>
-                  <PopoverTrigger asChild>
+                {/* Histórico */}
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
                     <TooltipTrigger asChild>
                       <button
-                        aria-label="Exportar dashboard"
-                        disabled={isExporting}
-                        className={cn("flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50", dashboardToolbarControlClass({ theme: "dark", menu: true }))}
+                        aria-label="Histórico de dados"
+                        onClick={() => openHistoricalModal()}
+                        className={cn(
+                          "flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors",
+                          dashboardToolbarControlClass({ theme: "dark" }),
+                        )}
                       >
-                        <Download className={cn("h-4 w-4 text-white", isExporting && "animate-pulse")} />
+                        <History className="h-4 w-4 text-white" />
+                        {Object.keys(historicalData).length > 0 && (
+                          <span className="absolute top-0.5 right-0.5 bg-amber-500 text-white rounded-full text-[8px] h-3.5 w-3.5 flex items-center justify-center">
+                            {Object.keys(historicalData).length}
+                          </span>
+                        )}
                       </button>
                     </TooltipTrigger>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-48 p-1.5" align="end">
-                    <button
-                      onClick={() => { setShowExportMenu(false); handleExportAs("pdf"); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-                    >
-                      <FileText className="h-3.5 w-3.5 text-red-500" />
-                      Exportar como PDF
-                    </button>
-                    <button
-                      onClick={() => { setShowExportMenu(false); handleExportAs("png"); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg hover:bg-accent transition-all text-left"
-                    >
-                      <ImageDown className="h-3.5 w-3.5 text-blue-500" />
-                      Exportar como PNG
-                    </button>
-                  </PopoverContent>
-                </Popover>
-                <TooltipContent side="bottom" sideOffset={6}>Exportar</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Histórico
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
 
-            {/* Histórico */}
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    aria-label="Histórico de dados"
-                    onClick={() => openHistoricalModal()}
-                    className={cn("flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors", dashboardToolbarControlClass({ theme: "dark" }))}
-                  >
-                    <History className="h-4 w-4 text-white" />
-                    {Object.keys(historicalData).length > 0 && (
-                      <span className="absolute top-0.5 right-0.5 bg-amber-500 text-white rounded-full text-[8px] h-3.5 w-3.5 flex items-center justify-center">
-                        {Object.keys(historicalData).length}
-                      </span>
-                    )}
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Histórico</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                {/* Compartilhar */}
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        aria-label="Compartilhar dashboard"
+                        onClick={openDashboardPublicShare}
+                        className={cn(
+                          "flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors",
+                          dashboardToolbarControlClass({ theme: "dark" }),
+                        )}
+                      >
+                        <Share2 className="h-4 w-4 text-white" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Compartilhar
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
 
-            {/* Compartilhar */}
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    aria-label="Compartilhar dashboard"
-                    onClick={openDashboardPublicShare}
-                    className={cn("flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors", dashboardToolbarControlClass({ theme: "dark" }))}
-                  >
-                    <Share2 className="h-4 w-4 text-white" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Compartilhar</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            {/* Editar */}
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => {
-                      if (isViewingTemplateDefault) {
-                        if (
-                          !confirm(
-                            "Este é o dashboard padrão definido pelo Admin e não pode ser editado diretamente. Deseja criar uma visão pessoal a partir dele para personalizar?",
-                          )
-                        ) {
-                          return;
-                        }
-                        createPersonalViewFromTemplate();
-                        const seeded = normalizeWidgetsColSpan(
-                          (profileTemplate?.widgets as WidgetState[] ?? []).map((w) => ({ ...w })).sort((a, b) => a.order - b.order),
-                        );
-                        editor.reset(seeded);
-                        setEditHeaderName("Minha visão");
-                        setIsEditingHeaderName(false);
-                        setIsEditDashboardModalOpen(true);
-                        return;
-                      }
-                      editor.reset([...widgets].sort((a, b) => a.order - b.order));
-                      const currentDb = savedDashboards.find((d) => d.id === currentDashboardId);
-                      setEditHeaderName(currentDb?.name ?? "Dashboard Padrão");
-                      setIsEditingHeaderName(false);
-                      setIsEditDashboardModalOpen(true);
-                    }}
-                    className={cn("flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors", dashboardToolbarControlClass({ theme: "dark" }))}
-                  >
-                    <Pencil className="h-3.5 w-3.5 shrink-0 text-white" />
-                    <span className="text-xs font-semibold text-white">
-                      Editar
-                    </span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Personalizar widgets</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <PinToTrayButton id="page-dashboard" label="Dashboard" icon={LayoutGrid} path="/admin/dashboard" />
-
-            </div>{/* fim ações */}
-
-          </div>{/* fim toolbar */}
-        </div>
-      </div>
-      {/* Export capture area: metrics + widgets */}
-      <div id="dashboard-export-area" className="flex flex-col gap-4">
-        {/* Banners/avisos do template padrão (item 10) */}
-        <DashboardTemplateContentList contents={templateContents} onDismiss={dismissTemplateContent} />
-        {/* Metrics Cards */}
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
-          {metricCards
-            .filter((m) => m.visible)
-            .sort((a, b) => a.order - b.order)
-            .map((metric) => renderMetricCard(metric.id))}
-        </div>
-
-        {/* Widgets Grid */}
-        <div
-          id="dashboard-content"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch"
-        >
-          {widgets
-            .filter((w) => w.visible)
-            .sort((a, b) => a.order - b.order)
-            .map((widget) => (
-              <div
-                key={`wrap-${widget.id}`}
-                className={cn(
-                  // col-span based on widget config
-                  widget.colSpan === 3
-                    ? "lg:col-span-3 md:col-span-2"
-                    : widget.colSpan === 2
-                      ? "lg:col-span-2 md:col-span-2"
-                      : "col-span-1",
-                  // container query context: inner grids respond to widget width
-                  "@container",
-                  // propagate height through: grid cell → outer widget div → Card
-                  "flex flex-col",
-                  "[&>*]:flex-1 [&>*]:flex [&>*]:flex-col",
-                  "[&>*>*:last-child]:flex-1",
-                )}
-              >
-                {renderWidget(widget)}
+                {/* Editar */}
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => {
+                          if (isViewingTemplateDefault) {
+                            if (
+                              !confirm(
+                                "Este é o dashboard padrão definido pelo Admin e não pode ser editado diretamente. Deseja criar uma visão pessoal a partir dele para personalizar?",
+                              )
+                            ) {
+                              return;
+                            }
+                            createPersonalViewFromTemplate();
+                            const seeded = normalizeWidgetsColSpan(
+                              (
+                                (profileTemplate?.widgets as WidgetState[]) ??
+                                []
+                              )
+                                .map((w) => ({ ...w }))
+                                .sort((a, b) => a.order - b.order),
+                            );
+                            editor.reset(seeded);
+                            setEditHeaderName("Minha visão");
+                            setIsEditingHeaderName(false);
+                            setIsEditDashboardModalOpen(true);
+                            return;
+                          }
+                          editor.reset(
+                            [...widgets].sort((a, b) => a.order - b.order),
+                          );
+                          const currentDb = savedDashboards.find(
+                            (d) => d.id === currentDashboardId,
+                          );
+                          setEditHeaderName(
+                            currentDb?.name ?? "Dashboard Padrão",
+                          );
+                          setIsEditingHeaderName(false);
+                          setIsEditDashboardModalOpen(true);
+                        }}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-white/70 bg-white/10 hover:bg-white/20 transition-colors",
+                          dashboardToolbarControlClass({ theme: "dark" }),
+                        )}
+                      >
+                        <Pencil className="h-3.5 w-3.5 shrink-0 text-white" />
+                        <span className="text-xs font-semibold text-white">
+                          Editar
+                        </span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Personalizar widgets
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <PinToTrayButton
+                  id="page-dashboard"
+                  label="Dashboard"
+                  icon={LayoutGrid}
+                  path="/admin/dashboard"
+                />
               </div>
-            ))}
-        </div>
-        {/* end dashboard-export-area */}
-      </div>
-
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Editar Dashboard</DialogTitle>
-            <DialogDescription>Altere o nome do dashboard</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-dashboard-name">Nome do Dashboard</Label>
-              <Input
-                id="edit-dashboard-name"
-                value={editingDashboardName}
-                onChange={(e) => setEditingDashboardName(e.target.value)}
-                placeholder="Digite o nome do dashboard"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSaveEditedDashboard();
-                  }
-                }}
-              />
+              {/* fim ações */}
             </div>
+            {/* fim toolbar */}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSaveEditedDashboard}
-              disabled={!editingDashboardName.trim()}
-            >
-              Salvar Alterações
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+        {/* Export capture area: metrics + widgets */}
+        <div id="dashboard-export-area" className="flex flex-col gap-4">
+          {/* Banners/avisos do template padrão (item 10) */}
+          <DashboardTemplateContentList
+            contents={templateContents}
+            onDismiss={dismissTemplateContent}
+          />
+          {/* Metrics Cards */}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-3">
+            {metricCards
+              .filter((m) => m.visible)
+              .sort((a, b) => a.order - b.order)
+              .map((metric) => renderMetricCard(metric.id))}
+          </div>
 
-      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Compartilhar Dashboard</DialogTitle>
-            <DialogDescription>
-              Escolha como deseja compartilhar este dashboard
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {/* Global Sharing */}
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div className="space-y-0.5">
+          {/* Widgets Grid */}
+          <div
+            id="dashboard-content"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch"
+          >
+            {widgets
+              .filter((w) => w.visible)
+              .sort((a, b) => a.order - b.order)
+              .map((widget) => (
+                <div
+                  key={`wrap-${widget.id}`}
+                  className={cn(
+                    // col-span based on widget config
+                    widget.colSpan === 3
+                      ? "lg:col-span-3 md:col-span-2"
+                      : widget.colSpan === 2
+                        ? "lg:col-span-2 md:col-span-2"
+                        : "col-span-1",
+                    // container query context: inner grids respond to widget width
+                    "@container",
+                    // propagate height through: grid cell → outer widget div → Card
+                    "flex flex-col",
+                    "[&>*]:flex-1 [&>*]:flex [&>*]:flex-col",
+                    "[&>*>*:last-child]:flex-1",
+                  )}
+                >
+                  {renderWidget(widget)}
+                </div>
+              ))}
+          </div>
+          {/* end dashboard-export-area */}
+        </div>
+
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Editar Dashboard</DialogTitle>
+              <DialogDescription>Altere o nome do dashboard</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-dashboard-name">Nome do Dashboard</Label>
+                <Input
+                  id="edit-dashboard-name"
+                  value={editingDashboardName}
+                  onChange={(e) => setEditingDashboardName(e.target.value)}
+                  placeholder="Digite o nome do dashboard"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSaveEditedDashboard();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSaveEditedDashboard}
+                disabled={!editingDashboardName.trim()}
+              >
+                Salvar Alterações
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Compartilhar Dashboard</DialogTitle>
+              <DialogDescription>
+                Escolha como deseja compartilhar este dashboard
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {/* Global Sharing */}
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-blue-500" />
+                    <Label htmlFor="share-global" className="font-medium">
+                      Compartilhar Globalmente
+                    </Label>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Disponível para todas as contas
+                  </p>
+                </div>
+                <Switch
+                  id="share-global"
+                  checked={shareGlobal}
+                  onCheckedChange={setShareGlobal}
+                />
+              </div>
+
+              {/* Professional Sharing */}
+              <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <Globe className="h-4 w-4 text-blue-500" />
-                  <Label htmlFor="share-global" className="font-medium">
-                    Compartilhar Globalmente
+                  <Users className="h-4 w-4 text-green-500" />
+                  <Label className="font-medium">
+                    Compartilhar com Profissionais
                   </Label>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Disponível para todas as contas
-                </p>
-              </div>
-              <Switch
-                id="share-global"
-                checked={shareGlobal}
-                onCheckedChange={setShareGlobal}
-              />
-            </div>
 
-            {/* Professional Sharing */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-green-500" />
-                <Label className="font-medium">
-                  Compartilhar com Profissionais
-                </Label>
-              </div>
+                <Input
+                  placeholder="Buscar profissional..."
+                  value={professionalSearch}
+                  onChange={(e) => setProfessionalSearch(e.target.value)}
+                  className="w-full"
+                />
 
-              <Input
-                placeholder="Buscar profissional..."
-                value={professionalSearch}
-                onChange={(e) => setProfessionalSearch(e.target.value)}
-                className="w-full"
-              />
-
-              <div className="border rounded-lg max-h-[200px] overflow-y-auto">
-                {/* Mock professional list - replace with real data */}
-                {[
-                  {
-                    id: "prof-1",
-                    name: "Dr. João Silva",
-                    specialty: "Psicólogo",
-                  },
-                  {
-                    id: "prof-2",
-                    name: "Dra. Maria Santos",
-                    specialty: "Nutricionista",
-                  },
-                  {
-                    id: "prof-3",
-                    name: "Dr. Pedro Costa",
-                    specialty: "Personal Trainer",
-                  },
-                  {
-                    id: "prof-4",
-                    name: "Dra. Ana Lima",
-                    specialty: "Terapeuta",
-                  },
-                ]
-                  .filter((prof) =>
-                    professionalSearch
-                      ? prof.name
-                          .toLowerCase()
-                          .includes(professionalSearch.toLowerCase())
-                      : true,
-                  )
-                  .map((professional) => (
-                    <div
-                      key={professional.id}
-                      className="flex items-center justify-between p-3 hover:bg-muted/50 border-b last:border-b-0"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">
-                          {professional.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {professional.specialty}
-                        </p>
+                <div className="border rounded-lg max-h-[200px] overflow-y-auto">
+                  {/* Mock professional list - replace with real data */}
+                  {[
+                    {
+                      id: "prof-1",
+                      name: "Dr. João Silva",
+                      specialty: "Psicólogo",
+                    },
+                    {
+                      id: "prof-2",
+                      name: "Dra. Maria Santos",
+                      specialty: "Nutricionista",
+                    },
+                    {
+                      id: "prof-3",
+                      name: "Dr. Pedro Costa",
+                      specialty: "Personal Trainer",
+                    },
+                    {
+                      id: "prof-4",
+                      name: "Dra. Ana Lima",
+                      specialty: "Terapeuta",
+                    },
+                  ]
+                    .filter((prof) =>
+                      professionalSearch
+                        ? prof.name
+                            .toLowerCase()
+                            .includes(professionalSearch.toLowerCase())
+                        : true,
+                    )
+                    .map((professional) => (
+                      <div
+                        key={professional.id}
+                        className="flex items-center justify-between p-3 hover:bg-muted/50 border-b last:border-b-0"
+                      >
+                        <div className="flex-1">
+                          <p className="font-medium text-sm">
+                            {professional.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {professional.specialty}
+                          </p>
+                        </div>
+                        <Switch
+                          checked={shareWithProfessionals.includes(
+                            professional.id,
+                          )}
+                          onCheckedChange={() =>
+                            handleToggleProfessional(professional.id)
+                          }
+                        />
                       </div>
-                      <Switch
-                        checked={shareWithProfessionals.includes(
-                          professional.id,
-                        )}
-                        onCheckedChange={() =>
-                          handleToggleProfessional(professional.id)
-                        }
-                      />
-                    </div>
-                  ))}
+                    ))}
+                </div>
+
+                {shareWithProfessionals.length > 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {shareWithProfessionals.length} profissional(is)
+                    selecionado(s)
+                  </p>
+                )}
               </div>
-
-              {shareWithProfessionals.length > 0 && (
-                <p className="text-sm text-muted-foreground">
-                  {shareWithProfessionals.length} profissional(is)
-                  selecionado(s)
-                </p>
-              )}
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowShareDialog(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveSharing}>Salvar Compartilhamento</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowShareDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveSharing}>
+                Salvar Compartilhamento
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      <Dialog
-        open={showSaveDashboardDialog}
-        onOpenChange={setShowSaveDashboardDialog}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Salvar Dashboard</DialogTitle>
-            <DialogDescription>
-              Dê um nome ao seu dashboard personalizado
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="dashboard-name">Nome do Dashboard</Label>
-              <Input
-                id="dashboard-name"
-                value={newDashboardName}
-                onChange={(e) => setNewDashboardName(e.target.value)}
-                placeholder="Ex: Meu Dashboard Financeiro"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSaveDashboard();
-                  }
-                }}
-              />
+        <Dialog
+          open={showSaveDashboardDialog}
+          onOpenChange={setShowSaveDashboardDialog}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Salvar Dashboard</DialogTitle>
+              <DialogDescription>
+                Dê um nome ao seu dashboard personalizado
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="dashboard-name">Nome do Dashboard</Label>
+                <Input
+                  id="dashboard-name"
+                  value={newDashboardName}
+                  onChange={(e) => setNewDashboardName(e.target.value)}
+                  placeholder="Ex: Meu Dashboard Financeiro"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSaveDashboard();
+                    }
+                  }}
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowSaveDashboardDialog(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleSaveDashboard}
-              disabled={!newDashboardName.trim()}
-            >
-              Salvar Dashboard
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowSaveDashboardDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleSaveDashboard}
+                disabled={!newDashboardName.trim()}
+              >
+                Salvar Dashboard
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* ── Public Share Dialog — popup padrão, não é uma "tela" (sem pin) ── */}
-      <StandardModalDialog
-        open={showPublicShareDialog}
-        onClose={() => setShowPublicShareDialog(false)}
-        title={shareTarget?.type === "widget" ? "Compartilhar widget" : "Compartilhar dashboard"}
-        subtitle={
-          shareTarget?.type === "widget"
-            ? shareTarget.title || "Gere ou copie o link público deste widget."
-            : "Gere ou copie o link público deste dashboard."
-        }
-        maxWidth="sm:max-w-2xl"
-        footer={
-          <div className="flex items-center justify-end gap-2 w-full">
-            <Button
-              variant="outline"
-              onClick={() => setShowPublicShareDialog(false)}
-            >
-              Fechar
-            </Button>
-            <Button
-              className="btn-brand"
-              onClick={handleGenerateShareLink}
-              disabled={(sharePinEnabled && sharePin.length !== 4) || shareGenerating}
-            >
-              <Link2 className="h-4 w-4 mr-1.5" />
-              {shareGenerating ? "Gerando..." : "Gerar Link"}
-            </Button>
-          </div>
-        }
-      >
-        <div className="p-6 space-y-4">
+        {/* ── Public Share Dialog — popup padrão, não é uma "tela" (sem pin) ── */}
+        <StandardModalDialog
+          open={showPublicShareDialog}
+          onClose={() => setShowPublicShareDialog(false)}
+          title={
+            shareTarget?.type === "widget"
+              ? "Compartilhar widget"
+              : "Compartilhar dashboard"
+          }
+          subtitle={
+            shareTarget?.type === "widget"
+              ? shareTarget.title ||
+                "Gere ou copie o link público deste widget."
+              : "Gere ou copie o link público deste dashboard."
+          }
+          maxWidth="sm:max-w-2xl"
+          footer={
+            <div className="flex items-center justify-end gap-2 w-full">
+              <Button
+                variant="outline"
+                onClick={() => setShowPublicShareDialog(false)}
+              >
+                Fechar
+              </Button>
+              <Button
+                className="btn-brand"
+                onClick={handleGenerateShareLink}
+                disabled={
+                  (sharePinEnabled && sharePin.length !== 4) || shareGenerating
+                }
+              >
+                <Link2 className="h-4 w-4 mr-1.5" />
+                {shareGenerating ? "Gerando..." : "Gerar Link"}
+              </Button>
+            </div>
+          }
+        >
+          <div className="p-6 space-y-4">
             <Tabs
               value={shareActiveTab}
               onValueChange={setShareActiveTab}
@@ -11561,20 +12225,41 @@ export function AdminDashboardPage() {
               <TabsContent value="permission" className="pt-2">
                 <ShareCreateForm
                   permission={sharePermission}
-                  onPermissionChange={(v) => { setSharePermission(v); setGeneratedShareLink(""); }}
+                  onPermissionChange={(v) => {
+                    setSharePermission(v);
+                    setGeneratedShareLink("");
+                  }}
                   slug={shareSlug}
-                  onSlugChange={(v) => { setShareSlug(v); setGeneratedShareLink(""); }}
+                  onSlugChange={(v) => {
+                    setShareSlug(v);
+                    setGeneratedShareLink("");
+                  }}
                   pinEnabled={sharePinEnabled}
-                  onPinEnabledChange={(v) => { setSharePinEnabled(v); setGeneratedShareLink(""); }}
+                  onPinEnabledChange={(v) => {
+                    setSharePinEnabled(v);
+                    setGeneratedShareLink("");
+                  }}
                   pin={sharePin}
-                  onPinChange={(v) => { setSharePin(v); setGeneratedShareLink(""); }}
+                  onPinChange={(v) => {
+                    setSharePin(v);
+                    setGeneratedShareLink("");
+                  }}
                   expiryEnabled={shareExpiryEnabled}
-                  onExpiryEnabledChange={(v) => { setShareExpiryEnabled(v); setGeneratedShareLink(""); }}
+                  onExpiryEnabledChange={(v) => {
+                    setShareExpiryEnabled(v);
+                    setGeneratedShareLink("");
+                  }}
                   expiry={shareExpiry}
-                  onExpiryChange={(v) => { setShareExpiry(v); setGeneratedShareLink(""); }}
+                  onExpiryChange={(v) => {
+                    setShareExpiry(v);
+                    setGeneratedShareLink("");
+                  }}
                   periodLabel={globalPeriod.label}
                   allowFilterChanges={shareAllowFilterChanges}
-                  onAllowFilterChangesChange={(v) => { setShareAllowFilterChanges(v); setGeneratedShareLink(""); }}
+                  onAllowFilterChangesChange={(v) => {
+                    setShareAllowFilterChanges(v);
+                    setGeneratedShareLink("");
+                  }}
                   disabled={shareGenerating}
                 />
               </TabsContent>
@@ -11587,7 +12272,11 @@ export function AdminDashboardPage() {
                   link recém-criado (pendingLink) e o refetch por
                   refreshSignal não têm componente nenhum pra reagir —
                   era a causa da regressão "link novo não aparece sem F5". */}
-              <TabsContent value="links" className="pt-2 data-[state=inactive]:hidden" forceMount>
+              <TabsContent
+                value="links"
+                className="pt-2 data-[state=inactive]:hidden"
+                forceMount
+              >
                 <ShareLinksPanel
                   targetId={shareTarget?.id}
                   refreshSignal={shareRefreshSignal}
@@ -11616,527 +12305,548 @@ export function AdminDashboardPage() {
                 </Button>
               </div>
             )}
-        </div>
-      </StandardModalDialog>
-      {/* ──────────────────────────────────────────────────────────────────── */}
-
-      {selectedMetric && (
-        <MetricChartModal
-          open={chartModalOpen}
-          onOpenChange={setChartModalOpen}
-          metricKey={selectedMetric.key}
-          metricTitle={selectedMetric.title}
-          chartType={selectedMetric.type}
-          data={selectedMetric.data}
-        />
-      )}
-
-      {/* ── Widget Details Modal ──────────────────────────────────────────── */}
-      {WidgetDetailsModal()}
-
-      {/* ── Historical Data Modal ─────────────────────────────────────────── */}
-      <EmbeddedSlideScreen
-        open={showHistoricalModal}
-        onClose={() => setShowHistoricalModal(false)}
-        title="Histórico do dashboard"
-        subtitle="Acompanhe alterações e eventos recentes deste painel."
-        pin={{
-          id: "dashboard-historico",
-          label: "Histórico do Dashboard",
-          icon: History,
-          path: "/admin/dashboard",
-          activateKey: "historico",
-        }}
-        footer={
-          <>
-            <Button
-              variant="outline"
-              onClick={() => setShowHistoricalModal(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={saveHistoricalEntry}
-              disabled={!histModalKey}
-              className="btn-brand"
-            >
-              <Save className="h-4 w-4 mr-1.5" />
-              Salvar Dados
-            </Button>
-          </>
-        }
-      >
-        <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-slate-950/40">
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm p-5 space-y-4">
-          <div className="flex items-start gap-2 text-sm text-muted-foreground">
-            <History className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-            <p>
-              Insira dados reais para um mês específico. Serão aplicados sobre
-              os dados gerados quando o período do dashboard corresponder a esse
-              mês.
-            </p>
           </div>
+        </StandardModalDialog>
+        {/* ──────────────────────────────────────────────────────────────────── */}
 
-          {/* Month picker + saved entries count */}
-          <div className="flex items-center gap-3 py-2 border-b border-border/40">
-            <Label className="text-sm font-medium shrink-0">Mês / Ano:</Label>
-            <Input
-              type="month"
-              value={histModalKey}
-              onChange={(e) => {
-                setHistModalKey(e.target.value);
-                setHistFormData(historicalData[e.target.value] ?? {});
-              }}
-              className="w-44"
-            />
-            {historicalData[histModalKey] && (
-              <Badge className="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700">
-                Dados salvos
-              </Badge>
-            )}
-          </div>
+        {selectedMetric && (
+          <MetricChartModal
+            open={chartModalOpen}
+            onOpenChange={setChartModalOpen}
+            metricKey={selectedMetric.key}
+            metricTitle={selectedMetric.title}
+            chartType={selectedMetric.type}
+            data={selectedMetric.data}
+          />
+        )}
 
-          {/* 4 collapsible groups */}
-          <Accordion
-            type="multiple"
-            defaultValue={["financeiro"]}
-            className="space-y-1"
-          >
-            {/* Group 1: Financeiro */}
-            <AccordionItem
-              value="financeiro"
-              className="border rounded-lg px-3"
-            >
-              <AccordionTrigger className="text-sm font-semibold py-3">
-                💰 Financeiro
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid grid-cols-2 gap-3 pb-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Receita Total (R$)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 85000"
-                      value={histFormData.revenue_total ?? ""}
-                      onChange={(e) =>
-                        setHistField("revenue_total", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      MRR (R$)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 42000"
-                      value={histFormData.mrr_total ?? ""}
-                      onChange={(e) =>
-                        setHistField("mrr_total", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Planos de Crédito (qtd)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 120"
-                      value={histFormData.creditPlans_total ?? ""}
-                      onChange={(e) =>
-                        setHistField("creditPlans_total", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Contas a Receber (R$)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 15000"
-                      value={histFormData.accountsReceivable_total ?? ""}
-                      onChange={(e) =>
-                        setHistField("accountsReceivable_total", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      CMV — Custo Total (R$)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 18000"
-                      value={histFormData.cmv_totalCosts ?? ""}
-                      onChange={(e) =>
-                        setHistField("cmv_totalCosts", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
+        {/* ── Widget Details Modal ──────────────────────────────────────────── */}
+        {WidgetDetailsModal()}
 
-            {/* Group 2: Projetos & Tarefas */}
-            <AccordionItem value="projetos" className="border rounded-lg px-3">
-              <AccordionTrigger className="text-sm font-semibold py-3">
-                📋 Projetos &amp; Tarefas
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid grid-cols-2 gap-3 pb-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Projetos Ativos (qtd)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 38"
-                      value={histFormData.activeProjects_total ?? ""}
-                      onChange={(e) =>
-                        setHistField("activeProjects_total", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Tarefas Totais (qtd)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 540"
-                      value={histFormData.tasks_total ?? ""}
-                      onChange={(e) =>
-                        setHistField("tasks_total", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Tarefas Concluídas (qtd)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 312"
-                      value={histFormData.tasks_completed ?? ""}
-                      onChange={(e) =>
-                        setHistField("tasks_completed", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Tarefas Em Progresso (qtd)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 95"
-                      value={histFormData.tasks_inProgress ?? ""}
-                      onChange={(e) =>
-                        setHistField("tasks_inProgress", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      SLA Compliance (%)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 89"
-                      min="0"
-                      max="100"
-                      value={histFormData.tasks_slaCompliance ?? ""}
-                      onChange={(e) =>
-                        setHistField("tasks_slaCompliance", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* Group 3: Nômades & Parceiros */}
-            <AccordionItem value="nomades" className="border rounded-lg px-3">
-              <AccordionTrigger className="text-sm font-semibold py-3">
-                🌍 Nômades &amp; Parceiros
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid grid-cols-2 gap-3 pb-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Nômades Total (qtd)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 210"
-                      value={histFormData.nomads_total ?? ""}
-                      onChange={(e) =>
-                        setHistField("nomads_total", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Nômades Ativos (qtd)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 178"
-                      value={histFormData.nomads_active ?? ""}
-                      onChange={(e) =>
-                        setHistField("nomads_active", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Parceiros Ativos (qtd)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 45"
-                      value={histFormData.partnerProgram_total ?? ""}
-                      onChange={(e) =>
-                        setHistField("partnerProgram_total", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Convites Enviados (qtd)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 90"
-                      value={histFormData.partnerProgram_invitesSent ?? ""}
-                      onChange={(e) =>
-                        setHistField(
-                          "partnerProgram_invitesSent",
-                          e.target.value,
-                        )
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      MRR Gerado Parceiros (R$)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 6200"
-                      value={histFormData.partnerProgram_mrrGenerated ?? ""}
-                      onChange={(e) =>
-                        setHistField(
-                          "partnerProgram_mrrGenerated",
-                          e.target.value,
-                        )
-                      }
-                    />
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-
-            {/* Group 4: Churn, Ticket & LTV */}
-            <AccordionItem
-              value="indicadores"
-              className="border rounded-lg px-3"
-            >
-              <AccordionTrigger className="text-sm font-semibold py-3">
-                📊 Churn, Ticket &amp; LTV
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="grid grid-cols-2 gap-3 pb-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Churn de Receita (%)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 3.2"
-                      step="0.1"
-                      value={histFormData.churn_revenueChurnRate ?? ""}
-                      onChange={(e) =>
-                        setHistField("churn_revenueChurnRate", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Receita Perdida — Churn (R$)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 1800"
-                      value={histFormData.churn_revenueChurn ?? ""}
-                      onChange={(e) =>
-                        setHistField("churn_revenueChurn", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      Ticket Médio Geral (R$)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 950"
-                      value={histFormData.averageTicket_general ?? ""}
-                      onChange={(e) =>
-                        setHistField("averageTicket_general", e.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">
-                      LTV (R$)
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 11400"
-                      value={histFormData.ltv_value ?? ""}
-                      onChange={(e) =>
-                        setHistField("ltv_value", e.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-
-          {/* Saved entries list */}
-          {Object.keys(historicalData).length > 0 && (
-            <div className="border-t border-border/40 pt-3 space-y-2">
-              <p className="text-xs text-muted-foreground font-medium">
-                Meses com dados salvos:
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(historicalData)
-                  .sort(([a], [b]) => b.localeCompare(a))
-                  .map(([key]) => {
-                    const [y, m] = key.split("-").map(Number);
-                    return (
-                      <div
-                        key={key}
-                        className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-0.5"
-                      >
-                        <button
-                          onClick={() => {
-                            setHistModalKey(key);
-                            setHistFormData(historicalData[key] ?? {});
-                          }}
-                          className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
-                        >
-                          {MONTH_NAMES[m - 1]}/{y}
-                        </button>
-                        <button
-                          onClick={() => deleteHistoricalEntry(key)}
-                          className="text-amber-400 hover:text-red-500 ml-0.5"
-                          title="Remover"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    );
-                  })}
+        {/* ── Historical Data Modal ─────────────────────────────────────────── */}
+        <EmbeddedSlideScreen
+          open={showHistoricalModal}
+          onClose={() => setShowHistoricalModal(false)}
+          title="Histórico do dashboard"
+          subtitle="Acompanhe alterações e eventos recentes deste painel."
+          pin={{
+            id: "dashboard-historico",
+            label: "Histórico do Dashboard",
+            icon: History,
+            path: "/admin/dashboard",
+            activateKey: "historico",
+          }}
+          footer={
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setShowHistoricalModal(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={saveHistoricalEntry}
+                disabled={!histModalKey}
+                className="btn-brand"
+              >
+                <Save className="h-4 w-4 mr-1.5" />
+                Salvar Dados
+              </Button>
+            </>
+          }
+        >
+          <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-slate-950/40">
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm p-5 space-y-4">
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <History className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                <p>
+                  Insira dados reais para um mês específico. Serão aplicados
+                  sobre os dados gerados quando o período do dashboard
+                  corresponder a esse mês.
+                </p>
               </div>
-            </div>
-          )}
-        </div>
-        </div>
-      </EmbeddedSlideScreen>
 
-      {/* Edit Dashboard Panel — SlidePanel é sempre renderizado (não gated por
+              {/* Month picker + saved entries count */}
+              <div className="flex items-center gap-3 py-2 border-b border-border/40">
+                <Label className="text-sm font-medium shrink-0">
+                  Mês / Ano:
+                </Label>
+                <Input
+                  type="month"
+                  value={histModalKey}
+                  onChange={(e) => {
+                    setHistModalKey(e.target.value);
+                    setHistFormData(historicalData[e.target.value] ?? {});
+                  }}
+                  className="w-44"
+                />
+                {historicalData[histModalKey] && (
+                  <Badge className="text-[10px] bg-amber-100 text-amber-700 border border-amber-300 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-700">
+                    Dados salvos
+                  </Badge>
+                )}
+              </div>
+
+              {/* 4 collapsible groups */}
+              <Accordion
+                type="multiple"
+                defaultValue={["financeiro"]}
+                className="space-y-1"
+              >
+                {/* Group 1: Financeiro */}
+                <AccordionItem
+                  value="financeiro"
+                  className="border rounded-lg px-3"
+                >
+                  <AccordionTrigger className="text-sm font-semibold py-3">
+                    💰 Financeiro
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid grid-cols-2 gap-3 pb-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Receita Total (R$)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 85000"
+                          value={histFormData.revenue_total ?? ""}
+                          onChange={(e) =>
+                            setHistField("revenue_total", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          MRR (R$)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 42000"
+                          value={histFormData.mrr_total ?? ""}
+                          onChange={(e) =>
+                            setHistField("mrr_total", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Planos de Crédito (qtd)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 120"
+                          value={histFormData.creditPlans_total ?? ""}
+                          onChange={(e) =>
+                            setHistField("creditPlans_total", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Contas a Receber (R$)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 15000"
+                          value={histFormData.accountsReceivable_total ?? ""}
+                          onChange={(e) =>
+                            setHistField(
+                              "accountsReceivable_total",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          CMV — Custo Total (R$)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 18000"
+                          value={histFormData.cmv_totalCosts ?? ""}
+                          onChange={(e) =>
+                            setHistField("cmv_totalCosts", e.target.value)
+                          }
+                        />
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Group 2: Projetos & Tarefas */}
+                <AccordionItem
+                  value="projetos"
+                  className="border rounded-lg px-3"
+                >
+                  <AccordionTrigger className="text-sm font-semibold py-3">
+                    📋 Projetos &amp; Tarefas
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid grid-cols-2 gap-3 pb-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Projetos Ativos (qtd)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 38"
+                          value={histFormData.activeProjects_total ?? ""}
+                          onChange={(e) =>
+                            setHistField("activeProjects_total", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Tarefas Totais (qtd)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 540"
+                          value={histFormData.tasks_total ?? ""}
+                          onChange={(e) =>
+                            setHistField("tasks_total", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Tarefas Concluídas (qtd)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 312"
+                          value={histFormData.tasks_completed ?? ""}
+                          onChange={(e) =>
+                            setHistField("tasks_completed", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Tarefas Em Progresso (qtd)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 95"
+                          value={histFormData.tasks_inProgress ?? ""}
+                          onChange={(e) =>
+                            setHistField("tasks_inProgress", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          SLA Compliance (%)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 89"
+                          min="0"
+                          max="100"
+                          value={histFormData.tasks_slaCompliance ?? ""}
+                          onChange={(e) =>
+                            setHistField("tasks_slaCompliance", e.target.value)
+                          }
+                        />
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Group 3: Nômades & Parceiros */}
+                <AccordionItem
+                  value="nomades"
+                  className="border rounded-lg px-3"
+                >
+                  <AccordionTrigger className="text-sm font-semibold py-3">
+                    🌍 Nômades &amp; Parceiros
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid grid-cols-2 gap-3 pb-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Nômades Total (qtd)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 210"
+                          value={histFormData.nomads_total ?? ""}
+                          onChange={(e) =>
+                            setHistField("nomads_total", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Nômades Ativos (qtd)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 178"
+                          value={histFormData.nomads_active ?? ""}
+                          onChange={(e) =>
+                            setHistField("nomads_active", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Parceiros Ativos (qtd)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 45"
+                          value={histFormData.partnerProgram_total ?? ""}
+                          onChange={(e) =>
+                            setHistField("partnerProgram_total", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Convites Enviados (qtd)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 90"
+                          value={histFormData.partnerProgram_invitesSent ?? ""}
+                          onChange={(e) =>
+                            setHistField(
+                              "partnerProgram_invitesSent",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          MRR Gerado Parceiros (R$)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 6200"
+                          value={histFormData.partnerProgram_mrrGenerated ?? ""}
+                          onChange={(e) =>
+                            setHistField(
+                              "partnerProgram_mrrGenerated",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Group 4: Churn, Ticket & LTV */}
+                <AccordionItem
+                  value="indicadores"
+                  className="border rounded-lg px-3"
+                >
+                  <AccordionTrigger className="text-sm font-semibold py-3">
+                    📊 Churn, Ticket &amp; LTV
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid grid-cols-2 gap-3 pb-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Churn de Receita (%)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 3.2"
+                          step="0.1"
+                          value={histFormData.churn_revenueChurnRate ?? ""}
+                          onChange={(e) =>
+                            setHistField(
+                              "churn_revenueChurnRate",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Receita Perdida — Churn (R$)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 1800"
+                          value={histFormData.churn_revenueChurn ?? ""}
+                          onChange={(e) =>
+                            setHistField("churn_revenueChurn", e.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          Ticket Médio Geral (R$)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 950"
+                          value={histFormData.averageTicket_general ?? ""}
+                          onChange={(e) =>
+                            setHistField(
+                              "averageTicket_general",
+                              e.target.value,
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">
+                          LTV (R$)
+                        </Label>
+                        <Input
+                          type="number"
+                          placeholder="ex: 11400"
+                          value={histFormData.ltv_value ?? ""}
+                          onChange={(e) =>
+                            setHistField("ltv_value", e.target.value)
+                          }
+                        />
+                      </div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+
+              {/* Saved entries list */}
+              {Object.keys(historicalData).length > 0 && (
+                <div className="border-t border-border/40 pt-3 space-y-2">
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Meses com dados salvos:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(historicalData)
+                      .sort(([a], [b]) => b.localeCompare(a))
+                      .map(([key]) => {
+                        const [y, m] = key.split("-").map(Number);
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center gap-1 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md px-2 py-0.5"
+                          >
+                            <button
+                              onClick={() => {
+                                setHistModalKey(key);
+                                setHistFormData(historicalData[key] ?? {});
+                              }}
+                              className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+                            >
+                              {MONTH_NAMES[m - 1]}/{y}
+                            </button>
+                            <button
+                              onClick={() => deleteHistoricalEntry(key)}
+                              className="text-amber-400 hover:text-red-500 ml-0.5"
+                              title="Remover"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </EmbeddedSlideScreen>
+
+        {/* Edit Dashboard Panel — SlidePanel é sempre renderizado (não gated por
           isEditDashboardModalOpen aqui); é ele mesmo que decide quando
           desmontar de verdade via seu estado interno `mounted`, o que dá
           tempo da animação de saída rodar. Gatear aqui desmontaria o painel
           no mesmo instante do fechamento, cortando a animação. */}
-      <DashboardEditorScreen
-        open={isEditDashboardModalOpen}
-        isNew={isNewDashboardMode}
-        name={editHeaderName}
-        onNameChange={setEditHeaderName}
-        onCommitName={handleSaveHeaderName}
-        editor={editor}
-        catalog={widgetLibrary}
-        getWidgetTitle={getWidgetTitle}
-        onSave={() => setShowSaveConfirmDialog(true)}
-        onCancel={() => setShowCancelConfirmDialog(true)}
-        pin={{
-          id: "dashboard-editar",
-          label: isNewDashboardMode ? "Novo Dashboard" : "Editar Dashboard",
-          icon: Pencil,
-          path: "/admin/dashboard",
-          activateKey: "editar",
-        }}
+        <DashboardEditorScreen
+          open={isEditDashboardModalOpen}
+          isNew={isNewDashboardMode}
+          name={editHeaderName}
+          onNameChange={setEditHeaderName}
+          onCommitName={handleSaveHeaderName}
+          editor={editor}
+          catalog={widgetLibrary}
+          getWidgetTitle={getWidgetTitle}
+          onSave={() => setShowSaveConfirmDialog(true)}
+          onCancel={() => setShowCancelConfirmDialog(true)}
+          pin={{
+            id: "dashboard-editar",
+            label: isNewDashboardMode ? "Novo Dashboard" : "Editar Dashboard",
+            icon: Pencil,
+            path: "/admin/dashboard",
+            activateKey: "editar",
+          }}
+        />
+        <ConfirmationDialog
+          open={showCancelConfirmDialog}
+          onClose={() => setShowCancelConfirmDialog(false)}
+          onConfirm={handleConfirmCancel}
+          title={isNewDashboardMode ? "Cancelar criação" : "Cancelar edição"}
+          message={
+            isNewDashboardMode
+              ? "Tem certeza que deseja cancelar? O novo dashboard não será criado."
+              : "Tem certeza que deseja cancelar? Todas as alterações não salvas serão perdidas."
+          }
+          confirmText="Sim, cancelar"
+          cancelText="Voltar"
+          destructive={true}
+        />
+        <ConfirmationDialog
+          open={showSaveConfirmDialog}
+          onClose={() => setShowSaveConfirmDialog(false)}
+          onConfirm={handleConfirmSave}
+          title={isNewDashboardMode ? "Criar dashboard" : "Salvar dashboard"}
+          message={
+            isNewDashboardMode
+              ? `Deseja criar o dashboard "${editHeaderName.trim() || "Novo Dashboard"}" com ${editor.draftWidgets.length} widget(s)?`
+              : "Deseja salvar as alterações feitas no dashboard? As mudanças serão aplicadas imediatamente."
+          }
+          confirmText={isNewDashboardMode ? "Criar" : "Salvar"}
+          cancelText="Voltar"
+          destructive={false}
+        />
+        <ConfirmationDialog
+          open={showDeleteDashboardDialog}
+          onClose={() => {
+            setShowDeleteDashboardDialog(false);
+            setDeletingDashboardId(null);
+          }}
+          onConfirm={() => {
+            if (deletingDashboardId) handleDeleteDashboard(deletingDashboardId);
+            setShowDeleteDashboardDialog(false);
+            setDeletingDashboardId(null);
+          }}
+          title="Excluir dashboard"
+          message={
+            <>
+              Tem certeza que deseja excluir o dashboard{" "}
+              <strong>
+                "
+                {savedDashboards.find((d) => d.id === deletingDashboardId)
+                  ?.name ?? ""}
+                "
+              </strong>
+              ?
+              <br />
+              <span className="text-muted-foreground text-xs">
+                Esta ação não pode ser desfeita.
+              </span>
+            </>
+          }
+          confirmText="Sim, excluir"
+          cancelText="Cancelar"
+          destructive={true}
+        />
+      </DashboardShellFrame>
+      <DashboardExportOverlay
+        state={exportState}
+        onDismiss={resetExportState}
+        onRetry={handleExportAs}
       />
-      <ConfirmationDialog
-        open={showCancelConfirmDialog}
-        onClose={() => setShowCancelConfirmDialog(false)}
-        onConfirm={handleConfirmCancel}
-        title={isNewDashboardMode ? "Cancelar criação" : "Cancelar edição"}
-        message={
-          isNewDashboardMode
-            ? "Tem certeza que deseja cancelar? O novo dashboard não será criado."
-            : "Tem certeza que deseja cancelar? Todas as alterações não salvas serão perdidas."
-        }
-        confirmText="Sim, cancelar"
-        cancelText="Voltar"
-        destructive={true}
-      />
-      <ConfirmationDialog
-        open={showSaveConfirmDialog}
-        onClose={() => setShowSaveConfirmDialog(false)}
-        onConfirm={handleConfirmSave}
-        title={isNewDashboardMode ? "Criar dashboard" : "Salvar dashboard"}
-        message={
-          isNewDashboardMode
-            ? `Deseja criar o dashboard "${editHeaderName.trim() || "Novo Dashboard"}" com ${editor.draftWidgets.length} widget(s)?`
-            : "Deseja salvar as alterações feitas no dashboard? As mudanças serão aplicadas imediatamente."
-        }
-        confirmText={isNewDashboardMode ? "Criar" : "Salvar"}
-        cancelText="Voltar"
-        destructive={false}
-      />
-      <ConfirmationDialog
-        open={showDeleteDashboardDialog}
-        onClose={() => {
-          setShowDeleteDashboardDialog(false);
-          setDeletingDashboardId(null);
-        }}
-        onConfirm={() => {
-          if (deletingDashboardId) handleDeleteDashboard(deletingDashboardId);
-          setShowDeleteDashboardDialog(false);
-          setDeletingDashboardId(null);
-        }}
-        title="Excluir dashboard"
-        message={
-          <>
-            Tem certeza que deseja excluir o dashboard{" "}
-            <strong>
-              "
-              {savedDashboards.find((d) => d.id === deletingDashboardId)
-                ?.name ?? ""}
-              "
-            </strong>
-            ?
-            <br />
-            <span className="text-muted-foreground text-xs">
-              Esta ação não pode ser desfeita.
-            </span>
-          </>
-        }
-        confirmText="Sim, excluir"
-        cancelText="Cancelar"
-        destructive={true}
-      />
-    </DashboardShellFrame>
-    <DashboardExportOverlay state={exportState} onDismiss={resetExportState} onRetry={handleExportAs} />
     </>
   );
 }

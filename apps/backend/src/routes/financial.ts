@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole, requirePermission, evaluateAnyPermission } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
-import { recordWalletEvent } from "../lib/wallet-service";
+import { recordWalletEvent, findOrCreateWallet } from "../lib/wallet-service";
 
 const router = Router();
 
@@ -142,6 +142,27 @@ router.post("/withdrawals", verifyToken, validate(createSchema), async (req, res
       // nomadeId permanece o valor enviado no corpo — admin agindo por terceiro.
     } else {
       res.status(403).json({ error: "Você não tem permissão para solicitar saques" });
+      return;
+    }
+
+    // Trava real de saldo — antes disto, um saque podia ser solicitado por
+    // qualquer valor, sem checar contra a carteira real do nômade (achado
+    // da auditoria de lançamento). Saldo disponível = balance da Wallet
+    // menos o que já está reservado em outros saques ainda não pagos/
+    // rejeitados/cancelados desta mesma pessoa (evita pedir o mesmo saldo
+    // duas vezes em dois saques pendentes simultâneos).
+    const amount = req.body.amount as number;
+    const wallet = await findOrCreateWallet("nomad", nomadeId);
+    const reservedInOtherRequests = await prisma.withdrawalRequest.aggregate({
+      where: { nomade_id: nomadeId, status: { in: ["aguardando_analise", "pagamento_agendado"] } },
+      _sum: { amount: true },
+    });
+    const available = wallet.balance - (reservedInOtherRequests._sum.amount ?? 0);
+    if (amount > available) {
+      res.status(400).json({
+        error: "Valor maior que o saldo disponível para saque.",
+        available_balance: available,
+      });
       return;
     }
 

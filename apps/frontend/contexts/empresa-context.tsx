@@ -140,27 +140,56 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
     }
     setLoading(true);
     try {
-      // Step 1: load company profile first to know the company ID
-      const companiesRes = await apiClient.getCompanies({ limit: "1" });
+      // Step 1: load company profile first to know the company ID.
+      //
+      // GET /clients é escopado pra quem GERENCIA empresas (admin/agência) —
+      // o dono da própria empresa nunca aparece na sua própria lista, então
+      // isto sempre ficava vazio pra uma empresa logada e o cabeçalho travava
+      // em "Carregando..." pra sempre (achado do usuário 2026-09-25). A
+      // fonte confiável da PRÓPRIA empresa é /auth/me (campo `company`,
+      // relação owned_company — mesmo padrão já usado por agencia-context.tsx
+      // via `agency`).
+      const currentUser: any = await apiClient.getCurrentUser().catch(() => null);
+      const own = currentUser?.company;
 
       let companyId = "1";
-      const cData: any = companiesRes;
-      const cList = cData.data || (Array.isArray(cData) ? cData : []);
-      if (cList[0]) {
-        companyId = String(cList[0].id);
+      if (own) {
+        companyId = String(own.id);
         setProfile({
           id: companyId,
-          name: cList[0].name || "",
-          cnpj: cList[0].document || "",
-          email: cList[0].email || "",
-          phone: cList[0].phone || "",
-          address: cList[0].address || "",
-          plan: cList[0].plan || "",
-          status: cList[0].status || "active",
-          createdAt: cList[0].created_at || cList[0].createdAt || "",
-          totalInvested: cList[0].totalInvested || 0,
-          activeProjects: cList[0].activeProjects || 0,
+          name: own.name || "",
+          cnpj: own.cnpj || own.document || "",
+          email: own.email || "",
+          phone: own.phone || "",
+          address: own.address || "",
+          plan: own.plan || "",
+          status: own.status || "active",
+          createdAt: own.created_at || own.createdAt || "",
+          totalInvested: own.totalInvested || 0,
+          activeProjects: own.activeProjects || 0,
         });
+      } else {
+        // Fallback pro comportamento anterior (ex.: admin acessando em nome
+        // de uma empresa via /clients, onde a lista pode não estar vazia).
+        const companiesRes = await apiClient.getCompanies({ limit: "1" });
+        const cData: any = companiesRes;
+        const cList = cData.data || (Array.isArray(cData) ? cData : []);
+        if (cList[0]) {
+          companyId = String(cList[0].id);
+          setProfile({
+            id: companyId,
+            name: cList[0].name || "",
+            cnpj: cList[0].document || "",
+            email: cList[0].email || "",
+            phone: cList[0].phone || "",
+            address: cList[0].address || "",
+            plan: cList[0].plan || "",
+            status: cList[0].status || "active",
+            createdAt: cList[0].created_at || cList[0].createdAt || "",
+            totalInvested: cList[0].totalInvested || 0,
+            activeProjects: cList[0].activeProjects || 0,
+          });
+        }
       }
 
       // Step 2: load projects (filtered by company) + invoices in parallel

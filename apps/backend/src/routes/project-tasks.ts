@@ -2,9 +2,9 @@ import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken, requireRole } from "../middleware/auth";
+import { verifyToken, requireRole, requireAdminMaster } from "../middleware/auth";
 import { validate } from "../middleware/validate";
-import { getRotationStatus, restartRotation, RotationError, startTaskRotation } from "../lib/task-rotation-engine";
+import { getRotationStatus, restartRotation, RotationError, startTaskRotation, sendManualOffer, assignNomadeDirectly } from "../lib/task-rotation-engine";
 import { atribuirLiderParaTarefa } from "../lib/atribuir-lider";
 import { withZeroDateRecovery } from "../lib/clean-zero-datetimes";
 import { combinedProjectWhere, isAdminUser } from "../lib/project-scope";
@@ -14,6 +14,7 @@ import { writeAccessAudit } from "../lib/product-feedback-service";
 import { recordApprovedTask } from "../lib/memory-service";
 import { assertTaskStatusTransitionAllowed, TaskStatusGuardError } from "../lib/task-release-guard";
 import { reevaluateSuccessors, DependencyInUseError, TaskReleaseError } from "../lib/task-release-service";
+import { recordWalletEvent } from "../lib/wallet-service";
 import {
   iniciarEtapasDaTarefa,
   concluirEtapa,
@@ -933,6 +934,82 @@ router.patch(
 );
 
 // ── GET /api/project-tasks/:id/rotation ─────────────────────────────────────
+// Controles de distribuição: deliberadamente Admin Master apenas. O servidor
+// não confia no botão da interface para habilitar/desabilitar a automação.
+const routingSettingsSchema = z.object({
+  offer_timeout_minutes: z.number().int().min(1).max(24 * 60),
+  mandatory_decline_alerts: z.boolean(),
+});
+const routingAreaSchema = z.object({ area: z.string().trim().min(1).max(191), auto_nomad_dispatch_enabled: z.boolean() });
+const routingTaskSchema = z.object({ auto_nomad_dispatch_enabled: z.boolean() });
+const routingNomadeSchema = z.object({ nomade_id: z.string().min(1) });
+
+router.get("/routing/settings", verifyToken, requireAdminMaster, async (_req, res, next) => {
+  try {
+    const settings = await prisma.taskRoutingSettings.upsert({
+      where: { id: "singleton" },
+      create: { id: "singleton", offer_timeout_minutes: 60, mandatory_decline_alerts: true }, update: {},
+    });
+    res.json(settings);
+  } catch (err) { next(err); }
+});
+
+router.put("/routing/settings", verifyToken, requireAdminMaster, validate(routingSettingsSchema), async (req, res, next) => {
+  try {
+    const saved = await prisma.taskRoutingSettings.upsert({
+      where: { id: "singleton" }, create: { id: "singleton", ...req.body }, update: req.body,
+    });
+    res.json(saved);
+  } catch (err) { next(err); }
+});
+
+router.get("/routing/areas", verifyToken, requireAdminMaster, async (_req, res, next) => {
+  try { res.json(await prisma.taskRoutingAreaPolicy.findMany({ orderBy: { area: "asc" } })); } catch (err) { next(err); }
+});
+
+router.put("/routing/areas", verifyToken, requireAdminMaster, validate(routingAreaSchema), async (req, res, next) => {
+  try {
+    const saved = await prisma.taskRoutingAreaPolicy.upsert({
+      where: { area: req.body.area },
+      create: { ...req.body, updated_by_user_id: req.user!.id },
+      update: { auto_nomad_dispatch_enabled: req.body.auto_nomad_dispatch_enabled, updated_by_user_id: req.user!.id },
+    });
+    res.json(saved);
+  } catch (err) { next(err); }
+});
+
+router.patch("/:id/routing", verifyToken, requireAdminMaster, validate(routingTaskSchema), async (req, res, next) => {
+  try {
+    const task = await prisma.projectTask.update({
+      where: { id: req.params.id as string }, data: req.body,
+      select: { id: true, auto_nomad_dispatch_enabled: true },
+    });
+    res.json(task);
+  } catch (err) { next(err); }
+});
+
+router.get("/:id/routing/nomades", verifyToken, requireAdminMaster, async (req, res, next) => {
+  try {
+    const task = await prisma.projectTask.findUnique({ where: { id: req.params.id as string }, select: { id: true } });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada." }); return; }
+    const all = await prisma.nomade.findMany({ where: { status: "ativo", user: { is: { is_active: true } } }, select: { id: true, name: true, user_id: true }, orderBy: { name: "asc" } });
+    const { eligibleCandidatesForTask } = await import("../lib/task-rotation-engine");
+    const eligible = new Set((await eligibleCandidatesForTask(task.id)).map((n) => n.nomadeId));
+    res.json(all.map((n) => ({ ...n, eligible: eligible.has(n.id) })));
+  } catch (err) { next(err); }
+});
+
+router.post("/:id/routing/manual-offer", verifyToken, requireAdminMaster, validate(routingNomadeSchema), async (req, res, next) => {
+  try { res.status(201).json(await sendManualOffer(req.params.id as string, req.body.nomade_id, req.user!.id)); }
+  catch (err) { if (err instanceof RotationError) { res.status(err.httpStatus).json({ error: err.message, code: err.code }); return; } next(err); }
+});
+
+router.post("/:id/routing/direct-assign", verifyToken, requireAdminMaster, validate(routingNomadeSchema), async (req, res, next) => {
+  try { await assignNomadeDirectly(req.params.id as string, req.body.nomade_id, req.user!.id); res.json({ ok: true }); }
+  catch (err) { if (err instanceof RotationError) { res.status(err.httpStatus).json({ error: err.message, code: err.code }); return; } next(err); }
+});
+
+// ── GET /api/project-tasks/:id/rotation ─────────────────────────────────────
 // Situação do rodízio de ofertas de Nômade — para o responsável entender por
 // que ninguém assumiu. Mesmo escopo de leitura da tarefa.
 router.get("/:id/rotation", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
@@ -1796,6 +1873,34 @@ router.patch(
         }
         return r;
       });
+
+      // ── Repasse ao nômade (fora da transação principal, best-effort — mesmo
+      // padrão de recordWalletEvent em routes/payments.ts). Só credita depois
+      // do aceite FINAL (concluida=true — nenhum nível de aprovação pendente),
+      // nunca em aprovação parcial (só agência) nem em reprovação. Soma
+      // valor_nomade de todas as etapas da tarefa; idempotencyKey por
+      // task.id garante que reprocessar este PATCH (retry de rede) não
+      // credita duas vezes.
+      if (resultado.concluida && task.nomade_responsavel_id) {
+        const stages = await prisma.projectTaskStage.findMany({
+          where: { project_task_id: task.id },
+          select: { valor_nomade: true },
+        });
+        const totalNomade = stages.reduce((sum, s) => sum + (s.valor_nomade ?? 0), 0);
+        if (totalNomade > 0) {
+          await recordWalletEvent("nomad", task.nomade_responsavel_id, {
+            type: "task_payout",
+            direction: "credit",
+            amount: totalNomade,
+            description: `Repasse — tarefa ${task.task_code ?? task.id} concluída e aprovada`,
+            idempotencyKey: `task_payout_${task.id}`,
+            referenceType: "project_task",
+            referenceId: task.id,
+            createdBy: req.user!.id,
+            metadata: { project_id: task.project_id },
+          });
+        }
+      }
 
       res.json(resultado);
     } catch (err) {

@@ -6,6 +6,14 @@ Plataforma de gestão para empresas, nômades digitais, agências e parceiros.
 
 ---
 
+## Marco atual: lançamento Allka 2.0
+
+**Meta interna de prontidão: 30 de setembro de 2026.** Até esta data, todo item **VS1** do [Roadmap Allka 2.0 — Lançamento](../Roadmap%20Allka%202.0%20%E2%80%94%20Lan%C3%A7amento.xlsx) deve estar funcional, validado em fluxo real e pronto para produção. Os itens **VS2** não bloqueiam a primeira publicação e devem ser apresentados como **“Em breve”** quando aparecerem no produto.
+
+O plano completo, com a lista literal dos itens, riscos já identificados, ordem de foco e critérios de saída, está em [docs/memoria-lancamento-2026-09.md](./docs/memoria-lancamento-2026-09.md). **Qualquer agente ou pessoa que retome o trabalho deve ler esse documento antes de priorizar novas tarefas ou recomendar deploy.**
+
+---
+
 ## O que é
 
 A plataforma **unifica cinco portais** em um único sistema — cada perfil de usuário tem sua área com navegação própria, mas compartilha o mesmo layout e identidade visual.
@@ -109,6 +117,7 @@ A documentação técnica completa está em [`/docs`](./docs):
 | [regras-de-negocio.md](./docs/regras-de-negocio.md)             | Regras importantes (perfis, produtos, financeiro, permissões, segurança)           |
 | [boas-praticas-dev.md](./docs/boas-praticas-dev.md)             | Como mexer sem quebrar, identificar impacto, documentar mudanças                   |
 | [checklist-manutencao.md](./docs/checklist-manutencao.md)       | Checklists práticas: criar feature, revisar, preparar deploy, validar pós-deploy   |
+| [memoria-lancamento-2026-09.md](./docs/memoria-lancamento-2026-09.md) | Fonte de verdade do lançamento: escopo VS1, data-alvo, riscos e ordem de execução |
 
 ---
 
@@ -125,6 +134,7 @@ A documentação técnica completa está em [`/docs`](./docs):
 9. **Desativar em vez de deletar** (preserva histórico).
 10. **Sem SSR** — é SPA pura. Rotas cliente dependem do `.htaccess` no cPanel.
 11. Português na UI, inglês no código.
+12. **Prioridade até 30/09/2026:** não tratar VS2 como bloqueador. Fechar e homologar o VS1 conforme [a memória de lançamento](./docs/memoria-lancamento-2026-09.md), com atenção imediata aos bloqueadores destacados nela.
 
 ---
 

@@ -35,6 +35,21 @@ import {
   type Catalog2Status,
 } from "./catalog2-foundation";
 
+// Resolve produto por slug, id técnico OU o ID numérico curto exposto no
+// link direto (/catalogo-produtos/:sequence_number) — achado do usuário
+// 2026-09-23: o slug completo é grande demais pra compartilhar. Reaproveitado
+// em todo endpoint que recebe o produto "da URL" (detalhe, configurar,
+// cotação, cesta), pra qualquer um deles aceitar o link curto.
+function productLookupWhere(slugOrId: string) {
+  const asNumber = Number(slugOrId);
+  const or: Array<{ slug: string } | { id: string } | { sequence_number: number }> = [
+    { slug: slugOrId },
+    { id: slugOrId },
+  ];
+  if (Number.isInteger(asNumber) && asNumber > 0) or.push({ sequence_number: asNumber });
+  return { OR: or };
+}
+
 // ── Identidade / permissão do cliente ────────────────────────────────────
 
 export type ClientKind = "admin" | "agency" | "company" | "leader" | "nomad" | "other";
@@ -50,6 +65,11 @@ export interface ClientContext {
   can_contract: boolean;
   // Admin Master pode abrir rascunhos em "pré-visualizar como cliente".
   can_preview_drafts: boolean;
+  // Líder vê o catálogo inteiro (ativo + inativo/em preparação) sempre,
+  // sem precisar de ?preview=1 — pedido do usuário 2026-09-25: "só o admin
+  // e leader que vê tudo mesmo inativo". Nunca configura/contrata (ver
+  // can_configure/can_contract, que continuam false pra leader).
+  always_sees_all_products: boolean;
 }
 
 // Item 16.1 (reunião 2026-09-14, "Visibilidade e teste") — parseia a lista
@@ -67,6 +87,16 @@ export async function resolveClientContext(userId: string, accountType: string, 
     select: {
       id: true,
       email: true,
+      // company_id/agency_id (vínculo de MEMBRO) são a fonte de verdade real
+      // pra "qual organização este usuário enxerga/compra em nome de" — a
+      // MESMA usada por project-scope.ts (ver comentário lá, linha 11-17),
+      // nunca owned_company/owned_agency (isso é OWNERSHIP, conceito
+      // diferente). Achado do usuário 2026-09-23: checkout gravava
+      // Project.company_id = ID DO USUÁRIO (violando a foreign key) porque
+      // os dados de teste nunca tinham User.company_id/agency_id
+      // preenchidos — corrigido na origem em setup-test-accounts.ts, não
+      // aqui (usar owned_company aqui seria inconsistente com
+      // project-scope.ts e quebraria pra um sub-usuário no futuro).
       company_id: true,
       agency_id: true,
       admin_profile: { select: { is_master: true, is_active: true } },
@@ -113,6 +143,14 @@ export async function resolveClientContext(userId: string, accountType: string, 
     can_configure: canConfigure,
     can_contract: canContract,
     can_preview_drafts: isMaster || isAuthorizedDemoAccount,
+    // Admin Master vê o catálogo inteiro sempre, sem precisar de ?preview=1
+    // — achado do usuário 2026-09-23: "Catálogo de Produtos" do admin tem
+    // que ser a MESMA tela que company/agency/líder usam, só que o admin
+    // vê tudo. Continua nunca configurando/contratando por enquanto (ver
+    // canConfigure/canContract acima) — "comprar em nome de uma empresa" é
+    // decisão adiada pelo usuário, feita pelo fluxo do projeto da empresa,
+    // não por aqui.
+    always_sees_all_products: kind === "leader" || isMaster,
   };
 }
 
@@ -313,10 +351,6 @@ function deliverablesFor(version: {
 
 // ── Listagem ──────────────────────────────────────────────────────────
 
-// Fixture de teste — nunca aparece pro cliente, nem em preview (reparo
-// 2026-09, "visualizar como cliente" pra Admin Master conferir os 36 reais).
-const TEST_LOCAL_PREFIX = "[TESTE LOCAL]";
-
 export interface ClientListFilters {
   q?: string;
   pillar_id?: string;
@@ -331,15 +365,18 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
   const page = Math.max(1, f.page ?? 1);
   const pageSize = Math.min(60, Math.max(1, f.page_size ?? 20));
   // Preview ("visualizar como cliente"): só Admin Master, só com ?preview=1
-  // (checado nas duas pontas — aqui e no chamador). Mostra os produtos reais
-  // (nunca a fixture) INDEPENDENTE de status/pendência/prontidão comercial —
-  // é o mesmo relaxamento que já existia para o detalhe de UM produto
-  // (getClientProduct), agora também na listagem, senão o preview nunca
-  // mostra os 36 (a maioria ainda em preparação, sem versão publicada).
-  const previewMode = !!opts.preview && ctx.can_preview_drafts;
+  // (checado nas duas pontas — aqui e no chamador). Mostra TODOS os
+  // produtos (reais + a fixture [TESTE LOCAL]) INDEPENDENTE de
+  // status/pendência/prontidão comercial — é o mesmo relaxamento que já
+  // existia para o detalhe de UM produto (getClientProduct), agora também
+  // na listagem, senão o preview nunca mostra os 36 (a maioria ainda em
+  // preparação, sem versão publicada). A fixture ficava excluída daqui
+  // antes (2026-09-25: pedido do usuário pra ele conseguir ver como ela
+  // aparece no preview, igual qualquer outro produto).
+  const previewMode = (!!opts.preview && ctx.can_preview_drafts) || ctx.always_sees_all_products;
 
   const where: Record<string, unknown> = previewMode
-    ? { internal_name: { not: { startsWith: TEST_LOCAL_PREFIX } } }
+    ? {}
     : { status: { in: CATALOG2_CLIENT_VISIBLE_STATUSES as string[] }, published_version_id: { not: null } };
   if (f.pillar_id) where.pillar_id = f.pillar_id;
   if (f.category_id) where.category_id = f.category_id;
@@ -388,7 +425,7 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
     if (!versionForPreview) {
       if (!previewMode) continue;
       enriched.push({
-        id: p.id, slug: p.slug, name: p.internal_name, short_description: null,
+        id: p.id, slug: p.slug, sequence_number: p.sequence_number, name: p.internal_name, short_description: null,
         pillar: p.pillar, category: p.category, four_f: p.four_f.map((l) => l.four_f).sort((a, b) => a.key.localeCompare(b.key)),
         origin: p.origin, is_new: false, starting_price: null, commercial_deadline_days: null, currency: "BRL",
         has_variations: false, has_addons: false,
@@ -420,6 +457,7 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
     enriched.push({
       id: p.id,
       slug: p.slug,
+      sequence_number: p.sequence_number,
       name: versionForPreview.title || p.internal_name,
       short_description: versionForPreview.summary ?? null,
       pillar: p.pillar,
@@ -465,7 +503,7 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
 
 export async function getClientProduct(ctx: ClientContext, slugOrId: string, opts: { preview: boolean }) {
   const product = await prisma.catalog2Product.findFirst({
-    where: { OR: [{ slug: slugOrId }, { id: slugOrId }] },
+    where: productLookupWhere(slugOrId),
     include: {
       pillar: true,
       category: true,
@@ -476,13 +514,23 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
         include: {
           variations: { orderBy: { sort_order: "asc" }, include: { options: { orderBy: { sort_order: "asc" } } } },
           addons: { orderBy: { sort_order: "asc" } },
+          // "O que está incluído" / especialidades do produto — dado REAL
+          // (nunca a camada provisória de Catalog2ProvisionalPreview, que é
+          // exclusiva do Admin Master) — achado do usuário 2026-09-23: a
+          // tela de detalhe do cliente precisa da mesma estrutura visual do
+          // "Detalhe comercial" do admin, incluindo o que está incluído e
+          // as especialidades envolvidas.
+          tasks: {
+            orderBy: { sort_order: "asc" },
+            include: { specialty: { select: { name: true } } },
+          },
         },
       },
     },
   });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
 
-  const previewMode = opts.preview && ctx.can_preview_drafts;
+  const previewMode = (opts.preview && ctx.can_preview_drafts) || ctx.always_sees_all_products;
   const vis = await checkClientVisibility(product);
 
   if (!vis.visible && !previewMode) {
@@ -506,6 +554,7 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
   return {
     id: product.id,
     slug: product.slug,
+    sequence_number: product.sequence_number,
     name: version.title || product.internal_name,
     description: version.full_description ?? version.summary ?? null,
     pillar: product.pillar ? { key: product.pillar.key, name: product.pillar.name } : null,
@@ -543,6 +592,10 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
     addons: version.addons
       .filter((a) => a.is_active)
       .map((a) => ({ key: a.key, name: a.name, description: a.description, is_default_selected: a.is_default_selected })),
+    // Dado real (nunca provisório) — usado pela aba "Detalhes"/"Nômades" do
+    // cliente, espelhando o "Detalhe comercial" do admin.
+    included_items: version.tasks.map((t) => ({ title: t.name, description: t.description })),
+    specialties: Array.from(new Set(version.tasks.map((t) => t.specialty?.name).filter((n): n is string => !!n))),
     // informações obrigatórias declaradas por efeitos require_info
     required_info: pricing.warnings
       .filter((w) => w.code === "extra_info_required")
@@ -571,6 +624,11 @@ export function normalizeSelection(raw: unknown): PricingSelection {
     variation_option_keys: arr(r.variation_option_keys),
     addon_keys: arr(r.addon_keys),
     quantity: qty,
+    // Cotações anteriores não possuíam essa escolha: preservam exatamente o
+    // comportamento anterior, com uma única tarefa para toda a quantidade.
+    delivery_groups: Array.isArray(r.delivery_groups)
+      ? r.delivery_groups.map((group) => Number(group))
+      : [qty],
     answers,
   };
 }
@@ -582,6 +640,7 @@ export function configChecksum(productId: string, versionId: string, sel: Pricin
     variation_option_keys: [...(sel.variation_option_keys ?? [])].sort(),
     addon_keys: [...(sel.addon_keys ?? [])].sort(),
     quantity: sel.quantity ?? 1,
+    delivery_groups: sel.delivery_groups ?? [sel.quantity ?? 1],
     answers: sel.answers ?? {},
     // Item 6: a MESMA seleção com períodos diferentes (ou avulso) é uma
     // configuração DIFERENTE — nunca colide no clique-duplo/cesta.
@@ -626,12 +685,20 @@ export function validateSelection(
   for (const k of sel.addon_keys ?? []) if (!activeAddons.has(k)) errs.push("Adicional inválido ou inativo selecionado.");
   const qty = sel.quantity ?? 1;
   if (qty < 1 || qty > 100000) errs.push("Quantidade fora do limite (1 a 100000).");
+  const groups = sel.delivery_groups ?? [qty];
+  if (!Array.isArray(groups) || groups.length === 0) {
+    errs.push("Informe ao menos um lote de execução.");
+  } else if (groups.some((group) => !Number.isInteger(group) || group < 1)) {
+    errs.push("Cada lote de execução precisa ter pelo menos uma unidade inteira.");
+  } else if (groups.reduce((sum, group) => sum + group, 0) !== qty) {
+    errs.push("A soma dos lotes precisa ser igual à quantidade contratada.");
+  }
   return errs;
 }
 
 export async function configureProduct(ctx: ClientContext, productIdOrSlug: string, rawSelection: unknown, opts: { preview: boolean; period?: unknown }) {
   const product = await prisma.catalog2Product.findFirst({
-    where: { OR: [{ slug: productIdOrSlug }, { id: productIdOrSlug }] },
+    where: productLookupWhere(productIdOrSlug),
     include: {
       import_origin: { select: { pendencies_json: true } },
       versions: {
@@ -642,7 +709,7 @@ export async function configureProduct(ctx: ClientContext, productIdOrSlug: stri
   });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
 
-  const previewMode = opts.preview && ctx.can_preview_drafts;
+  const previewMode = (opts.preview && ctx.can_preview_drafts) || ctx.always_sees_all_products;
   const vis = await checkClientVisibility(product);
   if (!vis.visible && !previewMode) throw new Catalog2Error("Produto não encontrado.", 404);
 
@@ -709,7 +776,7 @@ export async function createQuote(ctx: ClientContext, productIdOrSlug: string, r
   if (!ctx.can_contract) throw new Catalog2Error("Seu perfil não pode gerar cotações.", 403, "cannot_contract");
 
   const product = await prisma.catalog2Product.findFirst({
-    where: { OR: [{ slug: productIdOrSlug }, { id: productIdOrSlug }] },
+    where: productLookupWhere(productIdOrSlug),
     include: {
       import_origin: { select: { pendencies_json: true } },
       versions: { orderBy: { version_number: "desc" }, include: { variations: { include: { options: true } }, addons: true } },
@@ -1403,7 +1470,7 @@ export async function getCart(ctx: ClientContext) {
 export async function addToCart(ctx: ClientContext, productIdOrSlug: string, rawSelection: unknown, rawPeriod?: unknown) {
   if (!ctx.can_contract) throw new Catalog2Error("Seu perfil não pode usar a cesta do catálogo.", 403, "cannot_contract");
   const product = await prisma.catalog2Product.findFirst({
-    where: { OR: [{ slug: productIdOrSlug }, { id: productIdOrSlug }] },
+    where: productLookupWhere(productIdOrSlug),
     include: {
       import_origin: { select: { pendencies_json: true } },
       versions: { orderBy: { version_number: "desc" }, include: { variations: { include: { options: true } }, addons: true } },

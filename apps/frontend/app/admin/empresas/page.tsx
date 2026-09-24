@@ -163,7 +163,7 @@ function CompanyCompactStatCard({
   }[tone];
 
   return (
-    <div className="flex min-w-0 items-center gap-3 px-4 py-2.5 sm:px-5">
+    <div className="flex h-full min-w-0 items-center gap-3 px-4 sm:px-5">
       <span
         className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${palette}`}
       >
@@ -469,7 +469,7 @@ function CompanyAvatar({ company }: { company: Company }) {
   const [err, setErr] = React.useState(false);
   if (company.avatar && !err) {
     return (
-      <div className="w-10 h-10 rounded-full flex-shrink-0 shadow-sm overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+      <div className="h-9 w-9 rounded-full flex-shrink-0 overflow-hidden border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
         <img
           src={company.avatar}
           alt={company.name}
@@ -481,7 +481,7 @@ function CompanyAvatar({ company }: { company: Company }) {
   }
   return (
     <div
-      className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColor(company.id)} flex items-center justify-center flex-shrink-0 shadow-sm`}
+      className={`h-9 w-9 rounded-full bg-gradient-to-br ${avatarColor(company.id)} flex shrink-0 items-center justify-center shadow-sm`}
     >
       <span className="text-xs font-bold text-white">
         {companyInitials(company.name)}
@@ -916,7 +916,7 @@ export default function EmpresasPage() {
   const allDefaultWidths: Record<ColKey, number> = {
     acoes: 99,
     id: 85,
-    empresa: 280,
+    empresa: 340,
     contato: 240,
     cnpj: 210,
     status: 108,
@@ -927,7 +927,7 @@ export default function EmpresasPage() {
   const allMinWidths: Record<ColKey, number> = {
     acoes: 99,
     id: 72,
-    empresa: 200,
+    empresa: 260,
     contato: 180,
     cnpj: 180,
     status: 92,
@@ -1948,12 +1948,12 @@ export default function EmpresasPage() {
               }}
               placeholder="Pág."
               aria-label="Ir para a página"
-              className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="h-9 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             />
             <button
               onClick={commitPageJump}
               disabled={!pageJumpValue}
-              className="group relative h-7 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
+              className="group relative h-9 px-2.5 rounded-[8px] text-xs font-medium border border-slate-200 dark:border-slate-700 hover:border-transparent overflow-hidden disabled:opacity-40 disabled:pointer-events-none transition-all"
             >
               <span
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
@@ -1974,6 +1974,58 @@ export default function EmpresasPage() {
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+
+  const PaginationControls = () => (
+    <div className="flex items-center gap-1 shrink-0">
+      <button
+        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+        disabled={currentPage === 1}
+        title="Página anterior"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-30 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      {getPageNumbers().map((page, index) =>
+        page === "..." ? (
+          <span key={index} className="px-0.5 text-xs text-slate-300">
+            ·
+          </span>
+        ) : (
+          <button
+            key={index}
+            onClick={() => setCurrentPage(Number(page))}
+            title={
+              page === currentPage ? "Página atual" : `Ir para a página ${page}`
+            }
+            className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold transition-colors ${
+              page === currentPage
+                ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+            }`}
+            style={
+              page === currentPage
+                ? {
+                    background:
+                      "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                  }
+                : undefined
+            }
+          >
+            {page}
+          </button>
+        ),
+      )}
+      <button
+        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+        disabled={currentPage === totalPages}
+        title="Próxima página"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-30 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+      <PageJumpField className="ml-1.5 border-l border-slate-200 pl-1.5 dark:border-slate-700" />
+    </div>
   );
 
   const stats = {
@@ -2788,6 +2840,7 @@ export default function EmpresasPage() {
               icon={Building2}
               title="Empresas"
               description="Gerencie todas as empresas cadastradas na plataforma."
+              contentClassName="lg:h-[65px]"
               actions={
                 <>
                   <div className="bg-white rounded-lg">
@@ -2843,9 +2896,9 @@ export default function EmpresasPage() {
           </div>
 
           <div className="allka-users-scroll flex-1 min-h-0 overflow-y-scroll">
-            <div className="space-y-2 pr-1">
+            <div className="space-y-0 pr-[4px]">
               {/* Stats Cards */}
-              <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 xl:grid-cols-4 xl:divide-x xl:divide-slate-200">
+              <div className="mt-[5px] mb-[5px] grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 xl:h-[65px] xl:grid-cols-4 xl:divide-x xl:divide-slate-200">
                 <CompanyCompactStatCard
                   label="Total de Empresas"
                   value={stats.total}
@@ -2944,7 +2997,7 @@ export default function EmpresasPage() {
               é um chip principal aqui — é subfiltro exclusivo de Agência,
               ver bloco logo abaixo. */}
                   <div
-                    className="flex items-center gap-1.5 flex-shrink-0"
+                    className="flex h-9 items-center overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 flex-shrink-0"
                     role="group"
                     aria-label="Filtrar por tipo de organização"
                   >
@@ -2962,10 +3015,10 @@ export default function EmpresasPage() {
                           type="button"
                           aria-pressed={active}
                           onClick={() => applyTypeFilter(t)}
-                          className={`px-2.5 py-1.5 text-xs font-medium border transition-colors whitespace-nowrap ${
+                          className={`h-9 px-2.5 text-xs font-medium transition-colors whitespace-nowrap ${
                             active
                               ? "text-white border-transparent"
-                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-[#7d1b6a]/50"
+                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50"
                           }`}
                           style={
                             active
@@ -3122,29 +3175,7 @@ export default function EmpresasPage() {
                       )}{" "}
                       de {filteredCompanies.length}
                     </span>
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.max(1, currentPage - 1))
-                      }
-                      disabled={currentPage === 1}
-                      className="rounded-md p-1 text-slate-500 disabled:opacity-30"
-                      aria-label="Página anterior"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </button>
-                    <span className="min-w-6 rounded-md bg-[#31578f] px-1.5 py-1 text-center text-xs font-bold text-white">
-                      {currentPage}
-                    </span>
-                    <button
-                      onClick={() =>
-                        setCurrentPage(Math.min(totalPages, currentPage + 1))
-                      }
-                      disabled={currentPage === totalPages}
-                      className="rounded-md p-1 text-slate-500 disabled:opacity-30"
-                      aria-label="Próxima página"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
+                    {totalPages > 1 && <PaginationControls />}
                   </div>
                 </div>
 
@@ -3275,14 +3306,17 @@ export default function EmpresasPage() {
                 <div
                   ref={tableScrollRef}
                   onScroll={handleTableScroll}
-                  className="overflow-hidden empresas-table-body"
+                  className="overflow-x-auto empresas-table-body allka-table-scroll-body"
                 >
                   <table
-                    className="w-full table-fixed text-xs"
+                    className="tabela-cartao w-full table-fixed text-xs"
                     style={{
                       tableLayout: "fixed",
-                      width: "100%",
-                      minWidth: 0,
+                      width: Math.max(
+                        960,
+                        colWidths.reduce((total, width) => total + width, 0),
+                      ),
+                      minWidth: 960,
                     }}
                   >
                     <thead>
@@ -3290,10 +3324,8 @@ export default function EmpresasPage() {
                         {visibleColumnsList.map((col, i) => (
                           <th
                             key={col.key}
-                            className="py-2.5 text-[11px] font-bold text-[#5d7195] dark:text-slate-400 uppercase tracking-[0.04em] select-none relative [&_button]:!text-[11px]"
+                            className="relative py-2.5 px-4 text-[11px] font-bold text-[#365a91] dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
                             style={{
-                              paddingLeft: 16,
-                              paddingRight: 16,
                               textAlign:
                                 col.key === "acoes" ? "center" : "left",
                               position: "sticky",
@@ -3302,6 +3334,8 @@ export default function EmpresasPage() {
                               background: "var(--table-head)",
                               boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                               borderRight: "1px solid rgba(148,163,184,0.16)",
+                              width: colWidths[i],
+                              minWidth: minColWidths[i],
                             }}
                           >
                             <TooltipProvider delayDuration={300}>
@@ -3382,24 +3416,21 @@ export default function EmpresasPage() {
                             {col.key !== "acoes" && (
                               <span
                                 onMouseDown={(e) => onResizeMouseDown(e, i)}
-                                className="absolute top-0 right-0 h-full w-2.5 flex items-center justify-center cursor-col-resize z-10 group"
-                                style={{ transform: "translateX(50%)" }}
-                              >
-                                <span className="h-4 w-px bg-slate-300 dark:bg-slate-600 group-hover:bg-blue-400 dark:group-hover:bg-blue-500 transition-colors" />
-                              </span>
+                                className="absolute -right-0.5 top-1/2 z-20 h-7 w-1.5 -translate-y-1/2 cursor-col-resize rounded-full bg-slate-200/90 opacity-70 transition-all hover:w-2 hover:bg-fuchsia-400 hover:opacity-100"
+                              />
                             )}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#edf1f7] dark:divide-[oklch(0.20_0.022_258)]">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {paginatedCompanies.map((company, rowIndex) => (
                         <tr
                           key={company.id}
                           className={`group transition-colors cursor-pointer ${
                             rowIndex % 2 === 0
-                              ? "bg-white dark:bg-slate-900 hover:bg-indigo-50/70 dark:hover:bg-slate-800/60"
-                              : "bg-slate-50/60 dark:bg-slate-900/40 hover:bg-indigo-50/70 dark:hover:bg-slate-800/60"
+                              ? "bg-white hover:bg-[#f3f7ff] dark:bg-[oklch(0.14_0.026_258)] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                              : "bg-[#f5f8fc] hover:bg-[#eaf2ff] dark:bg-[oklch(0.185_0.024_258)] dark:hover:bg-[oklch(0.21_0.024_258)]"
                           }`}
                         >
                           {/* Actions — pinned to the left, first column */}
@@ -3587,7 +3618,7 @@ export default function EmpresasPage() {
                           {/* ID */}
                           {mostrarCol("id") && (
                             <td
-                              className="px-4 py-3"
+                              className="px-2 py-1.5 text-center"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
                                 overflow: "hidden",
@@ -3603,7 +3634,7 @@ export default function EmpresasPage() {
                           {/* Company */}
                           {mostrarCol("empresa") && (
                             <td
-                              className="px-4 py-3"
+                              className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
                                 overflow: "hidden",
@@ -3709,7 +3740,7 @@ export default function EmpresasPage() {
                           {/* Contact */}
                           {mostrarCol("contato") && (
                             <td
-                              className="px-4 py-3"
+                              className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
                                 overflow: "hidden",
@@ -3791,7 +3822,7 @@ export default function EmpresasPage() {
                           {/* CNPJ + Users */}
                           {mostrarCol("cnpj") && (
                             <td
-                              className="px-4 py-3"
+                              className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
                                 overflow: "hidden",
@@ -3816,7 +3847,7 @@ export default function EmpresasPage() {
                           {/* Status */}
                           {mostrarCol("status") && (
                             <td
-                              className="px-4 py-3"
+                              className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
                                 overflow: "hidden",
@@ -3852,7 +3883,7 @@ export default function EmpresasPage() {
                           {/* Plan */}
                           {mostrarCol("plano") && (
                             <td
-                              className="px-4 py-3"
+                              className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
                                 overflow: "hidden",
@@ -4024,7 +4055,7 @@ export default function EmpresasPage() {
                           {/* Type */}
                           {mostrarCol("tipo") && (
                             <td
-                              className="px-4 py-3"
+                              className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
                                 overflow: "hidden",
@@ -4086,7 +4117,7 @@ export default function EmpresasPage() {
                           {/* Membro Desde */}
                           {mostrarCol("membro_desde") && (
                             <td
-                              className="px-4 py-3"
+                              className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
                                 overflow: "hidden",

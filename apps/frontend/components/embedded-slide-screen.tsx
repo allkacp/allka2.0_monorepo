@@ -42,6 +42,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
 
 interface EmbeddedSlideScreenProps {
   open: boolean;
@@ -157,9 +158,14 @@ export function EmbeddedSlideScreen({
   }, [mounted, onClose, asPage]);
 
   // ── Modo PÁGINA: card no fluxo normal, sem overlay/animação/Escape/X ──
+  // Usa STANDARD_SHELL_PANEL_CLASS (mesmo painel branco com a "margenzinha"
+  // p-1.5/p-2 de qualquer tela do padrão "Tela Global com tabela principal",
+  // ex. /admin/usuarios) — achado do usuário 2026-09-23: o único consumidor
+  // de `asPage` (app/perfil/page.tsx) tinha essa margem faltando, com o
+  // conteúdo colado na borda arredondada do painel.
   if (asPage) {
     return (
-      <div className="relative w-full h-full flex flex-col overflow-hidden bg-white dark:bg-slate-900 rounded-2xl lg:rounded-[1.5rem] border border-slate-200/70 dark:border-slate-700/60 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.18),0_4px_16px_-4px_rgba(15,23,42,0.10)]">
+      <div className={`${STANDARD_SHELL_PANEL_CLASS} relative flex flex-col`}>
         <div className="flex flex-1 overflow-hidden min-h-0">{children}</div>
         {footer && (
           <div className="shrink-0 border-t border-slate-200/80 dark:border-slate-700/80 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm px-6 py-4">
@@ -244,19 +250,18 @@ export function EmbeddedSlideScreen({
                 disabled={pinning}
                 aria-pressed={pinned}
                 aria-label={pinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"}
-                // Posicionado pra não colidir com o X do cabeçalho custom
-                // (ModalBrandHeader usa top-5 right-5, ~36px de botão) —
-                // fica logo à esquerda dele, mesma altura.
-                className={`absolute top-5 right-16 z-10 flex items-center justify-center h-8 w-8 rounded-lg transition-all disabled:opacity-60 ${
+                // Mesma linha compacta do X: canto superior direito do
+                // cabeçalho, com um respiro curto entre as duas ações.
+                className={`absolute top-3 right-11 z-10 flex items-center justify-center h-6 w-6 rounded-md transition-all disabled:opacity-60 ${
                   pinned
                     ? "bg-white/25 text-white"
                     : "text-white/80 hover:bg-white/20 hover:text-white"
                 }`}
               >
                 {pinning ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Pin className={`h-4 w-4 ${pinned ? "fill-current" : ""}`} />
+                  <Pin className={`h-3.5 w-3.5 ${pinned ? "fill-current" : ""}`} />
                 )}
               </button>
             </TooltipTrigger>

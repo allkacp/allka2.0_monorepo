@@ -21,7 +21,7 @@ export function PageHeader({ title, description, subtitle, actions, className }:
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-x-1 gap-y-2 mb-5 lg:mb-7",
+        "flex flex-wrap items-center gap-x-1 gap-y-2 mb-5 lg:mb-7 lg:h-[65px]",
         "bg-background border border-border/70 rounded-xl",
         "px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.10),0_1px_6px_-2px_rgba(0,0,0,0.06)]",
         className,

@@ -52,7 +52,12 @@ import { ReportBuilderSheet } from "@/features/reports/components/report-builder
 import { exportReportSummaryPDF } from "@/features/reports/report-export";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import type { ReportConfig } from "@/features/reports/types";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   StandardPageBanner,
@@ -62,7 +67,10 @@ import { PinToTrayButton } from "@/components/pin-to-tray-button";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(value) {
-  return (value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return (value || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 }
 
 function fmtNum(n) {
@@ -81,10 +89,34 @@ const CATEGORIES = [
     lightText: "text-emerald-700 dark:text-emerald-400",
     border: "border-emerald-200 dark:border-emerald-700/40",
     reports: [
-      { id: "revenue",   name: "Receitas e Faturamento",   desc: "Análise detalhada de receitas por período, empresa e projeto", icon: TrendingUp, formats: ["PDF", "XLSX"] },
-      { id: "invoices",  name: "Faturas e Cobranças",       desc: "Gestão de faturas, inadimplência e histórico de pagamentos",    icon: ReceiptText, formats: ["PDF", "XLSX"] },
-      { id: "cashflow",  name: "Fluxo de Caixa",            desc: "Movimentações financeiras, entradas e saídas",                  icon: BarChart3, formats: ["PDF"] },
-      { id: "withdrawals",name: "Saques de Parceiros",      desc: "Solicitações, aprovações e pagamentos de saques",               icon: Banknote, formats: ["XLSX"] },
+      {
+        id: "revenue",
+        name: "Receitas e Faturamento",
+        desc: "Análise detalhada de receitas por período, empresa e projeto",
+        icon: TrendingUp,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "invoices",
+        name: "Faturas e Cobranças",
+        desc: "Gestão de faturas, inadimplência e histórico de pagamentos",
+        icon: ReceiptText,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "cashflow",
+        name: "Fluxo de Caixa",
+        desc: "Movimentações financeiras, entradas e saídas",
+        icon: BarChart3,
+        formats: ["PDF"],
+      },
+      {
+        id: "withdrawals",
+        name: "Saques de Parceiros",
+        desc: "Solicitações, aprovações e pagamentos de saques",
+        icon: Banknote,
+        formats: ["XLSX"],
+      },
     ],
   },
   {
@@ -96,10 +128,34 @@ const CATEGORIES = [
     lightText: "text-blue-700 dark:text-blue-400",
     border: "border-blue-200 dark:border-blue-700/40",
     reports: [
-      { id: "projects",   name: "Projetos e Entregas",        desc: "Status, progresso e métricas de projetos ativos",             icon: FolderKanban, formats: ["PDF", "XLSX"] },
-      { id: "tasks",      name: "Tarefas e Atividades",       desc: "Acompanhamento de execução, aprovação e rejeição de tarefas", icon: CheckSquare, formats: ["PDF", "XLSX"] },
-      { id: "availability",name: "Disponibilidade de Nômades",desc: "Capacidade, alocação e agenda dos profissionais",             icon: Users, formats: ["PDF"] },
-      { id: "performance",name: "Performance Operacional",    desc: "KPIs operacionais, SLAs e indicadores de qualidade",          icon: BarChart3, formats: ["PDF"] },
+      {
+        id: "projects",
+        name: "Projetos e Entregas",
+        desc: "Status, progresso e métricas de projetos ativos",
+        icon: FolderKanban,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "tasks",
+        name: "Tarefas e Atividades",
+        desc: "Acompanhamento de execução, aprovação e rejeição de tarefas",
+        icon: CheckSquare,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "availability",
+        name: "Disponibilidade de Nômades",
+        desc: "Capacidade, alocação e agenda dos profissionais",
+        icon: Users,
+        formats: ["PDF"],
+      },
+      {
+        id: "performance",
+        name: "Performance Operacional",
+        desc: "KPIs operacionais, SLAs e indicadores de qualidade",
+        icon: BarChart3,
+        formats: ["PDF"],
+      },
     ],
   },
   {
@@ -111,10 +167,34 @@ const CATEGORIES = [
     lightText: "text-violet-700 dark:text-violet-400",
     border: "border-violet-200 dark:border-violet-700/40",
     reports: [
-      { id: "companies",   name: "Empresas Clientes",      desc: "Cadastro, status e histórico de empresas parceiras",            icon: Building2, formats: ["PDF", "XLSX"] },
-      { id: "nomades",     name: "Nômades e Freelancers",  desc: "Profissionais cadastrados, níveis, performance e atividade",   icon: Users, formats: ["PDF", "XLSX"] },
-      { id: "engagement",  name: "Engajamento de Usuários",desc: "Atividade, retenção e padrões de uso da plataforma",           icon: Activity, formats: ["PDF"] },
-      { id: "satisfaction",name: "Satisfação e NPS",       desc: "Feedback, avaliações e Net Promoter Score",                   icon: Star, formats: ["PDF"] },
+      {
+        id: "companies",
+        name: "Empresas Clientes",
+        desc: "Cadastro, status e histórico de empresas parceiras",
+        icon: Building2,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "nomades",
+        name: "Nômades e Freelancers",
+        desc: "Profissionais cadastrados, níveis, performance e atividade",
+        icon: Users,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "engagement",
+        name: "Engajamento de Usuários",
+        desc: "Atividade, retenção e padrões de uso da plataforma",
+        icon: Activity,
+        formats: ["PDF"],
+      },
+      {
+        id: "satisfaction",
+        name: "Satisfação e NPS",
+        desc: "Feedback, avaliações e Net Promoter Score",
+        icon: Star,
+        formats: ["PDF"],
+      },
     ],
   },
   {
@@ -126,9 +206,27 @@ const CATEGORIES = [
     lightText: "text-amber-700 dark:text-amber-400",
     border: "border-amber-200 dark:border-amber-700/40",
     reports: [
-      { id: "levels",      name: "Níveis e Progressão",  desc: "Evolução de níveis, pontos e histórico de upgrades",    icon: Award, formats: ["PDF", "XLSX"] },
-      { id: "achievements",name: "Conquistas e Badges",  desc: "Sistema de recompensas e conquistas desbloqueadas",     icon: Star, formats: ["PDF"] },
-      { id: "leaderboard", name: "Ranking e Performance",desc: "Top performers, classificação e competições internas",  icon: TrendingUp, formats: ["PDF"] },
+      {
+        id: "levels",
+        name: "Níveis e Progressão",
+        desc: "Evolução de níveis, pontos e histórico de upgrades",
+        icon: Award,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "achievements",
+        name: "Conquistas e Badges",
+        desc: "Sistema de recompensas e conquistas desbloqueadas",
+        icon: Star,
+        formats: ["PDF"],
+      },
+      {
+        id: "leaderboard",
+        name: "Ranking e Performance",
+        desc: "Top performers, classificação e competições internas",
+        icon: TrendingUp,
+        formats: ["PDF"],
+      },
     ],
   },
   {
@@ -140,10 +238,34 @@ const CATEGORIES = [
     lightText: "text-pink-700 dark:text-pink-400",
     border: "border-pink-200 dark:border-pink-700/40",
     reports: [
-      { id: "campaigns",  name: "Campanhas de Marketing",desc: "Performance de campanhas, alcance e conversão",          icon: Megaphone, formats: ["PDF", "XLSX"] },
-      { id: "referrals",  name: "Indicações e Referrals",desc: "Programa de indicação, conversões e recompensas",        icon: Users, formats: ["XLSX"] },
-      { id: "promotions", name: "Promoções e Cupons",    desc: "Uso de descontos, cupons e impacto no faturamento",      icon: Tag, formats: ["PDF", "XLSX"] },
-      { id: "conversion", name: "Conversão e Funil",     desc: "Jornada do cliente, drop-off e taxa de conversão",      icon: BarChart3, formats: ["PDF"] },
+      {
+        id: "campaigns",
+        name: "Campanhas de Marketing",
+        desc: "Performance de campanhas, alcance e conversão",
+        icon: Megaphone,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "referrals",
+        name: "Indicações e Referrals",
+        desc: "Programa de indicação, conversões e recompensas",
+        icon: Users,
+        formats: ["XLSX"],
+      },
+      {
+        id: "promotions",
+        name: "Promoções e Cupons",
+        desc: "Uso de descontos, cupons e impacto no faturamento",
+        icon: Tag,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "conversion",
+        name: "Conversão e Funil",
+        desc: "Jornada do cliente, drop-off e taxa de conversão",
+        icon: BarChart3,
+        formats: ["PDF"],
+      },
     ],
   },
   {
@@ -155,10 +277,34 @@ const CATEGORIES = [
     lightText: "text-slate-700 dark:text-slate-300",
     border: "border-slate-200 dark:border-slate-600/40",
     reports: [
-      { id: "audit",      name: "Auditoria e Logs",       desc: "Histórico completo de ações, alterações e eventos",       icon: Shield, formats: ["PDF", "XLSX"] },
-      { id: "security",   name: "Segurança e Acessos",    desc: "Tentativas de acesso, permissões e controle de sessões",  icon: Lock, formats: ["PDF"] },
-      { id: "integrations",name:"Integrações e APIs",     desc: "Status, uso e erros das integrações externas",           icon: Settings, formats: ["XLSX"] },
-      { id: "perf-sys",   name: "Performance do Sistema", desc: "Tempo de resposta, disponibilidade e uso de recursos",    icon: Cpu, formats: ["PDF"] },
+      {
+        id: "audit",
+        name: "Auditoria e Logs",
+        desc: "Histórico completo de ações, alterações e eventos",
+        icon: Shield,
+        formats: ["PDF", "XLSX"],
+      },
+      {
+        id: "security",
+        name: "Segurança e Acessos",
+        desc: "Tentativas de acesso, permissões e controle de sessões",
+        icon: Lock,
+        formats: ["PDF"],
+      },
+      {
+        id: "integrations",
+        name: "Integrações e APIs",
+        desc: "Status, uso e erros das integrações externas",
+        icon: Settings,
+        formats: ["XLSX"],
+      },
+      {
+        id: "perf-sys",
+        name: "Performance do Sistema",
+        desc: "Tempo de resposta, disponibilidade e uso de recursos",
+        icon: Cpu,
+        formats: ["PDF"],
+      },
     ],
   },
 ];
@@ -176,14 +322,23 @@ function StatBadge({ value, label, loading }) {
 
 // ─── Category section ────────────────────────────────────────────────────────
 
-function CategorySection({ category, stats, statsLoading, search, dateRange, onOpenPermissions, onView }) {
+function CategorySection({
+  category,
+  stats,
+  statsLoading,
+  search,
+  dateRange,
+  onOpenPermissions,
+  onView,
+}) {
   const [collapsed, setCollapsed] = useState(false);
 
   const visibleReports = useMemo(() => {
     if (!search.trim()) return category.reports;
     const q = search.toLowerCase();
     return category.reports.filter(
-      (r) => r.name.toLowerCase().includes(q) || r.desc.toLowerCase().includes(q)
+      (r) =>
+        r.name.toLowerCase().includes(q) || r.desc.toLowerCase().includes(q),
     );
   }, [category.reports, search]);
 
@@ -192,10 +347,14 @@ function CategorySection({ category, stats, statsLoading, search, dateRange, onO
   // Pick a relevant counter from dashboard stats for this category
   function getCategoryMeta() {
     if (!stats) return null;
-    if (category.id === "financial")    return `${fmtNum(stats.financial?.totalInvoices)} faturas · ${fmt(stats.financial?.totalRevenue)} arrecadados`;
-    if (category.id === "operations")   return `${fmtNum(stats.projects?.total)} projetos · ${fmtNum(stats.tasks?.total)} tarefas`;
-    if (category.id === "users")        return `${fmtNum(stats.companies?.total)} empresas · ${fmtNum(stats.nomades?.total)} nômades`;
-    if (category.id === "gamification") return `${fmtNum(stats.nomades?.total)} participantes`;
+    if (category.id === "financial")
+      return `${fmtNum(stats.financial?.totalInvoices)} faturas · ${fmt(stats.financial?.totalRevenue)} arrecadados`;
+    if (category.id === "operations")
+      return `${fmtNum(stats.projects?.total)} projetos · ${fmtNum(stats.tasks?.total)} tarefas`;
+    if (category.id === "users")
+      return `${fmtNum(stats.companies?.total)} empresas · ${fmtNum(stats.nomades?.total)} nômades`;
+    if (category.id === "gamification")
+      return `${fmtNum(stats.nomades?.total)} participantes`;
     return null;
   }
 
@@ -208,31 +367,44 @@ function CategorySection({ category, stats, statsLoading, search, dateRange, onO
         className="w-full flex items-center gap-3 group text-left"
         onClick={() => setCollapsed((c) => !c)}
       >
-        <div className={`p-2.5 rounded-lg bg-gradient-to-br ${category.gradient} text-white shadow-sm`}>
+        <div
+          className={`p-2.5 rounded-lg bg-gradient-to-br ${category.gradient} text-white shadow-sm`}
+        >
           <category.icon className="h-4 w-4" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">{category.name}</h2>
+            <h2 className="text-base font-bold text-slate-800 dark:text-slate-100">
+              {category.name}
+            </h2>
             <span className="text-[11px] text-slate-400 font-normal">
-              {visibleReports.length} relatório{visibleReports.length !== 1 ? "s" : ""}
+              {visibleReports.length} relatório
+              {visibleReports.length !== 1 ? "s" : ""}
             </span>
           </div>
           {!statsLoading && meta && (
             <p className="text-xs text-slate-400 mt-0.5">{meta}</p>
           )}
         </div>
-        {collapsed
-          ? <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
-          : <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
-        }
+        {collapsed ? (
+          <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
+        ) : (
+          <ChevronDown className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
+        )}
       </button>
 
       {/* cards grid */}
       {!collapsed && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 pl-0">
           {visibleReports.map((report) => (
-            <ReportCard key={report.id} report={report} category={category} dateRange={dateRange} onOpenPermissions={onOpenPermissions} onView={onView} />
+            <ReportCard
+              key={report.id}
+              report={report}
+              category={category}
+              dateRange={dateRange}
+              onOpenPermissions={onOpenPermissions}
+              onView={onView}
+            />
           ))}
         </div>
       )}
@@ -243,14 +415,24 @@ function CategorySection({ category, stats, statsLoading, search, dateRange, onO
 // ─── Report card ──────────────────────────────────────────────────────────────
 
 function dateRangeLabel(dateRange) {
-  return dateRange === "7"   ? "7 dias"
-    : dateRange === "30"  ? "30 dias"
-    : dateRange === "90"  ? "90 dias"
-    : dateRange === "365" ? "1 ano"
-    : "Personalizado";
+  return dateRange === "7"
+    ? "7 dias"
+    : dateRange === "30"
+      ? "30 dias"
+      : dateRange === "90"
+        ? "90 dias"
+        : dateRange === "365"
+          ? "1 ano"
+          : "Personalizado";
 }
 
-function ReportCard({ report, category, dateRange, onOpenPermissions, onView }) {
+function ReportCard({
+  report,
+  category,
+  dateRange,
+  onOpenPermissions,
+  onView,
+}) {
   const [downloading, setDownloading] = useState(false);
 
   async function handleDownload(format) {
@@ -272,12 +454,18 @@ function ReportCard({ report, category, dateRange, onOpenPermissions, onView }) 
     <div className="group relative bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-4 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all flex flex-col gap-3">
       {/* icon + title */}
       <div className="flex items-start gap-3">
-        <div className={`p-2 rounded-lg ${category.lightBg} ${category.border} border shrink-0`}>
+        <div
+          className={`p-2 rounded-lg ${category.lightBg} ${category.border} border shrink-0`}
+        >
           <report.icon className={`h-3.5 w-3.5 ${category.lightText}`} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-snug">{report.name}</p>
-          <p className="text-[11px] text-slate-400 mt-1 leading-snug line-clamp-2">{report.desc}</p>
+          <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-snug">
+            {report.name}
+          </p>
+          <p className="text-[11px] text-slate-400 mt-1 leading-snug line-clamp-2">
+            {report.desc}
+          </p>
         </div>
         <button
           type="button"
@@ -323,10 +511,11 @@ function ReportCard({ report, category, dateRange, onOpenPermissions, onView }) 
           className="h-7 px-2.5 text-[11px] gap-1"
           title={`Baixar ${report.formats[0]}`}
         >
-          {downloading
-            ? <RefreshCw className="h-3 w-3 animate-spin" />
-            : <Download className="h-3 w-3" />
-          }
+          {downloading ? (
+            <RefreshCw className="h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
         </Button>
       </div>
     </div>
@@ -342,7 +531,9 @@ export default function AdminRelatoriosPage() {
   const [summary, setSummary] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<"overview" | "indicators" | "configs">("overview");
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "indicators" | "configs"
+  >("overview");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [dateRange, setDateRange] = useState("30");
@@ -371,7 +562,9 @@ export default function AdminRelatoriosPage() {
       const configured = Array.isArray(data) ? data : (data?.configured ?? []);
       setAdminConfigs(configured);
     } catch (err) {
-      setAdminConfigsError(err instanceof Error ? err.message : "Erro ao carregar configurações.");
+      setAdminConfigsError(
+        err instanceof Error ? err.message : "Erro ao carregar configurações.",
+      );
     } finally {
       setAdminConfigsLoading(false);
     }
@@ -389,7 +582,7 @@ export default function AdminRelatoriosPage() {
   // Seed: cria configuração padrão para cada relatório do catálogo
   const handleSeedDefaults = useCallback(async () => {
     const allReports = CATEGORIES.flatMap((cat) =>
-      cat.reports.map((r) => ({ report_key: r.id, category: cat.id }))
+      cat.reports.map((r) => ({ report_key: r.id, category: cat.id })),
     );
     // Chama em sequência para não sobrecarregar o banco; ignora 409 (já existe)
     for (const { report_key } of allReports) {
@@ -444,7 +637,7 @@ export default function AdminRelatoriosPage() {
         return cat.reports.some(
           (r) =>
             r.name.toLowerCase().includes(search.toLowerCase()) ||
-            r.desc.toLowerCase().includes(search.toLowerCase())
+            r.desc.toLowerCase().includes(search.toLowerCase()),
         );
       }
       return true;
@@ -454,7 +647,7 @@ export default function AdminRelatoriosPage() {
   // ── total reports visible ──────────────────────────────────────────────────
   const totalReports = useMemo(
     () => CATEGORIES.reduce((s, c) => s + c.reports.length, 0),
-    []
+    [],
   );
 
   if (statsLoading && !stats) {
@@ -463,392 +656,547 @@ export default function AdminRelatoriosPage() {
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-    <div className="relative h-full min-h-0 flex flex-col">
-      <div className="shrink-0 -mb-[11px]">
-      <StandardPageBanner
-        icon={BarChart3}
-        title="Relatórios"
-        description={`${totalReports} relatórios em ${CATEGORIES.length} categorias`}
-        actions={<>
-          <TooltipProvider delayDuration={400}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={loadData}
-                  className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          {activeTab === "configs" && (
-            <TooltipProvider delayDuration={400}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => { setEditingConfig(null); setBuilderOpen(true); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
-                  >
-                    <Plus className="h-3.5 w-3.5 shrink-0" />
-                    Nova configuração
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>Criar nova configuração de relatório</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-          <PinToTrayButton id="page-relatorios" label="Relatórios" icon={BarChart3} path="/admin/relatorios" />
-        </>}
-      />
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-4">
-      {/* ── KPI strip — estilo idêntico ao Financeiro ────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-violet-500 to-purple-700 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">Empresas</p>
-            <div className="bg-white/20 rounded-md p-1"><Building2 className="h-4 w-4 text-white" /></div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none tabular-nums">{statsLoading ? "—" : fmtNum(stats?.companies?.total)}</p>
-          <p className="text-[10px] text-white/60 mt-0.5">Clientes ativos</p>
-        </div>
-
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-blue-500 to-blue-700 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">Projetos</p>
-            <div className="bg-white/20 rounded-md p-1"><FolderKanban className="h-4 w-4 text-white" /></div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none tabular-nums">{statsLoading ? "—" : fmtNum(stats?.projects?.total)}</p>
-          <p className="text-[10px] text-white/60 mt-0.5">Total na plataforma</p>
-        </div>
-
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-indigo-500 to-indigo-700 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">Nômades</p>
-            <div className="bg-white/20 rounded-md p-1"><Users className="h-4 w-4 text-white" /></div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none tabular-nums">{statsLoading ? "—" : fmtNum(stats?.nomades?.total)}</p>
-          <p className="text-[10px] text-white/60 mt-0.5">Profissionais cadastrados</p>
-        </div>
-
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-amber-500 to-orange-600 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">Tarefas</p>
-            <div className="bg-white/20 rounded-md p-1"><CheckSquare className="h-4 w-4 text-white" /></div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none tabular-nums">{statsLoading ? "—" : fmtNum(stats?.tasks?.total)}</p>
-          <p className="text-[10px] text-white/60 mt-0.5">Em execução</p>
-        </div>
-
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-slate-500 to-slate-700 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">Faturas</p>
-            <div className="bg-white/20 rounded-md p-1"><ReceiptText className="h-4 w-4 text-white" /></div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none tabular-nums">{statsLoading ? "—" : fmtNum(stats?.financial?.totalInvoices)}</p>
-          <p className="text-[10px] text-white/60 mt-0.5">Total emitidas</p>
-        </div>
-
-        <div className="relative rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-emerald-500 to-teal-700 px-3 pt-2 pb-1.5">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs font-medium text-white/70 leading-tight">Receita Paga</p>
-            <div className="bg-white/20 rounded-md p-1"><DollarSign className="h-4 w-4 text-white" /></div>
-          </div>
-          <p className="text-2xl font-bold text-white leading-none tabular-nums">{statsLoading ? "—" : fmt(stats?.financial?.totalRevenue)}</p>
-          <p className="text-[10px] text-white/60 mt-0.5">Faturas pagas</p>
-        </div>
-      </div>
-
-      {/* ── Tab switcher — mesmo padrão do Financeiro, gradiente da sidebar ── */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
-            {(
-              [
-                { id: "overview",   label: "Visão Geral",   icon: BarChart3 },
-                { id: "indicators", label: "Indicadores",   icon: LayoutGrid },
-                { id: "configs",    label: "Configurações", icon: Settings2 },
-              ] as const
-            ).map(({ id, label, icon: Icon }) => (
-              <Button
-                key={id}
-                size="sm"
-                variant="ghost"
-                onClick={() => setActiveTab(id)}
-                className={cn(
-                  "h-7 px-2.5 rounded-md transition-all text-xs",
-                  activeTab === id
-                    ? "text-white shadow-sm border-0"
-                    : "hover:bg-background"
+      <div className="relative h-full min-h-0 flex flex-col">
+        <div className="shrink-0 -mb-[11px]">
+          <StandardPageBanner
+            icon={BarChart3}
+            title="Relatórios"
+            description={`${totalReports} relatórios em ${CATEGORIES.length} categorias`}
+            contentClassName="lg:h-[65px]"
+            actions={
+              <>
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={loadData}
+                        className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Atualizar
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {activeTab === "configs" && (
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => {
+                            setEditingConfig(null);
+                            setBuilderOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors text-xs font-semibold whitespace-nowrap"
+                        >
+                          <Plus className="h-3.5 w-3.5 shrink-0" />
+                          Nova configuração
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Criar nova configuração de relatório
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
-                style={
-                  activeTab === id
-                    ? {
-                        background:
-                          "var(--app-brand-gradient, linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%))",
-                      }
-                    : undefined
-                }
-              >
-                <Icon className="h-3 w-3 mr-1" />
-                {label}
-              </Button>
-            ))}
-          </div>
-
-          {/* Filters — only on overview tab */}
-          {activeTab === "overview" && (
-            <>
-              <div className="relative min-w-[180px] max-w-xs flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Buscar relatório…"
-                  className="pl-9 h-9 text-sm bg-white border-slate-200 rounded-lg focus-visible:ring-blue-500"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                <PinToTrayButton
+                  id="page-relatorios"
+                  label="Relatórios"
+                  icon={BarChart3}
+                  path="/admin/relatorios"
                 />
-              </div>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="h-9 w-44 text-sm border-slate-200 bg-white rounded-lg">
-                  <Filter className="h-3.5 w-3.5 mr-1.5 text-slate-400 shrink-0" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as categorias</SelectItem>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={dateRange} onValueChange={setDateRange}>
-                <SelectTrigger className="h-9 w-40 text-sm border-slate-200 bg-white rounded-lg">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7">Últimos 7 dias</SelectItem>
-                  <SelectItem value="30">Últimos 30 dias</SelectItem>
-                  <SelectItem value="90">Últimos 90 dias</SelectItem>
-                  <SelectItem value="365">Último ano</SelectItem>
-                </SelectContent>
-              </Select>
-              {(search || categoryFilter !== "all") && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-9 text-xs text-slate-500 hover:bg-slate-100"
-                  onClick={() => { setSearch(""); setCategoryFilter("all"); }}
-                >
-                  Limpar
-                </Button>
-              )}
-            </>
-          )}
+              </>
+            }
+          />
         </div>
 
-        {/* ── Tab: Visão Geral ────────────────────────────────────────────── */}
-        {activeTab === "overview" && (
-          <div className="space-y-6">
-            {/* Summary panel */}
-            {summary && !statsLoading && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="col-span-2 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/20 dark:to-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Award className="h-4 w-4 text-amber-600" />
-                    <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide">Top Nômades</p>
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="space-y-0">
+            {/* ── KPI strip — estilo idêntico ao Financeiro ────────────────────────── */}
+            <div className="mt-[5px] mb-[5px] grid grid-cols-2 gap-3 md:grid-cols-3 lg:h-[65px] lg:grid-cols-6">
+              <div className="relative h-full rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-violet-500 to-purple-700 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    Empresas
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <Building2 className="h-4 w-4 text-white" />
                   </div>
-                  <div className="space-y-2">
-                    {(summary.nomades?.topPerformers || []).slice(0, 3).map((n, i) => (
-                      <div key={n.id} className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold w-4 shrink-0 ${i === 0 ? "text-amber-500" : i === 1 ? "text-slate-400" : "text-amber-700/60"}`}>#{i + 1}</span>
-                        <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate flex-1">{n.name}</p>
-                        <span className="text-[10px] text-slate-400 tabular-nums">{fmtNum(n.score)} pts</span>
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 capitalize">{n.level}</Badge>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none tabular-nums">
+                  {statsLoading ? "—" : fmtNum(stats?.companies?.total)}
+                </p>
+                <p className="text-[10px] text-white/60 mt-0.5">
+                  Clientes ativos
+                </p>
+              </div>
+
+              <div className="relative h-full rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-blue-500 to-blue-700 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    Projetos
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <FolderKanban className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none tabular-nums">
+                  {statsLoading ? "—" : fmtNum(stats?.projects?.total)}
+                </p>
+                <p className="text-[10px] text-white/60 mt-0.5">
+                  Total na plataforma
+                </p>
+              </div>
+
+              <div className="relative h-full rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-indigo-500 to-indigo-700 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    Nômades
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <Users className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none tabular-nums">
+                  {statsLoading ? "—" : fmtNum(stats?.nomades?.total)}
+                </p>
+                <p className="text-[10px] text-white/60 mt-0.5">
+                  Profissionais cadastrados
+                </p>
+              </div>
+
+              <div className="relative h-full rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-amber-500 to-orange-600 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    Tarefas
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <CheckSquare className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none tabular-nums">
+                  {statsLoading ? "—" : fmtNum(stats?.tasks?.total)}
+                </p>
+                <p className="text-[10px] text-white/60 mt-0.5">Em execução</p>
+              </div>
+
+              <div className="relative h-full rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-slate-500 to-slate-700 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    Faturas
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <ReceiptText className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none tabular-nums">
+                  {statsLoading ? "—" : fmtNum(stats?.financial?.totalInvoices)}
+                </p>
+                <p className="text-[10px] text-white/60 mt-0.5">
+                  Total emitidas
+                </p>
+              </div>
+
+              <div className="relative h-full rounded-xl overflow-hidden shadow-sm bg-gradient-to-br from-emerald-500 to-teal-700 px-3 pt-2 pb-1.5">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-medium text-white/70 leading-tight">
+                    Receita Paga
+                  </p>
+                  <div className="bg-white/20 rounded-md p-1">
+                    <DollarSign className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+                <p className="text-2xl font-bold text-white leading-none tabular-nums">
+                  {statsLoading ? "—" : fmt(stats?.financial?.totalRevenue)}
+                </p>
+                <p className="text-[10px] text-white/60 mt-0.5">
+                  Faturas pagas
+                </p>
+              </div>
+            </div>
+
+            {/* ── Tab switcher — mesmo padrão do Financeiro, gradiente da sidebar ── */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
+                  {(
+                    [
+                      { id: "overview", label: "Visão Geral", icon: BarChart3 },
+                      {
+                        id: "indicators",
+                        label: "Indicadores",
+                        icon: LayoutGrid,
+                      },
+                      {
+                        id: "configs",
+                        label: "Configurações",
+                        icon: Settings2,
+                      },
+                    ] as const
+                  ).map(({ id, label, icon: Icon }) => (
+                    <Button
+                      key={id}
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setActiveTab(id)}
+                      className={cn(
+                        "h-7 px-2.5 rounded-md transition-all text-xs",
+                        activeTab === id
+                          ? "text-white shadow-sm border-0"
+                          : "hover:bg-background",
+                      )}
+                      style={
+                        activeTab === id
+                          ? {
+                              background:
+                                "var(--app-brand-gradient, linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%))",
+                            }
+                          : undefined
+                      }
+                    >
+                      <Icon className="h-3 w-3 mr-1" />
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Filters — only on overview tab */}
+                {activeTab === "overview" && (
+                  <>
+                    <div className="relative min-w-[180px] max-w-xs flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <Input
+                        placeholder="Buscar relatório…"
+                        className="pl-9 h-9 text-sm bg-white border-slate-200 rounded-lg focus-visible:ring-blue-500"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                      />
+                    </div>
+                    <Select
+                      value={categoryFilter}
+                      onValueChange={setCategoryFilter}
+                    >
+                      <SelectTrigger className="h-9 w-44 text-sm border-slate-200 bg-white rounded-lg">
+                        <Filter className="h-3.5 w-3.5 mr-1.5 text-slate-400 shrink-0" />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas as categorias</SelectItem>
+                        {CATEGORIES.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={dateRange} onValueChange={setDateRange}>
+                      <SelectTrigger className="h-9 w-40 text-sm border-slate-200 bg-white rounded-lg">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7">Últimos 7 dias</SelectItem>
+                        <SelectItem value="30">Últimos 30 dias</SelectItem>
+                        <SelectItem value="90">Últimos 90 dias</SelectItem>
+                        <SelectItem value="365">Último ano</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {(search || categoryFilter !== "all") && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 text-xs text-slate-500 hover:bg-slate-100"
+                        onClick={() => {
+                          setSearch("");
+                          setCategoryFilter("all");
+                        }}
+                      >
+                        Limpar
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* ── Tab: Visão Geral ────────────────────────────────────────────── */}
+              {activeTab === "overview" && (
+                <div className="space-y-6">
+                  {/* Summary panel */}
+                  {summary && !statsLoading && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="col-span-2 bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/20 dark:to-amber-900/20 border border-amber-200 dark:border-amber-700/40 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Award className="h-4 w-4 text-amber-600" />
+                          <p className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+                            Top Nômades
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          {(summary.nomades?.topPerformers || [])
+                            .slice(0, 3)
+                            .map((n, i) => (
+                              <div
+                                key={n.id}
+                                className="flex items-center gap-2"
+                              >
+                                <span
+                                  className={`text-[10px] font-bold w-4 shrink-0 ${i === 0 ? "text-amber-500" : i === 1 ? "text-slate-400" : "text-amber-700/60"}`}
+                                >
+                                  #{i + 1}
+                                </span>
+                                <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate flex-1">
+                                  {n.name}
+                                </p>
+                                <span className="text-[10px] text-slate-400 tabular-nums">
+                                  {fmtNum(n.score)} pts
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] px-1 py-0 h-4 capitalize"
+                                >
+                                  {n.level}
+                                </Badge>
+                              </div>
+                            ))}
+                          {!summary.nomades?.topPerformers?.length && (
+                            <p className="text-xs text-slate-400">
+                              Nenhum dado disponível
+                            </p>
+                          )}
+                        </div>
                       </div>
-                    ))}
-                    {!summary.nomades?.topPerformers?.length && (
-                      <p className="text-xs text-slate-400">Nenhum dado disponível</p>
+
+                      <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <CheckSquare className="h-4 w-4 text-blue-500" />
+                          <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                            Tarefas
+                          </p>
+                        </div>
+                        <div className="space-y-1.5">
+                          {(summary.tasks?.byStatus || []).map((s) => (
+                            <div
+                              key={s.status}
+                              className="flex items-center justify-between"
+                            >
+                              <span className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                                {s.status.replace("_", " ")}
+                              </span>
+                              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 tabular-nums">
+                                {fmtNum(s._count)}
+                              </span>
+                            </div>
+                          ))}
+                          {!summary.tasks?.byStatus?.length && (
+                            <p className="text-xs text-slate-400">
+                              Nenhum dado
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <FolderKanban className="h-4 w-4 text-violet-500" />
+                          <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">
+                            Projetos
+                          </p>
+                        </div>
+                        <div className="space-y-1.5">
+                          {(summary.projects?.byStatus || []).map((s) => (
+                            <div
+                              key={s.status}
+                              className="flex items-center justify-between"
+                            >
+                              <span className="text-xs text-slate-500 dark:text-slate-400 capitalize">
+                                {s.status.replace("-", " ")}
+                              </span>
+                              <span className="text-xs font-bold text-slate-700 dark:text-slate-200 tabular-nums">
+                                {fmtNum(s._count)}
+                              </span>
+                            </div>
+                          ))}
+                          {!summary.projects?.byStatus?.length && (
+                            <p className="text-xs text-slate-400">
+                              Nenhum dado
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Report categories */}
+                  <div className="space-y-8">
+                    {visibleCategories.length === 0 ? (
+                      <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
+                        <BarChart3 className="h-10 w-10 opacity-30" />
+                        <p className="text-sm">Nenhum relatório encontrado</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => {
+                            setSearch("");
+                            setCategoryFilter("all");
+                          }}
+                        >
+                          Limpar filtros
+                        </Button>
+                      </div>
+                    ) : (
+                      visibleCategories.map((cat) => (
+                        <CategorySection
+                          key={cat.id}
+                          category={cat}
+                          stats={stats}
+                          statsLoading={statsLoading}
+                          search={search}
+                          dateRange={dateRange}
+                          onOpenPermissions={(report) =>
+                            setPermDialogReport(report)
+                          }
+                          onView={(v) => setViewingReport(v)}
+                        />
+                      ))
                     )}
                   </div>
                 </div>
+              )}
 
-                <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <CheckSquare className="h-4 w-4 text-blue-500" />
-                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Tarefas</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    {(summary.tasks?.byStatus || []).map((s) => (
-                      <div key={s.status} className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500 dark:text-slate-400 capitalize">{s.status.replace("_", " ")}</span>
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 tabular-nums">{fmtNum(s._count)}</span>
-                      </div>
-                    ))}
-                    {!summary.tasks?.byStatus?.length && <p className="text-xs text-slate-400">Nenhum dado</p>}
-                  </div>
-                </div>
+              {/* ── Tab: Indicadores ─────────────────────────────────────────────── */}
+              {activeTab === "indicators" && <ReportIndicatorLibrary />}
 
-                <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FolderKanban className="h-4 w-4 text-violet-500" />
-                    <p className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wide">Projetos</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    {(summary.projects?.byStatus || []).map((s) => (
-                      <div key={s.status} className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500 dark:text-slate-400 capitalize">{s.status.replace("-", " ")}</span>
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 tabular-nums">{fmtNum(s._count)}</span>
-                      </div>
-                    ))}
-                    {!summary.projects?.byStatus?.length && <p className="text-xs text-slate-400">Nenhum dado</p>}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Report categories */}
-            <div className="space-y-8">
-              {visibleCategories.length === 0 ? (
-                <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
-                  <BarChart3 className="h-10 w-10 opacity-30" />
-                  <p className="text-sm">Nenhum relatório encontrado</p>
-                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setSearch(""); setCategoryFilter("all"); }}>
-                    Limpar filtros
-                  </Button>
-                </div>
-              ) : (
-                visibleCategories.map((cat) => (
-                  <CategorySection
-                    key={cat.id}
-                    category={cat}
-                    stats={stats}
-                    statsLoading={statsLoading}
-                    search={search}
-                    dateRange={dateRange}
-                    onOpenPermissions={(report) => setPermDialogReport(report)}
-                    onView={(v) => setViewingReport(v)}
-                  />
-                ))
+              {/* ── Tab: Configurações ───────────────────────────────────────────── */}
+              {activeTab === "configs" && (
+                <ReportConfigsTable
+                  configs={adminConfigs}
+                  loading={adminConfigsLoading}
+                  error={adminConfigsError}
+                  onEdit={(config) => {
+                    setEditingConfig(config);
+                    setBuilderOpen(true);
+                  }}
+                  onCreate={() => {
+                    setEditingConfig(null);
+                    setBuilderOpen(true);
+                  }}
+                  onRefresh={loadAdminConfigs}
+                  onSeedDefaults={handleSeedDefaults}
+                />
               )}
             </div>
+
+            {/* Visualizar — preview do relatório (Tela Slide) */}
+            <EmbeddedSlideScreen
+              open={!!viewingReport}
+              onClose={() => setViewingReport(null)}
+              title={viewingReport?.report?.name}
+              subtitle={viewingReport?.category?.name}
+              footer={
+                viewingReport && (
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-1.5">
+                      {viewingReport.report.formats.map((f) => (
+                        <span
+                          key={f}
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                        >
+                          <FileText className="h-2.5 w-2.5" />
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                    <Button
+                      size="sm"
+                      disabled={previewDownloading}
+                      onClick={async () => {
+                        setPreviewDownloading(true);
+                        try {
+                          await exportReportSummaryPDF(viewingReport.report, {
+                            categoryName: viewingReport.category.name,
+                            dateRangeLabel: dateRangeLabel(dateRange),
+                            generatedAt: new Date().toLocaleDateString("pt-BR"),
+                          });
+                        } catch (e) {
+                          console.error("[Relatorios] export:", e);
+                        } finally {
+                          setPreviewDownloading(false);
+                        }
+                      }}
+                      className="gap-1.5"
+                    >
+                      {previewDownloading ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Download className="h-3.5 w-3.5" />
+                      )}
+                      Baixar
+                    </Button>
+                  </div>
+                )
+              }
+            >
+              {viewingReport && (
+                <div className="flex-1 overflow-y-auto p-6 w-full">
+                  <div className="max-w-2xl mx-auto space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`p-2.5 rounded-lg ${viewingReport.category.lightBg} ${viewingReport.category.border} border shrink-0`}
+                      >
+                        <viewingReport.report.icon
+                          className={`h-4 w-4 ${viewingReport.category.lightText}`}
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                          {viewingReport.report.name}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {viewingReport.category.name} ·{" "}
+                          {dateRangeLabel(dateRange)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                        Descrição
+                      </p>
+                      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                        {viewingReport.report.desc}
+                      </p>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      Este é um resumo do relatório do catálogo. Use "Baixar"
+                      para exportar em PDF.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </EmbeddedSlideScreen>
+
+            {/* Dialogs */}
+            <ReportPermissionsDialog
+              reportKey={permDialogReport?.id ?? null}
+              reportName={permDialogReport?.name ?? ""}
+              allConfigs={allConfigs}
+              onClose={() => setPermDialogReport(null)}
+              onSaved={(key, config) => {
+                setAllConfigs((prev) => ({ ...prev, [key]: config }));
+                setPermDialogReport(null);
+              }}
+            />
+
+            <ReportBuilderSheet
+              open={builderOpen}
+              onOpenChange={setBuilderOpen}
+              editingConfig={editingConfig}
+              onSaved={loadAdminConfigs}
+            />
           </div>
-        )}
-
-        {/* ── Tab: Indicadores ─────────────────────────────────────────────── */}
-        {activeTab === "indicators" && <ReportIndicatorLibrary />}
-
-        {/* ── Tab: Configurações ───────────────────────────────────────────── */}
-        {activeTab === "configs" && (
-          <ReportConfigsTable
-            configs={adminConfigs}
-            loading={adminConfigsLoading}
-            error={adminConfigsError}
-            onEdit={(config) => { setEditingConfig(config); setBuilderOpen(true); }}
-            onCreate={() => { setEditingConfig(null); setBuilderOpen(true); }}
-            onRefresh={loadAdminConfigs}
-            onSeedDefaults={handleSeedDefaults}
-          />
-        )}
+        </div>
       </div>
-
-      {/* Visualizar — preview do relatório (Tela Slide) */}
-      <EmbeddedSlideScreen
-        open={!!viewingReport}
-        onClose={() => setViewingReport(null)}
-        title={viewingReport?.report?.name}
-        subtitle={viewingReport?.category?.name}
-        footer={
-          viewingReport && (
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-1.5">
-                {viewingReport.report.formats.map((f) => (
-                  <span
-                    key={f}
-                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
-                  >
-                    <FileText className="h-2.5 w-2.5" />
-                    {f}
-                  </span>
-                ))}
-              </div>
-              <Button
-                size="sm"
-                disabled={previewDownloading}
-                onClick={async () => {
-                  setPreviewDownloading(true);
-                  try {
-                    await exportReportSummaryPDF(viewingReport.report, {
-                      categoryName: viewingReport.category.name,
-                      dateRangeLabel: dateRangeLabel(dateRange),
-                      generatedAt: new Date().toLocaleDateString("pt-BR"),
-                    });
-                  } catch (e) {
-                    console.error("[Relatorios] export:", e);
-                  } finally {
-                    setPreviewDownloading(false);
-                  }
-                }}
-                className="gap-1.5"
-              >
-                {previewDownloading ? (
-                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
-                )}
-                Baixar
-              </Button>
-            </div>
-          )
-        }
-      >
-        {viewingReport && (
-          <div className="flex-1 overflow-y-auto p-6 w-full">
-            <div className="max-w-2xl mx-auto space-y-5">
-              <div className="flex items-center gap-3">
-                <div className={`p-2.5 rounded-lg ${viewingReport.category.lightBg} ${viewingReport.category.border} border shrink-0`}>
-                  <viewingReport.report.icon className={`h-4 w-4 ${viewingReport.category.lightText}`} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{viewingReport.report.name}</p>
-                  <p className="text-xs text-slate-400">{viewingReport.category.name} · {dateRangeLabel(dateRange)}</p>
-                </div>
-              </div>
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Descrição</p>
-                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{viewingReport.report.desc}</p>
-              </div>
-              <p className="text-xs text-slate-400">
-                Este é um resumo do relatório do catálogo. Use "Baixar" para exportar em PDF.
-              </p>
-            </div>
-          </div>
-        )}
-      </EmbeddedSlideScreen>
-
-      {/* Dialogs */}
-      <ReportPermissionsDialog
-        reportKey={permDialogReport?.id ?? null}
-        reportName={permDialogReport?.name ?? ""}
-        allConfigs={allConfigs}
-        onClose={() => setPermDialogReport(null)}
-        onSaved={(key, config) => {
-          setAllConfigs((prev) => ({ ...prev, [key]: config }));
-          setPermDialogReport(null);
-        }}
-      />
-
-      <ReportBuilderSheet
-        open={builderOpen}
-        onOpenChange={setBuilderOpen}
-        editingConfig={editingConfig}
-        onSaved={loadAdminConfigs}
-      />
-    </div>
-    </div>
-    </div>
     </div>
   );
 }

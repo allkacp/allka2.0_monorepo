@@ -451,17 +451,85 @@ const ALL_COLUMNS: {
     defaultW: 99,
     minW: 90,
   },
-  { key: "id", label: "ID", info: "Identificador interno da tarefa.", defaultW: 80, minW: 60 },
-  { key: "codigo", label: "Código", info: "Código sequencial da tarefa.", defaultW: 110, minW: 80 },
-  { key: "tarefa", label: "Tarefa", info: "Título/nome da tarefa operacional.", required: true, defaultW: 260, minW: 160 },
-  { key: "projeto", label: "Projeto", info: "Projeto ao qual a tarefa pertence.", defaultW: 200, minW: 120 },
-  { key: "cliente", label: "Cliente", info: "Empresa cliente vinculada ao projeto.", defaultW: 180, minW: 120 },
-  { key: "agencia", label: "Resp. Agência", info: "Agência responsável pelo projeto, quando houver.", defaultW: 160, minW: 100 },
-  { key: "produto", label: "Produto", info: "Produto que originou esta tarefa.", defaultW: 180, minW: 120 },
-  { key: "status", label: "Status", info: "Etapa atual da tarefa no fluxo operacional.", required: true, defaultW: 185, minW: 130 },
-  { key: "nomade", label: "Nômade", info: "Nômade atribuído à execução da tarefa.", defaultW: 160, minW: 100 },
-  { key: "lider", label: "Líder", info: "Líder responsável por acompanhar a tarefa.", defaultW: 150, minW: 100 },
-  { key: "prazo", label: "Prazo entrega", info: "Data limite para entrega da tarefa.", defaultW: 130, minW: 100 },
+  {
+    key: "id",
+    label: "ID",
+    info: "Identificador interno da tarefa.",
+    defaultW: 80,
+    minW: 60,
+  },
+  {
+    key: "codigo",
+    label: "Código",
+    info: "Código sequencial da tarefa.",
+    defaultW: 110,
+    minW: 80,
+  },
+  {
+    key: "tarefa",
+    label: "Tarefa",
+    info: "Título/nome da tarefa operacional.",
+    required: true,
+    defaultW: 260,
+    minW: 160,
+  },
+  {
+    key: "projeto",
+    label: "Projeto",
+    info: "Projeto ao qual a tarefa pertence.",
+    defaultW: 200,
+    minW: 120,
+  },
+  {
+    key: "cliente",
+    label: "Cliente",
+    info: "Empresa cliente vinculada ao projeto.",
+    defaultW: 180,
+    minW: 120,
+  },
+  {
+    key: "agencia",
+    label: "Resp. Agência",
+    info: "Agência responsável pelo projeto, quando houver.",
+    defaultW: 160,
+    minW: 100,
+  },
+  {
+    key: "produto",
+    label: "Produto",
+    info: "Produto que originou esta tarefa.",
+    defaultW: 180,
+    minW: 120,
+  },
+  {
+    key: "status",
+    label: "Status",
+    info: "Etapa atual da tarefa no fluxo operacional.",
+    required: true,
+    defaultW: 185,
+    minW: 130,
+  },
+  {
+    key: "nomade",
+    label: "Nômade",
+    info: "Nômade atribuído à execução da tarefa.",
+    defaultW: 160,
+    minW: 100,
+  },
+  {
+    key: "lider",
+    label: "Líder",
+    info: "Líder responsável por acompanhar a tarefa.",
+    defaultW: 150,
+    minW: 100,
+  },
+  {
+    key: "prazo",
+    label: "Prazo entrega",
+    info: "Data limite para entrega da tarefa.",
+    defaultW: 130,
+    minW: 100,
+  },
   {
     key: "execucao",
     label: "Prazo execução",
@@ -469,8 +537,20 @@ const ALL_COLUMNS: {
     defaultW: 130,
     minW: 100,
   },
-  { key: "atraso", label: "Atraso", info: "Tempo em atraso em relação ao prazo de entrega.", defaultW: 100, minW: 70 },
-  { key: "prioridade", label: "Prioridade", info: "Nível de prioridade da tarefa.", defaultW: 110, minW: 80 },
+  {
+    key: "atraso",
+    label: "Atraso",
+    info: "Tempo em atraso em relação ao prazo de entrega.",
+    defaultW: 100,
+    minW: 70,
+  },
+  {
+    key: "prioridade",
+    label: "Prioridade",
+    info: "Nível de prioridade da tarefa.",
+    defaultW: 110,
+    minW: 80,
+  },
 ];
 
 const DEFAULT_VISIBLE: ColKey[] = [
@@ -956,7 +1036,9 @@ function TransferTaskDialog({
             <RotateCcw className="h-4 w-4 text-slate-600" />
             Transferir para outro projeto
           </DialogTitle>
-          <p className="text-xs text-slate-500 mt-1 line-clamp-2">{task.title}</p>
+          <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+            {task.title}
+          </p>
         </DialogHeader>
         <div className="space-y-3">
           <div className="relative">
@@ -976,7 +1058,9 @@ function TransferTaskDialog({
           ) : (
             <div className="max-h-64 overflow-y-auto space-y-1 border border-slate-200 dark:border-border rounded-lg p-2">
               {filtered.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">Nenhum projeto encontrado.</p>
+                <p className="text-sm text-slate-400 text-center py-4">
+                  Nenhum projeto encontrado.
+                </p>
               ) : (
                 filtered.map((p: any) => (
                   <button
@@ -1006,7 +1090,12 @@ function TransferTaskDialog({
           {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving} className="h-9 text-sm">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            disabled={saving}
+            className="h-9 text-sm"
+          >
             Cancelar
           </Button>
           <Button
@@ -1155,13 +1244,22 @@ export default function AdminTarefasPage({
   // "success": drawer pode abrir. "not_found"/"forbidden"/"error"/
   // "timeout": estados finais com UI própria, nunca um spinner infinito.
   const [deepLinkStatus, setDeepLinkStatus] = useState<
-    "idle" | "loading" | "success" | "not_found" | "forbidden" | "error" | "timeout"
+    | "idle"
+    | "loading"
+    | "success"
+    | "not_found"
+    | "forbidden"
+    | "error"
+    | "timeout"
   >(urlTarefaId ? "loading" : "idle");
   const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
   // Incrementado por "Tentar novamente" pra reexecutar o efeito abaixo sem
   // duplicar a lógica de fetch em uma segunda função.
   const [deepLinkRetryNonce, setDeepLinkRetryNonce] = useState(0);
-  const retryDeepLink = useCallback(() => setDeepLinkRetryNonce((n) => n + 1), []);
+  const retryDeepLink = useCallback(
+    () => setDeepLinkRetryNonce((n) => n + 1),
+    [],
+  );
 
   // Deep-link: open task drawer from URL param. Só busca da API quando a
   // URL muda por navegação externa (ex.: link direto) — os cliques nas
@@ -1212,7 +1310,9 @@ export default function AdminTarefasPage({
         } else if (status === 401 || status === 403) {
           setDeepLinkStatus("forbidden");
         } else {
-          setDeepLinkError(err?.message || "Não foi possível carregar a tarefa.");
+          setDeepLinkError(
+            err?.message || "Não foi possível carregar a tarefa.",
+          );
           setDeepLinkStatus("error");
         }
       })
@@ -1232,7 +1332,9 @@ export default function AdminTarefasPage({
   const [launchDrawerOpen, setLaunchDrawerOpen] = useState(false);
   const [assignTask, setAssignTask] = useState<TarefaOperacional | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
-  const [transferTask, setTransferTask] = useState<TarefaOperacional | null>(null);
+  const [transferTask, setTransferTask] = useState<TarefaOperacional | null>(
+    null,
+  );
   const [transferOpen, setTransferOpen] = useState(false);
   const [projectData, setProjectData] = useState<any | null>(null);
   const [projectOpen, setProjectOpen] = useState(false);
@@ -1676,19 +1778,30 @@ export default function AdminTarefasPage({
       </button>
       {getPageNumbers().map((pg, i) =>
         pg === "..." ? (
-          <span key={i} className="text-xs text-slate-300 px-0.5">·</span>
+          <span key={i} className="text-xs text-slate-300 px-0.5">
+            ·
+          </span>
         ) : (
           <button
             key={i}
             onClick={() => setCurrentPage(Number(pg))}
-            title={pg === currentPage ? "Página atual" : `Ir para a página ${pg}`}
+            title={
+              pg === currentPage ? "Página atual" : `Ir para a página ${pg}`
+            }
             className={cn(
               "h-7 w-7 flex items-center justify-center rounded-full text-xs font-bold transition-colors",
               pg === currentPage
                 ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]"
                 : "text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400",
             )}
-            style={pg === currentPage ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+            style={
+              pg === currentPage
+                ? {
+                    background:
+                      "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                  }
+                : undefined
+            }
           >
             {pg}
           </button>
@@ -1711,7 +1824,9 @@ export default function AdminTarefasPage({
               max={totalPages}
               value={pageJumpValue}
               onChange={(e) => setPageJumpValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") commitPageJump(); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitPageJump();
+              }}
               placeholder="Pág."
               aria-label="Ir para a página"
               className="h-7 w-14 text-xs text-center rounded-[8px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -1723,13 +1838,20 @@ export default function AdminTarefasPage({
             >
               <span
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                style={{
+                  background:
+                    "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                }}
               />
-              <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
+              <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
+                Ir
+              </span>
             </button>
           </div>
         </TooltipTrigger>
-        <TooltipContent side="bottom">Ir diretamente para uma página</TooltipContent>
+        <TooltipContent side="bottom">
+          Ir diretamente para uma página
+        </TooltipContent>
       </Tooltip>
     </div>
   );
@@ -1739,13 +1861,19 @@ export default function AdminTarefasPage({
       <TooltipTrigger asChild>
         <span className="text-xs text-slate-400 whitespace-nowrap cursor-default">
           {(() => {
-            if (sorted.length === 0) return <span className="text-slate-400">0 tarefas</span>;
-            const start = Math.min((currentPage - 1) * pageSize + 1, sorted.length);
+            if (sorted.length === 0)
+              return <span className="text-slate-400">0 tarefas</span>;
+            const start = Math.min(
+              (currentPage - 1) * pageSize + 1,
+              sorted.length,
+            );
             const end = Math.min(currentPage * pageSize, sorted.length);
             return (
               <>
                 {start}-{end} de{" "}
-                <span className="font-semibold text-slate-600 dark:text-slate-300">{sorted.length}</span>{" "}
+                <span className="font-semibold text-slate-600 dark:text-slate-300">
+                  {sorted.length}
+                </span>{" "}
                 tarefa{sorted.length !== 1 ? "s" : ""}
               </>
             );
@@ -1792,7 +1920,9 @@ export default function AdminTarefasPage({
         if (selectedTarefa?.id === tarefa.id)
           setSelectedTarefa((p) => (p ? { ...p, status: newStatus } : p));
       } catch (err: any) {
-        setTaskActionError(err?.message || "Não foi possível alterar o status desta tarefa.");
+        setTaskActionError(
+          err?.message || "Não foi possível alterar o status desta tarefa.",
+        );
       } finally {
         setUpdatingId(null);
       }
@@ -1905,7 +2035,8 @@ export default function AdminTarefasPage({
               <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
                 {deepLinkStatus === "timeout"
                   ? "O carregamento demorou demais. Verifique sua conexão e tente novamente."
-                  : deepLinkError || "Não foi possível carregar a tarefa — falha de conexão com o servidor."}
+                  : deepLinkError ||
+                    "Não foi possível carregar a tarefa — falha de conexão com o servidor."}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -1950,1135 +2081,1351 @@ export default function AdminTarefasPage({
   return (
     <TooltipProvider>
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-      <div className="relative h-full min-h-0 flex flex-col">
-      {/* Tela Slide (EmbeddedSlideScreen) — precisam ficar DENTRO do
+        <div className="relative h-full min-h-0 flex flex-col">
+          {/* Tela Slide (EmbeddedSlideScreen) — precisam ficar DENTRO do
           container relative acima, senão o position:absolute delas não
           tem contra o que se ancorar e escapam do painel inteiro. */}
-      <TarefaDetailDrawer
-        tarefa={selectedTarefa}
-        open={drawerOpen}
-        onClose={() => {
-          setDrawerOpen(false);
-          navigate(routeBase, { replace: true });
-        }}
-        onStatusChange={handleStatusChange}
-        updatingId={updatingId}
-        isAdmin
-        startInEditMode={drawerStartInEditMode}
-        actionError={taskActionError}
-      />
-      <ProjectViewSlidePanel
-        open={projectOpen}
-        project={projectData}
-        onClose={() => setProjectOpen(false)}
-        onEdit={() => {
-          setProjectOpen(false);
-          setProjectEditOpen(true);
-        }}
-        onClone={() => {
-          toast({
-            title: "Duplicar projeto",
-            description: "Disponível na tela de Projetos.",
-          });
-          if (projectData?.id) navigate(`/admin/projetos/${projectData.id}`);
-        }}
-        onExport={() => {
-          toast({
-            title: "Exportar projeto",
-            description: "Disponível na tela de Projetos.",
-          });
-        }}
-        onCancel={() => {
-          toast({
-            title: "Cancelar projeto",
-            description: "Disponível na tela de Projetos.",
-          });
-          if (projectData?.id) navigate(`/admin/projetos/${projectData.id}`);
-        }}
-      />
-      {/* Editar Projeto — reaproveita o ProjectManagementModal (Tela Slide)
+          <TarefaDetailDrawer
+            tarefa={selectedTarefa}
+            open={drawerOpen}
+            onClose={() => {
+              setDrawerOpen(false);
+              navigate(routeBase, { replace: true });
+            }}
+            onStatusChange={handleStatusChange}
+            updatingId={updatingId}
+            isAdmin
+            startInEditMode={drawerStartInEditMode}
+            actionError={taskActionError}
+          />
+          <ProjectViewSlidePanel
+            open={projectOpen}
+            project={projectData}
+            onClose={() => setProjectOpen(false)}
+            onEdit={() => {
+              setProjectOpen(false);
+              setProjectEditOpen(true);
+            }}
+            onClone={() => {
+              toast({
+                title: "Duplicar projeto",
+                description: "Disponível na tela de Projetos.",
+              });
+              if (projectData?.id)
+                navigate(`/admin/projetos/${projectData.id}`);
+            }}
+            onExport={() => {
+              toast({
+                title: "Exportar projeto",
+                description: "Disponível na tela de Projetos.",
+              });
+            }}
+            onCancel={() => {
+              toast({
+                title: "Cancelar projeto",
+                description: "Disponível na tela de Projetos.",
+              });
+              if (projectData?.id)
+                navigate(`/admin/projetos/${projectData.id}`);
+            }}
+          />
+          {/* Editar Projeto — reaproveita o ProjectManagementModal (Tela Slide)
           de admin/projetos, acionado pelo botão Editar dentro do painel
           de visualização acima. */}
-      <ProjectManagementModal
-        project={projectData}
-        open={projectEditOpen}
-        onOpenChange={(v: boolean) => {
-          setProjectEditOpen(v);
-          if (!v) setProjectData(null);
-        }}
-        mode="edit"
-        onSave={() => {
-          setProjectEditOpen(false);
-          setProjectData(null);
-        }}
-      />
-      <div className="shrink-0 -mb-[11px]">
-        {/* ── Header ─────────────────────────────────────────────── */}
-        <StandardPageBanner
-          icon={CheckSquare2}
-          title="Tarefas"
-          description="Acompanhe todas as tarefas operacionais da plataforma."
-          actions={
-            <>
-              <TooltipProvider delayDuration={400}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={fetchTarefas}
-                      disabled={loading}
-                      className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
-                    >
-                      <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>Atualizar</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <PinToTrayButton id="page-tarefas" label="Tarefas" icon={CheckSquare2} path="/admin/tarefas" />
-            </>
-          }
-        />
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="space-y-5">
-        {/* ── Stat Cards ─────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-          {[
-            {
-              key: null,
-              label: "Total",
-              value: stats.total,
-              grad: "from-slate-600 to-slate-800",
-              border: "border-slate-400/60 dark:border-slate-700/70",
-              icon: CheckSquare2,
-            },
-            {
-              key: "PARA_LANCAMENTO",
-              label: "Para lançamento",
-              value: stats.paraLancamento,
-              grad: "from-indigo-500 to-indigo-700",
-              border: "border-indigo-300/70 dark:border-indigo-800/70",
-              icon: Clock,
-            },
-            {
-              key: "EM_LANCAMENTO",
-              label: "Em lançamento",
-              value: stats.emLancamento,
-              grad: "from-violet-500 to-indigo-700",
-              border: "border-violet-300/70 dark:border-violet-800/70",
-              icon: SendHorizonal,
-            },
-            {
-              key: "EM_EXECUCAO",
-              label: "Em execução",
-              value: stats.emExecucao,
-              grad: "from-blue-500 to-blue-700",
-              border: "border-blue-300/70 dark:border-blue-800/70",
-              icon: PlayCircle,
-            },
-            {
-              key: "aprovacao",
-              label: "Em aprovação",
-              value: stats.emAprovacao,
-              grad: "from-violet-500 to-purple-700",
-              border: "border-violet-300/70 dark:border-violet-800/70",
-              icon: CheckCircle2,
-            },
-            {
-              key: "overdue",
-              label: "Atrasadas",
-              value: stats.atrasadas,
-              grad: "from-red-500 to-rose-700",
-              border: "border-red-300/70 dark:border-red-800/70",
-              icon: AlertCircle,
-            },
-            {
-              key: "concluido",
-              label: "Concluídas",
-              value: stats.concluidas,
-              grad: "from-emerald-500 to-emerald-700",
-              border: "border-emerald-300/70 dark:border-emerald-800/70",
-              icon: ThumbsUp,
-            },
-            {
-              key: "AGUARDANDO_NOMADE",
-              label: "Aguard. nômade",
-              value: stats.aguardandoNomade,
-              grad: "from-purple-500 to-purple-700",
-              border: "border-purple-300/70 dark:border-purple-800/70",
-              icon: UserSearch,
-            },
-          ].map((c) => {
-            const isActive =
-              c.key === null
-                ? !hasFilters
-                : c.key === "overdue"
-                  ? appliedFilters.overdue
-                  : c.key === "aprovacao"
-                    ? appliedFilters.group === "aprovacao"
-                    : c.key === "concluido"
-                      ? appliedFilters.group === "concluido"
-                      : appliedFilters.status === c.key;
-            return (
-              <StatCard
-                key={c.label}
-                label={c.label}
-                value={c.value}
-                icon={c.icon}
-                gradient={c.grad}
-                border={c.border}
-                active={isActive}
-                onClick={() => {
-                  setSearch("");
-                  if (c.key === null) {
-                    setAppliedFilters(EMPTY_FILTERS);
-                    return;
-                  }
-                  if (c.key === "overdue")
-                    setAppliedFilters({ ...EMPTY_FILTERS, overdue: true });
-                  else if (c.key === "aprovacao")
-                    setAppliedFilters({ ...EMPTY_FILTERS, group: "aprovacao" });
-                  else if (c.key === "concluido")
-                    setAppliedFilters({ ...EMPTY_FILTERS, group: "concluido" });
-                  else setAppliedFilters({ ...EMPTY_FILTERS, status: c.key });
-                }}
-              />
-            );
-          })}
-        </div>
-
-        {/* ── Main Card ─────────────────────────────────── */}
-        <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
-          {/* Row 1 — search + icon toolbar buttons */}
-          <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
-            <div className="relative flex-1 min-w-[220px] max-w-sm">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar tarefa, projeto, cliente, nômade..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 h-9 text-sm w-full"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div className="ml-auto flex items-center gap-2">
-              <IconToolbarButton
-                icon={Filter}
-                tooltip={activeFilterCount > 0 ? `Filtros (${activeFilterCount} ativos)` : "Filtros"}
-                onClick={() => setFilterDrawerOpen(true)}
-              />
-              <IconToolbarButton
-                icon={Settings2}
-                tooltip="Configurar colunas"
-                onClick={() => setColConfigOpen(true)}
-              />
-            </div>
-          </div>
-
-          {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
-            <div className="flex items-center gap-3">
-              <ItemsPerPageSelect
-                value={pageSize.toString()}
-                onValueChange={(v) => setPageSize(Number(v))}
-                variant="top"
-              />
-              <CountText side="bottom" />
-            </div>
-
-            {hasHorizontalOverflow && (
-              <div className="hidden md:flex flex-1 min-w-[120px] items-center gap-1.5 self-center">
-                <span className="flex items-center gap-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 shrink-0 whitespace-nowrap select-none">
-                  <ChevronLeft className="h-3 w-3" />
-                  arraste
-                  <ChevronRight className="h-3 w-3" />
-                </span>
-                <div
-                  ref={topScrollRef}
-                  onScroll={handleTopBarScroll}
-                  title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                  className="flex-1 overflow-x-scroll allka-table-scroll"
-                  style={{ height: 12 }}
-                >
-                  <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
-                </div>
-              </div>
-            )}
-
-            {totalPages > 1 && <PaginationControls />}
-          </div>
-
-          {/* Empty state */}
-          {tarefas.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-              <div className="h-16 w-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                <CheckSquare2 className="h-8 w-8 text-slate-400" />
-              </div>
-              <div>
-                <h2 className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  Nenhuma tarefa operacional
-                </h2>
-                <p className="text-sm text-slate-400 max-w-sm">
-                  Tarefas s\ão geradas automaticamente quando produtos
-                  s\ão vinculados a projetos.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* No filter results */}
-          {tarefas.length > 0 && sorted.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-              <Filter className="h-8 w-8 text-slate-300 dark:text-slate-600" />
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                Nenhuma tarefa com os filtros aplicados.
-              </p>
-              <button
-                onClick={clearFilters}
-                className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
-              >
-                Limpar filtros
-              </button>
-            </div>
-          )}
-
-          {/* Table */}
-          {sorted.length > 0 && (
-            <div
-              ref={tableScrollRef}
-              onScroll={handleTableScroll}
-              className="overflow-x-auto allka-table-scroll-body"
-            >
-              <table
-                className="text-sm"
-                style={{
-                  tableLayout: "fixed",
-                  minWidth: colWidths.reduce((a, b) => a + b, 0),
-                }}
-              >
-                <colgroup>
-                  {colWidths.map((w, i) => (
-                    <col key={i} style={{ width: w }} />
-                  ))}
-                </colgroup>
-                <thead>
-                  <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
-                    {visibleColumnsList.map((col, i) => {
-                      const sortField = {
-                        codigo: "code_snapshot",
-                        tarefa: "title",
-                        projeto: "project_title",
-                        cliente: "client_name",
-                        produto: "product_name",
-                        status: "status",
-                        nomade: "nomade_name",
-                        agencia: "agencia_name",
-                        prazo: "due_date",
-                        execucao: "start_date",
-                        prioridade: "priority",
-                        atraso: "atraso",
-                      }[col.key];
-                      const isAcoes = col.key === "acoes";
-                      return (
-                        <th
-                          key={col.key}
-                          className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
-                          style={{
-                            paddingLeft: isAcoes ? 8 : 20,
-                            paddingRight: isAcoes ? 8 : 20,
-                            textAlign: isAcoes ? "center" : "left",
-                            borderRight: "1px solid rgba(148,163,184,0.2)",
-                            position: "sticky",
-                            top: 0,
-                            left: isAcoes ? 0 : undefined,
-                            zIndex: isAcoes ? 3 : 2,
-                            minWidth: isAcoes ? 99 : undefined,
-                            background: "var(--table-head)",
-                            boxShadow: isAcoes
-                              ? "0 1px 0 rgba(148,163,184,0.3), 1px 0 0 rgba(100,116,139,0.18)"
-                              : "0 1px 0 rgba(148,163,184,0.3)",
-                          }}
+          <ProjectManagementModal
+            project={projectData}
+            open={projectEditOpen}
+            onOpenChange={(v: boolean) => {
+              setProjectEditOpen(v);
+              if (!v) setProjectData(null);
+            }}
+            mode="edit"
+            onSave={() => {
+              setProjectEditOpen(false);
+              setProjectData(null);
+            }}
+          />
+          <div className="shrink-0 -mb-[11px]">
+            {/* ── Header ─────────────────────────────────────────────── */}
+            <StandardPageBanner
+              icon={CheckSquare2}
+              title="Tarefas"
+              description="Acompanhe todas as tarefas operacionais da plataforma."
+              contentClassName="lg:h-[65px]"
+              actions={
+                <>
+                  <TooltipProvider delayDuration={400}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={fetchTarefas}
+                          disabled={loading}
+                          className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/70 text-white bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
                         >
-                          <div className={isAcoes ? "flex justify-center" : "inline-flex items-center gap-1"}>
-                            {sortField ? (
-                              <SortableHeader
-                                label={col.label}
-                                field={sortField}
-                                sortKey={sortKey as string | null}
-                                sortDir={sortDir}
-                                onSort={(f, d) => handleSort(f as any, d)}
-                              />
-                            ) : (
-                              <span>{col.label}</span>
-                            )}
-                            {!isAcoes && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">ⓘ</span>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs max-w-[200px]">{col.info}</TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
-                          {i < colWidths.length - 1 && (
-                            <div
-                              onMouseDown={(e) => onResizeMouseDown(e, i)}
-                              className="absolute right-0 top-1/2 -translate-y-1/2 h-5 w-1 cursor-col-resize hover:bg-blue-400 rounded-full opacity-0 hover:opacity-100 transition-opacity"
-                              style={{
-                                transform: "translateX(50%) translateY(-50%)",
-                                zIndex: 10,
-                              }}
-                            />
-                          )}
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginated.map((tarefa, rowIdx) => {
-                    const overdue = isOverdue(tarefa);
-                    const sc =
-                      STATUS_CFG[tarefa.status] ?? STATUS_CFG.PARA_LANCAMENTO;
-                    const updating = updatingId === tarefa.id;
-                    const canLaunch = [
-                      "PARA_LANCAMENTO",
-                      "EM_LANCAMENTO",
-                      "AGUARDANDO_INFORMACOES",
-                      "AGUARDANDO_ETAPA",
-                    ].includes(tarefa.status);
-                    const dias = daysUntil(tarefa.due_date);
+                          <RefreshCw
+                            className={cn("h-4 w-4", loading && "animate-spin")}
+                          />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        Atualizar
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <PinToTrayButton
+                    id="page-tarefas"
+                    label="Tarefas"
+                    icon={CheckSquare2}
+                    path="/admin/tarefas"
+                  />
+                </>
+              }
+            />
+          </div>
 
-                    return (
-                      <tr
-                        key={tarefa.id}
-                        className={cn(
-                          "border-b border-slate-100 dark:border-slate-700/50 transition-colors group",
-                          rowIdx % 2 === 0
-                            ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                            : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]",
-                          overdue && "bg-red-50/50 dark:bg-red-950/10",
-                        )}
-                      >
-                        {/* A\ç\ões \— pinned/sticky, matching the platform-wide icon-column recipe */}
-                        {visibleCols.has("acoes") && (
-                          <td
-                            className={cn(
-                              "px-2 py-3 transition-colors",
-                              rowIdx % 2 === 0
-                                ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                                : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]",
-                            )}
-                            style={{
-                              position: "sticky",
-                              left: 0,
-                              zIndex: 1,
-                              minWidth: 99,
-                              borderRight: "1px solid rgba(100,116,139,0.18)",
-                            }}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedTarefa(tarefa);
-                                      setDrawerStartInEditMode(false);
-                                      setDrawerOpen(true);
-                                      navigate(`${routeBase}/${tarefa.task_code || tarefa.id}`, {
-                                        replace: true,
-                                      });
-                                    }}
-                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                  >
-                                    <Eye className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  Ver detalhes
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => {
-                                      setSelectedTarefa(tarefa);
-                                      setDrawerStartInEditMode(true);
-                                      setDrawerOpen(true);
-                                      navigate(`${routeBase}/${tarefa.task_code || tarefa.id}`, {
-                                        replace: true,
-                                      });
-                                    }}
-                                    className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  Editar tarefa
-                                </TooltipContent>
-                              </Tooltip>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
-                                    <MoreHorizontal className="h-3.5 w-3.5" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  align="start"
-                                  className="w-56 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60"
-                                >
-                                  <DropdownMenuItem
-                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                    onClick={() => {
-                                      setSelectedTarefa(tarefa);
-                                      setDrawerStartInEditMode(false);
-                                      setDrawerOpen(true);
-                                      navigate(`${routeBase}/${tarefa.task_code || tarefa.id}`, {
-                                        replace: true,
-                                      });
-                                    }}
-                                  >
-                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0"><Eye className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /></span>
-                                    Ver detalhes
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator className="my-1" />
-                                  {canLaunch && (
-                                    <DropdownMenuItem
-                                      className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                      onClick={() => {
-                                        setLaunchTask(tarefa);
-                                        setLaunchDrawerOpen(true);
-                                      }}
-                                    >
-                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-900/30 shrink-0"><Rocket className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" /></span>
-                                      Lançar tarefa
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem
-                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                    onClick={() => {
-                                      setAssignTask(tarefa);
-                                      setAssignOpen(true);
-                                    }}
-                                  >
-                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-100 dark:bg-purple-900/30 shrink-0"><UserSearch className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" /></span>
-                                    Atribuir nômade
-                                  </DropdownMenuItem>
-                                  {tarefa.status !== "PAUSADA" && (
-                                    <DropdownMenuItem
-                                      className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                      onClick={() =>
-                                        handleStatusChange(tarefa, "PAUSADA")
-                                      }
-                                    >
-                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30 shrink-0"><PauseCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" /></span>
-                                      Pausar tarefa
-                                    </DropdownMenuItem>
-                                  )}
-                                  {tarefa.status === "PAUSADA" && (
-                                    <DropdownMenuItem
-                                      className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                      onClick={() =>
-                                        handleStatusChange(
-                                          tarefa,
-                                          "EM_EXECUCAO",
-                                        )
-                                      }
-                                    >
-                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0"><PlayCircle className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /></span>
-                                      Retomar tarefa
-                                    </DropdownMenuItem>
-                                  )}
-                                  <DropdownMenuItem
-                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                    onClick={() =>
-                                      handleStatusChange(
-                                        tarefa,
-                                        "PARA_LANCAMENTO",
-                                      )
-                                    }
-                                  >
-                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-900/30 shrink-0"><RotateCcw className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" /></span>
-                                    Devolver tarefa
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer">
-                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0"><CheckSquare2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" /></span>
-                                      Alterar status
-                                    </DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent className="w-72 max-h-80 overflow-y-auto rounded-xl p-1.5 shadow-lg">
-                                      {ALL_STATUSES.map((s) => {
-                                        const c = STATUS_CFG[s];
-                                        const Icon = c.icon;
-                                        const isCurrent = s === tarefa.status;
-                                        return (
-                                          <DropdownMenuItem
-                                            key={s}
-                                            className={cn(
-                                              "gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer whitespace-nowrap",
-                                              isCurrent &&
-                                                "bg-blue-50 dark:bg-blue-950/30 font-semibold",
-                                            )}
-                                            onClick={() =>
-                                              !isCurrent &&
-                                              handleStatusChange(tarefa, s)
-                                            }
-                                          >
-                                            <Icon
-                                              className={cn(
-                                                "h-3.5 w-3.5 shrink-0",
-                                                c.color,
-                                              )}
-                                            />
-                                            <span className="flex-1">{c.label}</span>
-                                            {isCurrent && (
-                                              <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                                            )}
-                                          </DropdownMenuItem>
-                                        );
-                                      })}
-                                    </DropdownMenuSubContent>
-                                  </DropdownMenuSub>
-                                  <DropdownMenuSeparator className="my-1" />
-                                  <DropdownMenuItem
-                                    className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                    onClick={() => handleOpenProject(tarefa)}
-                                  >
-                                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-900/30 shrink-0"><ExternalLink className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" /></span>
-                                    Abrir projeto
-                                  </DropdownMenuItem>
-                                  {/* Só a nível de UX — o backend revalida
-                                      tudo de novo (nômade/etapas/anexos/
-                                      briefing) antes de aceitar. */}
-                                  {tarefa.status === "PARA_LANCAMENTO" && !tarefa.nomade_responsavel_id && (
-                                    <DropdownMenuItem
-                                      className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
-                                      onClick={() => {
-                                        setTransferTask(tarefa);
-                                        setTransferOpen(true);
-                                      }}
-                                    >
-                                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 dark:bg-violet-900/30 shrink-0"><RotateCcw className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" /></span>
-                                      Transferir para outro projeto
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </td>
-                        )}
-
-                        {/* ID */}
-                        {visibleCols.has("id") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <span className="text-[11px] font-mono text-slate-400">
-                              #{String(tarefa.id)}
-                            </span>
-                          </td>
-                        )}
-
-                        {/* Código */}
-                        {visibleCols.has("codigo") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              {tarefa.task_code || tarefa.code_snapshot ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 cursor-help">
-                                      {tarefa.task_code ? formatTaskCode(tarefa.task_code) : tarefa.code_snapshot}
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" className="text-xs">
-                                    Código único da tarefa{tarefa.task_code ? ` (original: ${tarefa.task_code})` : ""}
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : (
-                                <span className="text-slate-300 dark:text-slate-600">—</span>
-                              )}
-                              {/* Tarefa vinda da plataforma antiga: mostra o número de lá e
-                                  sinaliza quando ela continua no formato antigo (sem modelo
-                                  de tarefa novo por trás). */}
-                              <LegacyIdBadge
-                                legacyId={(tarefa as any).legacy_id}
-                                entidade="tarefa"
-                                modeloAntigo={Boolean((tarefa as any).legacy_model)}
-                              />
-                            </div>
-                          </td>
-                        )}
-
-                        {/* Tarefa */}
-                        {visibleCols.has("tarefa") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  className="text-left w-full"
-                                  onClick={() => {
-                                    setSelectedTarefa(tarefa);
-                                    setDrawerStartInEditMode(false);
-                                    setDrawerOpen(true);
-                                    navigate(`${routeBase}/${tarefa.task_code || tarefa.id}`, {
-                                      replace: true,
-                                    });
-                                  }}
-                                >
-                                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors leading-snug">
-                                    {tarefa.title}
-                                  </p>
-                                  {tarefa.fase && (
-                                    <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded mt-0.5 inline-block">
-                                      {tarefa.fase}
-                                    </span>
-                                  )}
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs max-w-[280px]">
-                                {tarefa.title}{tarefa.fase ? ` · Fase: ${tarefa.fase}` : ""}
-                              </TooltipContent>
-                            </Tooltip>
-                          </td>
-                        )}
-
-                        {/* Projeto */}
-                        {visibleCols.has("projeto") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                  <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                  <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                    {tarefa.project.title}
-                                  </span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">
-                                Projeto: {tarefa.project.title}
-                              </TooltipContent>
-                            </Tooltip>
-                          </td>
-                        )}
-
-                        {/* Cliente */}
-                        {visibleCols.has("cliente") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {tarefa.project.client ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                    <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                    <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                      {tarefa.project.client.name}
-                                    </span>
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  {tarefa.project.client.name}{tarefa.project.client.cnpj ? ` · CNPJ: ${tarefa.project.client.cnpj}` : ""}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600">—</span>
-                            )}
-                          </td>
-                        )}
-
-                        {/* Agência */}
-                        {visibleCols.has("agencia") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {tarefa.responsavel_agencia ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                    <AvatarBubble
-                                      name={tarefa.responsavel_agencia.name}
-                                      colorClass="bg-blue-500"
-                                    />
-                                    <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                                      {tarefa.responsavel_agencia.name}
-                                    </span>
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  {tarefa.responsavel_agencia.name}{tarefa.responsavel_agencia.email ? ` · ${tarefa.responsavel_agencia.email}` : ""}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600">—</span>
-                            )}
-                          </td>
-                        )}
-
-                        {/* Produto */}
-                        {visibleCols.has("produto") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                  <Package className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-                                  <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                    {tarefa.project_product.product_name_snapshot}
-                                  </span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">
-                                {tarefa.project_product.product_name_snapshot}{tarefa.project_product.product_category_snapshot ? ` · ${tarefa.project_product.product_category_snapshot}` : ""}
-                              </TooltipContent>
-                            </Tooltip>
-                          </td>
-                        )}
-
-                        {/* Status */}
-                        {visibleCols.has("status") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-help inline-block">
-                                  <StatusBadge status={tarefa.status} />
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">
-                                Etapa atual: {STATUS_CFG[tarefa.status]?.label ?? tarefa.status}
-                                {tarefa.updated_at ? ` · Atualizado em ${fmtDate(tarefa.updated_at)}` : ""}
-                              </TooltipContent>
-                            </Tooltip>
-                          </td>
-                        )}
-
-                        {/* Nômade */}
-                        {visibleCols.has("nomade") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {tarefa.nomade_responsavel ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                    <AvatarBubble
-                                      name={tarefa.nomade_responsavel.name}
-                                      colorClass="bg-purple-500"
-                                    />
-                                    <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                                      {tarefa.nomade_responsavel.name}
-                                    </span>
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  {tarefa.nomade_responsavel.name}{tarefa.nomade_responsavel.email ? ` · ${tarefa.nomade_responsavel.email}` : ""}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setAssignTask(tarefa);
-                                  setAssignOpen(true);
-                                }}
-                                className="text-[11px] text-slate-400 hover:text-purple-600 underline underline-offset-2 transition-colors"
-                              >
-                                Atribuir
-                              </button>
-                            )}
-                          </td>
-                        )}
-
-                        {/* Líder */}
-                        {visibleCols.has("lider") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {tarefa.project.consultant ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="text-xs text-slate-600 dark:text-slate-400 truncate block cursor-help">
-                                    {tarefa.project.consultant}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  Líder responsável: {tarefa.project.consultant}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600">—</span>
-                            )}
-                          </td>
-                        )}
-
-                        {/* Prazo entrega */}
-                        {visibleCols.has("prazo") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {tarefa.due_date ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div className="cursor-help">
-                                    <span
-                                      className={cn(
-                                        "text-sm font-medium",
-                                        overdue
-                                          ? "text-red-600 dark:text-red-400"
-                                          : "text-slate-600 dark:text-slate-400",
-                                      )}
-                                    >
-                                      {fmtDate(tarefa.due_date, true)}
-                                    </span>
-                                    {dias !== null && (
-                                      <p
-                                        className={cn(
-                                          "text-[10px] mt-0.5 leading-none",
-                                          overdue
-                                            ? "text-red-500"
-                                            : dias <= 3
-                                              ? "text-amber-500"
-                                              : "text-slate-400",
-                                        )}
-                                      >
-                                        {dias < 0
-                                          ? `${Math.abs(dias)}d atraso`
-                                          : dias === 0
-                                            ? "hoje"
-                                            : `${dias}d`}
-                                      </p>
-                                    )}
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  Prazo: {fmtDate(tarefa.due_date)}
-                                  {dias !== null
-                                    ? dias < 0
-                                      ? ` · Atrasada há ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? "" : "s"}`
-                                      : dias === 0
-                                        ? " · Vence hoje"
-                                        : ` · Faltam ${dias} dia${dias === 1 ? "" : "s"}`
-                                    : ""}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600">—</span>
-                            )}
-                          </td>
-                        )}
-
-                        {/* Prazo execução */}
-                        {visibleCols.has("execucao") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {tarefa.start_date ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="text-sm text-slate-600 dark:text-slate-400 cursor-help">
-                                    {fmtDate(tarefa.start_date, true)}
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-xs">
-                                  Início da execução: {fmtDate(tarefa.start_date)}
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span className="text-slate-300 dark:text-slate-600">—</span>
-                            )}
-                          </td>
-                        )}
-
-                        {/* Atraso */}
-                        {visibleCols.has("atraso") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {(() => {
-                              const isTerminal = ["CONCLUIDA", "CANCELADA", "APROVADA"].includes(tarefa.status);
-                              if (!tarefa.due_date || isTerminal) {
-                                return <span className="text-slate-300 dark:text-slate-600">—</span>;
-                              }
-                              const tone = urgencyTone(dias, overdue);
-                              const label = overdue
-                                ? `${Math.abs(dias ?? 0)}d atraso`
-                                : dias === 0
-                                  ? "Hoje"
-                                  : `${dias}d`;
-                              const explanation = overdue
-                                ? `Atrasada há ${Math.abs(dias ?? 0)} dia${Math.abs(dias ?? 0) === 1 ? "" : "s"} (prazo era ${fmtDate(tarefa.due_date)})`
-                                : dias === 0
-                                  ? "Vence hoje — última chance antes de atrasar"
-                                  : `Faltam ${dias} dia${dias === 1 ? "" : "s"} para o prazo (${fmtDate(tarefa.due_date)})`;
-                              return (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span
-                                      className={cn(
-                                        "inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 border cursor-help",
-                                        tone.text,
-                                        tone.bg,
-                                        tone.border,
-                                      )}
-                                    >
-                                      {tone.pulse ? (
-                                        <span className="relative flex h-2 w-2 shrink-0">
-                                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
-                                        </span>
-                                      ) : (
-                                        <AlertCircle className="h-3 w-3" />
-                                      )}
-                                      {label}
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" className="text-xs">
-                                    {explanation}
-                                  </TooltipContent>
-                                </Tooltip>
-                              );
-                            })()}
-                          </td>
-                        )}
-
-                        {/* Prioridade */}
-                        {visibleCols.has("prioridade") && (
-                          <td
-                            className="px-5 py-3.5"
-                            style={{
-                              borderRight: "1px solid rgba(148,163,184,0.15)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-help inline-block">
-                                  <PriorityBadge
-                                    priority={tarefa.priority as Priority}
-                                  />
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="text-xs">
-                                {PRIORITY_INFO[tarefa.priority as Priority] ?? "Prioridade da tarefa."}
-                              </TooltipContent>
-                            </Tooltip>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Row 3 — bottom mirror of row 2 */}
-          {sorted.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
-              <div className="flex items-center gap-3">
-                <ItemsPerPageSelect
-                  value={pageSize.toString()}
-                  onValueChange={(v) => setPageSize(Number(v))}
-                  variant="bottom"
-                />
-                <CountText side="top" />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="space-y-0">
+              {/* ── Stat Cards ─────────────────────────────────────────── */}
+              <div className="mt-[5px] mb-[5px] grid grid-cols-2 gap-3 sm:grid-cols-4 lg:h-[65px] lg:grid-cols-8">
+                {[
+                  {
+                    key: null,
+                    label: "Total",
+                    value: stats.total,
+                    grad: "from-slate-600 to-slate-800",
+                    border: "border-slate-400/60 dark:border-slate-700/70",
+                    icon: CheckSquare2,
+                  },
+                  {
+                    key: "PARA_LANCAMENTO",
+                    label: "Para lançamento",
+                    value: stats.paraLancamento,
+                    grad: "from-indigo-500 to-indigo-700",
+                    border: "border-indigo-300/70 dark:border-indigo-800/70",
+                    icon: Clock,
+                  },
+                  {
+                    key: "EM_LANCAMENTO",
+                    label: "Em lançamento",
+                    value: stats.emLancamento,
+                    grad: "from-violet-500 to-indigo-700",
+                    border: "border-violet-300/70 dark:border-violet-800/70",
+                    icon: SendHorizonal,
+                  },
+                  {
+                    key: "EM_EXECUCAO",
+                    label: "Em execução",
+                    value: stats.emExecucao,
+                    grad: "from-blue-500 to-blue-700",
+                    border: "border-blue-300/70 dark:border-blue-800/70",
+                    icon: PlayCircle,
+                  },
+                  {
+                    key: "aprovacao",
+                    label: "Em aprovação",
+                    value: stats.emAprovacao,
+                    grad: "from-violet-500 to-purple-700",
+                    border: "border-violet-300/70 dark:border-violet-800/70",
+                    icon: CheckCircle2,
+                  },
+                  {
+                    key: "overdue",
+                    label: "Atrasadas",
+                    value: stats.atrasadas,
+                    grad: "from-red-500 to-rose-700",
+                    border: "border-red-300/70 dark:border-red-800/70",
+                    icon: AlertCircle,
+                  },
+                  {
+                    key: "concluido",
+                    label: "Concluídas",
+                    value: stats.concluidas,
+                    grad: "from-emerald-500 to-emerald-700",
+                    border: "border-emerald-300/70 dark:border-emerald-800/70",
+                    icon: ThumbsUp,
+                  },
+                  {
+                    key: "AGUARDANDO_NOMADE",
+                    label: "Aguard. nômade",
+                    value: stats.aguardandoNomade,
+                    grad: "from-purple-500 to-purple-700",
+                    border: "border-purple-300/70 dark:border-purple-800/70",
+                    icon: UserSearch,
+                  },
+                ].map((c) => {
+                  const isActive =
+                    c.key === null
+                      ? !hasFilters
+                      : c.key === "overdue"
+                        ? appliedFilters.overdue
+                        : c.key === "aprovacao"
+                          ? appliedFilters.group === "aprovacao"
+                          : c.key === "concluido"
+                            ? appliedFilters.group === "concluido"
+                            : appliedFilters.status === c.key;
+                  return (
+                    <StatCard
+                      key={c.label}
+                      label={c.label}
+                      value={c.value}
+                      icon={c.icon}
+                      gradient={c.grad}
+                      border={c.border}
+                      active={isActive}
+                      onClick={() => {
+                        setSearch("");
+                        if (c.key === null) {
+                          setAppliedFilters(EMPTY_FILTERS);
+                          return;
+                        }
+                        if (c.key === "overdue")
+                          setAppliedFilters({
+                            ...EMPTY_FILTERS,
+                            overdue: true,
+                          });
+                        else if (c.key === "aprovacao")
+                          setAppliedFilters({
+                            ...EMPTY_FILTERS,
+                            group: "aprovacao",
+                          });
+                        else if (c.key === "concluido")
+                          setAppliedFilters({
+                            ...EMPTY_FILTERS,
+                            group: "concluido",
+                          });
+                        else
+                          setAppliedFilters({
+                            ...EMPTY_FILTERS,
+                            status: c.key,
+                          });
+                      }}
+                    />
+                  );
+                })}
               </div>
 
-              {hasHorizontalOverflow && (
-                <div className="hidden md:flex flex-1 min-w-[120px] items-center gap-1.5 self-center">
-                  <span className="flex items-center gap-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 shrink-0 whitespace-nowrap select-none">
-                    <ChevronLeft className="h-3 w-3" />
-                    arraste
-                    <ChevronRight className="h-3 w-3" />
-                  </span>
-                  <div
-                    ref={bottomScrollRef}
-                    onScroll={handleBottomBarScroll}
-                    title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
-                    className="flex-1 overflow-x-scroll allka-table-scroll"
-                    style={{ height: 12 }}
-                  >
-                    <div style={{ minWidth: colWidths.reduce((a, b) => a + b, 0), height: 1 }} />
+              {/* ── Main Card ─────────────────────────────────── */}
+              <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+                {/* Row 1 — search + icon toolbar buttons */}
+                <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+                  <div className="relative flex-1 min-w-[220px] max-w-sm">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar tarefa, projeto, cliente, nômade..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-8 h-9 text-sm w-full"
+                    />
+                    {search && (
+                      <button
+                        onClick={() => setSearch("")}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="ml-auto flex items-center gap-2">
+                    <IconToolbarButton
+                      icon={Filter}
+                      tooltip={
+                        activeFilterCount > 0
+                          ? `Filtros (${activeFilterCount} ativos)`
+                          : "Filtros"
+                      }
+                      onClick={() => setFilterDrawerOpen(true)}
+                    />
+                    <IconToolbarButton
+                      icon={Settings2}
+                      tooltip="Configurar colunas"
+                      onClick={() => setColConfigOpen(true)}
+                    />
                   </div>
                 </div>
-              )}
 
-              {totalPages > 1 && <PaginationControls />}
+                {/* Row 2 — items-per-page + count + scrollbar mirror + numbered pagination */}
+                <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-y border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/30">
+                  <div className="flex items-center gap-3">
+                    <ItemsPerPageSelect
+                      value={pageSize.toString()}
+                      onValueChange={(v) => setPageSize(Number(v))}
+                      variant="top"
+                    />
+                    <CountText side="bottom" />
+                  </div>
+
+                  {hasHorizontalOverflow && (
+                    <div className="hidden md:flex flex-1 min-w-[120px] items-center gap-1.5 self-center">
+                      <span className="flex items-center gap-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 shrink-0 whitespace-nowrap select-none">
+                        <ChevronLeft className="h-3 w-3" />
+                        arraste
+                        <ChevronRight className="h-3 w-3" />
+                      </span>
+                      <div
+                        ref={topScrollRef}
+                        onScroll={handleTopBarScroll}
+                        title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                        className="flex-1 overflow-x-scroll allka-table-scroll"
+                        style={{ height: 12 }}
+                      >
+                        <div
+                          style={{
+                            minWidth: colWidths.reduce((a, b) => a + b, 0),
+                            height: 1,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {totalPages > 1 && <PaginationControls />}
+                </div>
+
+                {/* Empty state */}
+                {tarefas.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+                    <div className="h-16 w-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                      <CheckSquare2 className="h-8 w-8 text-slate-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Nenhuma tarefa operacional
+                      </h2>
+                      <p className="text-sm text-slate-400 max-w-sm">
+                        Tarefas s\ão geradas automaticamente quando produtos
+                        s\ão vinculados a projetos.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* No filter results */}
+                {tarefas.length > 0 && sorted.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                    <Filter className="h-8 w-8 text-slate-300 dark:text-slate-600" />
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                      Nenhuma tarefa com os filtros aplicados.
+                    </p>
+                    <button
+                      onClick={clearFilters}
+                      className="text-xs text-blue-600 dark:text-blue-400 underline hover:no-underline"
+                    >
+                      Limpar filtros
+                    </button>
+                  </div>
+                )}
+
+                {/* Table */}
+                {sorted.length > 0 && (
+                  <div
+                    ref={tableScrollRef}
+                    onScroll={handleTableScroll}
+                    className="overflow-x-auto allka-table-scroll-body"
+                  >
+                    <table
+                      className="text-sm"
+                      style={{
+                        tableLayout: "fixed",
+                        minWidth: colWidths.reduce((a, b) => a + b, 0),
+                      }}
+                    >
+                      <colgroup>
+                        {colWidths.map((w, i) => (
+                          <col key={i} style={{ width: w }} />
+                        ))}
+                      </colgroup>
+                      <thead>
+                        <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
+                          {visibleColumnsList.map((col, i) => {
+                            const sortField = {
+                              codigo: "code_snapshot",
+                              tarefa: "title",
+                              projeto: "project_title",
+                              cliente: "client_name",
+                              produto: "product_name",
+                              status: "status",
+                              nomade: "nomade_name",
+                              agencia: "agencia_name",
+                              prazo: "due_date",
+                              execucao: "start_date",
+                              prioridade: "priority",
+                              atraso: "atraso",
+                            }[col.key];
+                            const isAcoes = col.key === "acoes";
+                            return (
+                              <th
+                                key={col.key}
+                                className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
+                                style={{
+                                  paddingLeft: isAcoes ? 8 : 20,
+                                  paddingRight: isAcoes ? 8 : 20,
+                                  textAlign: isAcoes ? "center" : "left",
+                                  borderRight:
+                                    "1px solid rgba(148,163,184,0.2)",
+                                  position: "sticky",
+                                  top: 0,
+                                  left: isAcoes ? 0 : undefined,
+                                  zIndex: isAcoes ? 3 : 2,
+                                  minWidth: isAcoes ? 99 : undefined,
+                                  background: "var(--table-head)",
+                                  boxShadow: isAcoes
+                                    ? "0 1px 0 rgba(148,163,184,0.3), 1px 0 0 rgba(100,116,139,0.18)"
+                                    : "0 1px 0 rgba(148,163,184,0.3)",
+                                }}
+                              >
+                                <div
+                                  className={
+                                    isAcoes
+                                      ? "flex justify-center"
+                                      : "inline-flex items-center gap-1"
+                                  }
+                                >
+                                  {sortField ? (
+                                    <SortableHeader
+                                      label={col.label}
+                                      field={sortField}
+                                      sortKey={sortKey as string | null}
+                                      sortDir={sortDir}
+                                      onSort={(f, d) => handleSort(f as any, d)}
+                                    />
+                                  ) : (
+                                    <span>{col.label}</span>
+                                  )}
+                                  {!isAcoes && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="text-slate-300 dark:text-slate-600 cursor-help text-[10px]">
+                                          ⓘ
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent className="text-xs max-w-[200px]">
+                                        {col.info}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                </div>
+                                {i < colWidths.length - 1 && (
+                                  <div
+                                    onMouseDown={(e) => onResizeMouseDown(e, i)}
+                                    className="absolute right-0 top-1/2 -translate-y-1/2 h-5 w-1 cursor-col-resize hover:bg-blue-400 rounded-full opacity-0 hover:opacity-100 transition-opacity"
+                                    style={{
+                                      transform:
+                                        "translateX(50%) translateY(-50%)",
+                                      zIndex: 10,
+                                    }}
+                                  />
+                                )}
+                              </th>
+                            );
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginated.map((tarefa, rowIdx) => {
+                          const overdue = isOverdue(tarefa);
+                          const sc =
+                            STATUS_CFG[tarefa.status] ??
+                            STATUS_CFG.PARA_LANCAMENTO;
+                          const updating = updatingId === tarefa.id;
+                          const canLaunch = [
+                            "PARA_LANCAMENTO",
+                            "EM_LANCAMENTO",
+                            "AGUARDANDO_INFORMACOES",
+                            "AGUARDANDO_ETAPA",
+                          ].includes(tarefa.status);
+                          const dias = daysUntil(tarefa.due_date);
+
+                          return (
+                            <tr
+                              key={tarefa.id}
+                              className={cn(
+                                "border-b border-slate-100 dark:border-slate-700/50 transition-colors group",
+                                rowIdx % 2 === 0
+                                  ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                  : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]",
+                                overdue && "bg-red-50/50 dark:bg-red-950/10",
+                              )}
+                            >
+                              {/* A\ç\ões \— pinned/sticky, matching the platform-wide icon-column recipe */}
+                              {visibleCols.has("acoes") && (
+                                <td
+                                  className={cn(
+                                    "px-2 py-3 transition-colors",
+                                    rowIdx % 2 === 0
+                                      ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
+                                      : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]",
+                                  )}
+                                  style={{
+                                    position: "sticky",
+                                    left: 0,
+                                    zIndex: 1,
+                                    minWidth: 99,
+                                    borderRight:
+                                      "1px solid rgba(100,116,139,0.18)",
+                                  }}
+                                >
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          onClick={() => {
+                                            setSelectedTarefa(tarefa);
+                                            setDrawerStartInEditMode(false);
+                                            setDrawerOpen(true);
+                                            navigate(
+                                              `${routeBase}/${tarefa.task_code || tarefa.id}`,
+                                              {
+                                                replace: true,
+                                              },
+                                            );
+                                          }}
+                                          className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-[#2558FF] dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        Ver detalhes
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          onClick={() => {
+                                            setSelectedTarefa(tarefa);
+                                            setDrawerStartInEditMode(true);
+                                            setDrawerOpen(true);
+                                            navigate(
+                                              `${routeBase}/${tarefa.task_code || tarefa.id}`,
+                                              {
+                                                replace: true,
+                                              },
+                                            );
+                                          }}
+                                          className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        Editar tarefa
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
+                                          <MoreHorizontal className="h-3.5 w-3.5" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent
+                                        align="start"
+                                        className="w-56 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60"
+                                      >
+                                        <DropdownMenuItem
+                                          className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                          onClick={() => {
+                                            setSelectedTarefa(tarefa);
+                                            setDrawerStartInEditMode(false);
+                                            setDrawerOpen(true);
+                                            navigate(
+                                              `${routeBase}/${tarefa.task_code || tarefa.id}`,
+                                              {
+                                                replace: true,
+                                              },
+                                            );
+                                          }}
+                                        >
+                                          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0">
+                                            <Eye className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                          </span>
+                                          Ver detalhes
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator className="my-1" />
+                                        {canLaunch && (
+                                          <DropdownMenuItem
+                                            className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                            onClick={() => {
+                                              setLaunchTask(tarefa);
+                                              setLaunchDrawerOpen(true);
+                                            }}
+                                          >
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-100 dark:bg-indigo-900/30 shrink-0">
+                                              <Rocket className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                                            </span>
+                                            Lançar tarefa
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem
+                                          className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                          onClick={() => {
+                                            setAssignTask(tarefa);
+                                            setAssignOpen(true);
+                                          }}
+                                        >
+                                          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-purple-100 dark:bg-purple-900/30 shrink-0">
+                                            <UserSearch className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                                          </span>
+                                          Atribuir nômade
+                                        </DropdownMenuItem>
+                                        {tarefa.status !== "PAUSADA" && (
+                                          <DropdownMenuItem
+                                            className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                            onClick={() =>
+                                              handleStatusChange(
+                                                tarefa,
+                                                "PAUSADA",
+                                              )
+                                            }
+                                          >
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30 shrink-0">
+                                              <PauseCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                            </span>
+                                            Pausar tarefa
+                                          </DropdownMenuItem>
+                                        )}
+                                        {tarefa.status === "PAUSADA" && (
+                                          <DropdownMenuItem
+                                            className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                            onClick={() =>
+                                              handleStatusChange(
+                                                tarefa,
+                                                "EM_EXECUCAO",
+                                              )
+                                            }
+                                          >
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0">
+                                              <PlayCircle className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                            </span>
+                                            Retomar tarefa
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem
+                                          className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                          onClick={() =>
+                                            handleStatusChange(
+                                              tarefa,
+                                              "PARA_LANCAMENTO",
+                                            )
+                                          }
+                                        >
+                                          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-900/30 shrink-0">
+                                            <RotateCcw className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                                          </span>
+                                          Devolver tarefa
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSub>
+                                          <DropdownMenuSubTrigger className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer">
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30 shrink-0">
+                                              <CheckSquare2 className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                            </span>
+                                            Alterar status
+                                          </DropdownMenuSubTrigger>
+                                          <DropdownMenuSubContent className="w-72 max-h-80 overflow-y-auto rounded-xl p-1.5 shadow-lg">
+                                            {ALL_STATUSES.map((s) => {
+                                              const c = STATUS_CFG[s];
+                                              const Icon = c.icon;
+                                              const isCurrent =
+                                                s === tarefa.status;
+                                              return (
+                                                <DropdownMenuItem
+                                                  key={s}
+                                                  className={cn(
+                                                    "gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer whitespace-nowrap",
+                                                    isCurrent &&
+                                                      "bg-blue-50 dark:bg-blue-950/30 font-semibold",
+                                                  )}
+                                                  onClick={() =>
+                                                    !isCurrent &&
+                                                    handleStatusChange(
+                                                      tarefa,
+                                                      s,
+                                                    )
+                                                  }
+                                                >
+                                                  <Icon
+                                                    className={cn(
+                                                      "h-3.5 w-3.5 shrink-0",
+                                                      c.color,
+                                                    )}
+                                                  />
+                                                  <span className="flex-1">
+                                                    {c.label}
+                                                  </span>
+                                                  {isCurrent && (
+                                                    <Check className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                                                  )}
+                                                </DropdownMenuItem>
+                                              );
+                                            })}
+                                          </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
+                                        <DropdownMenuSeparator className="my-1" />
+                                        <DropdownMenuItem
+                                          className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                          onClick={() =>
+                                            handleOpenProject(tarefa)
+                                          }
+                                        >
+                                          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 dark:bg-slate-900/30 shrink-0">
+                                            <ExternalLink className="h-3.5 w-3.5 text-slate-600 dark:text-slate-400" />
+                                          </span>
+                                          Abrir projeto
+                                        </DropdownMenuItem>
+                                        {/* Só a nível de UX — o backend revalida
+                                      tudo de novo (nômade/etapas/anexos/
+                                      briefing) antes de aceitar. */}
+                                        {tarefa.status === "PARA_LANCAMENTO" &&
+                                          !tarefa.nomade_responsavel_id && (
+                                            <DropdownMenuItem
+                                              className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
+                                              onClick={() => {
+                                                setTransferTask(tarefa);
+                                                setTransferOpen(true);
+                                              }}
+                                            >
+                                              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 dark:bg-violet-900/30 shrink-0">
+                                                <RotateCcw className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                                              </span>
+                                              Transferir para outro projeto
+                                            </DropdownMenuItem>
+                                          )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* ID */}
+                              {visibleCols.has("id") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <span className="text-[11px] font-mono text-slate-400">
+                                    #{String(tarefa.id)}
+                                  </span>
+                                </td>
+                              )}
+
+                              {/* Código */}
+                              {visibleCols.has("codigo") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <div className="flex flex-col gap-0.5">
+                                    {tarefa.task_code ||
+                                    tarefa.code_snapshot ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 cursor-help">
+                                            {tarefa.task_code
+                                              ? formatTaskCode(tarefa.task_code)
+                                              : tarefa.code_snapshot}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent
+                                          side="top"
+                                          className="text-xs"
+                                        >
+                                          Código único da tarefa
+                                          {tarefa.task_code
+                                            ? ` (original: ${tarefa.task_code})`
+                                            : ""}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : (
+                                      <span className="text-slate-300 dark:text-slate-600">
+                                        —
+                                      </span>
+                                    )}
+                                    {/* Tarefa vinda da plataforma antiga: mostra o número de lá e
+                                  sinaliza quando ela continua no formato antigo (sem modelo
+                                  de tarefa novo por trás). */}
+                                    <LegacyIdBadge
+                                      legacyId={(tarefa as any).legacy_id}
+                                      entidade="tarefa"
+                                      modeloAntigo={Boolean(
+                                        (tarefa as any).legacy_model,
+                                      )}
+                                    />
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* Tarefa */}
+                              {visibleCols.has("tarefa") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        className="text-left w-full"
+                                        onClick={() => {
+                                          setSelectedTarefa(tarefa);
+                                          setDrawerStartInEditMode(false);
+                                          setDrawerOpen(true);
+                                          navigate(
+                                            `${routeBase}/${tarefa.task_code || tarefa.id}`,
+                                            {
+                                              replace: true,
+                                            },
+                                          );
+                                        }}
+                                      >
+                                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors leading-snug">
+                                          {tarefa.title}
+                                        </p>
+                                        {tarefa.fase && (
+                                          <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                            {tarefa.fase}
+                                          </span>
+                                        )}
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs max-w-[280px]"
+                                    >
+                                      {tarefa.title}
+                                      {tarefa.fase
+                                        ? ` · Fase: ${tarefa.fase}`
+                                        : ""}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
+
+                              {/* Projeto */}
+                              {visibleCols.has("projeto") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                        <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                                          {tarefa.project.title}
+                                        </span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs"
+                                    >
+                                      Projeto: {tarefa.project.title}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
+
+                              {/* Cliente */}
+                              {visibleCols.has("cliente") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.project.client ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                          <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                          <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                                            {tarefa.project.client.name}
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        {tarefa.project.client.name}
+                                        {tarefa.project.client.cnpj
+                                          ? ` · CNPJ: ${tarefa.project.client.cnpj}`
+                                          : ""}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Agência */}
+                              {visibleCols.has("agencia") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.responsavel_agencia ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                          <AvatarBubble
+                                            name={
+                                              tarefa.responsavel_agencia.name
+                                            }
+                                            colorClass="bg-blue-500"
+                                          />
+                                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                                            {tarefa.responsavel_agencia.name}
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        {tarefa.responsavel_agencia.name}
+                                        {tarefa.responsavel_agencia.email
+                                          ? ` · ${tarefa.responsavel_agencia.email}`
+                                          : ""}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Produto */}
+                              {visibleCols.has("produto") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                        <Package className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                                          {
+                                            tarefa.project_product
+                                              .product_name_snapshot
+                                          }
+                                        </span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs"
+                                    >
+                                      {
+                                        tarefa.project_product
+                                          .product_name_snapshot
+                                      }
+                                      {tarefa.project_product
+                                        .product_category_snapshot
+                                        ? ` · ${tarefa.project_product.product_category_snapshot}`
+                                        : ""}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
+
+                              {/* Status */}
+                              {visibleCols.has("status") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="cursor-help inline-block">
+                                        <StatusBadge status={tarefa.status} />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs"
+                                    >
+                                      Etapa atual:{" "}
+                                      {STATUS_CFG[tarefa.status]?.label ??
+                                        tarefa.status}
+                                      {tarefa.updated_at
+                                        ? ` · Atualizado em ${fmtDate(tarefa.updated_at)}`
+                                        : ""}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
+
+                              {/* Nômade */}
+                              {visibleCols.has("nomade") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.nomade_responsavel ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                          <AvatarBubble
+                                            name={
+                                              tarefa.nomade_responsavel.name
+                                            }
+                                            colorClass="bg-purple-500"
+                                          />
+                                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                                            {tarefa.nomade_responsavel.name}
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        {tarefa.nomade_responsavel.name}
+                                        {tarefa.nomade_responsavel.email
+                                          ? ` · ${tarefa.nomade_responsavel.email}`
+                                          : ""}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        setAssignTask(tarefa);
+                                        setAssignOpen(true);
+                                      }}
+                                      className="text-[11px] text-slate-400 hover:text-purple-600 underline underline-offset-2 transition-colors"
+                                    >
+                                      Atribuir
+                                    </button>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Líder */}
+                              {visibleCols.has("lider") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.project.consultant ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="text-xs text-slate-600 dark:text-slate-400 truncate block cursor-help">
+                                          {tarefa.project.consultant}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        Líder responsável:{" "}
+                                        {tarefa.project.consultant}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Prazo entrega */}
+                              {visibleCols.has("prazo") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.due_date ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="cursor-help">
+                                          <span
+                                            className={cn(
+                                              "text-sm font-medium",
+                                              overdue
+                                                ? "text-red-600 dark:text-red-400"
+                                                : "text-slate-600 dark:text-slate-400",
+                                            )}
+                                          >
+                                            {fmtDate(tarefa.due_date, true)}
+                                          </span>
+                                          {dias !== null && (
+                                            <p
+                                              className={cn(
+                                                "text-[10px] mt-0.5 leading-none",
+                                                overdue
+                                                  ? "text-red-500"
+                                                  : dias <= 3
+                                                    ? "text-amber-500"
+                                                    : "text-slate-400",
+                                              )}
+                                            >
+                                              {dias < 0
+                                                ? `${Math.abs(dias)}d atraso`
+                                                : dias === 0
+                                                  ? "hoje"
+                                                  : `${dias}d`}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        Prazo: {fmtDate(tarefa.due_date)}
+                                        {dias !== null
+                                          ? dias < 0
+                                            ? ` · Atrasada há ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? "" : "s"}`
+                                            : dias === 0
+                                              ? " · Vence hoje"
+                                              : ` · Faltam ${dias} dia${dias === 1 ? "" : "s"}`
+                                          : ""}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Prazo execução */}
+                              {visibleCols.has("execucao") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.start_date ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="text-sm text-slate-600 dark:text-slate-400 cursor-help">
+                                          {fmtDate(tarefa.start_date, true)}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        Início da execução:{" "}
+                                        {fmtDate(tarefa.start_date)}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Atraso */}
+                              {visibleCols.has("atraso") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {(() => {
+                                    const isTerminal = [
+                                      "CONCLUIDA",
+                                      "CANCELADA",
+                                      "APROVADA",
+                                    ].includes(tarefa.status);
+                                    if (!tarefa.due_date || isTerminal) {
+                                      return (
+                                        <span className="text-slate-300 dark:text-slate-600">
+                                          —
+                                        </span>
+                                      );
+                                    }
+                                    const tone = urgencyTone(dias, overdue);
+                                    const label = overdue
+                                      ? `${Math.abs(dias ?? 0)}d atraso`
+                                      : dias === 0
+                                        ? "Hoje"
+                                        : `${dias}d`;
+                                    const explanation = overdue
+                                      ? `Atrasada há ${Math.abs(dias ?? 0)} dia${Math.abs(dias ?? 0) === 1 ? "" : "s"} (prazo era ${fmtDate(tarefa.due_date)})`
+                                      : dias === 0
+                                        ? "Vence hoje — última chance antes de atrasar"
+                                        : `Faltam ${dias} dia${dias === 1 ? "" : "s"} para o prazo (${fmtDate(tarefa.due_date)})`;
+                                    return (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span
+                                            className={cn(
+                                              "inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 border cursor-help",
+                                              tone.text,
+                                              tone.bg,
+                                              tone.border,
+                                            )}
+                                          >
+                                            {tone.pulse ? (
+                                              <span className="relative flex h-2 w-2 shrink-0">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
+                                              </span>
+                                            ) : (
+                                              <AlertCircle className="h-3 w-3" />
+                                            )}
+                                            {label}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent
+                                          side="top"
+                                          className="text-xs"
+                                        >
+                                          {explanation}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })()}
+                                </td>
+                              )}
+
+                              {/* Prioridade */}
+                              {visibleCols.has("prioridade") && (
+                                <td
+                                  className="px-5 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="cursor-help inline-block">
+                                        <PriorityBadge
+                                          priority={tarefa.priority as Priority}
+                                        />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs"
+                                    >
+                                      {PRIORITY_INFO[
+                                        tarefa.priority as Priority
+                                      ] ?? "Prioridade da tarefa."}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Row 3 — bottom mirror of row 2 */}
+                {sorted.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] py-2 border-t border-[#e8edf5] dark:border-slate-800 bg-white dark:bg-slate-900/20">
+                    <div className="flex items-center gap-3">
+                      <ItemsPerPageSelect
+                        value={pageSize.toString()}
+                        onValueChange={(v) => setPageSize(Number(v))}
+                        variant="bottom"
+                      />
+                      <CountText side="top" />
+                    </div>
+
+                    {hasHorizontalOverflow && (
+                      <div className="hidden md:flex flex-1 min-w-[120px] items-center gap-1.5 self-center">
+                        <span className="flex items-center gap-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500 shrink-0 whitespace-nowrap select-none">
+                          <ChevronLeft className="h-3 w-3" />
+                          arraste
+                          <ChevronRight className="h-3 w-3" />
+                        </span>
+                        <div
+                          ref={bottomScrollRef}
+                          onScroll={handleBottomBarScroll}
+                          title="Arraste para rolar a tabela na horizontal e ver as colunas que não couberem na tela"
+                          className="flex-1 overflow-x-scroll allka-table-scroll"
+                          style={{ height: 12 }}
+                        >
+                          <div
+                            style={{
+                              minWidth: colWidths.reduce((a, b) => a + b, 0),
+                              height: 1,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {totalPages > 1 && <PaginationControls />}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
-      </div>
-      </div>
       </div>
 
       {/* Advanced Filters Drawer */}

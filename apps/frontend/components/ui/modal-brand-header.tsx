@@ -1,5 +1,6 @@
 import { ReactNode, CSSProperties } from "react"
 import { X } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface ModalBrandHeaderProps {
   title?: string
@@ -9,11 +10,13 @@ interface ModalBrandHeaderProps {
   right?: ReactNode
   onClose?: () => void
   headerStyle?: CSSProperties
+  /** Permite adequar o banner ao espaço da tela que o contém. */
+  className?: string
 }
 
-export function ModalBrandHeader({ title, subtitle, icon, left, right, onClose, headerStyle }: ModalBrandHeaderProps) {
+export function ModalBrandHeader({ title, subtitle, icon, left, right, onClose, headerStyle, className }: ModalBrandHeaderProps) {
   return (
-    <div className="app-brand-header relative flex items-center gap-4 pl-[25px] pr-[90px] py-3 min-h-[100px] overflow-hidden flex-shrink-0" style={headerStyle}>
+    <div className={cn("app-brand-header relative flex items-center gap-4 pl-[25px] pr-[90px] py-2 min-h-[88px] overflow-hidden flex-shrink-0", className)} style={headerStyle}>
       {/* Icon */}
       {icon && (
         <div className="h-14 w-14 rounded-full bg-white/15 border-2 border-white/30 flex items-center justify-center flex-shrink-0 [&>svg]:h-6 [&>svg]:w-6 [&>svg]:text-white">
@@ -51,11 +54,11 @@ export function ModalBrandHeader({ title, subtitle, icon, left, right, onClose, 
       {onClose && (
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 rounded-lg opacity-100 transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 disabled:pointer-events-none p-1.5"
+          className="absolute top-3 right-3 rounded-md opacity-100 transition-all hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 disabled:pointer-events-none p-1"
           title="Fechar"
           aria-label="Fechar"
         >
-          <X className="size-6 text-white drop-shadow-md" />
+          <X className="size-5 text-white drop-shadow-md" />
           <span className="sr-only">Fechar</span>
         </button>
       )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -20,7 +20,9 @@ import {
   Pencil,
   Plus,
   Search,
-  SlidersHorizontal,
+  Filter,
+  EyeOff,
+  Settings2,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Badge } from "@/components/ui/badge";
@@ -43,19 +45,35 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { ProvisionalBadge } from "@/components/provisional-badge";
 import {
   STANDARD_SHELL_PANEL_CLASS,
+  STANDARD_SHELL_TABLE_CARD_CLASS,
   StandardPageBanner,
 } from "@/components/standard-page-shell";
-import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
-import { CATALOG2_STATUS_LABEL, CATALOG2_STATUS_TONE } from "@/lib/catalog2-status";
-import { provisionalPrice, provisionalTaskCount } from "@/lib/catalog2-provisional";
+import {
+  usePersistedViewMode,
+  viewModeGridClass,
+} from "@/lib/use-persisted-view-mode";
+import {
+  CATALOG2_STATUS_LABEL,
+  CATALOG2_STATUS_TONE,
+} from "@/lib/catalog2-status";
+import {
+  provisionalPrice,
+  provisionalTaskCount,
+} from "@/lib/catalog2-provisional";
+import {
+  catalog2CategoryTone,
+  catalog2EditorialImage,
+} from "@/lib/catalog2-editorial";
 import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
+import { StandardModalDialog } from "@/components/standard-modal-dialog";
 
 // Cadastro de Produtos — administração exclusiva dos produtos catalog2
 // (reunião 2026-09, consolidação "catálogo2 como cadastro definitivo"; e
@@ -100,40 +118,87 @@ const PENDENCY_LABEL: Record<string, string> = {
   rose_review_pending: "revisão Rose",
 };
 
+const PRODUCT_COLUMNS = [
+  { key: "number", label: "#", width: 48, min: 32, align: "left" },
+  { key: "image", label: "Img", width: 58, min: 42, align: "left" },
+  { key: "product", label: "Produto", width: 310, min: 90, align: "left" },
+  { key: "category", label: "Categoria", width: 145, min: 70, align: "left" },
+  { key: "tasks", label: "Tarefas", width: 150, min: 70, align: "left" },
+  { key: "price", label: "Preço", width: 145, min: 70, align: "right" },
+  {
+    key: "pendencies",
+    label: "Pendências",
+    width: 130,
+    min: 70,
+    align: "left",
+  },
+  { key: "status", label: "Status", width: 125, min: 65, align: "left" },
+  { key: "actions", label: "Ações", width: 110, min: 64, align: "center" },
+] as const;
+type ProductColumnKey = (typeof PRODUCT_COLUMNS)[number]["key"];
+const PRODUCT_LIST_PREFERENCES_KEY = "allka:admin-products-list-preferences";
+
+function defaultProductColumnWidths() {
+  return Object.fromEntries(
+    PRODUCT_COLUMNS.map((column) => [column.key, column.width]),
+  ) as Record<ProductColumnKey, number>;
+}
+
 export default function AdminProdutosPage() {
   const isAdminMaster = useIsAdminMaster();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [state, setState] = useState<"loading" | "ready" | "forbidden" | "error">("loading");
+  const [state, setState] = useState<
+    "loading" | "ready" | "forbidden" | "error"
+  >("loading");
   const [overview, setOverview] = useState<any>(null);
-  const [refs, setRefs] = useState<{ pillars: any[]; categories: any[] }>({ pillars: [], categories: [] });
+  const [refs, setRefs] = useState<{ pillars: any[]; categories: any[] }>({
+    pillars: [],
+    categories: [],
+  });
   // ?produto=<id> abre o construtor direto (deep link preservado do redirect
   // de /admin/produtos/novo-catalogo e de qualquer link externo).
-  const [openProductId, setOpenProductId] = useState<string | null>(() => searchParams.get("produto"));
+  const [openProductId, setOpenProductId] = useState<string | null>(() =>
+    searchParams.get("produto"),
+  );
   // ?ver=<id> abre o DETALHE completo (só leitura) — ação separada do
   // construtor (?produto=<id>). Ícone de olho → detalhe; ícone de lápis →
   // construtor (reparo 2026-09, "não abra o construtor quando a ação
   // escolhida for apenas visualizar").
-  const [viewProductId, setViewProductId] = useState<string | null>(() => searchParams.get("ver"));
+  const [viewProductId, setViewProductId] = useState<string | null>(() =>
+    searchParams.get("ver"),
+  );
 
-  const openProduct = useCallback((id: string | null) => {
-    setOpenProductId(id);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (id) next.set("produto", id);
-      else next.delete("produto");
-      return next;
-    }, { replace: true });
-  }, [setSearchParams]);
+  const openProduct = useCallback(
+    (id: string | null) => {
+      setOpenProductId(id);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id) next.set("produto", id);
+          else next.delete("produto");
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
-  const viewProduct = useCallback((id: string | null) => {
-    setViewProductId(id);
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (id) next.set("ver", id);
-      else next.delete("ver");
-      return next;
-    }, { replace: true });
-  }, [setSearchParams]);
+  const viewProduct = useCallback(
+    (id: string | null) => {
+      setViewProductId(id);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id) next.set("ver", id);
+          else next.delete("ver");
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   // filtros/listagem (preservados ao voltar do editor)
   const [q, setQ] = useState("");
@@ -155,19 +220,119 @@ export default function AdminProdutosPage() {
   const [showCategoryFilters, setShowCategoryFilters] = useState(false);
   // Lista/Grade — preferência isolada desta tela, persistida em localStorage
   // (mesma convenção do layout anterior; restaurada 2026-09).
-  const [gridMode, setGridMode] = usePersistedViewMode("admin-produtos", "list");
+  const [gridMode, setGridMode] = usePersistedViewMode(
+    "admin-produtos",
+    "list",
+  );
+  const [columnConfigOpen, setColumnConfigOpen] = useState(false);
+  const [visibleProductColumns, setVisibleProductColumns] = useState<
+    Set<ProductColumnKey>
+  >(() => {
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(PRODUCT_LIST_PREFERENCES_KEY) || "{}",
+      );
+      const valid = Array.isArray(saved.visible)
+        ? saved.visible.filter((key: string) =>
+            PRODUCT_COLUMNS.some((column) => column.key === key),
+          )
+        : [];
+      return new Set(
+        (valid.length
+          ? valid
+          : PRODUCT_COLUMNS.map((column) => column.key)) as ProductColumnKey[],
+      );
+    } catch {
+      return new Set(PRODUCT_COLUMNS.map((column) => column.key));
+    }
+  });
+  const [productColumnWidths, setProductColumnWidths] = useState<
+    Record<ProductColumnKey, number>
+  >(() => {
+    const defaults = defaultProductColumnWidths();
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(PRODUCT_LIST_PREFERENCES_KEY) || "{}",
+      );
+      for (const column of PRODUCT_COLUMNS) {
+        const width = Number(saved.widths?.[column.key]);
+        if (Number.isFinite(width))
+          defaults[column.key] = Math.max(column.min, width);
+      }
+    } catch {
+      // Mantém as larguras padrão quando a preferência estiver inválida.
+    }
+    return defaults;
+  });
+  const productResizeRef = useRef<{
+    key: ProductColumnKey;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
   const [page, setPage] = useState(1);
-  const pageSize = 15;
-  const [list, setList] = useState<{ data: any[]; total: number; page_size: number } | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [pageJumpValue, setPageJumpValue] = useState("");
+  const [list, setList] = useState<{
+    data: any[];
+    total: number;
+    page_size: number;
+  } | null>(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-  const [confirm, setConfirm] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
   // Item 5 (reunião 2026-09-14, "Inativação programada de produtos") — a
   // prévia (projetos/propostas afetados, datas, consequências) é carregada
   // ANTES de abrir o diálogo, pra reaproveitar o ConfirmationDialog comum
   // (mesmo componente do resto da tela) já com os dados prontos.
-  const [inactivationDialog, setInactivationDialog] = useState<{ product: any; preview: any } | null>(null);
+  const [inactivationDialog, setInactivationDialog] = useState<{
+    product: any;
+    preview: any;
+  } | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(
+      PRODUCT_LIST_PREFERENCES_KEY,
+      JSON.stringify({
+        visible: [...visibleProductColumns],
+        widths: productColumnWidths,
+      }),
+    );
+  }, [visibleProductColumns, productColumnWidths]);
+
+  const beginProductColumnResize = useCallback(
+    (event: React.PointerEvent, key: ProductColumnKey) => {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      productResizeRef.current = {
+        key,
+        startX: event.clientX,
+        startWidth: productColumnWidths[key],
+      };
+    },
+    [productColumnWidths],
+  );
+
+  const resizeProductColumn = useCallback((event: React.PointerEvent) => {
+    const active = productResizeRef.current;
+    if (!active) return;
+    const column = PRODUCT_COLUMNS.find((item) => item.key === active.key)!;
+    setProductColumnWidths((current) => ({
+      ...current,
+      [active.key]: Math.max(
+        column.min,
+        Math.round(active.startWidth + event.clientX - active.startX),
+      ),
+    }));
+  }, []);
+
+  const finishProductColumnResize = useCallback(() => {
+    productResizeRef.current = null;
+  }, []);
 
   const bootstrap = useCallback(async () => {
     try {
@@ -188,16 +353,26 @@ export default function AdminProdutosPage() {
       else setState("error");
     }
   }, []);
-  useEffect(() => { void bootstrap(); }, [bootstrap]);
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
 
   const loadList = useCallback(async () => {
     setListLoading(true);
     try {
       const r = await apiClient.getCatalog2Products({
-        q, status, pillar_id: pillarId, category_id: categoryId,
-        origin, rose_reviewed: roseReviewed, review_state: reviewState, pendency,
+        q,
+        status,
+        pillar_id: pillarId,
+        category_id: categoryId,
+        origin,
+        rose_reviewed: roseReviewed,
+        review_state: reviewState,
+        pendency,
         has_pendencies: onlyPendencies ? "true" : undefined,
-        sort, page, page_size: pageSize,
+        sort,
+        page,
+        page_size: pageSize,
       });
       setList(r);
       setListError(null);
@@ -209,11 +384,26 @@ export default function AdminProdutosPage() {
       // dizia "36" com a lista vazia sem NENHUM aviso de erro. Agora o erro
       // fica visível e distinto do estado "nenhum resultado".
       setList({ data: [], total: 0, page_size: pageSize });
-      setListError("Não foi possível carregar a lista de produtos agora. Tente novamente.");
+      setListError(
+        "Não foi possível carregar a lista de produtos agora. Tente novamente.",
+      );
     } finally {
       setListLoading(false);
     }
-  }, [q, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, onlyPendencies, sort, page]);
+  }, [
+    q,
+    status,
+    pillarId,
+    categoryId,
+    origin,
+    roseReviewed,
+    reviewState,
+    pendency,
+    onlyPendencies,
+    sort,
+    page,
+    pageSize,
+  ]);
 
   useEffect(() => {
     if (state !== "ready" || openProductId || viewProductId) return;
@@ -221,7 +411,21 @@ export default function AdminProdutosPage() {
     return () => clearTimeout(t);
   }, [state, openProductId, viewProductId, loadList, q]);
 
-  useEffect(() => setPage(1), [q, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, onlyPendencies, sort]);
+  useEffect(
+    () => setPage(1),
+    [
+      q,
+      status,
+      pillarId,
+      categoryId,
+      origin,
+      roseReviewed,
+      reviewState,
+      pendency,
+      onlyPendencies,
+      sort,
+    ],
+  );
 
   // Bug real 2026-09-11: "contador diz 36, tabela/grade ficam vazias" —
   // acontece quando `page` fica acima do total de páginas válido (ex.: total
@@ -241,8 +445,14 @@ export default function AdminProdutosPage() {
 
   async function rowAction(fn: () => Promise<any>, ok: string) {
     setMsg(null);
-    try { await fn(); setMsg(ok); await loadList(); await bootstrap(); }
-    catch (e: any) { setMsg(e?.message ?? "Falha."); }
+    try {
+      await fn();
+      setMsg(ok);
+      await loadList();
+      await bootstrap();
+    } catch (e: any) {
+      setMsg(e?.message ?? "Falha.");
+    }
   }
 
   // Item 5: busca a prévia (projetos/propostas afetados) ANTES de abrir o
@@ -273,14 +483,19 @@ export default function AdminProdutosPage() {
   if (state === "loading") {
     return (
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-        <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+        <Centered>
+          <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
+        </Centered>
       </div>
     );
   }
   if (state === "forbidden") {
     return (
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-        <Centered><Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master neste momento.</Centered>
+        <Centered>
+          <Lock className="h-5 w-5" /> Esta área é exclusiva do Admin Master
+          neste momento.
+        </Centered>
       </div>
     );
   }
@@ -292,22 +507,49 @@ export default function AdminProdutosPage() {
             <AlertTriangle className="h-8 w-8 text-red-500" />
           </div>
           <div className="space-y-1.5">
-            <h2 className="text-base font-semibold text-foreground">Erro ao carregar produtos</h2>
-            <p className="max-w-sm text-sm text-muted-foreground">Não foi possível carregar o catálogo agora.</p>
+            <h2 className="text-base font-semibold text-foreground">
+              Erro ao carregar produtos
+            </h2>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Não foi possível carregar o catálogo agora.
+            </p>
           </div>
-          <Button onClick={() => { setState("loading"); void bootstrap(); }}>Tentar novamente</Button>
+          <Button
+            onClick={() => {
+              setState("loading");
+              void bootstrap();
+            }}
+          >
+            Tentar novamente
+          </Button>
         </div>
       </div>
     );
   }
 
-  const totalPages = list ? Math.max(1, Math.ceil(list.total / list.page_size)) : 1;
+  const totalPages = list
+    ? Math.max(1, Math.ceil(list.total / list.page_size))
+    : 1;
+  const commitPageJump = () => {
+    const target = Number(pageJumpValue);
+    if (Number.isInteger(target) && target >= 1 && target <= totalPages) {
+      setPage(target);
+    }
+    setPageJumpValue("");
+  };
   const c = overview.counts;
   // /readiness traz task_count/price_amount reais (mesmos usados no painel de
   // prontidão) — indexado por id pra casar com a página atual da listagem.
   const readinessById: Record<string, any> = {};
   for (const rp of readiness?.products ?? []) readinessById[rp.id] = rp;
-  const advancedFilters = [pillarId, categoryId, origin, roseReviewed, reviewState, pendency].filter(Boolean).length;
+  const advancedFilters = [
+    pillarId,
+    categoryId,
+    origin,
+    roseReviewed,
+    reviewState,
+    pendency,
+  ].filter(Boolean).length;
 
   // Abas de filtro rápido — mesma ideia do layout anterior aprovado
   // (filtram a tabela direto, sem precisar abrir "Mais filtros"), adaptadas
@@ -315,9 +557,16 @@ export default function AdminProdutosPage() {
   // catálogo antigo, que não existem aqui).
   const quickTabs = [
     {
-      key: "all", label: "Todos os produtos", icon: Package, count: c.final_imported_products ?? c.imported_products ?? 0,
+      key: "all",
+      label: "Todos os produtos",
+      icon: Package,
+      count: c.final_imported_products ?? c.imported_products ?? 0,
       active: status === "" && !onlyPendencies && !showCategoryFilters,
-      onClick: () => { setStatus(""); setOnlyPendencies(false); setShowCategoryFilters(false); },
+      onClick: () => {
+        setStatus("");
+        setOnlyPendencies(false);
+        setShowCategoryFilters(false);
+      },
     },
     {
       // Reunião 2026-09-14 (Item 2): renomeado de "Publicados" para "Ativos"
@@ -326,27 +575,54 @@ export default function AdminProdutosPage() {
       // exigem versão publicada, mas não são "Ativo"). Contagem vem de
       // products_by_status (grupo real por status), não mais de
       // products_published (que conta qualquer versão publicada).
-      key: "active", label: "Ativos", icon: CheckCircle2, count: overview.products_by_status?.disponivel ?? 0,
+      key: "active",
+      label: "Ativos",
+      icon: CheckCircle2,
+      count: overview.products_by_status?.disponivel ?? 0,
       active: status === "disponivel" && !onlyPendencies,
-      onClick: () => { setStatus("disponivel"); setOnlyPendencies(false); setShowCategoryFilters(false); },
+      onClick: () => {
+        setStatus("disponivel");
+        setOnlyPendencies(false);
+        setShowCategoryFilters(false);
+      },
     },
     {
-      key: "preparing", label: "Em preparação", icon: ClockIcon, count: c.products_in_preparation ?? 0,
+      key: "preparing",
+      label: "Em preparação",
+      icon: ClockIcon,
+      count: c.products_in_preparation ?? 0,
       active: status === "em_preparacao" && !onlyPendencies,
-      onClick: () => { setStatus("em_preparacao"); setOnlyPendencies(false); setShowCategoryFilters(false); },
+      onClick: () => {
+        setStatus("em_preparacao");
+        setOnlyPendencies(false);
+        setShowCategoryFilters(false);
+      },
     },
     {
       // Bug real corrigido (reparo 2026-09): esta aba reusava o mesmo estado
       // de "Categorias" e nunca filtrava nada — cada aba agora tem estado
       // próprio e independente.
-      key: "pendencies", label: "Com pendências", icon: ListChecks, count: c.products_with_pendencies ?? 0,
+      key: "pendencies",
+      label: "Com pendências",
+      icon: ListChecks,
+      count: c.products_with_pendencies ?? 0,
       active: onlyPendencies,
-      onClick: () => { setOnlyPendencies(true); setStatus(""); setShowCategoryFilters(false); },
+      onClick: () => {
+        setOnlyPendencies(true);
+        setStatus("");
+        setShowCategoryFilters(false);
+      },
     },
     {
-      key: "categories", label: "Categorias", icon: Layers, count: refs.categories.length,
+      key: "categories",
+      label: "Categorias",
+      icon: Layers,
+      count: refs.categories.length,
       active: showCategoryFilters,
-      onClick: () => { setShowCategoryFilters((v) => !v); setOnlyPendencies(false); },
+      onClick: () => {
+        setShowCategoryFilters((v) => !v);
+        setOnlyPendencies(false);
+      },
     },
   ] as const;
 
@@ -358,6 +634,7 @@ export default function AdminProdutosPage() {
             icon={Package}
             title="Cadastro de Produtos"
             description="Cadastre, edite e organize os produtos e serviços da plataforma (catalog2)"
+            contentClassName="lg:h-[65px]"
             actions={
               <>
                 <TooltipProvider delayDuration={400}>
@@ -365,14 +642,23 @@ export default function AdminProdutosPage() {
                     <TooltipTrigger asChild>
                       <button
                         data-tour-id="catalog2-admin-create"
-                        onClick={() => setConfirm({ title: "Criar produto", message: "Um novo produto (em preparação) com uma versão rascunho será criado.", onConfirm: () => createProduct() })}
+                        onClick={() =>
+                          setConfirm({
+                            title: "Criar produto",
+                            message:
+                              "Um novo produto (em preparação) com uma versão rascunho será criado.",
+                            onConfirm: () => createProduct(),
+                          })
+                        }
                         className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/70 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/20"
                       >
                         <Plus className="h-3.5 w-3.5 shrink-0" />
                         Novo Produto
                       </button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>Criar novo produto catalog2</TooltipContent>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Criar novo produto catalog2
+                    </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
                 <a
@@ -381,91 +667,97 @@ export default function AdminProdutosPage() {
                 >
                   Pré-visualizar como cliente
                 </a>
-                <PinToTrayButton id="page-produtos" label="Cadastro de Produtos" icon={Package} path="/admin/produtos" />
+                <PinToTrayButton
+                  id="page-produtos"
+                  label="Cadastro de Produtos"
+                  icon={Package}
+                  path="/admin/produtos"
+                />
               </>
             }
           />
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto" data-tour-id="catalog2-admin-header">
-          <div className="space-y-3">
-            <p className="rounded-lg bg-muted px-3 py-2 text-sm text-foreground">
-              Estes são os produtos da plataforma, ainda <strong>em preparação</strong> na maioria dos casos. O
-              catálogo antigo, com 162 produtos, não aparece mais aqui — ele segue no banco só para não quebrar
-              projetos antigos já ligados a ele.
-            </p>
-
-            {/* Abas-filtro rápido — mesmo padrão visual do layout anterior. */}
-            <div className="mb-1 overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+        <div
+          className="flex-1 min-h-0 overflow-y-auto"
+          data-tour-id="catalog2-admin-header"
+        >
+          <div className="space-y-[5px]">
+            {/* Uma única faixa: os números são os próprios filtros, sem repetir
+                os mesmos estados em um segundo painel. */}
+            <div className="mb-1 hidden overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
               <div className="flex flex-wrap items-center">
                 {quickTabs.map((tab) => (
                   <button
                     key={tab.key}
                     type="button"
                     onClick={tab.onClick}
-                    className={`relative flex h-14 items-center gap-2 border-r border-slate-100 px-4 text-sm font-medium transition-colors last:border-r-0 dark:border-slate-800 ${
+                    className={`relative flex h-10 items-center gap-1.5 border-r border-slate-100 px-2.5 text-xs font-semibold transition-colors dark:border-slate-800 sm:px-3 ${
                       tab.active
-                        ? "text-blue-600 dark:text-blue-400"
+                        ? tab.key === "active"
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                          : tab.key === "preparing"
+                            ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+                            : tab.key === "pendencies"
+                              ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300"
+                              : tab.key === "categories"
+                                ? "bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300"
+                                : "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
                         : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-200"
                     }`}
                   >
-                    <tab.icon className="h-4 w-4" />
+                    <tab.icon className="h-3.5 w-3.5" />
                     {tab.label}
-                    <span className={`ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold ${tab.active ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"}`}>
+                    <span
+                      className={`ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold ${tab.active ? "bg-white/80 text-current shadow-sm dark:bg-slate-900/60" : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"}`}
+                    >
                       {tab.count}
                     </span>
-                    <span className={`absolute inset-x-0 bottom-0 h-0.5 origin-left bg-blue-500 transition-transform ${tab.active ? "scale-x-100" : "scale-x-0"}`} />
+                    <span
+                      className={`absolute inset-x-0 bottom-0 h-0.5 origin-left transition-transform ${tab.key === "active" ? "bg-emerald-500" : tab.key === "preparing" ? "bg-amber-500" : tab.key === "pendencies" ? "bg-rose-500" : tab.key === "categories" ? "bg-violet-500" : "bg-blue-500"} ${tab.active ? "scale-x-100" : "scale-x-0"}`}
+                    />
                   </button>
                 ))}
+                <div className="ml-auto flex h-10 items-center gap-2 px-2 text-right sm:px-3">
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-600 dark:hover:bg-slate-800">
+                          <ClockIcon className="h-3.5 w-3.5" />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">
+                        Última atualização:{" "}
+                        {overview.import?.last_applied_at
+                          ? new Date(
+                              overview.import.last_applied_at,
+                            ).toLocaleString("pt-BR", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })
+                          : "Agora"}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <button
+                    type="button"
+                    aria-label="Atualizar produtos"
+                    onClick={() => {
+                      void bootstrap();
+                      void loadList();
+                    }}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800 dark:border-slate-700 dark:hover:bg-slate-800"
+                  >
+                    <ArrowUpDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Indicadores gerais — vêm de overview.counts (dados reais). */}
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-3">
-              <Stat k="Importados (finais)" v={c.final_imported_products ?? c.imported_products ?? 0}
-                hint={`não conta os 162 operacionais${c.test_local_products ? ` · + ${c.test_local_products} de demonstração, fora da contagem` : ""}`} />
-              <Stat k="Tarefas (nos importados)" v={c.tasks_in_final_imported ?? 0} hint={`${c.tasks ?? 0} no catálogo todo`} />
-              <Stat k="Etapas (nos importados)" v={c.steps_in_final_imported ?? 0} hint={`${c.steps ?? 0} no catálogo todo`} />
-            </div>
-
-            {importSummary?.has_import && (
-              <details className="rounded-lg border">
-                <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-2 px-3 py-2">
-                  <h2 className="text-sm font-semibold text-foreground">Importação de produtos definitivos</h2>
-                  <span className="text-xs text-muted-foreground">
-                    {importSummary.count_matches_expected
-                      ? `✓ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`
-                      : `⚠ ${importSummary.total_imported}/${importSummary.expected ?? importSummary.total_imported} importados`}
-                    {" · "}{importSummary.published_count} publicado(s)
-                  </span>
-                </summary>
-                <div className="space-y-2 border-t p-3 text-muted-foreground">
-                  <p className="text-xs">
-                    {overview.import?.message ??
-                      `${overview.counts.final_imported_products ?? importSummary.total_imported} produto(s) importado(s) para preparação. Aguardando tarefas, prazos, precificação e revisão para publicação.`}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                    <SummaryCell k="Revisados pela Rose" v={`${importSummary.rose_reviewed} / ${importSummary.total_imported}`} />
-                    <SummaryCell k="Sem revisão da Rose" v={importSummary.not_rose_reviewed} />
-                    <SummaryCell k="Decisões pendentes" v={importSummary.decisions_pending} />
-                    <SummaryCell k="Editados por humano" v={importSummary.human_edited} />
-                  </div>
-                  <p className="text-[11px]">
-                    Fonte principal <code>{importSummary.last_batch?.source_main?.name}</code> · checksum{" "}
-                    <code>{String(importSummary.last_batch?.source_main?.checksum ?? "").slice(0, 12)}…</code> · regra{" "}
-                    {importSummary.last_batch?.rule_version} · lote {importSummary.last_batch?.status}. Os 162 produtos
-                    operacionais seguem intactos.
-                  </p>
-                </div>
-              </details>
-            )}
-
-            {readiness && <ReadinessPanel readiness={readiness} />}
-
-            <Card className="overflow-hidden border border-slate-200/70 shadow-sm dark:border-slate-700/60">
+            <div className={`mt-[5px] ${STANDARD_SHELL_TABLE_CARD_CLASS}`}>
               {/* Row 1 — busca + filtros + ordenar */}
-              <div className="flex flex-wrap items-center gap-3 border-b border-slate-200/70 bg-slate-50/60 px-4 py-3.5 dark:border-slate-700/60 dark:bg-slate-900/30">
-                <div className="relative min-w-[180px] flex-1">
+              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/70 bg-slate-50/60 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-900/30 xl:flex-nowrap">
+                <div className="relative min-w-[150px] flex-1 xl:max-w-[260px]">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     placeholder="Buscar por nome ou slug"
@@ -475,182 +767,490 @@ export default function AdminProdutosPage() {
                     className="h-9 w-full rounded-lg border-slate-200 bg-white pl-9 text-sm dark:border-slate-700 dark:bg-slate-800"
                   />
                 </div>
-                <Button
-                  onClick={() => setShowCategoryFilters((v) => !v)}
-                  variant="outline"
-                  size="sm"
-                  className={`h-9 gap-2 px-3.5 text-xs ${advancedFilters > 0 ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
-                >
-                  <SlidersHorizontal className="h-3.5 w-3.5" />
-                  Filtros
-                  {advancedFilters > 0 && (
-                    <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">{advancedFilters}</span>
-                  )}
-                </Button>
-                <label className="sr-only" htmlFor="f-sort">Ordenar</label>
-                <select id="f-sort" className={SELECT_CLS} value={sort} onChange={(e) => setSort(e.target.value)}>
-                  <option value="name">Ordenar: Nome A–Z</option>
-                  <option value="name_desc">Ordenar: Nome Z–A</option>
-                  <option value="updated">Ordenar: Alterado recentemente</option>
-                  <option value="created">Ordenar: Criado recentemente</option>
-                </select>
-                <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">
-                  {list ? `${list.total} ${list.total === 1 ? "item" : "itens"}` : ""}
+                <div className="flex shrink-0 items-center overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+                  {quickTabs.map((tab) => (
+                    <TooltipProvider key={tab.key} delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={tab.onClick}
+                            aria-label={tab.label}
+                            className={`relative flex h-9 items-center gap-1 border-r border-slate-100 px-2 text-[11px] font-semibold transition-colors last:border-r-0 dark:border-slate-700 sm:px-2.5 ${
+                              tab.active
+                                ? tab.key === "active"
+                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
+                                  : tab.key === "preparing"
+                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+                                    : tab.key === "pendencies"
+                                      ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300"
+                                      : tab.key === "categories"
+                                        ? "bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300"
+                                        : "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
+                                : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+                            }`}
+                          >
+                            <tab.icon className="h-3.5 w-3.5" />
+                            <span
+                              className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold ${tab.active ? "bg-white/80 text-current shadow-sm dark:bg-slate-900/60" : "bg-slate-100 text-slate-500 dark:bg-slate-700"}`}
+                            >
+                              {tab.count}
+                            </span>
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent className="text-xs">
+                          {tab.label}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+                </div>
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => setShowCategoryFilters((v) => !v)}
+                        variant="outline"
+                        size="icon"
+                        aria-label="Filtros avançados"
+                        className={`relative h-9 w-9 rounded-lg transition-all hover:border-transparent hover:bg-gradient-to-r hover:from-[#101b4c] hover:via-[#4b1c83] hover:to-[#bf087f] hover:text-white ${advancedFilters > 0 ? "border-[#9a1683] bg-[#f9edfa] text-[#8a1477] dark:border-[#9a1683] dark:bg-[#48143f] dark:text-[#f5a9e6]" : "border-slate-200 text-[#8a1477] dark:border-slate-700 dark:text-[#e694d1]"}`}
+                      >
+                        <Filter className="h-4 w-4" />
+                        {advancedFilters > 0 && (
+                          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
+                            {advancedFilters}
+                          </span>
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-xs">
+                      Filtros avançados
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <DropdownMenu>
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Ordenar produtos"
+                            className="h-9 w-9 rounded-lg border-slate-200 text-[#8a1477] transition-all hover:border-transparent hover:bg-gradient-to-r hover:from-[#101b4c] hover:via-[#4b1c83] hover:to-[#bf087f] hover:text-white dark:border-slate-700 dark:text-[#e694d1]"
+                          >
+                            <ArrowUpDown className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent className="text-xs">
+                        Ordenar produtos
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => setSort("name")}>
+                      Nome A–Z
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSort("name_desc")}>
+                      Nome Z–A
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSort("updated")}>
+                      Alterado recentemente
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setSort("created")}>
+                      Criado recentemente
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setColumnConfigOpen(true)}
+                        aria-label="Configurar colunas"
+                        className="relative h-9 w-9 rounded-lg border-slate-200 text-[#8a1477] transition-all hover:border-transparent hover:bg-gradient-to-r hover:from-[#101b4c] hover:via-[#4b1c83] hover:to-[#bf087f] hover:text-white dark:border-slate-700 dark:text-[#e694d1]"
+                      >
+                        <Settings2 className="h-4 w-4" />
+                        {PRODUCT_COLUMNS.length - visibleProductColumns.size >
+                          0 && (
+                          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[9px] font-bold text-white">
+                            {PRODUCT_COLUMNS.length -
+                              visibleProductColumns.size}
+                          </span>
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent className="text-xs">
+                      Configurar colunas
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <span className="hidden shrink-0 whitespace-nowrap text-xs text-slate-400 lg:inline">
+                  {list
+                    ? `${list.total} ${list.total === 1 ? "item" : "itens"}`
+                    : ""}
                 </span>
-                <ProductViewModeToggle value={gridMode} onChange={setGridMode} />
+                <ProductViewModeToggle
+                  value={gridMode}
+                  onChange={setGridMode}
+                />
+                <div className="ml-auto hidden items-center gap-2 border-l border-slate-200 pl-2 xl:flex dark:border-slate-700">
+                  <ItemsPerPageSelect
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setPage(1);
+                    }}
+                  />
+                  {totalPages > 1 && (
+                    <PaginationControls
+                      page={page}
+                      totalPages={totalPages}
+                      onChange={setPage}
+                    />
+                  )}
+                  <div className="flex items-center gap-1 border-l border-slate-200 pl-2 dark:border-slate-700">
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={pageJumpValue}
+                      onChange={(event) => setPageJumpValue(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") commitPageJump();
+                      }}
+                      placeholder="Pág."
+                      aria-label="Ir para a página"
+                      className="h-9 w-14 rounded-lg border border-slate-200 bg-white text-center text-xs text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-[#8a1477]/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={commitPageJump}
+                      disabled={!pageJumpValue}
+                      className="h-9 rounded-lg border border-slate-200 px-2 text-xs font-semibold text-[#8a1477] transition-colors hover:border-transparent hover:bg-gradient-to-r hover:from-[#101b4c] hover:via-[#4b1c83] hover:to-[#bf087f] hover:text-white disabled:pointer-events-none disabled:opacity-40 dark:border-slate-700"
+                    >
+                      Ir
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {showCategoryFilters && (
                 <div className="flex flex-wrap gap-2 border-b border-slate-200/70 p-3 dark:border-slate-700/60">
-                  <label className="sr-only" htmlFor="f-status">Situação</label>
-                  <select id="f-status" className={SELECT_CLS} value={status} onChange={(e) => setStatus(e.target.value)}>
-                    <option value="">Todas as situações</option>
-                    {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  <label className="sr-only" htmlFor="f-status">
+                    Status
+                  </label>
+                  <select
+                    id="f-status"
+                    className={SELECT_CLS}
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                  >
+                    <option value="">Todos os status</option>
+                    {Object.entries(STATUS_LABEL).map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
                   </select>
-                  <label className="sr-only" htmlFor="f-pillar">Pilar</label>
-                  <select id="f-pillar" className={SELECT_CLS} value={pillarId} onChange={(e) => setPillarId(e.target.value)}>
-                    <option value="">Todos os pilares</option>{refs.pillars.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  <label className="sr-only" htmlFor="f-pillar">
+                    Pilar
+                  </label>
+                  <select
+                    id="f-pillar"
+                    className={SELECT_CLS}
+                    value={pillarId}
+                    onChange={(e) => setPillarId(e.target.value)}
+                  >
+                    <option value="">Todos os pilares</option>
+                    {refs.pillars.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
                   </select>
-                  <label className="sr-only" htmlFor="f-cat">Categoria</label>
-                  <select id="f-cat" className={SELECT_CLS} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                    <option value="">Todas as categorias</option>{refs.categories.map((c2) => <option key={c2.id} value={c2.id}>{c2.name}</option>)}
+                  <label className="sr-only" htmlFor="f-cat">
+                    Categoria
+                  </label>
+                  <select
+                    id="f-cat"
+                    className={SELECT_CLS}
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                  >
+                    <option value="">Todas as categorias</option>
+                    {refs.categories.map((c2) => (
+                      <option key={c2.id} value={c2.id}>
+                        {c2.name}
+                      </option>
+                    ))}
                   </select>
-                  <label className="sr-only" htmlFor="f-origin">Origem</label>
-                  <select id="f-origin" className={SELECT_CLS} value={origin} onChange={(e) => setOrigin(e.target.value)}>
+                  <label className="sr-only" htmlFor="f-origin">
+                    Origem
+                  </label>
+                  <select
+                    id="f-origin"
+                    className={SELECT_CLS}
+                    value={origin}
+                    onChange={(e) => setOrigin(e.target.value)}
+                  >
                     <option value="">Toda origem</option>
                     <option value="existente">Só existentes</option>
                     <option value="novo">Só novos</option>
                     <option value="reativado">Só reativados</option>
                   </select>
-                  <label className="sr-only" htmlFor="f-rose">Revisão da Rose</label>
-                  <select id="f-rose" className={SELECT_CLS} value={roseReviewed} onChange={(e) => setRoseReviewed(e.target.value)}>
+                  <label className="sr-only" htmlFor="f-rose">
+                    Revisão da Rose
+                  </label>
+                  <select
+                    id="f-rose"
+                    className={SELECT_CLS}
+                    value={roseReviewed}
+                    onChange={(e) => setRoseReviewed(e.target.value)}
+                  >
                     <option value="">Revisão da Rose (todas)</option>
                     <option value="true">Revisado pela Rose</option>
                     <option value="false">Sem revisão da Rose</option>
                   </select>
-                  <label className="sr-only" htmlFor="f-review">Estado de preparo</label>
-                  <select id="f-review" className={SELECT_CLS} value={reviewState} onChange={(e) => setReviewState(e.target.value)}>
+                  <label className="sr-only" htmlFor="f-review">
+                    Estado de preparo
+                  </label>
+                  <select
+                    id="f-review"
+                    className={SELECT_CLS}
+                    value={reviewState}
+                    onChange={(e) => setReviewState(e.target.value)}
+                  >
                     <option value="">Estado de preparo (todos)</option>
-                    {Object.entries(REVIEW_STATE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    {Object.entries(REVIEW_STATE_LABEL).map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
                   </select>
-                  <label className="sr-only" htmlFor="f-pend">Tipo de pendência</label>
-                  <select id="f-pend" className={SELECT_CLS} value={pendency} onChange={(e) => setPendency(e.target.value)}>
+                  <label className="sr-only" htmlFor="f-pend">
+                    Tipo de pendência
+                  </label>
+                  <select
+                    id="f-pend"
+                    className={SELECT_CLS}
+                    value={pendency}
+                    onChange={(e) => setPendency(e.target.value)}
+                  >
                     <option value="">Tipo de pendência (todas)</option>
-                    {Object.entries(PENDENCY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    {Object.entries(PENDENCY_LABEL).map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
                   </select>
                 </div>
               )}
 
               {/* Row — paginação (espelhada no rodapé) */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white px-4 py-2 dark:border-slate-700/60 dark:bg-slate-900/30">
-                <span className="text-xs text-slate-400">Página {page} de {totalPages}</span>
-                {totalPages > 1 && <PaginationControls page={page} totalPages={totalPages} onChange={setPage} />}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white px-3 py-2 xl:hidden dark:border-slate-700/60 dark:bg-slate-900/30">
+                <ItemsPerPageSelect
+                  value={pageSize.toString()}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value));
+                    setPage(1);
+                  }}
+                  variant="bottom"
+                />
+                {totalPages > 1 && (
+                  <PaginationControls
+                    page={page}
+                    totalPages={totalPages}
+                    onChange={setPage}
+                  />
+                )}
               </div>
 
-              {msg && <p className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400">{msg}</p>}
+              {msg && (
+                <p className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400">
+                  {msg}
+                </p>
+              )}
 
               {listLoading ? (
-                <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+                <Centered>
+                  <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
+                </Centered>
               ) : listError ? (
                 <div className="flex flex-col items-center justify-center px-4 py-20">
                   <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-red-50 shadow-sm dark:bg-red-950/30">
                     <AlertTriangle className="h-9 w-9 text-red-500" />
                   </div>
-                  <h3 className="mb-1.5 text-base font-semibold">Erro ao carregar a lista de produtos</h3>
-                  <p className="mb-6 max-w-md text-center text-sm leading-relaxed text-muted-foreground">{listError}</p>
-                  <Button onClick={() => void loadList()}>Tentar novamente</Button>
+                  <h3 className="mb-1.5 text-base font-semibold">
+                    Erro ao carregar a lista de produtos
+                  </h3>
+                  <p className="mb-6 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
+                    {listError}
+                  </p>
+                  <Button onClick={() => void loadList()}>
+                    Tentar novamente
+                  </Button>
                 </div>
               ) : !list || list.data.length === 0 ? (
                 <div className="flex flex-col items-center justify-center px-4 py-20">
                   <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-linear-to-br from-blue-100 to-purple-100 shadow-sm">
                     <Package className="h-9 w-9 text-blue-500" />
                   </div>
-                  <h3 className="mb-1.5 text-base font-semibold">Nenhum produto encontrado</h3>
+                  <h3 className="mb-1.5 text-base font-semibold">
+                    Nenhum produto encontrado
+                  </h3>
                   <p className="mb-6 max-w-md text-center text-sm leading-relaxed text-muted-foreground">
-                    {overview.is_empty ? overview.empty_message : "Tente ajustar os filtros ou a busca para encontrar o que procura."}
+                    {overview.is_empty
+                      ? overview.empty_message
+                      : "Tente ajustar os filtros ou a busca para encontrar o que procura."}
                   </p>
                 </div>
               ) : gridMode === "list" ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[880px] text-xs">
+                <div className="allka-table-scroll-body overflow-auto">
+                  <table
+                    className="tabela-cartao w-full table-fixed text-xs"
+                    style={{
+                      minWidth: PRODUCT_COLUMNS.filter((column) =>
+                        visibleProductColumns.has(column.key),
+                      ).reduce(
+                        (total, column) =>
+                          total + productColumnWidths[column.key],
+                        0,
+                      ),
+                    }}
+                  >
+                    <colgroup>
+                      {PRODUCT_COLUMNS.map((column) => (
+                        <col
+                          key={column.key}
+                          style={{
+                            width: productColumnWidths[column.key],
+                            visibility: visibleProductColumns.has(column.key)
+                              ? "visible"
+                              : "collapse",
+                          }}
+                        />
+                      ))}
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-slate-200/60 bg-slate-50/60 dark:border-slate-700/60 dark:bg-slate-900/30">
-                        <th className="w-12 px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">#</th>
-                        <th className="w-12 px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Img</th>
-                        <th className="px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Produto</th>
-                        <th className="hidden px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 sm:table-cell">Categoria</th>
-                        <th className="hidden px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 lg:table-cell">Tarefas</th>
-                        <th className="hidden px-2 py-3 text-right text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 lg:table-cell">Preço</th>
-                        <th className="hidden px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400 md:table-cell">Pendências</th>
-                        <th className="px-2 py-3 text-left text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Status</th>
-                        <th className="px-2 py-3 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400">Ações</th>
+                        {PRODUCT_COLUMNS.map((column) => (
+                          <th
+                            key={column.key}
+                            className="relative h-8 px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400"
+                            style={{
+                              textAlign: column.align,
+                              visibility: visibleProductColumns.has(column.key)
+                                ? "visible"
+                                : "collapse",
+                            }}
+                          >
+                            <span className="block truncate">
+                              {column.label}
+                            </span>
+                            <div
+                              role="separator"
+                              aria-orientation="vertical"
+                              aria-label={`Redimensionar coluna ${column.label}`}
+                              onPointerDown={(event) =>
+                                beginProductColumnResize(event, column.key)
+                              }
+                              onPointerMove={resizeProductColumn}
+                              onPointerUp={finishProductColumnResize}
+                              onPointerCancel={finishProductColumnResize}
+                              className="absolute -right-1 top-1/2 z-20 h-5 w-2 -translate-y-1/2 cursor-col-resize touch-none rounded-full after:absolute after:left-1/2 after:top-1/2 after:h-4 after:w-[3px] after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-slate-200 hover:after:bg-violet-400 dark:after:bg-slate-700"
+                            />
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {list.data.map((p) => {
-                        const readyLabel = p.imported
-                          ? (p.review_state === "ready_for_final_review" ? "Pronto p/ revisão final" : (REVIEW_STATE_LABEL[p.review_state] ?? "Em preparação"))
-                          : null;
                         const pend: string[] = p.pendencies ?? [];
                         const rp = readinessById[p.id];
-                        const realTaskCount: number | undefined = rp?.task_count;
-                        const realPrice: number | null | undefined = rp?.price_amount;
-                        const simulatedPrice: number | null | undefined = rp?.pricing_simulation?.price_amount;
+                        const realTaskCount: number | undefined =
+                          rp?.task_count;
+                        const realPrice: number | null | undefined =
+                          rp?.price_amount;
+                        const simulatedPrice: number | null | undefined =
+                          rp?.pricing_simulation?.price_amount;
                         // Fonte ÚNICA de provisório: a camada do backend
                         // (Catalog2ProvisionalPreview, via p.provisional_preview). O
                         // hash local (lib/catalog2-provisional.ts) só entra se o
                         // produto não tiver nenhum preview provisório gravado.
                         const pv = p.provisional_preview;
-                        const taskProv = pv ? { value: pv.included_items_count, label: "Estrutura provisória — completar" } : provisionalTaskCount(p.id);
-                        const priceProv = pv?.price_amount != null ? { value: pv.price_amount, label: "Preço provisório — revisar.", is_provisional: true as const } : provisionalPrice(p.id);
-                        const tech = [
-                          `slug ${p.slug}`,
-                          p.source_index ? `origem #${p.source_index}` : null,
-                          p.origin || null,
-                          p.published_version_number ? `v${p.published_version_number} publicada` : "sem versão publicada",
-                          p.has_draft ? "rascunho aberto" : null,
-                          p.published_at ? `publicado ${new Date(p.published_at).toLocaleDateString("pt-BR")}` : null,
-                          `alterado ${new Date(p.updated_at).toLocaleDateString("pt-BR")}`,
-                        ].filter(Boolean).join(" · ");
+                        const taskProv = pv
+                          ? {
+                              value: pv.included_items_count,
+                              label: "Estrutura provisória — completar",
+                            }
+                          : provisionalTaskCount(p.id);
+                        const priceProv =
+                          pv?.price_amount != null
+                            ? {
+                                value: pv.price_amount,
+                                label: "Preço provisório — revisar.",
+                                is_provisional: true as const,
+                              }
+                            : provisionalPrice(p.id);
                         return (
-                          <tr key={p.id} className="group transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                            <td className="px-2 py-3">
-                              <span className="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">{p.source_index ?? "—"}</span>
+                          <tr
+                            key={p.id}
+                            className="group h-12 odd:bg-white even:bg-slate-50/70 transition-colors hover:bg-blue-50/70 dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
+                          >
+                            <td className="px-2 py-1">
+                              <span className="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">
+                                {p.source_index ?? "—"}
+                              </span>
                             </td>
-                            <td className="px-2 py-3">
-                              <Catalog2Thumbnail productId={p.id} imagePath={p.provisional_preview?.image_path} size="sm" showBadge={false} />
+                            <td className="px-2 py-1">
+                              <Catalog2Thumbnail
+                                productId={p.id}
+                                imagePath={catalog2EditorialImage(
+                                  p.category?.name,
+                                  p.internal_name,
+                                )}
+                                size="sm"
+                                showBadge={false}
+                              />
                             </td>
-                            <td className="px-2 py-3">
+                            <td className="px-2 py-1">
                               <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <button className="text-left text-[13px] font-semibold leading-tight hover:underline" onClick={() => viewProduct(p.id)}>
-                                    {p.internal_name}
-                                  </button>
-                                  <code className="shrink-0 rounded bg-slate-100 px-1 py-0.5 text-[10px] text-slate-400 dark:bg-slate-800" title="Slug catalog2 (não é código legado)">
-                                    {p.slug}
-                                  </code>
-                                </div>
-                                <p className="max-w-[260px] truncate text-[11px] text-muted-foreground" title={p.summary ?? undefined}>
-                                  {p.summary || "Resumo ainda não escrito"}
-                                </p>
-                                <p className="max-w-[280px] truncate text-[11px] text-muted-foreground">
-                                  {readyLabel ? readyLabel : "Sem revisão de preparo ainda"}
-                                  {p.imported ? ` · ${pend.length} pendência(s)` : ""}
-                                </p>
-                                <RowTechDetails text={tech} />
+                                <button
+                                  className="block w-full truncate whitespace-nowrap text-left text-[13px] font-semibold leading-tight hover:underline"
+                                  onClick={() => viewProduct(p.id)}
+                                  title={p.internal_name}
+                                >
+                                  {p.internal_name}
+                                </button>
                               </div>
                             </td>
-                            <td className="hidden px-2 py-3 sm:table-cell">
-                              <Badge variant="outline">{p.category?.name ?? "Sem categoria"}</Badge>
+                            <td className="px-2 py-1">
+                              <Badge
+                                className={`whitespace-nowrap border-0 shadow-none ring-1 ${catalog2CategoryTone(p.category?.name)}`}
+                              >
+                                {p.category?.name ?? "Sem categoria"}
+                              </Badge>
                             </td>
-                            <td className="hidden px-2 py-3 lg:table-cell">
-                              <div className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-300">
+                            <td className="px-2 py-1">
+                              <div className="flex items-center gap-1 whitespace-nowrap text-[11px] text-slate-600 dark:text-slate-300">
                                 {realTaskCount != null && realTaskCount > 0 ? (
                                   <span>{realTaskCount} tarefa(s)</span>
                                 ) : (
                                   <>
-                                    <span className="text-slate-400">{taskProv.value} tarefa(s)</span>
-                                    <ProvisionalBadge label={taskProv.label + " Pendência real de tarefas continua registrada."} />
+                                    <span className="text-slate-400">
+                                      {taskProv.value} tarefa(s)
+                                    </span>
+                                    <ProvisionalBadge
+                                      label={
+                                        taskProv.label +
+                                        " Pendência real de tarefas continua registrada."
+                                      }
+                                    />
                                   </>
                                 )}
                                 {rp?.functional_for_test && (
@@ -658,55 +1258,77 @@ export default function AdminProdutosPage() {
                                 )}
                               </div>
                             </td>
-                            <td className="hidden px-2 py-3 text-right lg:table-cell">
+                            <td className="px-2 py-1 text-right">
                               {realPrice != null ? (
                                 <div className="flex items-center justify-end gap-1">
                                   <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
                                     R$ {realPrice.toFixed(2)}
                                   </span>
-                                  <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
+                                  <Catalog2PricingMemoryPopover
+                                    productId={p.id}
+                                    isAdminMaster={isAdminMaster}
+                                  />
                                 </div>
                               ) : simulatedPrice != null ? (
                                 <div className="flex items-center justify-end gap-1">
-                                  <span className="text-[13px] font-semibold text-violet-600 dark:text-violet-300">R$ {simulatedPrice.toFixed(2)}</span>
+                                  <span className="text-[13px] font-semibold text-violet-600 dark:text-violet-300">
+                                    R$ {simulatedPrice.toFixed(2)}
+                                  </span>
                                   <ProvisionalBadge label="Preço final simulado para teste. Não autoriza publicação, cotação ou contratação." />
-                                  <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
+                                  <Catalog2PricingMemoryPopover
+                                    productId={p.id}
+                                    isAdminMaster={isAdminMaster}
+                                  />
                                 </div>
                               ) : (
                                 <div className="flex items-center justify-end gap-1">
-                                  <span className="text-[13px] font-semibold text-slate-400">R$ {priceProv.value.toFixed(2)}</span>
-                                  <ProvisionalBadge label={priceProv.label + " Não é comercialmente válido — nunca usado em cotação, checkout ou publicação."} />
-                                  <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} provisionalPriceAmount={priceProv.value} />
+                                  <span className="text-[13px] font-semibold text-slate-400">
+                                    R$ {priceProv.value.toFixed(2)}
+                                  </span>
+                                  <ProvisionalBadge
+                                    label={
+                                      priceProv.label +
+                                      " Não é comercialmente válido — nunca usado em cotação, checkout ou publicação."
+                                    }
+                                  />
+                                  <Catalog2PricingMemoryPopover
+                                    productId={p.id}
+                                    isAdminMaster={isAdminMaster}
+                                    provisionalPriceAmount={priceProv.value}
+                                  />
                                 </div>
                               )}
                             </td>
-                            <td className="hidden px-2 py-3 md:table-cell">
-                              {pend.length === 0 && !!p.rose_reviewed !== false && !p.human_edited ? (
-                                <span className="text-[11px] text-muted-foreground">nenhuma</span>
+                            <td className="px-2 py-1">
+                              {pend.length === 0 &&
+                              !!p.rose_reviewed !== false &&
+                              !p.human_edited ? (
+                                <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+                                  Sem pendências
+                                </span>
                               ) : (
-                                <div className="flex flex-wrap items-center gap-1">
-                                  {!p.rose_reviewed && <Badge className="bg-muted text-muted-foreground">Rose pendente</Badge>}
-                                  {p.human_edited && <Badge className="bg-muted text-muted-foreground">editado por humano</Badge>}
-                                  {pend.slice(0, 3).map((pk: string) => (
-                                    <Badge key={pk} className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{PENDENCY_LABEL[pk] ?? pk}</Badge>
-                                  ))}
-                                  {pend.length > 3 && <span className="text-[11px] text-muted-foreground">+{pend.length - 3}</span>}
-                                </div>
+                                <Badge className="whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                                  {pend.length +
+                                    (p.rose_reviewed ? 0 : 1) +
+                                    (p.human_edited ? 1 : 0)}{" "}
+                                  pendência(s)
+                                </Badge>
                               )}
                             </td>
-                            <td className="px-2 py-3">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {p.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
-                                <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-                                {p.inactivation_scheduled_at && (
-                                  <Badge className="bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">
-                                    Inativação programada para {new Date(p.inactivation_effective_at).toLocaleDateString("pt-BR")}
-                                  </Badge>
-                                )}
+                            <td className="px-2 py-1">
+                              <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                <Badge
+                                  className={
+                                    STATUS_TONE[p.status] ??
+                                    "bg-muted text-muted-foreground"
+                                  }
+                                >
+                                  {STATUS_LABEL[p.status] ?? p.status}
+                                </Badge>
                               </div>
                             </td>
-                            <td className="px-2 py-3">
-                              <div className="flex items-center justify-center gap-1">
+                            <td className="px-2 py-1">
+                              <div className="flex items-center justify-center gap-1 whitespace-nowrap">
                                 <TooltipProvider delayDuration={400}>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
@@ -718,7 +1340,9 @@ export default function AdminProdutosPage() {
                                         <Eye className="h-3.5 w-3.5" />
                                       </button>
                                     </TooltipTrigger>
-                                    <TooltipContent className="text-xs font-medium">Ver detalhe completo</TooltipContent>
+                                    <TooltipContent className="text-xs font-medium">
+                                      Ver detalhe completo
+                                    </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
                                 <TooltipProvider delayDuration={400}>
@@ -726,16 +1350,31 @@ export default function AdminProdutosPage() {
                                     <TooltipTrigger asChild>
                                       <button
                                         onClick={() => openProduct(p.id)}
-                                        aria-label={p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}
+                                        aria-label={
+                                          p.has_draft
+                                            ? "Continuar configuração"
+                                            : "Abrir/editar produto"
+                                        }
                                         className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-[#6E2C96] shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"
                                       >
                                         <Pencil className="h-3.5 w-3.5" />
                                       </button>
                                     </TooltipTrigger>
-                                    <TooltipContent className="text-xs font-medium">{p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}</TooltipContent>
+                                    <TooltipContent className="text-xs font-medium">
+                                      {p.has_draft
+                                        ? "Continuar configuração"
+                                        : "Abrir/editar produto"}
+                                    </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
-                                <ProductRowActionsMenu p={p} rowAction={rowAction} setConfirm={setConfirm} onScheduleInactivation={openInactivationDialog} />
+                                <ProductRowActionsMenu
+                                  p={p}
+                                  rowAction={rowAction}
+                                  setConfirm={setConfirm}
+                                  onScheduleInactivation={
+                                    openInactivationDialog
+                                  }
+                                />
                               </div>
                             </td>
                           </tr>
@@ -747,79 +1386,137 @@ export default function AdminProdutosPage() {
               ) : (
                 <div className={`p-4 ${viewModeGridClass(gridMode)}`}>
                   {list.data.map((p) => {
-                    const readyLabel = p.imported
-                      ? (p.review_state === "ready_for_final_review" ? "Pronto p/ revisão final" : (REVIEW_STATE_LABEL[p.review_state] ?? "Em preparação"))
-                      : null;
                     const pend: string[] = p.pendencies ?? [];
                     const isCompact = gridMode === 4 || gridMode === 5;
                     const rp = readinessById[p.id];
+                    const realPrice: number | null | undefined =
+                      rp?.price_amount;
+                    const simulatedPrice: number | null | undefined =
+                      rp?.pricing_simulation?.price_amount;
+                    const previewPrice =
+                      p.provisional_preview?.price_amount ??
+                      provisionalPrice(p.id).value;
+                    const categoryName = p.category?.name ?? "Sem categoria";
                     return (
-                      <Card key={p.id} className="group flex flex-col overflow-hidden border border-slate-200/70 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700/60">
+                      <Card
+                        key={p.id}
+                        className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-1 hover:border-violet-200 hover:shadow-[0_18px_38px_rgba(76,29,149,0.17)] dark:border-slate-700/60 dark:bg-slate-900"
+                      >
                         <button
                           type="button"
                           onClick={() => viewProduct(p.id)}
-                          className={`relative flex w-full shrink-0 items-center justify-center overflow-hidden ${isCompact ? "h-20" : "h-28"}`}
+                          className={`relative flex w-full shrink-0 items-center justify-center overflow-hidden ${isCompact ? "h-24" : "h-36"}`}
                         >
-                          {p.provisional_preview?.image_path ? (
-                            <img src={p.provisional_preview.image_path} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-blue-500 to-violet-600">
-                              <Package className={isCompact ? "h-6 w-6 text-white/90" : "h-9 w-9 text-white/90"} />
-                            </div>
-                          )}
-                          <div className="absolute right-2 top-2 flex items-center gap-1">
-                            {p.is_new && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Novo</Badge>}
-                            <Badge className={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>
-                          </div>
-                          {p.provisional_preview?.image_path && (
-                            <div className="absolute left-2 bottom-2">
-                              <ProvisionalBadge label="Imagem provisória — reaproveitada para visualização, substituir pela imagem definitiva." />
-                            </div>
-                          )}
+                          <img
+                            src={catalog2EditorialImage(
+                              categoryName,
+                              p.internal_name,
+                            )}
+                            alt=""
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.035]"
+                          />
+                          <div className="absolute inset-0 bg-linear-to-t from-slate-950/20 via-transparent to-transparent" />
+                          <Badge
+                            className={`absolute left-3 top-3 border-0 px-2.5 py-1 text-[10px] font-bold shadow-sm ${STATUS_TONE[p.status] ?? "bg-white/90 text-slate-700"}`}
+                          >
+                            {p.is_new
+                              ? "Novo"
+                              : (STATUS_LABEL[p.status] ?? p.status)}
+                          </Badge>
                         </button>
-                        <div className="flex flex-1 flex-col gap-2 p-3">
-                          <button className="text-left text-[13px] font-semibold leading-tight hover:underline" onClick={() => viewProduct(p.id)}>
-                            {p.internal_name}
-                          </button>
+                        <div
+                          className={`flex flex-1 flex-col ${isCompact ? "gap-1.5 p-3" : "gap-2 p-3.5"}`}
+                        >
+                          <div className="flex min-w-0 items-center justify-between gap-2">
+                            <Badge
+                              className={`max-w-[60%] truncate border-0 px-2 py-0.5 text-[10px] font-semibold shadow-none ring-1 ${catalog2CategoryTone(categoryName)}`}
+                            >
+                              {categoryName}
+                            </Badge>
+                            <span
+                              className={`shrink-0 font-bold tracking-tight text-emerald-600 ${isCompact ? "text-base" : "text-lg"}`}
+                            >
+                              R${" "}
+                              {(
+                                realPrice ??
+                                simulatedPrice ??
+                                previewPrice
+                              ).toFixed(2)}
+                            </span>
+                          </div>
+                          <TooltipProvider delayDuration={120}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  className="truncate text-left text-[13px] font-bold leading-tight text-slate-900 hover:text-violet-700 hover:underline dark:text-white"
+                                  onClick={() => viewProduct(p.id)}
+                                >
+                                  {p.internal_name}
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent
+                                side="top"
+                                className="max-w-xs text-xs font-medium"
+                              >
+                                {p.internal_name}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                           {!isCompact && (
-                            <p className="text-[11px] text-muted-foreground">
-                              {readyLabel ? readyLabel : "Sem revisão de preparo ainda"}
-                              {p.imported ? ` · ${pend.length} pendência(s)` : ""}
+                            <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                              {pend.length
+                                ? `${pend.length} pendência(s) para revisar`
+                                : "Produto pronto para continuar a configuração"}
                             </p>
                           )}
-                          <div className="flex flex-wrap items-center gap-1">
-                            <Badge variant="outline" className="w-fit">{p.category?.name ?? "Sem categoria"}</Badge>
-                            {rp?.functional_for_test && (
-                              <ProvisionalBadge label="Especialidade e tempo provisórios para teste — funcional para teste, pendente de revisão. Nunca usado para aprovar preço comercial ou publicação." />
-                            )}
-                            {p.inactivation_scheduled_at && (
-                              <Badge className="w-fit bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">
-                                Inativação programada para {new Date(p.inactivation_effective_at).toLocaleDateString("pt-BR")}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="mt-auto flex items-center justify-between gap-1 border-t border-slate-100 pt-2 dark:border-slate-800">
+                          <div className="mt-auto flex items-center gap-2 pt-1.5">
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => viewProduct(p.id)} aria-label="Ver detalhe completo">
-                                    <Eye className="h-3 w-3" />
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 w-9 rounded-lg border-slate-200 bg-slate-50 px-0 text-slate-700 shadow-sm hover:bg-slate-100"
+                                    onClick={() => viewProduct(p.id)}
+                                    aria-label="Ver detalhe completo"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">Ver detalhe completo</TooltipContent>
+                                <TooltipContent className="text-xs font-medium">
+                                  Ver detalhe completo
+                                </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                             <TooltipProvider delayDuration={400}>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Button size="sm" variant="outline" className="h-7 flex-1 text-xs" onClick={() => openProduct(p.id)} aria-label={p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}>
-                                    <Pencil className="h-3 w-3" /> {isCompact ? "" : "Abrir"}
+                                  <Button
+                                    size="sm"
+                                    className="h-8 flex-1 rounded-lg bg-linear-to-r from-[#4a2cff] via-[#7b2cdb] to-[#d92293] text-xs font-semibold shadow-[0_6px_16px_rgba(123,44,219,0.25)] hover:from-[#3b22d9] hover:to-[#bd177e]"
+                                    onClick={() => openProduct(p.id)}
+                                    aria-label={
+                                      p.has_draft
+                                        ? "Continuar configuração"
+                                        : "Abrir/editar produto"
+                                    }
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" /> Abrir
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">{p.has_draft ? "Continuar configuração" : "Abrir/editar produto"}</TooltipContent>
+                                <TooltipContent className="text-xs font-medium">
+                                  {p.has_draft
+                                    ? "Continuar configuração"
+                                    : "Abrir/editar produto"}
+                                </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                            <ProductRowActionsMenu p={p} rowAction={rowAction} setConfirm={setConfirm} onScheduleInactivation={openInactivationDialog} />
+                            <ProductRowActionsMenu
+                              p={p}
+                              rowAction={rowAction}
+                              setConfirm={setConfirm}
+                              onScheduleInactivation={openInactivationDialog}
+                            />
                           </div>
                         </div>
                       </Card>
@@ -830,13 +1527,75 @@ export default function AdminProdutosPage() {
 
               {list && list.data.length > 0 && (
                 <div className="flex items-center justify-between gap-3 border-t border-slate-200/70 px-4 py-2.5 dark:border-slate-700/60">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">{list.total} produto{list.total === 1 ? "" : "s"}</span>
-                  {totalPages > 1 && <PaginationControls page={page} totalPages={totalPages} onChange={setPage} />}
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {list.total} produto{list.total === 1 ? "" : "s"}
+                  </span>
+                  {totalPages > 1 && (
+                    <PaginationControls
+                      page={page}
+                      totalPages={totalPages}
+                      onChange={setPage}
+                    />
+                  )}
                 </div>
               )}
-            </Card>
+            </div>
           </div>
         </div>
+
+        <StandardModalDialog
+          open={columnConfigOpen}
+          onClose={() => setColumnConfigOpen(false)}
+          title="Configurar colunas"
+          subtitle="Escolha as colunas exibidas e preserve o seu layout"
+        >
+          <div className="flex-1 overflow-y-auto p-2">
+            {PRODUCT_COLUMNS.map((column) => (
+              <label
+                key={column.key}
+                className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors ${visibleProductColumns.has(column.key) ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-slate-50 dark:hover:bg-slate-800"}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={visibleProductColumns.has(column.key)}
+                  onChange={() =>
+                    setVisibleProductColumns((current) => {
+                      const next = new Set(current);
+                      next.has(column.key)
+                        ? next.delete(column.key)
+                        : next.add(column.key);
+                      return next;
+                    })
+                  }
+                  className="h-4 w-4 accent-blue-600"
+                />
+                <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                  {column.label}
+                </span>
+                {!visibleProductColumns.has(column.key) && (
+                  <EyeOff className="ml-auto h-3.5 w-3.5 text-slate-400" />
+                )}
+              </label>
+            ))}
+            <div className="mt-2 flex items-center justify-between border-t border-slate-100 px-3 pt-3 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setVisibleProductColumns(
+                    new Set(PRODUCT_COLUMNS.map((column) => column.key)),
+                  );
+                  setProductColumnWidths(defaultProductColumnWidths());
+                }}
+                className="text-[11px] font-semibold text-blue-600 hover:text-blue-800"
+              >
+                Restaurar padrão
+              </button>
+              <span className="text-[10px] text-slate-400">
+                {visibleProductColumns.size} de {PRODUCT_COLUMNS.length}
+              </span>
+            </div>
+          </div>
+        </StandardModalDialog>
 
         {confirm && (
           <ConfirmationDialog
@@ -846,7 +1605,10 @@ export default function AdminProdutosPage() {
             message={confirm.message}
             confirmText="Confirmar"
             destructive={false}
-            onConfirm={() => { confirm.onConfirm(); setConfirm(null); }}
+            onConfirm={() => {
+              confirm.onConfirm();
+              setConfirm(null);
+            }}
           />
         )}
 
@@ -867,7 +1629,9 @@ export default function AdminProdutosPage() {
             destructive={false}
             attention
             onConfirm={async () => {
-              await apiClient.scheduleCatalog2ProductInactivation(inactivationDialog.product.id);
+              await apiClient.scheduleCatalog2ProductInactivation(
+                inactivationDialog.product.id,
+              );
               setMsg("Inativação programada — responsáveis notificados.");
               await loadList();
               await bootstrap();
@@ -880,31 +1644,48 @@ export default function AdminProdutosPage() {
             Catálogo"/"Preparação de Produtos"). Reunião 2026-09. */}
         <EmbeddedSlideScreen
           open={!!openProductId}
-          onClose={() => { openProduct(null); void loadList(); void bootstrap(); }}
+          onClose={() => {
+            openProduct(null);
+            void loadList();
+            void bootstrap();
+          }}
           title="Editor de produto"
-          pin={openProductId ? {
-            id: `catalog2-produto-${openProductId}`,
-            label: "Editor de produto",
-            icon: Package,
-            path: `/admin/produtos?produto=${openProductId}`,
-          } : undefined}
+          pin={
+            openProductId
+              ? {
+                  id: `catalog2-produto-${openProductId}`,
+                  label: "Editor de produto",
+                  icon: Package,
+                  path: `/admin/produtos?produto=${openProductId}`,
+                }
+              : undefined
+          }
         >
           {openProductId && (
             <div className="min-h-0 flex-1 overflow-y-auto">
               {(() => {
                 const rp = readinessById[openProductId];
-                const hasProvisional = rp && (!(rp.task_count > 0) || rp.price_amount == null);
+                const hasProvisional =
+                  rp && (!(rp.task_count > 0) || rp.price_amount == null);
                 return hasProvisional ? (
                   <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
                     <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>
-                      Este produto tem campos provisórios (preço, prazo e/ou tarefas de demonstração) — veja o
-                      resumo completo no Catálogo de Produtos administrativo antes de publicar.
+                      Este produto tem campos provisórios (preço, prazo e/ou
+                      tarefas de demonstração) — veja o resumo completo no
+                      Catálogo de Produtos administrativo antes de publicar.
                     </span>
                   </div>
                 ) : null;
               })()}
-              <ProductEditor productId={openProductId} onBack={() => { openProduct(null); void loadList(); void bootstrap(); }} />
+              <ProductEditor
+                productId={openProductId}
+                onBack={() => {
+                  openProduct(null);
+                  void loadList();
+                  void bootstrap();
+                }}
+              />
             </div>
           )}
         </EmbeddedSlideScreen>
@@ -915,19 +1696,27 @@ export default function AdminProdutosPage() {
           open={!!viewProductId}
           onClose={() => viewProduct(null)}
           title="Detalhe do produto"
-          pin={viewProductId ? {
-            id: `catalog2-detalhe-${viewProductId}`,
-            label: "Detalhe do produto",
-            icon: Eye,
-            path: `/admin/produtos?ver=${viewProductId}`,
-          } : undefined}
+          pin={
+            viewProductId
+              ? {
+                  id: `catalog2-detalhe-${viewProductId}`,
+                  label: "Detalhe do produto",
+                  icon: Eye,
+                  path: `/admin/produtos?ver=${viewProductId}`,
+                }
+              : undefined
+          }
         >
           {viewProductId && (
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               <Catalog2ProductDetail
                 productId={viewProductId}
                 onBack={() => viewProduct(null)}
-                onOpenEditor={() => { const id = viewProductId; viewProduct(null); openProduct(id); }}
+                onOpenEditor={() => {
+                  const id = viewProductId;
+                  viewProduct(null);
+                  openProduct(id);
+                }}
                 isAdminMaster={isAdminMaster}
               />
             </div>
@@ -946,7 +1735,15 @@ const SELECT_CLS =
 // Paginação numerada — mesmo desenho do layout anterior aprovado (setas +
 // números + salto direto de página), sem o campo de "ir para" (dispensável
 // no volume atual de produtos catalog2).
-function PaginationControls({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+function PaginationControls({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (p: number) => void;
+}) {
   const pages = getPageNumbers(page, totalPages);
   return (
     <div className="flex flex-shrink-0 items-center gap-1">
@@ -954,19 +1751,28 @@ function PaginationControls({ page, totalPages, onChange }: { page: number; tota
         onClick={() => onChange(Math.max(1, page - 1))}
         disabled={page === 1}
         title="Página anterior"
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-30 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-30 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
       </button>
       {pages.map((p, i) =>
         p === "..." ? (
-          <span key={i} className="px-0.5 text-xs text-slate-300">·</span>
+          <span key={i} className="px-0.5 text-xs text-slate-300">
+            ·
+          </span>
         ) : (
           <button
             key={i}
             onClick={() => onChange(Number(p))}
-            className={`flex h-7 w-7 items-center justify-center rounded-[8px] text-xs font-bold transition-colors ${p === page ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]" : "text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"}`}
-            style={p === page ? { background: "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)" } : undefined}
+            className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold transition-colors ${p === page ? "text-white shadow-[0_6px_14px_rgba(110,44,150,0.25)]" : "text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"}`}
+            style={
+              p === page
+                ? {
+                    background:
+                      "linear-gradient(135deg, #111A4D 0%, #6E2C96 55%, #D92293 100%)",
+                  }
+                : undefined
+            }
           >
             {p}
           </button>
@@ -976,7 +1782,7 @@ function PaginationControls({ page, totalPages, onChange }: { page: number; tota
         onClick={() => onChange(Math.min(totalPages, page + 1))}
         disabled={page === totalPages}
         title="Próxima página"
-        className="flex h-7 w-7 items-center justify-center rounded-[8px] text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-30 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:pointer-events-none disabled:opacity-30 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white"
       >
         <ChevronRight className="h-3.5 w-3.5" />
       </button>
@@ -984,29 +1790,19 @@ function PaginationControls({ page, totalPages, onChange }: { page: number; tota
   );
 }
 function getPageNumbers(page: number, totalPages: number): (number | "...")[] {
-  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  if (totalPages <= 7)
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
   const out: (number | "...")[] = [1];
   if (page > 3) out.push("...");
-  for (let p = Math.max(2, page - 1); p <= Math.min(totalPages - 1, page + 1); p++) out.push(p);
+  for (
+    let p = Math.max(2, page - 1);
+    p <= Math.min(totalPages - 1, page + 1);
+    p++
+  )
+    out.push(p);
   if (page < totalPages - 2) out.push("...");
   out.push(totalPages);
   return out;
-}
-
-// Detalhe técnico da linha (slug, origem, versões, datas) — fora da leitura
-// principal, atrás de um botão acessível por teclado. Recuperado da
-// reformulação de 10/09 (9539f94/823b18c) — tinha sumido quando a lista
-// virou tabela no reparo de layout.
-function RowTechDetails({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-1 text-[11px] text-muted-foreground">
-      <button type="button" aria-expanded={open} className="underline decoration-dotted" onClick={() => setOpen((o) => !o)}>
-        Detalhes técnicos
-      </button>
-      {open && <div className="mt-0.5">{text}</div>}
-    </div>
-  );
 }
 
 // Indicador — sem card colorido; célula neutra dentro de um painel único.
@@ -1014,11 +1810,16 @@ function RowTechDetails({ text }: { text: string }) {
 // muda o gatilho visual ao redor). Nunca inclui "Excluir": catalog2 não tem
 // exclusão — arquivar é o equivalente real, já usado aqui.
 function ProductRowActionsMenu({
-  p, rowAction, setConfirm, onScheduleInactivation,
+  p,
+  rowAction,
+  setConfirm,
+  onScheduleInactivation,
 }: {
   p: any;
   rowAction: (fn: () => Promise<any>, ok: string) => void;
-  setConfirm: (c: { title: string; message: string; onConfirm: () => void } | null) => void;
+  setConfirm: (
+    c: { title: string; message: string; onConfirm: () => void } | null,
+  ) => void;
   onScheduleInactivation: (p: any) => void;
 }) {
   return (
@@ -1030,39 +1831,103 @@ function ProductRowActionsMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {p.published_version_number && !p.has_draft && (
-          <DropdownMenuItem onClick={() => rowAction(() => apiClient.newCatalog2Version(p.id), "Nova versão rascunho criada.")}>
+          <DropdownMenuItem
+            onClick={() =>
+              rowAction(
+                () => apiClient.newCatalog2Version(p.id),
+                "Nova versão rascunho criada.",
+              )
+            }
+          >
             Nova versão
           </DropdownMenuItem>
         )}
         {p.status === "em_preparacao" && !!p.published_version_number && (
-          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "pre_lancamento"), "Produto em pré-lançamento.")}>
+          <DropdownMenuItem
+            onClick={() =>
+              rowAction(
+                () =>
+                  apiClient.setCatalog2ProductStatus(p.id, "pre_lancamento"),
+                "Produto em pré-lançamento.",
+              )
+            }
+          >
             Colocar em pré-lançamento
           </DropdownMenuItem>
         )}
-        {(p.status === "em_preparacao" || p.status === "pre_lancamento") && !!p.published_version_number && (
-          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Produto ativado.")}>
-            Ativar
-          </DropdownMenuItem>
-        )}
+        {(p.status === "em_preparacao" || p.status === "pre_lancamento") &&
+          !!p.published_version_number && (
+            <DropdownMenuItem
+              onClick={() =>
+                rowAction(
+                  () => apiClient.setCatalog2ProductStatus(p.id, "disponivel"),
+                  "Produto ativado.",
+                )
+              }
+            >
+              Ativar
+            </DropdownMenuItem>
+          )}
         {p.status === "disponivel" && (
           <>
-            <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "temporariamente_inativo"), "Oferta pausada.")}>
+            <DropdownMenuItem
+              onClick={() =>
+                rowAction(
+                  () =>
+                    apiClient.setCatalog2ProductStatus(
+                      p.id,
+                      "temporariamente_inativo",
+                    ),
+                  "Oferta pausada.",
+                )
+              }
+            >
               Pausar
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "esgotado_temporariamente"), "Produto marcado como esgotado temporariamente.")}>
+            <DropdownMenuItem
+              onClick={() =>
+                rowAction(
+                  () =>
+                    apiClient.setCatalog2ProductStatus(
+                      p.id,
+                      "esgotado_temporariamente",
+                    ),
+                  "Produto marcado como esgotado temporariamente.",
+                )
+              }
+            >
               Marcar como esgotado
             </DropdownMenuItem>
           </>
         )}
-        {(p.status === "temporariamente_inativo" || p.status === "esgotado_temporariamente") && (
-          <DropdownMenuItem onClick={() => rowAction(() => apiClient.setCatalog2ProductStatus(p.id, "disponivel"), "Oferta reativada.")}>
+        {(p.status === "temporariamente_inativo" ||
+          p.status === "esgotado_temporariamente") && (
+          <DropdownMenuItem
+            onClick={() =>
+              rowAction(
+                () => apiClient.setCatalog2ProductStatus(p.id, "disponivel"),
+                "Oferta reativada.",
+              )
+            }
+          >
             Reativar
           </DropdownMenuItem>
         )}
         {p.status !== "arquivado" && (
           <DropdownMenuItem
             className="text-red-600"
-            onClick={() => setConfirm({ title: "Arquivar produto?", message: "O produto sai do catálogo. O histórico é preservado; nada é apagado. Só funciona se não houver projeto/proposta ativo vinculado — se houver, use \"Programar inativação\" abaixo.", onConfirm: () => rowAction(() => apiClient.archiveCatalog2Product(p.id), "Produto arquivado.") })}
+            onClick={() =>
+              setConfirm({
+                title: "Arquivar produto?",
+                message:
+                  'O produto sai do catálogo. O histórico é preservado; nada é apagado. Só funciona se não houver projeto/proposta ativo vinculado — se houver, use "Programar inativação" abaixo.',
+                onConfirm: () =>
+                  rowAction(
+                    () => apiClient.archiveCatalog2Product(p.id),
+                    "Produto arquivado.",
+                  ),
+              })
+            }
           >
             Arquivar (direto)
           </DropdownMenuItem>
@@ -1070,17 +1935,27 @@ function ProductRowActionsMenu({
         {/* Item 5 (reunião 2026-09-14): quando há vínculo ativo, o caminho
             é agendar (aviso + 30 dias), não arquivar direto. */}
         {p.status !== "arquivado" && !p.inactivation_scheduled_at && (
-          <DropdownMenuItem className="text-amber-700 dark:text-amber-400" onClick={() => onScheduleInactivation(p)}>
+          <DropdownMenuItem
+            className="text-amber-700 dark:text-amber-400"
+            onClick={() => onScheduleInactivation(p)}
+          >
             Programar inativação (30 dias)
           </DropdownMenuItem>
         )}
         {p.inactivation_scheduled_at && (
           <DropdownMenuItem
-            onClick={() => setConfirm({
-              title: "Cancelar inativação programada?",
-              message: "O agendamento é desfeito e o produto volta a ficar contratável normalmente. Um novo agendamento, se feito depois, contará um novo prazo de 30 dias.",
-              onConfirm: () => rowAction(() => apiClient.cancelCatalog2ProductInactivation(p.id), "Inativação programada cancelada."),
-            })}
+            onClick={() =>
+              setConfirm({
+                title: "Cancelar inativação programada?",
+                message:
+                  "O agendamento é desfeito e o produto volta a ficar contratável normalmente. Um novo agendamento, se feito depois, contará um novo prazo de 30 dias.",
+                onConfirm: () =>
+                  rowAction(
+                    () => apiClient.cancelCatalog2ProductInactivation(p.id),
+                    "Inativação programada cancelada.",
+                  ),
+              })
+            }
           >
             Cancelar inativação programada
           </DropdownMenuItem>
@@ -1090,19 +1965,6 @@ function ProductRowActionsMenu({
   );
 }
 
-function Stat({ k, v, hint, tone }: { k: string; v: number | string; hint?: string; tone?: "ok" | "warn" }) {
-  const toneCls =
-    tone === "ok" ? "text-emerald-700 dark:text-emerald-300"
-      : tone === "warn" ? "text-amber-700 dark:text-amber-300"
-        : "text-foreground";
-  return (
-    <div className="bg-card p-3">
-      <div className={`text-lg font-semibold ${toneCls}`}>{v}</div>
-      <div className="text-xs text-muted-foreground">{k}</div>
-      {hint && <div className="text-[10px] text-muted-foreground/80">{hint}</div>}
-    </div>
-  );
-}
 function SummaryCell({ k, v }: { k: string; v: number | string }) {
   return (
     <div className="rounded border bg-background px-2 py-1">
@@ -1116,15 +1978,21 @@ function ReadinessPanel({ readiness }: { readiness: any }) {
   return (
     <details className="rounded-lg border">
       <summary className="flex cursor-pointer select-none flex-wrap items-center justify-between gap-2 px-3 py-2">
-        <h2 className="text-sm font-semibold text-foreground">Prontidão para o catálogo do cliente</h2>
+        <h2 className="text-sm font-semibold text-foreground">
+          Prontidão para o catálogo do cliente
+        </h2>
         <span className="text-xs text-muted-foreground">
-          {readiness.ready_for_client}/{readiness.total} prontos · {readiness.client_visible_now} visíveis agora ·{" "}
+          {readiness.ready_for_client}/{readiness.total} prontos ·{" "}
+          {readiness.client_visible_now} visíveis agora ·{" "}
           {readiness.with_blockers} com bloqueador
         </span>
       </summary>
       <div className="space-y-2 border-t p-3">
         <p className="text-[11px] text-muted-foreground">{readiness.note}</p>
-        <button className="text-xs font-medium text-foreground underline" onClick={() => setOpen((o) => !o)}>
+        <button
+          className="text-xs font-medium text-foreground underline"
+          onClick={() => setOpen((o) => !o)}
+        >
           {open ? "Ocultar detalhamento" : "Ver detalhamento por produto"}
         </button>
         {open && (
@@ -1132,22 +2000,44 @@ function ReadinessPanel({ readiness }: { readiness: any }) {
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 bg-muted text-muted-foreground">
                 <tr>
-                  <th className="p-1.5">#</th><th className="p-1.5">Produto</th>
-                  <th className="p-1.5">Bloqueadores</th><th className="p-1.5">Pendências</th>
+                  <th className="p-1.5">#</th>
+                  <th className="p-1.5">Produto</th>
+                  <th className="p-1.5">Bloqueadores</th>
+                  <th className="p-1.5">Pendências</th>
                 </tr>
               </thead>
               <tbody>
                 {readiness.products.map((p: any) => (
                   <tr key={p.id} className="border-t">
-                    <td className="p-1.5 text-muted-foreground">{p.source_index ?? "—"}</td>
+                    <td className="p-1.5 text-muted-foreground">
+                      {p.source_index ?? "—"}
+                    </td>
                     <td className="p-1.5 text-foreground">{p.name}</td>
                     <td className="p-1.5">
-                      {p.blockers.length === 0
-                        ? <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">nenhum</Badge>
-                        : p.blockers.map((b: string) => <Badge key={b} className="mr-1 bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200">{b}</Badge>)}
+                      {p.blockers.length === 0 ? (
+                        <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+                          nenhum
+                        </Badge>
+                      ) : (
+                        p.blockers.map((b: string) => (
+                          <Badge
+                            key={b}
+                            className="mr-1 bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+                          >
+                            {b}
+                          </Badge>
+                        ))
+                      )}
                     </td>
                     <td className="p-1.5">
-                      {p.pendings.map((b: string) => <Badge key={b} className="mr-1 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{b}</Badge>)}
+                      {p.pendings.map((b: string) => (
+                        <Badge
+                          key={b}
+                          className="mr-1 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                        >
+                          {b}
+                        </Badge>
+                      ))}
                     </td>
                   </tr>
                 ))}
@@ -1160,5 +2050,9 @@ function ReadinessPanel({ readiness }: { readiness: any }) {
   );
 }
 function Centered({ children }: { children: React.ReactNode }) {
-  return <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">{children}</div>;
+  return (
+    <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
+      {children}
+    </div>
+  );
 }

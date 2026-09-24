@@ -12,6 +12,10 @@ import { publishVersion } from "../lib/catalog2-service";
 import { runCatalog2DeliveryCycleSchedulerOnce } from "../lib/catalog2-delivery-cycle-scheduler";
 import { addMonths } from "../lib/catalog2-checkout";
 
+// Cenários de ciclos de contratos multi-mês permanecem testados atrás da
+// chave explícita de futura liberação; a operação normal oferece só mensal.
+process.env.CATALOG2_ENABLE_MULTI_PERIOD_CONTRACTS = "true";
+
 // Item 6.1 (reunião 2026-09-14, "Completar a execução dos períodos") —
 // produtos de entrega mensal recorrente registram e liberam um ciclo por
 // mês do período pago, sem cobrança nova, reaproveitando o motor de
@@ -346,7 +350,10 @@ describe("Ciclos de entrega mensal (Item 6.1, reunião 2026-09-14)", () => {
     assert.equal(pp.preco_final_cliente_snapshot, approvedTotal);
 
     // muda preço/desconto DEPOIS — processa os ciclos seguintes e confirma
-    // que nada relacionado a cobrança nova aconteceu (nenhum Payment novo).
+    // que a cobrança recorrente de cada ciclo usa o valor CONGELADO da
+    // cotação aprovada, nunca o preço/desconto novo (mudou nesta mesma
+    // sessão: ciclo agora cobra de verdade a cada mês — ver
+    // generate-tasks-catalog2.ts — mas o VALOR cobrado continua imutável).
     await setPricingSettings(90);
     await configurePeriod(MASTER, product.id, "trimestral", 50);
     const paymentCountBefore = await prisma.payment.count({ where: { project_id: projectId } });
@@ -354,7 +361,18 @@ describe("Ciclos de entrega mensal (Item 6.1, reunião 2026-09-14)", () => {
     await prisma.catalog2ProjectDeliveryCycle.updateMany({ where: { project_product_id: projectProductId }, data: { scheduled_at: new Date(Date.now() - 1000) } });
     await runCatalog2DeliveryCycleSchedulerOnce();
 
-    assert.equal(await prisma.payment.count({ where: { project_id: projectId } }), paymentCountBefore, "processar ciclos nunca cria Payment novo");
+    const newPayments = await prisma.payment.findMany({
+      where: { project_id: projectId, payment_method: "RECORRENCIA_AUTOMATICA" },
+    });
+    assert.equal(newPayments.length, 2, "cada ciclo processado agora cobra de verdade (uma cobrança recorrente por ciclo)");
+    for (const p of newPayments) {
+      assert.equal(p.status, "PAGO");
+      assert.equal(p.amount, approvedTotal, "cobrança recorrente usa o valor CONGELADO da cotação, não o preço/desconto novo");
+    }
+    assert.equal(
+      await prisma.payment.count({ where: { project_id: projectId } }),
+      paymentCountBefore + 2,
+    );
     const ppAfter = await prisma.projectProduct.findUniqueOrThrow({ where: { id: projectProductId } });
     assert.equal(ppAfter.preco_final_cliente_snapshot, approvedTotal, "valor cobrado permanece o da cotação aprovada");
     await setPricingSettings();
