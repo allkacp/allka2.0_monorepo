@@ -3,7 +3,7 @@
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
 ## Pendente de deploy
-(nada pendente — atualizar aqui a cada alteração feita depois do último deploy)
+- Backend: novo script `baseline-cleanup.ts` (limpeza do banco ao modelo limpo, em transação única) e workflows `prod-data-inspect.yml` / `prod-baseline-cleanup.yml` (manuais). Só rodam quando disparados; nao mudam o comportamento do sistema.
 
 ## deploy-2026-09-24-1 (commits 6771aba → e598977)
 **Backend (`apps/backend`)**
