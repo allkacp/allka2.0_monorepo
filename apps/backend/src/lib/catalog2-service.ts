@@ -974,6 +974,7 @@ export async function getProductDetail(productId: string) {
       summary: v.summary,
       full_description: v.full_description,
       change_summary: v.change_summary,
+      base_commercial_deadline_days: v.base_commercial_deadline_days ?? null,
       published_at: v.published_at,
       updated_at: v.updated_at,
       is_published_current: v.id === product.published_version_id,

@@ -917,13 +917,14 @@ router.put("/versions/:id", async (req, res, next) => {
       client_info: z.string().max(8000).nullish(),
       internal_notes: z.string().max(8000).nullish(),
       change_summary: z.string().max(2000).nullish(),
+      base_commercial_deadline_days: z.number().int().min(1).max(3650).nullish(),
     }).parse(req.body);
     // deliverables/client_info/internal_notes ficam no full_description
     // estruturado por marcadores? Não — mantemos simples: só os campos do
     // schema. Os extras entram no summary/description conforme a UI.
     const before = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: req.params.id as string } });
     const data: Record<string, unknown> = { updated_by_user_id: req.user!.id };
-    for (const k of ["title", "summary", "full_description", "change_summary"] as const) if (d[k] !== undefined) data[k] = d[k];
+    for (const k of ["title", "summary", "full_description", "change_summary", "base_commercial_deadline_days"] as const) if (d[k] !== undefined) data[k] = d[k];
     const updated = await prisma.catalog2ProductVersion.update({ where: { id: req.params.id as string }, data });
     // Item 7 (reunião 2026-09-14): descrição legível com o que realmente
     // mudou — reaproveita o MESMO Catalog2VersionEvent já escrito aqui
@@ -933,6 +934,7 @@ router.put("/versions/:id", async (req, res, next) => {
     if (d.title !== undefined && d.title !== before.title) changedLabels.push(`título alterado de "${before.title}" para "${d.title}"`);
     if (d.summary !== undefined && d.summary !== before.summary) changedLabels.push("resumo atualizado");
     if (d.full_description !== undefined && d.full_description !== before.full_description) changedLabels.push("descrição completa atualizada");
+    if (d.base_commercial_deadline_days !== undefined && d.base_commercial_deadline_days !== before.base_commercial_deadline_days) changedLabels.push(`prazo comercial base definido para ${d.base_commercial_deadline_days ?? "sem valor"} dia(s)`);
     const note = changedLabels.length > 0 ? `Conteúdo editado — ${changedLabels.join("; ")}.` : "Informações gerais editadas.";
     await prisma.catalog2VersionEvent.create({ data: { version_id: updated.id, event_type: "updated", actor_user_id: req.user!.id, note } });
     res.json({ ok: true });

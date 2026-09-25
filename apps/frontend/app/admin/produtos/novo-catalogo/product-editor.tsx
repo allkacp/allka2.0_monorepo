@@ -1001,6 +1001,26 @@ function ConditionsTab({ version, readOnly, act }: any) {
 }
 
 // ── 7. Custos e preço (simulador) ───────────────────────────────────
+// Prazo comercial base da versão: é o que o cliente vê como prazo de entrega.
+// Não é a soma das tarefas (isso é só a estimativa interna de esforço).
+function DeadlineBaseField({ version, act, ringOf }: any) {
+  const [v, setV] = useState<string>(version.base_commercial_deadline_days == null ? "" : String(version.base_commercial_deadline_days));
+  useEffect(() => { setV(version.base_commercial_deadline_days == null ? "" : String(version.base_commercial_deadline_days)); }, [version.id, version.base_commercial_deadline_days]);
+  const n = Number(v);
+  const valid = v !== "" && Number.isInteger(n) && n >= 1;
+  const readOnly = version.state === "publicada";
+  return (
+    <div id="catalog2-deadline-base" className={`space-y-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800 ${ringOf("catalog2-deadline-base")}`}>
+      <h3 className="text-sm font-semibold">Prazo comercial base (dias)</h3>
+      <p className="text-xs text-neutral-500">Prazo de entrega prometido ao cliente para esta versão. Dias extras de variações, adicionais e condições são somados a ele.</p>
+      <div className="flex items-center gap-2">
+        <Input type="number" min={1} className="w-28" value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} />
+        <Button size="sm" disabled={readOnly || !valid} onClick={() => act(() => apiClient.updateCatalog2VersionInfo(version.id, { base_commercial_deadline_days: n }), "Prazo comercial salvo.")}>Salvar prazo</Button>
+      </div>
+    </div>
+  );
+}
+
 function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget, clearHighlight }: any) {
   const ringOf = useContext(RingCtx);
   const [sel, setSel] = useState<any>({ variation_option_keys: [], addon_keys: [], quantity: 1, answers: {} });
@@ -1022,6 +1042,7 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
     <div id="catalog2-costs" className={`mt-3 grid gap-4 scroll-mt-6 md:grid-cols-2 ${ringOf("catalog2-costs").replace("rounded-lg", "rounded-2xl")}`}>
       <div className="space-y-3">
         {highlightTarget === "catalog2-costs" && <p className="rounded-lg border border-amber-400 bg-amber-100 p-2 text-sm text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">Há uma pendência comercial de preço ou prazo. Revise o valor que está marcado como “aguardando definição comercial” e salve a alteração.</p>}
+        <DeadlineBaseField version={version} act={act} ringOf={ringOf} />
         <h3 className="text-sm font-semibold">Módulo de precificação (taxas e margens)</h3>
         {pricing && <PricingSettingsForm pricing={pricing} onSave={(b) => act(() => apiClient.updateCatalog2PricingSettings(b).then(setPricing), "Taxas salvas.")} />}
         <h3 className="mt-4 text-sm font-semibold">Valor/hora padrão das especialidades</h3>
@@ -1899,10 +1920,6 @@ function readinessPendingIds(key: string, product: any, version: any, level?: st
       const miss = tasks.filter((t) => !t.specialty?.id || t.estimated_minutes == null).map((t) => "task-effort:" + t.id);
       return miss.length ? miss : tasks.map((t) => "task-effort:" + t.id);
     }
-    case "prazo": {
-      const miss = tasks.filter((t) => t.estimated_minutes == null || Number(t.estimated_minutes) <= 0).map((t) => "task-duration:" + t.id);
-      return miss.length ? miss : tasks.map((t) => "task-duration:" + t.id);
-    }
     default:
       return [readinessDestination(key, product).target];
   }
@@ -1918,7 +1935,7 @@ function readinessDestination(key: string, product: any): { tab: string; sub?: R
     case "tarefas":
     case "etapas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-create" };
     case "esforco_tarefas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" };
-    case "prazo": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-duration" };
+    case "prazo": return { tab: "precos", target: "catalog2-deadline-base" };
     case "preco": return { tab: "precos", target: "catalog2-costs" };
     case "portfolio":
     case "revisao_rose": return { tab: "origem", target: "sec-origem" };
@@ -1935,7 +1952,7 @@ const READINESS_WHERE: Record<string, string> = {
   tarefas: "Entrega › Tarefas e etapas",
   etapas: "Entrega › Tarefas e etapas",
   esforco_tarefas: "Entrega › Tarefas e etapas",
-  prazo: "Entrega › Tarefas e etapas",
+  prazo: "Custos e preço › Prazo comercial base",
   preco: "Custos e preço",
   portfolio: "Origem e importação",
   revisao_rose: "Origem e importação",
@@ -1952,8 +1969,8 @@ const READINESS_HELP: Record<string, Partial<Record<"bloqueador" | "pendente", s
   },
   tarefas: { pendente: "Cadastre pelo menos uma tarefa (o que será executado quando o produto for contratado). Sem tarefas não há operação nem base de custo para calcular o preço." },
   esforco_tarefas: { pendente: "Cada tarefa precisa de especialidade e horas estimadas reais. Mesmo que já estejam preenchidas, se estiverem marcadas como PROVISÓRIAS (dado de teste) o item continua pendente até você revisar e confirmar os valores reais." },
-  preco: { bloqueador: "O preço é calculado pelo servidor a partir das tarefas (especialidade × horas) e da configuração comercial. Falta base de custo ou alguma configuração — veja o motivo acima e complete em Custos e preço. Sem preço definido o produto não pode ser vendido." },
-  prazo: { bloqueador: "O prazo comercial vem da soma das durações das tarefas. Defina a duração das tarefas (ou o prazo base) para o prazo deixar de aparecer como \"a definir\"." },
+  preco: { bloqueador: "O preço sai de: horas de cada tarefa × valor/hora da especialidade, + revisão humana, + impostos, comissão, taxa operacional e margem, aplicados na ordem definida. O motivo exato aparece na linha acima (ex.: valor/hora de especialidade, percentual de revisão, impostos/margem, ordem de incidência, dados provisórios). Tudo se configura em Custos e preço: coluna da esquerda (taxas e margens; valor/hora das especialidades); horas e especialidade de cada tarefa ficam em Entrega › Tarefas e etapas." },
+  prazo: { bloqueador: "O prazo que o cliente vê NÃO é a soma das tarefas: é o \"Prazo comercial base\" da versão, que ainda não foi informado. Preencha o campo em Custos e preço › Prazo comercial base (dias) e salve." },
   portfolio: { pendente: "Ainda não há material de portfólio para este produto. Não impede a venda, mas deixa a página do produto mais pobre. Resolva na aba Origem e importação." },
   revisao_rose: { pendente: "A Rose ainda não marcou este produto como revisado. Confirme a revisão na aba Origem e importação." },
   publicacao: { bloqueador: "O produto nunca foi publicado, então o cliente não o enxerga. Quando os outros bloqueios estiverem resolvidos, publique a versão em Revisão e publicação › Publicação e versões." },
