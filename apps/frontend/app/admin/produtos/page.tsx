@@ -7,6 +7,8 @@ import {
   ArrowUpDown,
   CheckCircle2,
   ChevronDown,
+  ChevronUp,
+  ChevronsUpDown,
   ChevronLeft,
   ChevronRight,
   Clock as ClockIcon,
@@ -136,6 +138,16 @@ const PRODUCT_COLUMNS = [
   { key: "actions", label: "Ações", width: 110, min: 64, align: "center" },
 ] as const;
 type ProductColumnKey = (typeof PRODUCT_COLUMNS)[number]["key"];
+// Colunas que ordenam ao clicar no cabeçalho (o valor é o "sort" enviado ao
+// backend; a variante decrescente é o mesmo valor + "_desc"). Img, Tarefas,
+// Pendências e Ações não ordenam: não há coluna no banco para isso.
+const SORTABLE_COLUMNS: Partial<Record<ProductColumnKey, string>> = {
+  number: "source_index",
+  product: "name",
+  category: "category",
+  price: "price",
+  status: "status",
+};
 const PRODUCT_LIST_PREFERENCES_KEY = "allka:admin-products-list-preferences";
 
 function defaultProductColumnWidths() {
@@ -627,7 +639,9 @@ export default function AdminProdutosPage() {
   ] as const;
 
   return (
-    <div className={STANDARD_SHELL_PANEL_CLASS}>
+    <div
+      className={`${STANDARD_SHELL_PANEL_CLASS} !border-violet-200/80 !bg-violet-100/70 dark:!border-violet-900/60 dark:!bg-violet-950/40`}
+    >
       <div className="relative flex h-full min-h-[70vh] flex-col">
         <div className="shrink-0 -mb-[11px]">
           <StandardPageBanner
@@ -1149,9 +1163,32 @@ export default function AdminProdutosPage() {
                                 : "collapse",
                             }}
                           >
-                            <span className="block truncate">
-                              {column.label}
-                            </span>
+                            {SORTABLE_COLUMNS[column.key] ? (
+                              (() => {
+                                const base = SORTABLE_COLUMNS[column.key]!;
+                                const active = sort === base || sort === `${base}_desc`;
+                                const desc = sort === `${base}_desc`;
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSort(active && !desc ? `${base}_desc` : base)}
+                                    title={`Ordenar por ${column.label}`}
+                                    className={`group flex w-full items-center gap-1 truncate uppercase transition-colors hover:text-violet-700 dark:hover:text-violet-300 ${column.align === "right" ? "justify-end" : column.align === "center" ? "justify-center" : "justify-start"} ${active ? "text-violet-700 dark:text-violet-300" : ""}`}
+                                  >
+                                    <span className="truncate">{column.label}</span>
+                                    {active ? (
+                                      desc ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                                    ) : (
+                                      <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-slate-300 group-hover:text-slate-400" />
+                                    )}
+                                  </button>
+                                );
+                              })()
+                            ) : (
+                              <span className="block truncate">
+                                {column.label}
+                              </span>
+                            )}
                             <div
                               role="separator"
                               aria-orientation="vertical"

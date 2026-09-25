@@ -2,8 +2,13 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
-## Pendente de deploy
-- Backend: novo script `baseline-cleanup.ts` (limpeza do banco ao modelo limpo, em transação única) e workflows `prod-data-inspect.yml` / `prod-baseline-cleanup.yml` (manuais). Só rodam quando disparados; nao mudam o comportamento do sistema.
+## Pendente de deploy (local, ainda NÃO subiu)
+- **Frontend** `apps/frontend/app/admin/produtos/page.tsx` — Cadastro de Produtos: cabeçalhos clicáveis para ordenar (#, Produto, Categoria, Preço, Status; clica de novo inverte) e fundo lilás para diferenciar do Catálogo de Produtos.
+- **Backend** `apps/backend/src/routes/catalog2-admin.ts` — novas ordenações da listagem de produtos (por # de importação, categoria, status e preço; preço usa o mesmo valor mostrado na coluna) e desempate estável.
+- Nenhuma migration nem dado envolvido.
+
+## Já no ar (deploy de 2026-09-25)
+- Backend: script `baseline-cleanup.ts` e workflows manuais `prod-data-inspect.yml` / `prod-baseline-cleanup.yml` (só rodam quando disparados).
 
 ## deploy-2026-09-24-1 (commits 6771aba → e598977)
 **Backend (`apps/backend`)**

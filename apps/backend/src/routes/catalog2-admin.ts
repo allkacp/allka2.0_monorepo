@@ -723,6 +723,17 @@ const SORTS: Record<string, Prisma.Catalog2ProductOrderByWithRelationInput> = {
   name_desc: { internal_name: "desc" },
   updated: { updated_at: "desc" },
   created: { created_at: "desc" },
+  // Ordenação por coluna do Cadastro de Produtos (pedido do usuário
+  // 2026-09-25): clicar no cabeçalho alterna crescente/decrescente. Feita no
+  // servidor porque a lista é paginada — ordenar só a página visível no
+  // navegador daria uma ordem errada. "Tarefas" e "Pendências" não entram:
+  // são contagens calculadas, sem coluna no banco para ordenar.
+  source_index: { import_origin: { source_index: "asc" } },
+  source_index_desc: { import_origin: { source_index: "desc" } },
+  category: { category: { name: "asc" } },
+  category_desc: { category: { name: "desc" } },
+  status: { status: "asc" },
+  status_desc: { status: "desc" },
 };
 router.get("/products", async (req, res, next) => {
   try {
@@ -767,19 +778,42 @@ router.get("/products", async (req, res, next) => {
     }
     if (importedOnly || hasPendencies || Object.keys(originWhere).length > 0) where.import_origin = { is: originWhere };
 
-    const [total, rows] = await Promise.all([
-      prisma.catalog2Product.count({ where }),
-      prisma.catalog2Product.findMany({
-        where, orderBy, skip: (page - 1) * pageSize, take: pageSize,
-        include: {
-          pillar: { select: { key: true, name: true } },
-          category: { select: { key: true, name: true } },
-          versions: { select: { id: true, version_number: true, state: true, published_at: true, updated_at: true, summary: true } },
-          import_origin: { select: { rose_reviewed: true, review_state: true, pendencies_json: true, area_rose: true, human_edited_at: true, source_index: true } },
-          provisional_preview: { select: { image_path: true, price_amount: true, deadline_days: true, modality: true, needs_review: true, included_items_json: true } },
-        },
-      }),
-    ]);
+    const listInclude = {
+      pillar: { select: { key: true, name: true } },
+      category: { select: { key: true, name: true } },
+      versions: { select: { id: true, version_number: true, state: true, published_at: true, updated_at: true, summary: true } },
+      import_origin: { select: { rose_reviewed: true, review_state: true, pendencies_json: true, area_rose: true, human_edited_at: true, source_index: true } },
+      provisional_preview: { select: { image_path: true, price_amount: true, deadline_days: true, modality: true, needs_review: true, included_items_json: true } },
+    } satisfies Prisma.Catalog2ProductInclude;
+
+    // Ordenar por PREÇO usa o MESMO valor que a coluna mostra (preço real →
+    // simulação → provisório), que é calculado (computeProductReadiness) e
+    // não existe como coluna no banco. Como a lista é paginada, calcula-se
+    // para todos os produtos do filtro, ordena-se aqui e só então fatia-se a
+    // página. O catálogo é pequeno (dezenas de produtos) e /readiness já faz
+    // esse mesmo cálculo para todos a cada abertura da tela.
+    const sortParam = String(req.query.sort ?? "name");
+    let total: number;
+    let rows;
+    if (sortParam === "price" || sortParam === "price_desc") {
+      const all = await prisma.catalog2Product.findMany({ where, include: READINESS_INCLUDE });
+      const priced = await Promise.all(all.map(async (prod) => {
+        const r = await computeProductReadiness(prod);
+        const prov = await prisma.catalog2ProvisionalPreview.findUnique({ where: { product_id: prod.id }, select: { price_amount: true } });
+        return { id: prod.id, price: (r.price_amount ?? r.pricing_simulation?.price_amount ?? prov?.price_amount ?? null) as number | null };
+      }));
+      const dir = sortParam === "price" ? 1 : -1;
+      priced.sort((a, b) => (a.price == null && b.price == null ? 0 : a.price == null ? 1 : b.price == null ? -1 : (a.price - b.price) * dir));
+      total = priced.length;
+      const pageIds = priced.slice((page - 1) * pageSize, page * pageSize).map((x) => x.id);
+      const found = await prisma.catalog2Product.findMany({ where: { id: { in: pageIds } }, include: listInclude });
+      rows = pageIds.map((id) => found.find((f) => f.id === id)!).filter(Boolean);
+    } else {
+      [total, rows] = await Promise.all([
+        prisma.catalog2Product.count({ where }),
+        prisma.catalog2Product.findMany({ where, orderBy: [orderBy, { internal_name: "asc" }, { id: "asc" }], skip: (page - 1) * pageSize, take: pageSize, include: listInclude }),
+      ]);
+    }
     const NEW_MS = 90 * 24 * 60 * 60 * 1000;
     const now = Date.now();
     res.json({
