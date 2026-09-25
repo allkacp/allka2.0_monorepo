@@ -47,6 +47,12 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   const [highlightTaskIds, setHighlightTaskIds] = useState<string[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Prontidão navegável (pedido do usuário 2026-09-25): clicar num item leva
+  // à aba/sub-aba/campo certo e destaca em amarelo até o item ficar resolvido.
+  const [loadCount, setLoadCount] = useState(0);
+  const [subTabs, setSubTabs] = useState({ opcoes: "class", entrega: "tarefas", revisao: "preview" });
+  const [navKey, setNavKey] = useState<string | null>(null);
+  const [readinessItems, setReadinessItems] = useState<Record<string, { level: string; note: string }> | null>(null);
   const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
 
   // Contexto pra Aura (Item 9, reunião 2026-09-14, "Atualizar o contexto da
@@ -75,9 +81,36 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
     setRefs({ pillars: pil.data, fourF: ff.data, categories: cat.data, specialties: sp.data, questionnaires: qn.data });
     setSelectedVersionId((cur) => cur && p.versions.some((v: any) => v.id === cur) ? cur : (p.versions.find((v: any) => v.state === "rascunho")?.id ?? p.versions[0]?.id ?? ""));
     setLoading(false);
+    setLoadCount((c) => c + 1);
   }, [productId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Quando o item de prontidão que o usuário veio resolver deixa de ser
+  // pendente/bloqueio (ou nunca foi), o amarelo some e o campo volta ao normal.
+  useEffect(() => {
+    if (!navKey || !readinessItems) return;
+    const level = readinessItems[navKey]?.level;
+    if (level === "pronto") {
+      setHighlightTarget(null);
+      setNavKey(null);
+    }
+  }, [navKey, readinessItems]);
+
+  function goToReadinessItem(key: string) {
+    const dest = readinessDestination(key, product);
+    setEditorTab(dest.tab);
+    if (dest.sub) setSubTabs((cur) => ({ ...cur, ...dest.sub }));
+    const level = readinessItems?.[key]?.level;
+    const needsWork = level !== "pronto";
+    const perTask = key === "esforco_tarefas" || key === "prazo";
+    const cur = product?.versions.find((v: any) => v.id === selectedVersionId);
+    setHighlightTarget(needsWork ? dest.target : null);
+    setHighlightTaskIds(needsWork && perTask ? (cur?.tasks ?? []).map((t: any) => t.id) : []);
+    setNavKey(needsWork ? key : null);
+    window.setTimeout(() => (document.getElementById(dest.target) ?? document.getElementById("catalog2-editor-tabs"))?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+  }
+  const secRing = (id: string) => (highlightTarget === id ? "rounded-2xl bg-amber-50 p-3 ring-2 ring-amber-400 dark:bg-amber-900/20" : "");
 
   const version = useMemo(() => product?.versions.find((v: any) => v.id === selectedVersionId) ?? null, [product, selectedVersionId]);
   const readOnly = version?.state === "publicada";
@@ -154,7 +187,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-4 sm:px-6 dark:bg-slate-900">
       {notice}
       {readOnly && <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">Versão publicada — somente leitura. Crie uma nova versão para editar.</p>}
-      <ProductReadinessPanel productId={productId} versionKey={selectedVersionId} />
+      <ProductReadinessPanel productId={productId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onItems={setReadinessItems} />
       {msg && <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">{msg}</p>}
 
       {version && (
@@ -178,21 +211,21 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 
           <TabsContent value="opcoes" className={TAB_CARD}>
             <StepIntro>Como o produto é classificado e as escolhas que o cliente faz na contratação.</StepIntro>
-            <Tabs defaultValue="class">
+            <Tabs value={subTabs.opcoes} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, opcoes: v }))}>
               <TabsList className={SUB_TABS_LIST}>
                 <TabsTrigger value="class" className={SUB_TAB}>Classificação</TabsTrigger>
                 <TabsTrigger value="var" className={SUB_TAB}>Variações</TabsTrigger>
                 <TabsTrigger value="add" className={SUB_TAB}>Adicionais</TabsTrigger>
               </TabsList>
               <TabsContent value="class"><ClassTab product={product} refs={refs} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></TabsContent>
-              <TabsContent value="var"><VariationsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
-              <TabsContent value="add"><AddonsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
+              <TabsContent value="var"><div id="sec-var" className={secRing("sec-var")}><VariationsTab version={version} readOnly={readOnly} act={act} /></div></TabsContent>
+              <TabsContent value="add"><div id="sec-add" className={secRing("sec-add")}><AddonsTab version={version} readOnly={readOnly} act={act} /></div></TabsContent>
             </Tabs>
           </TabsContent>
 
           <TabsContent value="entrega" className={TAB_CARD}>
             <StepIntro>Onde se cadastram tarefas, etapas, especialidades, prazos e as condições que ajustam a entrega.</StepIntro>
-            <Tabs defaultValue="tarefas">
+            <Tabs value={subTabs.entrega} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, entrega: v }))}>
               <TabsList className={SUB_TABS_LIST}>
                 <TabsTrigger value="tarefas" className={SUB_TAB}>Tarefas e etapas</TabsTrigger>
                 <TabsTrigger value="cond" className={SUB_TAB}>Prazos e condições</TabsTrigger>
@@ -209,21 +242,21 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 
           <TabsContent value="revisao" className={TAB_CARD}>
             <StepIntro>Confira como o produto aparece para o cliente e publique a versão quando estiver pronta.</StepIntro>
-            <Tabs defaultValue="preview">
+            <Tabs value={subTabs.revisao} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, revisao: v }))}>
               <TabsList className={SUB_TABS_LIST}>
                 <TabsTrigger value="preview" className={SUB_TAB}>Pré-visualização</TabsTrigger>
                 <TabsTrigger value="hist" className={SUB_TAB}>Publicação e versões</TabsTrigger>
                 <TabsTrigger value="historico" className={SUB_TAB}>Histórico</TabsTrigger>
               </TabsList>
               <TabsContent value="preview"><PreviewTab version={version} /></TabsContent>
-              <TabsContent value="hist"><HistoryTab version={version} readOnly={readOnly} act={act} onResolveIssue={goToPublishIssue} /></TabsContent>
+              <TabsContent value="hist"><div id="sec-publicacao" className={secRing("sec-publicacao")}><HistoryTab version={version} readOnly={readOnly} act={act} onResolveIssue={goToPublishIssue} /></div></TabsContent>
               <TabsContent value="historico"><ProductHistoryTab productId={productId} /></TabsContent>
             </Tabs>
           </TabsContent>
 
           <TabsContent value="origem" className={TAB_CARD}>
             <StepIntro>Área secundária: de onde este produto veio na importação e as pendências de decisão. Não altera o produto.</StepIntro>
-            <OriginReviewTab productId={productId} onChanged={load} />
+            <div id="sec-origem" className={secRing("sec-origem")}><OriginReviewTab productId={productId} onChanged={load} /></div>
           </TabsContent>
         </Tabs>
       )}
@@ -1817,6 +1850,7 @@ const READINESS_ITEM_LABEL: Record<string, string> = {
   adicionais: "Adicionais",
   tarefas: "Tarefas",
   etapas: "Etapas",
+  esforco_tarefas: "Especialidade e horas das tarefas",
   preco: "Preço / base de custo",
   prazo: "Prazo comercial",
   portfolio: "Portfólio",
@@ -1830,10 +1864,71 @@ const READINESS_TONE: Record<string, string> = {
   opcional: "bg-neutral-100 text-neutral-600",
 };
 
-function ProductReadinessPanel({ productId, versionKey }: { productId: string; versionKey: string }) {
+// Destino de cada item de prontidão: aba, sub-aba e campo a destacar.
+function readinessDestination(key: string, product: any): { tab: string; sub?: Record<string, string>; target: string } {
+  switch (key) {
+    case "conteudo": return { tab: "info", target: "catalog2-field-full-description" };
+    case "classificacao": return { tab: "opcoes", sub: { opcoes: "class" }, target: !product?.pillar ? "catalog2-field-pillar" : !product?.category ? "catalog2-field-category" : "catalog2-field-four-f" };
+    case "variacoes": return { tab: "opcoes", sub: { opcoes: "var" }, target: "sec-var" };
+    case "adicionais": return { tab: "opcoes", sub: { opcoes: "add" }, target: "sec-add" };
+    case "tarefas":
+    case "etapas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-create" };
+    case "esforco_tarefas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" };
+    case "prazo": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-duration" };
+    case "preco": return { tab: "precos", target: "catalog2-costs" };
+    case "portfolio":
+    case "revisao_rose": return { tab: "origem", target: "sec-origem" };
+    case "publicacao": return { tab: "revisao", sub: { revisao: "hist" }, target: "sec-publicacao" };
+    default: return { tab: "info", target: "catalog2-general" };
+  }
+}
+
+const READINESS_WHERE: Record<string, string> = {
+  conteudo: "Informações do produto",
+  classificacao: "Classificação e opções › Classificação",
+  variacoes: "Classificação e opções › Variações",
+  adicionais: "Classificação e opções › Adicionais",
+  tarefas: "Entrega › Tarefas e etapas",
+  etapas: "Entrega › Tarefas e etapas",
+  esforco_tarefas: "Entrega › Tarefas e etapas",
+  prazo: "Entrega › Tarefas e etapas",
+  preco: "Custos e preço",
+  portfolio: "Origem e importação",
+  revisao_rose: "Origem e importação",
+  publicacao: "Revisão e publicação › Publicação e versões",
+};
+
+// Explicação completa do que fazer (some ao lado da nota curta do servidor).
+// Vale mesmo quando o campo já está preenchido: um item pode estar preenchido
+// e continuar pendente/bloqueado — o texto explica o porquê.
+const READINESS_HELP: Record<string, Partial<Record<"bloqueador" | "pendente", string>>> = {
+  conteudo: { bloqueador: "O texto veio da importação e ainda não foi revisado. Leia o título e as descrições, ajuste o que for preciso e salve. Mesmo com tudo preenchido, o item continua bloqueado até a revisão do conteúdo ser confirmada." },
+  classificacao: {
+    bloqueador: "Escolha o pilar e a categoria do produto. Se houver divergência entre a categoria e a área de origem da importação, é preciso decidir qual vale. Sem isso o produto não fica classificado corretamente no catálogo.",
+  },
+  tarefas: { pendente: "Cadastre pelo menos uma tarefa (o que será executado quando o produto for contratado). Sem tarefas não há operação nem base de custo para calcular o preço." },
+  esforco_tarefas: { pendente: "Cada tarefa precisa de especialidade e horas estimadas reais. Mesmo que já estejam preenchidas, se estiverem marcadas como PROVISÓRIAS (dado de teste) o item continua pendente até você revisar e confirmar os valores reais." },
+  preco: { bloqueador: "O preço é calculado pelo servidor a partir das tarefas (especialidade × horas) e da configuração comercial. Falta base de custo ou alguma configuração — veja o motivo acima e complete em Custos e preço. Sem preço definido o produto não pode ser vendido." },
+  prazo: { bloqueador: "O prazo comercial vem da soma das durações das tarefas. Defina a duração das tarefas (ou o prazo base) para o prazo deixar de aparecer como \"a definir\"." },
+  portfolio: { pendente: "Ainda não há material de portfólio para este produto. Não impede a venda, mas deixa a página do produto mais pobre. Resolva na aba Origem e importação." },
+  revisao_rose: { pendente: "A Rose ainda não marcou este produto como revisado. Confirme a revisão na aba Origem e importação." },
+  publicacao: { bloqueador: "O produto nunca foi publicado, então o cliente não o enxerga. Quando os outros bloqueios estiverem resolvidos, publique a versão em Revisão e publicação › Publicação e versões." },
+};
+
+const LEVEL_META: Record<string, { label: string; chip: string; border: string; rank: number }> = {
+  bloqueador: { label: "Bloqueio", chip: "bg-red-100 text-red-700", border: "border-l-red-500", rank: 0 },
+  pendente: { label: "Pendente", chip: "bg-amber-100 text-amber-700", border: "border-l-amber-400", rank: 1 },
+  pronto: { label: "Pronto", chip: "bg-emerald-100 text-emerald-700", border: "border-l-emerald-500", rank: 2 },
+  opcional: { label: "Opcional", chip: "bg-slate-100 text-slate-600", border: "border-l-slate-300", rank: 3 },
+};
+
+type ReadinessFilter = "todos" | "pronto" | "bloqueador" | "pendente" | "opcional";
+
+function ProductReadinessPanel({ productId, versionKey, onGo, onItems }: { productId: string; versionKey: string; onGo: (key: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void }) {
   const [data, setData] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<ReadinessFilter>("todos");
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -1844,24 +1939,30 @@ function ProductReadinessPanel({ productId, versionKey }: { productId: string; v
       .finally(() => setLoading(false));
   }, [productId]);
   useEffect(() => { reload(); }, [reload, versionKey]);
+  useEffect(() => { if (data?.items) onItems?.(data.items); }, [data, onItems]);
 
   const blockers = data?.blockers ?? [];
   const pendings = data?.pendings ?? [];
-  const summary = data?.error
-    ? "não foi possível carregar"
-    : loading && !data
-      ? "carregando…"
-      : blockers.length === 0 && pendings.length === 0
-        ? "nada pendente"
-        : `${blockers.length} bloqueador(es) · ${pendings.length} pendência(s)`;
-
-  const levelList: any[] = data?.items ? Object.values(data.items) : [];
-  const counted = levelList.filter((it: any) => it.level !== "opcional");
-  const readyCount = counted.filter((it: any) => it.level === "pronto").length;
+  const entries: { key: string; level: string; note: string }[] = data?.items
+    ? Object.entries(data.items).map(([key, it]: any) => ({ key, level: it.level, note: it.note }))
+    : [];
+  const counted = entries.filter((it) => it.level !== "opcional");
+  const readyCount = counted.filter((it) => it.level === "pronto").length;
   const pct = counted.length > 0 ? Math.round((readyCount / counted.length) * 100) : 0;
   const seg = (n: number) => (counted.length > 0 ? (n / counted.length) * 100 : 0);
   const nBlock = blockers.length;
   const nPend = pendings.length;
+  const countOf = (lvl: string) => entries.filter((it) => it.level === lvl).length;
+  const visible = entries
+    .filter((it) => filter === "todos" || it.level === filter)
+    .sort((x, y) => (LEVEL_META[x.level]?.rank ?? 9) - (LEVEL_META[y.level]?.rank ?? 9));
+  const filters: { id: ReadinessFilter; label: string; n: number }[] = [
+    { id: "todos", label: "Todos", n: entries.length },
+    { id: "pronto", label: "Pronto", n: countOf("pronto") },
+    { id: "bloqueador", label: "Bloqueios", n: countOf("bloqueador") },
+    { id: "pendente", label: "Pendentes", n: countOf("pendente") },
+    { id: "opcional", label: "Opcional", n: countOf("opcional") },
+  ];
 
   return (
     <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
@@ -1900,28 +2001,66 @@ function ProductReadinessPanel({ productId, versionKey }: { productId: string; v
         )}
       </button>
       {open && (
-        <div className="border-t border-neutral-200 p-3 dark:border-neutral-800">
+        <div className="border-t border-slate-200/80 px-5 py-4 dark:border-slate-700/60">
           {data?.error ? (
             <p className="text-sm text-red-600">Não foi possível carregar a prontidão.</p>
           ) : !data?.items ? (
-            <p className="flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>
+            <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>
           ) : (
             <>
-              <p className="mb-2 text-[11px] text-neutral-400">
-                Só leitura — mostra o que falta para o produto ficar pronto. Não publica nem altera nada.
-              </p>
-              <ul className="space-y-1.5 text-sm">
-                {Object.entries(data.items).map(([key, it]: any) => (
-                  <li key={key} className="flex items-start justify-between gap-3">
-                    <span className="flex items-center gap-2">
-                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] ${READINESS_TONE[it.level] ?? "bg-neutral-100"}`}>{it.level}</span>
-                      <span className="font-medium">{READINESS_ITEM_LABEL[key] ?? key}</span>
-                    </span>
-                    <span className="text-right text-xs text-neutral-500">{it.note}</span>
-                  </li>
+              <div className="mb-3 flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtrar itens de prontidão">
+                {filters.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={filter === f.id}
+                    onClick={() => setFilter(f.id)}
+                    className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${filter === f.id ? "border-violet-600 bg-violet-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+                  >
+                    {f.label} <span className={filter === f.id ? "text-white/80" : "text-slate-400"}>({f.n})</span>
+                  </button>
                 ))}
-              </ul>
-              <div className="mt-2 flex items-center gap-2 text-[11px] text-neutral-400">
+              </div>
+              <p className="mb-3 text-xs text-slate-500">
+                Clique num item para ir direto ao lugar de resolver. O campo aparece em amarelo até ficar pronto.
+              </p>
+              {visible.length === 0 ? (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-800/40">Nenhum item nesta categoria.</p>
+              ) : (
+                <ul className="space-y-2.5">
+                  {visible.map((it) => {
+                    const meta = LEVEL_META[it.level] ?? LEVEL_META.opcional;
+                    const help = (READINESS_HELP[it.key] as any)?.[it.level] as string | undefined;
+                    return (
+                      <li key={it.key}>
+                        <button
+                          type="button"
+                          onClick={() => onGo(it.key)}
+                          className={`w-full rounded-xl border border-l-4 border-slate-200/80 bg-white p-4 text-left transition-colors hover:border-violet-300 hover:bg-violet-50/40 dark:border-slate-700/60 dark:bg-slate-900 dark:hover:bg-slate-800/50 ${meta.border}`}
+                        >
+                          <span className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="flex items-center gap-2.5">
+                              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${meta.chip}`}>{meta.label}</span>
+                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{READINESS_ITEM_LABEL[it.key] ?? it.key}</span>
+                            </span>
+                            <span className="flex items-center gap-1 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                              {READINESS_WHERE[it.key] ?? "Abrir"} <ChevronRight className="h-4 w-4" />
+                            </span>
+                          </span>
+                          <span className="mt-1.5 block text-sm text-slate-600 dark:text-slate-300">{it.note}</span>
+                          {help && (
+                            <span className={`mt-2 block rounded-lg px-3 py-2 text-[13px] leading-relaxed ${it.level === "bloqueador" ? "bg-red-50 text-red-800 dark:bg-red-950/20 dark:text-red-200" : "bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200"}`}>
+                              <strong>{it.level === "bloqueador" ? "Por que está bloqueado: " : "Por que está pendente: "}</strong>{help}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
                 <span>tarefas: {data.task_count ?? 0} · etapas: {data.step_count ?? 0}</span>
                 <button type="button" className="underline" onClick={reload}>atualizar</button>
               </div>
