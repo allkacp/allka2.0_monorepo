@@ -93,7 +93,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
     if (!watch || !product) return;
     const cur = product.versions.find((v: any) => v.id === selectedVersionId);
     const level = readinessItems?.[watch.key]?.level;
-    const still = level === "pronto" ? [] : readinessPendingIds(watch.key, product, cur, level);
+    const still = level === "pronto" ? [] : readinessPendingIds(watch.key, product, cur, level, readinessItems?.[watch.key]?.note);
     const finished = watch.ids.filter((id) => !still.includes(id));
     if (finished.length === 0) return;
     setWatch((w) => (w ? { ...w, ids: w.ids.filter((id) => still.includes(id)) } : w));
@@ -102,10 +102,10 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   }, [product, readinessItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function goToReadinessItem(key: string) {
-    const dest = readinessDestination(key, product);
+    const dest = readinessDestination(key, product, readinessItems?.[key]?.note);
     const level = readinessItems?.[key]?.level;
     const cur = product?.versions.find((v: any) => v.id === selectedVersionId);
-    const ids = level === "pronto" ? [] : readinessPendingIds(key, product, cur, level);
+    const ids = level === "pronto" ? [] : readinessPendingIds(key, product, cur, level, readinessItems?.[key]?.note);
     setEditorTab(dest.tab);
     if (dest.sub) setSubTabs((cur2) => ({ ...cur2, ...dest.sub }));
     setHighlightTarget(null);
@@ -1049,14 +1049,16 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
   useEffect(() => { void run(); /* eslint-disable-next-line */ }, [JSON.stringify(sel), version.id]);
 
   return (
-    <div id="catalog2-costs" className={`mt-3 grid gap-4 scroll-mt-6 md:grid-cols-2 ${ringOf("catalog2-costs").replace("rounded-lg", "rounded-2xl")}`}>
+    <div id="catalog2-costs" className={`mt-3 grid gap-4 scroll-mt-6 md:grid-cols-2`}>
       <div className="space-y-3">
         {highlightTarget === "catalog2-costs" && <p className="rounded-lg border border-amber-400 bg-amber-100 p-2 text-sm text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">Há uma pendência comercial de preço ou prazo. Revise o valor que está marcado como “aguardando definição comercial” e salve a alteração.</p>}
         <DeadlineBaseField version={version} act={act} ringOf={ringOf} />
+        <div id="catalog2-pricing-link" className={ringOf("catalog2-pricing-link") || "rounded-lg"}>
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-100">
           <p className="font-semibold">Custos, impostos e valor/hora ficam na Precificação</p>
           <p className="mt-1 text-xs">Valor/hora das especialidades, impostos, comissão, taxas, margem, revisão e ordem são globais e valem para todos os produtos. Aqui você só define o prazo deste produto e escolhe, em cada etapa, a especialidade e as horas.</p>
           <a href="/admin/precificacao" className="mt-2 inline-block rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Abrir Precificação</a>
+        </div>
         </div>
       </div>
 
@@ -1906,7 +1908,7 @@ const READINESS_TONE: Record<string, string> = {
 };
 
 // Campos exatos que ainda impedem o item de ficar pronto (ids de elementos).
-function readinessPendingIds(key: string, product: any, version: any, level?: string): string[] {
+function readinessPendingIds(key: string, product: any, version: any, level?: string, note?: string): string[] {
   const tasks: any[] = version?.tasks ?? [];
   const out: string[] = [];
   switch (key) {
@@ -1921,6 +1923,9 @@ function readinessPendingIds(key: string, product: any, version: any, level?: st
       if (!(product?.four_f?.length > 0)) out.push("catalog2-field-four-f");
       if (!out.length) out.push("catalog2-field-category");
       return out;
+    case "preco":
+      if (priceBlockedByTasks(note)) return readinessPendingIds("esforco_tarefas", product, version, level, note);
+      return ["catalog2-pricing-link"];
     case "esforco_tarefas": {
       const miss = tasks.filter((t) => {
         const sm = (t.steps ?? []).filter((x: any) => (x.estimated_minutes ?? 0) > 0);
@@ -1929,12 +1934,18 @@ function readinessPendingIds(key: string, product: any, version: any, level?: st
       return miss.length ? miss : tasks.map((t) => "task-effort:" + t.id);
     }
     default:
-      return [readinessDestination(key, product).target];
+      return [readinessDestination(key, product, note).target];
   }
 }
 
 // Destino de cada item de prontidão: aba, sub-aba e campo a destacar.
-function readinessDestination(key: string, product: any): { tab: string; sub?: Record<string, string>; target: string } {
+// O bloqueio de preço vem de dados das tarefas (provisórios / sem especialidade ou horas)
+// ou da configuração global (Precificação). Cada caso aponta para um lugar diferente.
+function priceBlockedByTasks(note?: string) {
+  return /provis|tarefa/i.test(note ?? "");
+}
+
+function readinessDestination(key: string, product: any, note?: string): { tab: string; sub?: Record<string, string>; target: string } {
   switch (key) {
     case "conteudo": return { tab: "info", target: "catalog2-field-full-description" };
     case "classificacao": return { tab: "opcoes", sub: { opcoes: "class" }, target: !product?.pillar ? "catalog2-field-pillar" : !product?.category ? "catalog2-field-category" : "catalog2-field-four-f" };
@@ -1944,7 +1955,7 @@ function readinessDestination(key: string, product: any): { tab: string; sub?: R
     case "etapas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-create" };
     case "esforco_tarefas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" };
     case "prazo": return { tab: "precos", target: "catalog2-deadline-base" };
-    case "preco": return { tab: "precos", target: "catalog2-costs" };
+    case "preco": return priceBlockedByTasks(note) ? { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" } : { tab: "precos", target: "catalog2-pricing-link" };
     case "portfolio":
     case "revisao_rose": return { tab: "origem", target: "sec-origem" };
     case "publicacao": return { tab: "revisao", sub: { revisao: "hist" }, target: "sec-publicacao" };
