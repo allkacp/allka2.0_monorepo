@@ -208,9 +208,6 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
             <TabsTrigger value="entrega" className={MAIN_TAB}>Entrega: tarefas, etapas e prazos</TabsTrigger>
             <TabsTrigger value="precos" className={MAIN_TAB}>Custos e preço</TabsTrigger>
             <TabsTrigger value="revisao" className={MAIN_TAB}>Revisão e publicação</TabsTrigger>
-            <TabsTrigger value="origem" className={MAIN_TAB}>
-              Origem e importação
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="info" className={TAB_CARD}>
@@ -260,11 +257,6 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
               <TabsContent value="hist"><div id="sec-publicacao" className={secRing("sec-publicacao")}><HistoryTab version={version} readOnly={readOnly} act={act} onResolveIssue={goToPublishIssue} /></div></TabsContent>
               <TabsContent value="historico"><ProductHistoryTab productId={productId} /></TabsContent>
             </Tabs>
-          </TabsContent>
-
-          <TabsContent value="origem" className={TAB_CARD}>
-            <StepIntro>Área secundária: de onde este produto veio na importação e as pendências de decisão. Não altera o produto.</StepIntro>
-            <div id="sec-origem" className={secRing("sec-origem")}><OriginReviewTab productId={productId} onChanged={load} /></div>
           </TabsContent>
         </Tabs>
       )}
@@ -685,9 +677,9 @@ function TaskInlineEdit({ task, refs, act, effortHighlighted, durationHighlighte
     <div className="mt-2 space-y-2 text-xs">
       <div className="flex flex-wrap items-center gap-2">
         <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.execution_mode} onChange={(e) => setT({ ...t, execution_mode: e.target.value })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-        <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.specialty_id} onChange={(e) => setT({ ...t, specialty_id: e.target.value })}><option value="">sem especialidade</option>{refs.specialties.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+        <select className={`rounded border bg-transparent px-1 py-0.5 dark:border-neutral-700 ${effortDone ? "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : effortHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.specialty_id} onChange={(e) => setT({ ...t, specialty_id: e.target.value })}><option value="">sem especialidade</option>{refs.specialties.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         <button type="button" className="text-neutral-500 underline hover:text-neutral-900 dark:hover:text-neutral-100" onClick={() => setShowNewSpecialty((v) => !v)}>+ nova especialidade</button>
-        <label>min <input id={"task-duration:" + task.id} type="number" className={`w-16 rounded border bg-transparent px-1 dark:border-neutral-700 ${durationDone ? "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : durationHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.estimated_minutes} onChange={(e) => setT({ ...t, estimated_minutes: e.target.value })} /></label>
+        <label>min <input id={"task-duration:" + task.id} type="number" className={`w-16 rounded border bg-transparent px-1 dark:border-neutral-700 ${durationDone || effortDone ? "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : durationHighlighted || effortHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.estimated_minutes} onChange={(e) => setT({ ...t, estimated_minutes: e.target.value })} /></label>
         <label><input type="checkbox" checked={t.is_conditional} onChange={(e) => setT({ ...t, is_conditional: e.target.checked })} /> condicional</label>
         <label><input type="checkbox" checked={t.requires_review} onChange={(e) => setT({ ...t, requires_review: e.target.checked })} /> revisão</label>
         <label><input type="checkbox" checked={t.requires_client_approval} onChange={(e) => setT({ ...t, requires_client_approval: e.target.checked })} /> aprovação cliente</label>
@@ -1929,6 +1921,7 @@ function readinessPendingIds(key: string, product: any, version: any, level?: st
     case "esforco_tarefas": {
       const miss = tasks.filter((t) => {
         const sm = (t.steps ?? []).filter((x: any) => (x.estimated_minutes ?? 0) > 0);
+        if (t.effort_is_provisional) return true;
         return sm.length > 0 ? sm.some((x: any) => !(x.specialty_id ?? t.specialty?.id)) : (!t.specialty?.id || t.estimated_minutes == null);
       }).map((t) => "task-effort:" + t.id);
       return miss.length ? miss : tasks.map((t) => "task-effort:" + t.id);
@@ -1956,8 +1949,7 @@ function readinessDestination(key: string, product: any, note?: string): { tab: 
     case "esforco_tarefas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" };
     case "prazo": return { tab: "precos", target: "catalog2-deadline-base" };
     case "preco": return priceBlockedByTasks(note) ? { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" } : { tab: "precos", target: "catalog2-pricing-link" };
-    case "portfolio":
-    case "revisao_rose": return { tab: "origem", target: "sec-origem" };
+    case "portfolio": return { tab: "info", target: "catalog2-general" };
     case "publicacao": return { tab: "revisao", sub: { revisao: "hist" }, target: "sec-publicacao" };
     default: return { tab: "info", target: "catalog2-general" };
   }
@@ -1973,8 +1965,7 @@ const READINESS_WHERE: Record<string, string> = {
   esforco_tarefas: "Entrega › Tarefas e etapas",
   prazo: "Custos e preço › Prazo comercial base",
   preco: "Custos e preço",
-  portfolio: "Origem e importação",
-  revisao_rose: "Origem e importação",
+  portfolio: "Informações do produto",
   publicacao: "Revisão e publicação › Publicação e versões",
 };
 
@@ -1990,8 +1981,6 @@ const READINESS_HELP: Record<string, Partial<Record<"bloqueador" | "pendente", s
   esforco_tarefas: { pendente: "Cada tarefa precisa de especialidade e horas estimadas reais. Mesmo que já estejam preenchidas, se estiverem marcadas como PROVISÓRIAS (dado de teste) o item continua pendente até você revisar e confirmar os valores reais." },
   preco: { bloqueador: "O preço sai de: horas de cada tarefa × valor/hora da especialidade, + revisão humana, + impostos, comissão, taxa operacional e margem, aplicados na ordem definida. O motivo exato aparece na linha acima (ex.: valor/hora de especialidade, percentual de revisão, impostos/margem, ordem de incidência, dados provisórios). Tudo se configura em Custos e preço: coluna da esquerda (taxas e margens; valor/hora das especialidades); horas e especialidade de cada tarefa ficam em Entrega › Tarefas e etapas." },
   prazo: { bloqueador: "O prazo que o cliente vê NÃO é a soma das tarefas: é o \"Prazo comercial base\" da versão, que ainda não foi informado. Preencha o campo em Custos e preço › Prazo comercial base (dias) e salve." },
-  portfolio: { pendente: "Ainda não há material de portfólio para este produto. Não impede a venda, mas deixa a página do produto mais pobre. Resolva na aba Origem e importação." },
-  revisao_rose: { pendente: "A Rose ainda não marcou este produto como revisado. Confirme a revisão na aba Origem e importação." },
   publicacao: { bloqueador: "O produto nunca foi publicado, então o cliente não o enxerga. Quando os outros bloqueios estiverem resolvidos, publique a versão em Revisão e publicação › Publicação e versões." },
 };
 

@@ -2379,14 +2379,9 @@ async function computeProductReadiness(p: ReadinessProduct) {
     prazo: pricing && !pricing.deadline.commercial_deadline_pending
       ? { level: "pronto", note: `Prazo comercial ${pricing.deadline.commercial_deadline_days} dia(s).` }
       : { level: "bloqueador", note: "Prazo comercial base não definido." },
-    portfolio: has("portfolio_pending")
-      ? { level: "pendente", note: "Sem material de portfólio (não bloqueia venda, mas empobrece a página)." }
-      : { level: "pronto", note: "Portfólio ok / não aplicável." },
-    revisao_rose: p.import_origin
-      ? p.import_origin.rose_reviewed
-        ? { level: "pronto", note: "Revisado pela Rose." }
-        : { level: "pendente", note: "Sem revisão da Rose." }
-      : { level: "opcional", note: "Produto não veio da importação." },
+    // Produtos novos (sem vínculo com a plataforma antiga): portfólio é opcional
+    // e não existe mais revisão da Rose / pendências de importação.
+    portfolio: { level: "opcional", note: "Portfólio é opcional (não bloqueia a venda)." },
     publicacao: published
       ? { level: "pronto", note: `v${published.version_number} publicada.` }
       : { level: "bloqueador", note: "Nunca publicado — invisível para o cliente (bloco 5 não publica)." },
