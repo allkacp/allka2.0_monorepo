@@ -71,7 +71,7 @@ async function main() {
         include: {
           variations: { include: { options: { include: { effects: true } } } },
           addons: { include: { effects: true } },
-          tasks: { include: { steps: true, specialty: { select: { key: true, max_hourly_rate: true } }, questionnaire: { include: { questions: true } } } },
+          tasks: { include: { steps: { include: { specialty: { select: { key: true } } } }, specialty: { select: { key: true, max_hourly_rate: true } }, questionnaire: { include: { questions: true } } } },
         },
       },
     },

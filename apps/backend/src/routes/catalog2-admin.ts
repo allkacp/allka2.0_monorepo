@@ -554,12 +554,67 @@ router.put("/tasks/:id/questionnaire", async (req, res, next) => {
 });
 
 // ── Módulo de precificação (singleton) ────────────────────────────────
+function parseJsonList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v.map(String) : []; } catch { return []; }
+}
+function parseJsonMap(raw: string | null | undefined): Record<string, string> {
+  if (!raw) return {};
+  try { const v = JSON.parse(raw); return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch { return {}; }
+}
+async function pricingSettingsView() {
+  const s = (await prisma.catalog2PricingSettings.findUnique({ where: { id: "default" } })) ??
+    (await prisma.catalog2PricingSettings.create({ data: { id: "default" } }));
+  const custom = await prisma.catalog2PricingComponent.findMany({ orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] });
+  return {
+    ...s,
+    component_order: parseJsonList(s.component_order_json),
+    component_base: parseJsonMap(s.component_base_json),
+    disabled_components: parseJsonList(s.disabled_components_json),
+    custom_components: custom,
+  };
+}
 router.get("/pricing-settings", async (_req, res, next) => {
+  try { res.json(await pricingSettingsView()); } catch (e) { next(e); }
+});
+const COMPONENT_KEYS = ["tax", "commission", "operational", "margin"];
+const componentSchema = z.object({
+  label: z.string().min(1).max(120),
+  percent: z.number().nonnegative().max(1000).nullish(),
+  is_active: z.boolean().optional(),
+});
+async function touchCommercial(req: any, note: string) {
+  await prisma.$transaction(async (tx) => {
+    await logCommercialChangeEvent(tx, { scope: "global_settings", actor_user_id: req.user!.id, note });
+    await notifyValidQuoteOwnersOfCommercialChange(tx, { scope: "global_settings" });
+  });
+}
+router.post("/pricing-components", async (req, res, next) => {
   try {
-    const s = (await prisma.catalog2PricingSettings.findUnique({ where: { id: "default" } })) ??
-      (await prisma.catalog2PricingSettings.create({ data: { id: "default" } }));
-    res.json(s);
-  } catch (e) { next(e); }
+    const d = componentSchema.parse(req.body);
+    const base = d.label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "componente";
+    let key = base; let n = 2;
+    while (COMPONENT_KEYS.includes(key) || (await prisma.catalog2PricingComponent.findUnique({ where: { key } }))) key = `${base}-${n++}`;
+    const created = await prisma.catalog2PricingComponent.create({ data: { key, label: d.label, percent: d.percent ?? null, is_active: d.is_active ?? true } });
+    await touchCommercial(req, `componente de preço "${d.label}" criado`);
+    await audit(req, "pricing_component_created", { key });
+    res.status(201).json(created);
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/pricing-components/:id", async (req, res, next) => {
+  try {
+    const d = componentSchema.partial().parse(req.body);
+    const u = await prisma.catalog2PricingComponent.update({ where: { id: req.params.id as string }, data: d });
+    await touchCommercial(req, `componente de preço "${u.label}" alterado`);
+    res.json(u);
+  } catch (e) { handle(e, res, next); }
+});
+router.delete("/pricing-components/:id", async (req, res, next) => {
+  try {
+    const u = await prisma.catalog2PricingComponent.delete({ where: { id: req.params.id as string } });
+    await touchCommercial(req, `componente de preço "${u.label}" removido`);
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
 });
 router.put("/pricing-settings", async (req, res, next) => {
   try {
@@ -569,6 +624,9 @@ router.put("/pricing-settings", async (req, res, next) => {
       operational_fee_percent: z.number().nonnegative().nullish(),
       profit_margin_percent: z.number().nonnegative().nullish(),
       human_review_percent: z.number().nonnegative().nullish(),
+      component_order: z.array(z.string()).max(50).optional(),
+      component_base: z.record(z.string(), z.enum(["running", "subtotal", "direct_cost"])).optional(),
+      disabled_components: z.array(z.string()).max(50).optional(),
       currency: z.string().length(3).optional(),
       notes: z.string().max(2000).nullish(),
       // Item 16.1 — percentual DEMONSTRATIVO de compensação por inativação,
@@ -580,6 +638,9 @@ router.put("/pricing-settings", async (req, res, next) => {
     for (const k of ["tax_percent", "commission_percent", "operational_fee_percent", "profit_margin_percent", "human_review_percent", "currency", "notes", "demo_inactivation_compensation_percent", "demo_inactivation_compensation_note"] as const) {
       if (d[k] !== undefined) data[k] = d[k];
     }
+    if (d.component_order !== undefined) data.component_order_json = d.component_order.length ? JSON.stringify(d.component_order) : null;
+    if (d.component_base !== undefined) data.component_base_json = JSON.stringify(d.component_base);
+    if (d.disabled_components !== undefined) data.disabled_components_json = JSON.stringify(d.disabled_components);
     const before = await prisma.catalog2PricingSettings.findUnique({ where: { id: "default" } });
     const s = await prisma.$transaction(async (tx) => {
       const updated = await tx.catalog2PricingSettings.upsert({ where: { id: "default" }, create: { id: "default", ...data }, update: data });
@@ -587,7 +648,7 @@ router.put("/pricing-settings", async (req, res, next) => {
       // cálculo de TODOS os produtos. Só grava evento quando um campo que
       // realmente entra na conta (computePricing) mudou de valor — moeda/
       // observações não afetam preço, não contam como alteração comercial.
-      const priceAffecting = ["tax_percent", "commission_percent", "operational_fee_percent", "profit_margin_percent", "human_review_percent"] as const;
+      const priceAffecting = ["tax_percent", "commission_percent", "operational_fee_percent", "profit_margin_percent", "human_review_percent", "component_order_json", "component_base_json", "disabled_components_json"] as const;
       const changed = priceAffecting.some((k) => (before as Record<string, unknown> | null)?.[k] !== (updated as Record<string, unknown>)[k]);
       if (changed) {
         await logCommercialChangeEvent(tx, { scope: "global_settings", actor_user_id: req.user!.id, note: "configuração comercial global alterada" });
@@ -598,7 +659,7 @@ router.put("/pricing-settings", async (req, res, next) => {
       return updated;
     });
     await audit(req, "pricing_settings_updated", {});
-    res.json(s);
+    res.json(await pricingSettingsView());
   } catch (e) { handle(e, res, next); }
 });
 
@@ -1615,6 +1676,7 @@ router.put("/tasks/:id", async (req, res, next) => {
       if (d.name !== undefined && d.name !== before.name) changed.push(`nome de "${before.name}" para "${d.name}"`);
       if (d.specialty_id !== undefined && d.specialty_id !== before.specialty_id) changed.push("especialidade");
       if (d.estimated_minutes !== undefined && d.estimated_minutes !== before.estimated_minutes) changed.push(`tempo estimado de ${before.estimated_minutes ?? "?"} para ${d.estimated_minutes ?? "?"} min`);
+      if (d.specialty_id !== undefined && d.specialty_id !== before.specialty_id) changed.push("especialidade alterada");
       if (changed.length > 0) {
         await recordCatalog2ProductHistory(tx, {
           productId: version.product_id, versionId: version.id, eventType: "task_updated",
@@ -1657,7 +1719,7 @@ router.post("/tasks/:id/duplicate", async (req, res, next) => {
           requires_review: src.requires_review, requires_client_approval: src.requires_client_approval, is_conditional: src.is_conditional,
         },
       });
-      for (const s of src.steps) await tx.catalog2TaskStep.create({ data: { task_id: t.id, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional } });
+      for (const s of src.steps) await tx.catalog2TaskStep.create({ data: { task_id: t.id, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
       if (src.ai) await tx.catalog2TaskAI.create({ data: { task_id: t.id, provider: src.ai.provider, model: src.ai.model, est_input_tokens: src.ai.est_input_tokens, est_output_tokens: src.ai.est_output_tokens, unit_cost_input_per_1k: src.ai.unit_cost_input_per_1k, unit_cost_output_per_1k: src.ai.unit_cost_output_per_1k, currency: src.ai.currency, est_review_rounds: src.ai.est_review_rounds, cost_note: src.ai.cost_note, human_review_required: src.ai.human_review_required } });
       return t;
     });
@@ -1703,7 +1765,7 @@ router.post("/versions/:id/tasks/import", async (req, res, next) => {
         },
       });
       for (const s of src.steps) {
-        await tx.catalog2TaskStep.create({ data: { task_id: t.id, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional } });
+        await tx.catalog2TaskStep.create({ data: { task_id: t.id, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
       }
       if (src.ai) {
         await tx.catalog2TaskAI.create({ data: { task_id: t.id, provider: src.ai.provider, model: src.ai.model, est_input_tokens: src.ai.est_input_tokens, est_output_tokens: src.ai.est_output_tokens, unit_cost_input_per_1k: src.ai.unit_cost_input_per_1k, unit_cost_output_per_1k: src.ai.unit_cost_output_per_1k, currency: src.ai.currency, est_review_rounds: src.ai.est_review_rounds, cost_note: src.ai.cost_note, human_review_required: src.ai.human_review_required } });
@@ -1731,7 +1793,7 @@ router.put("/versions/:id/tasks/order", async (req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 
-const stepSchema = z.object({ key: z.string().min(1).max(60), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), sort_order: z.number().int().optional(), estimated_minutes: z.number().int().nonnegative().nullish(), is_conditional: z.boolean().optional() });
+const stepSchema = z.object({ key: z.string().min(1).max(60), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), sort_order: z.number().int().optional(), estimated_minutes: z.number().int().nonnegative().nullish(), is_conditional: z.boolean().optional(), specialty_id: z.string().nullish() });
 // Item 7.1: "etapas" — o Item 7 nunca instrumentou etapas (só tarefas) —
 // fechado aqui (add/update/remove; reordenar segue o mesmo padrão de baixo
 // valor informativo já adotado pra tarefas/perguntas, não instrumentado).
@@ -1741,7 +1803,7 @@ router.post("/tasks/:id/steps", async (req, res, next) => {
     const task = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string }, select: { name: true } });
     const d = stepSchema.parse(req.body);
     const created = await prisma.$transaction(async (tx) => {
-      const c = await tx.catalog2TaskStep.create({ data: { task_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, estimated_minutes: d.estimated_minutes ?? null, is_conditional: d.is_conditional ?? false } });
+      const c = await tx.catalog2TaskStep.create({ data: { task_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, estimated_minutes: d.estimated_minutes ?? null, is_conditional: d.is_conditional ?? false, specialty_id: d.specialty_id ?? null } });
       await recordCatalog2ProductHistory(tx, {
         productId: version.product_id, versionId: version.id, eventType: "step_added",
         description: `Etapa "${c.name}" adicionada à tarefa "${task.name}".`, after: { key: c.key, name: c.name },
@@ -2196,7 +2258,7 @@ const READINESS_INCLUDE = {
       // alguma tarefa está sem esforço definido (reunião 10/09, correção
       // "task_effort_fields_pending") — nunca lido de um registro
       // histórico de pendência.
-      tasks: { select: { specialty_id: true, estimated_minutes: true, effort_is_provisional: true, _count: { select: { steps: true } } } },
+      tasks: { select: { specialty_id: true, estimated_minutes: true, effort_is_provisional: true, _count: { select: { steps: true } }, steps: { select: { specialty_id: true, estimated_minutes: true } } } },
     },
   },
 } satisfies Prisma.Catalog2ProductInclude;
@@ -2238,7 +2300,13 @@ async function computeProductReadiness(p: ReadinessProduct) {
   // sem especialidade/horas). Reflete o estado atual e some sozinho assim
   // que todas as tarefas da versão forem completadas.
   const tasksForEffort = targetVersion?.tasks ?? [];
-  const hasMissingTaskEffort = tasksForEffort.some((t) => !t.specialty_id || t.estimated_minutes == null);
+  // Esforço definido no nível da tarefa (especialidade + minutos) OU nas etapas
+  // (cada etapa com minutos usa a própria especialidade ou a da tarefa).
+  const hasMissingTaskEffort = tasksForEffort.some((t: any) => {
+    const stepsWithMinutes = (t.steps ?? []).filter((s: any) => (s.estimated_minutes ?? 0) > 0);
+    if (stepsWithMinutes.length > 0) return stepsWithMinutes.some((s: any) => !(s.specialty_id ?? t.specialty_id));
+    return !t.specialty_id || t.estimated_minutes == null;
+  });
   const hasProvisionalTaskEffort = tasksForEffort.some((t) => t.effort_is_provisional);
   const hasIncompleteTaskEffort = hasMissingTaskEffort || hasProvisionalTaskEffort;
   // Regra 9 (reunião 10/09): a prontidão distingue os três estados —

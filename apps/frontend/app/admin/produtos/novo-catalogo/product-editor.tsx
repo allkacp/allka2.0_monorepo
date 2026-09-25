@@ -559,9 +559,9 @@ function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTask
           {!readOnly && <TaskInlineEdit task={t} refs={refs} act={act} effortHighlighted={(highlightTarget === "catalog2-task-effort" && highlightTaskIds.includes(t.id)) || ringOf("task-effort:" + t.id).includes("amber")} durationHighlighted={(highlightTarget === "catalog2-task-duration" && highlightTaskIds.includes(t.id)) || ringOf("task-duration:" + t.id).includes("amber")} effortDone={ringOf("task-effort:" + t.id).includes("emerald")} durationDone={ringOf("task-duration:" + t.id).includes("emerald")} onSaved={(target: string) => clearHighlight(target)} />}
           <ul className="mt-2 ml-3 space-y-1">
             {t.steps.map((s: any, si: number) => (
-              <StepRow key={s.id} step={s} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} />
+              <StepRow key={s.id} step={s} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} />
             ))}
-            {!readOnly && <AddStepRow onAdd={(b: any) => act(() => apiClient.addCatalog2Step(t.id, b), "Etapa adicionada.")} />}
+            {!readOnly && <AddStepRow refs={refs} onAdd={(b: any) => act(() => apiClient.addCatalog2Step(t.id, b), "Etapa adicionada.")} />}
           </ul>
         </div>
       ))}
@@ -594,22 +594,31 @@ function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTask
   );
 }
 
-function StepRow({ step, index, steps, taskId, readOnly, act }: any) {
+const SpecialtySelect = ({ refs, value, onChange, emptyLabel }: any) => (
+  <select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={value} onChange={(e) => onChange(e.target.value)}>
+    <option value="">{emptyLabel}</option>
+    {(refs?.specialties ?? []).map((sp: any) => <option key={sp.id} value={sp.id}>{sp.name}{sp.max_hourly_rate == null ? " (sem valor/hora)" : ""}</option>)}
+  </select>
+);
+
+function StepRow({ step, index, steps, taskId, readOnly, act, refs, task }: any) {
   const [editing, setEditing] = useState(false);
-  const [f, setF] = useState({ name: step.name, estimated_minutes: step.estimated_minutes ?? "" });
+  const [f, setF] = useState({ name: step.name, estimated_minutes: step.estimated_minutes ?? "", specialty_id: step.specialty_id ?? "" });
+  const specName = (refs?.specialties ?? []).find((sp: any) => sp.id === (step.specialty_id ?? task?.specialty?.id))?.name;
   if (editing) {
     return (
       <li className="flex items-end gap-2">
         <Field label="nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="especialidade"><SpecialtySelect refs={refs} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
         <Field label="min"><Input type="number" value={f.estimated_minutes} onChange={(e) => setF({ ...f, estimated_minutes: e.target.value })} /></Field>
-        <Button size="sm" variant="outline" onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: f.name, estimated_minutes: f.estimated_minutes === "" ? null : Number(f.estimated_minutes) }), "Etapa salva.").then(() => setEditing(false))}>Salvar</Button>
+        <Button size="sm" variant="outline" onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: f.name, estimated_minutes: f.estimated_minutes === "" ? null : Number(f.estimated_minutes), specialty_id: f.specialty_id || null }), "Etapa salva.").then(() => setEditing(false))}>Salvar</Button>
         <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>
       </li>
     );
   }
   return (
     <li className="flex items-center justify-between text-sm">
-      <span>{index + 1}. {step.name} <span className="text-xs text-neutral-400">{step.estimated_minutes ?? "?"} min{step.is_conditional ? " · condicional" : ""}</span></span>
+      <span>{index + 1}. {step.name} <span className="text-xs text-neutral-400">{step.estimated_minutes ?? "?"} min · {specName ?? "sem especialidade"}{step.is_conditional ? " · condicional" : ""}</span></span>
       {!readOnly && (
         <span className="flex gap-1">
           <button className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100" onClick={() => setEditing(true)}>editar</button>
@@ -954,14 +963,15 @@ function AiConfig({ task, act }: any) {
     </details>
   );
 }
-function AddStepRow({ onAdd }: { onAdd: (b: any) => void }) {
-  const [s, setS] = useState({ key: "", name: "", estimated_minutes: "" });
+function AddStepRow({ onAdd, refs }: { onAdd: (b: any) => void; refs?: any }) {
+  const [s, setS] = useState({ key: "", name: "", estimated_minutes: "", specialty_id: "" });
   return (
     <li className="flex items-end gap-2">
       <Field label="key"><Input value={s.key} onChange={(e) => setS({ ...s, key: e.target.value })} /></Field>
       <Field label="nome"><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} /></Field>
+      <Field label="especialidade"><SpecialtySelect refs={refs} value={s.specialty_id} onChange={(v: string) => setS({ ...s, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
       <Field label="min"><Input type="number" value={s.estimated_minutes} onChange={(e) => setS({ ...s, estimated_minutes: e.target.value })} /></Field>
-      <Button size="sm" variant="outline" onClick={() => s.key && s.name && (onAdd({ key: s.key, name: s.name, estimated_minutes: s.estimated_minutes ? Number(s.estimated_minutes) : null }), setS({ key: "", name: "", estimated_minutes: "" }))}>Adicionar etapa</Button>
+      <Button size="sm" variant="outline" onClick={() => s.key && s.name && (onAdd({ key: s.key, name: s.name, estimated_minutes: s.estimated_minutes ? Number(s.estimated_minutes) : null, specialty_id: s.specialty_id || null }), setS({ key: "", name: "", estimated_minutes: "", specialty_id: "" }))}>Adicionar etapa</Button>
     </li>
   );
 }
@@ -1043,16 +1053,11 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
       <div className="space-y-3">
         {highlightTarget === "catalog2-costs" && <p className="rounded-lg border border-amber-400 bg-amber-100 p-2 text-sm text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">Há uma pendência comercial de preço ou prazo. Revise o valor que está marcado como “aguardando definição comercial” e salve a alteração.</p>}
         <DeadlineBaseField version={version} act={act} ringOf={ringOf} />
-        <h3 className="text-sm font-semibold">Módulo de precificação (taxas e margens)</h3>
-        {pricing && <PricingSettingsForm pricing={pricing} onSave={(b) => act(() => apiClient.updateCatalog2PricingSettings(b).then(setPricing), "Taxas salvas.")} />}
-        <h3 className="mt-4 text-sm font-semibold">Valor/hora padrão das especialidades</h3>
-        <p className="text-xs text-neutral-500">Estas taxas são globais: o produto usa automaticamente o valor da especialidade vinculada à tarefa. Não existe valor/hora manual por produto.</p>
-        {refs.specialties.map((s: any) => {
-          const isTestLocal = typeof s.hourly_rate_note === "string" && s.hourly_rate_note.toUpperCase().includes("[TESTE LOCAL]");
-          return (
-            <SpecialtyRateRow key={s.id} specialty={s} isTestLocal={isTestLocal} act={act} onReloadRefs={onReloadRefs} />
-          );
-        })}
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-100">
+          <p className="font-semibold">Custos, impostos e valor/hora ficam na Precificação</p>
+          <p className="mt-1 text-xs">Valor/hora das especialidades, impostos, comissão, taxas, margem, revisão e ordem são globais e valem para todos os produtos. Aqui você só define o prazo deste produto e escolhe, em cada etapa, a especialidade e as horas.</p>
+          <a href="/admin/precificacao" className="mt-2 inline-block rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Abrir Precificação</a>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -1917,7 +1922,10 @@ function readinessPendingIds(key: string, product: any, version: any, level?: st
       if (!out.length) out.push("catalog2-field-category");
       return out;
     case "esforco_tarefas": {
-      const miss = tasks.filter((t) => !t.specialty?.id || t.estimated_minutes == null).map((t) => "task-effort:" + t.id);
+      const miss = tasks.filter((t) => {
+        const sm = (t.steps ?? []).filter((x: any) => (x.estimated_minutes ?? 0) > 0);
+        return sm.length > 0 ? sm.some((x: any) => !(x.specialty_id ?? t.specialty?.id)) : (!t.specialty?.id || t.estimated_minutes == null);
+      }).map((t) => "task-effort:" + t.id);
       return miss.length ? miss : tasks.map((t) => "task-effort:" + t.id);
     }
     default:

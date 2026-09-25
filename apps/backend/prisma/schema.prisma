@@ -4770,6 +4770,7 @@ model Catalog2Specialty {
   updated_at DateTime @updatedAt
 
   tasks Catalog2Task[]
+  steps Catalog2TaskStep[] @relation("StepSpecialty")
 
   @@map("catalog2_specialties")
 }
@@ -5461,12 +5462,18 @@ model Catalog2TaskStep {
   estimated_minutes Int?
   is_conditional    Boolean @default(false)
 
+  // Especialidade da ETAPA (valor/hora vem da Precificação global). Nulo =
+  // usa a especialidade da tarefa.
+  specialty_id String?
+  specialty    Catalog2Specialty? @relation("StepSpecialty", fields: [specialty_id], references: [id], onDelete: SetNull)
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   addon_targets Catalog2Addon[] @relation("AddonTargetStep")
 
   @@index([task_id, sort_order])
+  @@index([specialty_id])
   @@map("catalog2_task_steps")
 }
 
@@ -5539,6 +5546,21 @@ model Catalog2Condition {
 // margem de lucro "definidas no modulo de precificacao". A ata NAO informa
 // os percentuais — cada campo nulo vira "aguardando definicao comercial" no
 // resultado; o calculo nunca inventa valor. Singleton (id = "default").
+// Componentes de preço extras (impostos/taxas novos) cadastrados pelo admin.
+// Entram no cálculo como "custom:<key>" e podem ser ligados/desligados.
+model Catalog2PricingComponent {
+  id         String   @id @default(cuid())
+  key        String   @unique
+  label      String
+  percent    Float?
+  is_active  Boolean  @default(true)
+  sort_order Int      @default(0)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("catalog2_pricing_components")
+}
+
 model Catalog2PricingSettings {
   id                      String   @id @default("default")
   tax_percent             Float?
@@ -5556,6 +5578,9 @@ model Catalog2PricingSettings {
   // "direct_cost" }. Ausente = "running" (acumulado ate ali), mas sinalizado
   // como nao explicitamente definido.
   component_base_json     String?  @db.Text
+  // JSON string[] de componentes DESLIGADOS ("tax"|"commission"|"operational"|
+  // "margin"|"custom:<key>"): não entram na soma nem geram pendência.
+  disabled_components_json String? @db.Text
   currency                String   @default("BRL")
   notes                   String?  @db.Text
   updated_by_user_id      String?

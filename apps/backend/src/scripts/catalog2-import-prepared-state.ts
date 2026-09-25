@@ -543,7 +543,8 @@ async function main() {
 
         for (const s of t.steps) {
           const existingStep = await tx.catalog2TaskStep.findFirst({ where: { task_id: taskId, key: s.key } });
-          const stepData = { name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional };
+          const stepSpec = (s as any).specialty?.key ? await tx.catalog2Specialty.findUnique({ where: { key: (s as any).specialty.key } }) : null;
+          const stepData = { name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: stepSpec?.id ?? null };
           if (!existingStep) { await tx.catalog2TaskStep.create({ data: { task_id: taskId, key: s.key, ...stepData } }); line.steps.created++; }
           else {
             const changed = existingStep.name !== s.name || existingStep.estimated_minutes !== s.estimated_minutes;

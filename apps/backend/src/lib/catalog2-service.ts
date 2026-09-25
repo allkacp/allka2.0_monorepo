@@ -197,6 +197,7 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
           sort_order: s.sort_order,
           estimated_minutes: s.estimated_minutes,
           is_conditional: s.is_conditional,
+          specialty_id: s.specialty_id,
         },
       });
       stepIdByRef.set(`${t.key}:${s.key}`, ns.id);
@@ -1073,6 +1074,7 @@ export async function getProductDetail(productId: string) {
           sort_order: s.sort_order,
           estimated_minutes: s.estimated_minutes,
           is_conditional: s.is_conditional,
+          specialty_id: s.specialty_id,
         })),
       })),
     })),

@@ -1,1232 +1,282 @@
-﻿import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, Award, DollarSign, Info, Percent, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  TrendingUp,
-  DollarSign,
-  Calculator,
-  Percent,
-  Plus,
-  Edit,
-  Trash2,
-  Award,
-  Receipt,
-  BadgeDollarSign,
-  Info,
-  AlertCircle,
-  Building2,
-  FileText,
-  Target,
-  Scale,
-  BarChart3,
-} from "lucide-react";
-import { StandardModalDialog } from "@/components/standard-modal-dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { toast } from "@/hooks/use-toast";
-import {
-  usePricing,
-  type PricingComponent,
-  type CommissionApplyOn,
-  type ProductCategory,
-} from "@/hooks/use-pricing";
-import { useSpecialties } from "@/lib/contexts/specialty-context";
-import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
-import {
-  STANDARD_SHELL_PANEL_CLASS,
-  StandardPageBanner,
-} from "@/components/standard-page-shell";
+import { Badge } from "@/components/ui/badge";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { apiClient } from "@/lib/api-client";
+import { STANDARD_SHELL_PANEL_CLASS, StandardPageBanner } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 
-const PrecificacaoPage = () => {
-  const { sidebarWidth, headerHeight, footerHeight } = useAppFrameMetrics();
-  const {
-    pricingComponents,
-    addComponent,
-    updateComponent,
-    deleteComponent,
-    getActiveComponents,
-  } = usePricing();
-  const { specialties } = useSpecialties();
-  const [activeTab, setActiveTab] = useState("rates");
-  const [isOpen, setIsOpen] = useState(false);
-  const [showTypeModal, setShowTypeModal] = useState(false);
-  const [selectedType, setSelectedType] = useState<
-    "commission" | "fee" | "tax" | "margin" | null
-  >(null);
-  const [editingItem, setEditingItem] = useState<PricingComponent | null>(null);
-  const [companyType, setCompanyType] = useState<"partners" | "nomades" | null>(
-    null,
-  );
-  const [showSpecialtiesModal, setShowSpecialtiesModal] = useState(false);
-  const [editingSpecialty, setEditingSpecialty] = useState<any>(null);
-  const [deleteSpecialtyConfirm, setDeleteSpecialtyConfirm] = useState<{
-    isOpen: boolean;
-    specialty: any | null;
-  }>({ isOpen: false, specialty: null });
-  const [specialtyFormData, setSpecialtyFormData] = useState({
-    name: "",
-    iniciante: "",
-    junior: "",
-    pleno: "",
-    senior: "",
-    aiEnabled: false,
-    aiFixedValue: "",
-  });
-  const [formData, setFormData] = useState({
-    name: "",
-    value: 0,
-    valueType: "percentage" as "percentage" | "fixed",
-    appliesTo: [] as string[],
-    description: "",
-    isActive: true,
-    applyOn: "final_value" as CommissionApplyOn,
-    productCategories: ["all"] as ProductCategory[],
-  });
-  const [deleteConfirm, setDeleteConfirm] = useState<{
-    isOpen: boolean;
-    id: string;
-    name: string;
-  }>({ isOpen: false, id: "", name: "" });
+// Precificação GLOBAL do catálogo (catalog2): tudo o que entra no preço de
+// TODOS os produtos fica aqui — valor/hora das especialidades, impostos,
+// comissão, taxa operacional, margem, revisão humana e componentes extras
+// (que podem ser ligados/desligados). O produto só puxa esses valores.
 
-  const specialtyLevels = ["Iniciante", "Júnior", "Pleno", "Sênior"];
-  const partnerLevels = ["Bronze", "Prata", "Ouro", "Platina", "Diamante"];
-  const nomadeLevels = ["Nível 1", "Nível 2", "Nível 3", "Nível 4", "Nível 5"];
+type Row = {
+  key: string; // "tax" | ... | "custom:<slug>"
+  label: string;
+  builtin: boolean;
+  id?: string;
+  percent: string;
+  active: boolean;
+  base: "running" | "subtotal" | "direct_cost";
+};
 
-  const availableLevels =
-    selectedType === "commission"
-      ? companyType === "partners"
-        ? partnerLevels
-        : nomadeLevels
-      : specialtyLevels;
+const BUILTIN: { key: string; label: string; field: string }[] = [
+  { key: "tax", label: "Impostos (Simples Nacional)", field: "tax_percent" },
+  { key: "commission", label: "Comissão", field: "commission_percent" },
+  { key: "operational", label: "Taxa operacional", field: "operational_fee_percent" },
+  { key: "margin", label: "Margem de lucro", field: "profit_margin_percent" },
+];
+const BASE_LABEL: Record<string, string> = { running: "Acumulado até aqui", subtotal: "Subtotal", direct_cost: "Custo direto" };
 
-  const levelOptions =
-    selectedType === "commission"
-      ? companyType === "partners"
-        ? partnerLevels
-        : companyType === "nomades"
-          ? nomadeLevels
-          : []
-      : specialtyLevels;
+const cardCls = "rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900";
 
-  const handleOpenSheet = (item?: PricingComponent, type?: string) => {
-    if (item) {
-      setEditingItem(item);
-      const isPartner = partnerLevels.some((level) =>
-        item.appliesTo.includes(level),
-      );
-      const isNomade = nomadeLevels.some((level) =>
-        item.appliesTo.includes(level),
-      );
-      setCompanyType(isPartner ? "partners" : isNomade ? "nomades" : null);
-      setSelectedType(item.type);
-      setFormData({
-        name: item.name,
-        value: item.value,
-        valueType: item.valueType,
-        appliesTo: item.appliesTo,
-        description: item.description,
-        isActive: item.isActive,
-        applyOn: item.applyOn || "final_value",
-        productCategories: item.productCategories || ["all"],
-      });
-      setShowTypeModal(false);
-      setIsOpen(true);
-    } else {
-      if (!type) {
-        setShowTypeModal(true);
-        return;
-      }
-      setSelectedType(type as "commission" | "fee" | "tax");
-      setEditingItem(null);
-      setCompanyType(null);
-      setFormData({
-        name: "",
-        value: 0,
-        valueType: "percentage",
-        appliesTo: [],
-        description: "",
-        isActive: true,
-        applyOn: "final_value",
-        productCategories: ["all"],
-      });
-      setShowTypeModal(false);
-      setIsOpen(true);
-    }
+function buildRows(s: any): Row[] {
+  const disabled = new Set<string>(s.disabled_components ?? []);
+  const base = s.component_base ?? {};
+  const rows: Row[] = [
+    ...BUILTIN.map((b) => ({ key: b.key, label: b.label, builtin: true, percent: s[b.field] == null ? "" : String(s[b.field]), active: !disabled.has(b.key), base: (base[b.key] ?? "running") as Row["base"] })),
+    ...(s.custom_components ?? []).map((c: any) => ({ key: `custom:${c.key}`, label: c.label, builtin: false, id: c.id, percent: c.percent == null ? "" : String(c.percent), active: !!c.is_active && !disabled.has(`custom:${c.key}`), base: (base[`custom:${c.key}`] ?? "running") as Row["base"] })),
+  ];
+  const order: string[] = s.component_order?.length ? s.component_order : BUILTIN.map((b) => b.key);
+  const pos = (k: string) => { const i = order.indexOf(k); return i === -1 ? 999 : i; };
+  return rows.map((r, i) => ({ r, i })).sort((a, b) => pos(a.r.key) - pos(b.r.key) || a.i - b.i).map((x) => x.r);
+}
+
+function PrecificacaoPage() {
+  const [settings, setSettings] = useState<any>(null);
+  const [rows, setRows] = useState<Row[]>([]);
+  const [review, setReview] = useState("");
+  const [specialties, setSpecialties] = useState<any[]>([]);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [newComp, setNewComp] = useState({ label: "", percent: "" });
+  const [newSpec, setNewSpec] = useState({ key: "", name: "", rate: "" });
+  const [confirmSave, setConfirmSave] = useState(false);
+  const [removeRow, setRemoveRow] = useState<Row | null>(null);
+
+  const load = useCallback(async () => {
+    const [s, sp] = await Promise.all([apiClient.getCatalog2PricingSettings(), apiClient.getCatalog2Specialties()]);
+    setSettings(s);
+    setRows(buildRows(s));
+    setReview(s.human_review_percent == null ? "" : String(s.human_review_percent));
+    setSpecialties(Array.isArray(sp) ? sp : sp?.data ?? []);
+  }, []);
+  useEffect(() => { load().catch((e) => setMsg({ ok: false, text: e?.message ?? "Não foi possível carregar." })); }, [load]);
+
+  const run = async (fn: () => Promise<any>, ok: string) => {
+    setMsg(null);
+    try { await fn(); await load(); setMsg({ ok: true, text: ok }); }
+    catch (e: any) { setMsg({ ok: false, text: e?.message ?? "Falha na operação." }); }
   };
 
-  const handleTypeSelect = (
-    type:
-      | "commission"
-      | "fee"
-      | "tax"
-      | "margin"
-      | "comissao"
-      | "taxa"
-      | "imposto"
-      | "margem",
-  ) => {
-    let actualType: "commission" | "fee" | "tax" | "margin";
-    switch (type) {
-      case "comissao":
-        actualType = "commission";
-        break;
-      case "taxa":
-        actualType = "fee";
-        break;
-      case "imposto":
-        actualType = "tax";
-        break;
-      case "margem":
-        actualType = "margin";
-        break;
-      default:
-        actualType = type;
+  const setRow = (key: string, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const move = (i: number, d: number) => setRows((cur) => { const n = [...cur]; const j = i + d; if (j < 0 || j >= n.length) return cur; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  const num = (v: string) => (v.trim() === "" ? null : Number(v));
+
+  const saveAll = () => run(async () => {
+    for (const r of rows.filter((x) => !x.builtin && x.id)) {
+      await apiClient.updateCatalog2PricingComponent(r.id!, { label: r.label, percent: num(r.percent), is_active: r.active });
     }
-    setSelectedType(actualType);
-    setShowTypeModal(false);
-    setIsOpen(true);
-  };
-
-  const handleSave = () => {
-    if (!formData.name || formData.value === 0) {
-      toast({
-        title: "Campos obrigatórios",
-        description: "Preencha o nome e o valor",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Nível só faz sentido pra comissão (varia por nível de nômade/parceiro).
-    // Taxa, imposto e margem incidem sobre o valor total do projeto, não por
-    // nível de especialista — exigir isso travava o cadastro sem sentido.
-    if (selectedType === "commission" && formData.appliesTo.length === 0) {
-      toast({
-        title: "Nível obrigatório",
-        description: "Selecione pelo menos um nível",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const componentType =
-      selectedType ||
-      (activeTab === "commissions"
-        ? "commission"
-        : activeTab === "fees"
-          ? "fee"
-          : "tax");
-
-    const newComponent: PricingComponent = {
-      id: editingItem?.id || Date.now().toString(),
-      name: formData.name,
-      type: componentType,
-      value: formData.value,
-      valueType: formData.valueType,
-      appliesTo: formData.appliesTo,
-      description: formData.description,
-      isActive: formData.isActive,
-      ...(componentType === "commission" && { applyOn: formData.applyOn }),
-      ...(componentType === "margin" && {
-        productCategories: formData.productCategories,
-      }),
+    const body: Record<string, any> = {
+      human_review_percent: num(review),
+      component_order: rows.map((r) => r.key),
+      component_base: Object.fromEntries(rows.map((r) => [r.key, r.base])),
+      disabled_components: rows.filter((r) => !r.active).map((r) => r.key),
     };
+    for (const b of BUILTIN) body[b.field] = num(rows.find((r) => r.key === b.key)?.percent ?? "");
+    await apiClient.updateCatalog2PricingSettings(body);
+  }, "Configuração de preço salva. Vale para todos os produtos.");
 
-    if (editingItem) {
-      updateComponent(editingItem.id, newComponent);
-      toast({
-        title: "Componente atualizado",
-        description: `${formData.name} foi atualizado com sucesso`,
-      });
-    } else {
-      addComponent(newComponent);
-      toast({
-        title: "Componente criado",
-        description: `${formData.name} foi criado com sucesso`,
-      });
-    }
+  const addComponent = () => run(async () => {
+    if (!newComp.label.trim()) throw new Error("Informe o nome do imposto/taxa.");
+    await apiClient.createCatalog2PricingComponent({ label: newComp.label.trim(), percent: num(newComp.percent) });
+    setNewComp({ label: "", percent: "" });
+  }, "Componente adicionado. Ele entra no fim da ordem; ajuste a ordem e salve.");
 
-    setIsOpen(false);
-    setShowTypeModal(false);
-    setSelectedType(null);
-    setEditingItem(null);
-    setCompanyType(null);
-    setFormData({
-      name: "",
-      value: 0,
-      valueType: "percentage",
-      appliesTo: [],
-      description: "",
-      isActive: true,
-      applyOn: "final_value",
-      productCategories: ["all"],
-    });
-  };
+  const addSpecialty = () => run(async () => {
+    if (!newSpec.key.trim() || !newSpec.name.trim()) throw new Error("Informe a chave e o nome da especialidade.");
+    await apiClient.addCatalog2Specialty({ key: newSpec.key.trim(), name: newSpec.name.trim(), max_hourly_rate: num(newSpec.rate) });
+    setNewSpec({ key: "", name: "", rate: "" });
+  }, "Especialidade criada. Já aparece para escolher nas etapas dos produtos.");
 
-  const handleDelete = (id: string, name: string) => {
-    deleteComponent(id);
-    toast({
-      title: "Componente removido",
-      description: `${name} foi removido com sucesso`,
-    });
-    setDeleteConfirm({ isOpen: false, id: "", name: "" });
-  };
-
-  const handleToggleActive = (component: PricingComponent) => {
-    updateComponent(component.id, {
-      ...component,
-      isActive: !component.isActive,
-    });
-    toast({
-      title: component.isActive
-        ? "Componente desativado"
-        : "Componente ativado",
-      description: `${component.name} foi ${component.isActive ? "desativado" : "ativado"}`,
-    });
-  };
-
-  const handleEdit = (component: PricingComponent) => {
-    handleOpenSheet(component);
-  };
-
-  const getFilteredComponents = (type: string) => {
-    return pricingComponents.filter((item) => item.type === type);
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case "commission":
-        return "Comissões";
-      case "fee":
-        return "Taxas";
-      case "tax":
-        return "Impostos";
-      case "margin":
-        return "Margens";
-      default:
-        return "";
-    }
-  };
-
-  const renderComponentCard = (component: PricingComponent) => (
-    <Card
-      key={component.id}
-      className={`p-3 hover:shadow-md transition-all border-l-4 bg-white ${
-        component.type === "commission"
-          ? "border-l-green-500"
-          : component.type === "fee"
-            ? "border-l-blue-500"
-            : component.type === "margin"
-              ? "border-l-orange-500"
-              : "border-l-purple-500"
-      } ${!component.isActive ? "opacity-50" : ""}`}
-    >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-gray-900 text-sm mb-0.5 truncate">
-            {component.name}
-          </h3>
-          <p className="text-xs text-gray-600 line-clamp-2">
-            {component.description}
-          </p>
-        </div>
-        <div className="flex flex-col gap-1.5 items-end shrink-0">
-          <Switch
-            checked={component.isActive}
-            onCheckedChange={() => handleToggleActive(component)}
-            className="scale-75"
-          />
-          <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleEdit(component)}
-              className="h-7 w-7 p-0 hover:bg-green-100"
-            >
-              <Edit className="h-3.5 w-3.5 text-green-600" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() =>
-                setDeleteConfirm({
-                  isOpen: true,
-                  id: component.id,
-                  name: component.name,
-                })
-              }
-              className="h-7 w-7 p-0 hover:bg-red-100"
-            >
-              <Trash2 className="h-3.5 w-3.5 text-red-600" />
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 pt-2 border-t">
-        <div className="flex flex-wrap gap-1">
-          {component.appliesTo.slice(0, 2).map((level) => (
-            <Badge
-              key={level}
-              variant="secondary"
-              className="text-xs px-1.5 py-0"
-            >
-              {level}
-            </Badge>
-          ))}
-          {component.appliesTo.length > 2 && (
-            <Badge variant="secondary" className="text-xs px-1.5 py-0">
-              +{component.appliesTo.length - 2}
-            </Badge>
-          )}
-        </div>
-        <Badge
-          className={`text-xs font-semibold ${
-            component.type === "commission"
-              ? "bg-green-500 text-white"
-              : component.type === "fee"
-                ? "bg-blue-500 text-white"
-                : "bg-purple-500 text-white"
-          }`}
-        >
-          {component.valueType === "percentage" ? (
-            <>
-              <Percent className="h-3 w-3 mr-0.5" />
-              {component.value}%
-            </>
-          ) : (
-            <>
-              <DollarSign className="h-3 w-3 mr-0.5" />
-              R$ {component.value.toFixed(2)}
-            </>
-          )}
-        </Badge>
-      </div>
-    </Card>
-  );
+  const pending = useMemo(() => rows.filter((r) => r.active && r.percent.trim() === "").length + (review.trim() === "" ? 1 : 0) + specialties.filter((s) => s.is_active !== false && s.max_hourly_rate == null).length, [rows, review, specialties]);
 
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
-      <div className="h-full min-h-0 flex flex-col">
-        <div className="shrink-0 -mb-[11px]">
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="-mb-[11px] shrink-0">
           <StandardPageBanner
             icon={DollarSign}
             title="Precificação"
-            description="Gerencie comissões, taxas, impostos e custos"
+            description="Valor/hora das especialidades, impostos, comissão, taxas e margem — valem para todos os produtos"
             contentClassName="lg:h-[65px]"
-            actions={
-              <PinToTrayButton
-                id="page-precificacao"
-                label="Precificação"
-                icon={DollarSign}
-                path="/admin/precificacao"
-              />
-            }
+            actions={<PinToTrayButton id="page-precificacao" label="Precificação" icon={DollarSign} path="/admin/precificacao" />}
           />
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="flex flex-col space-y-3">
-            <Accordion type="single" collapsible className="mt-[5px] mb-1">
-              <AccordionItem value="stats" className="border-none">
-                <AccordionTrigger className="bg-white hover:bg-slate-50 rounded-lg px-4 py-3 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-blue-600" />
-                    <span className="font-semibold text-blue-900">
-                      Estatísticas e Métricas
-                    </span>
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="pt-3">
-                  <div className="p-2 bg-blue-50 border-l-4 border-blue-500 rounded-md shadow-sm mb-3">
-                    <div className="flex items-center gap-2">
-                      <Info className="h-4 w-4 text-blue-600 shrink-0" />
-                      <p className="text-blue-800 text-xs">
-                        <strong>Importante:</strong> Todas as alterações afetam
-                        automaticamente o cálculo de preços. Componentes
-                        inativos não serão aplicados.
-                      </p>
-                    </div>
-                  </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mt-[5px] space-y-4 p-1">
+            <div className="flex items-start gap-2 rounded-xl border-l-4 border-blue-500 bg-blue-50 p-3 text-xs text-blue-900">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+              <p>
+                O preço de cada produto = (horas de cada <strong>etapa</strong> × valor/hora da <strong>especialidade</strong> escolhida na etapa) + revisão humana + os componentes abaixo, na ordem definida.
+                Componentes <strong>desligados</strong> não entram na soma. Mudou algo aqui, todos os produtos passam a usar.
+              </p>
+            </div>
 
-                  <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-                    <Card className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                      <div className="flex items-center gap-2 mb-1">
-                        <TrendingUp className="h-4 w-4 text-blue-600" />
-                        <span className="text-xs font-medium text-blue-900">
-                          Comissões Ativas
-                        </span>
-                      </div>
-                      <p className="text-2xl font-bold text-blue-700">
-                        {
-                          getFilteredComponents("commission").filter(
-                            (c) => c.isActive,
-                          ).length
-                        }
-                      </p>
-                    </Card>
+            {msg && (
+              <p className={`rounded-lg border px-3 py-2 text-sm ${msg.ok ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-red-300 bg-red-50 text-red-700"}`}>{msg.text}</p>
+            )}
+            {pending > 0 && (
+              <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {pending} valor(es) ainda sem definição (campos vazios). Enquanto houver, o preço comercial dos produtos fica "A definir".
+              </p>
+            )}
 
-                    <Card className="p-3 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                      <div className="flex items-center gap-2 mb-1">
-                        <DollarSign className="h-4 w-4 text-green-600" />
-                        <span className="text-xs font-medium text-green-900">
-                          Taxas Ativas
-                        </span>
-                      </div>
-                      <p className="text-2xl font-bold text-green-700">
-                        {
-                          getFilteredComponents("fee").filter((c) => c.isActive)
-                            .length
-                        }
-                      </p>
-                    </Card>
+            {/* ── Especialidades ── */}
+            <section className={cardCls}>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="rounded-lg bg-orange-100 p-2"><Award className="h-4 w-4 text-orange-600" /></span>
+                <div>
+                  <h2 className="text-base font-semibold">Valor/hora das especialidades</h2>
+                  <p className="text-xs text-slate-500">Nas etapas dos produtos você escolhe uma dessas especialidades e informa as horas; o valor sai daqui.</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {specialties.map((s) => <SpecialtyLine key={s.id} s={s} onSave={(rate) => run(() => apiClient.updateCatalog2Specialty(s.id, { max_hourly_rate: rate }), `Valor/hora de ${s.name} salvo.`)} />)}
+                {specialties.length === 0 && <p className="text-sm text-slate-500">Nenhuma especialidade cadastrada.</p>}
+              </div>
+              <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+                <label className="text-xs">Chave<Input className="mt-1 w-36" value={newSpec.key} onChange={(e) => setNewSpec({ ...newSpec, key: e.target.value })} placeholder="ex.: designer-senior" /></label>
+                <label className="text-xs">Nome<Input className="mt-1 w-48" value={newSpec.name} onChange={(e) => setNewSpec({ ...newSpec, name: e.target.value })} placeholder="ex.: Designer sênior" /></label>
+                <label className="text-xs">Valor/hora (R$)<Input className="mt-1 w-28" type="number" value={newSpec.rate} onChange={(e) => setNewSpec({ ...newSpec, rate: e.target.value })} /></label>
+                <Button size="sm" onClick={addSpecialty}><Plus className="h-4 w-4" /> Nova especialidade</Button>
+              </div>
+            </section>
 
-                    <Card className="p-3 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Receipt className="h-4 w-4 text-purple-600" />
-                        <span className="text-xs font-medium text-purple-900">
-                          Impostos Ativos
-                        </span>
-                      </div>
-                      <p className="text-2xl font-bold text-purple-700">
-                        {
-                          getFilteredComponents("tax").filter((c) => c.isActive)
-                            .length
-                        }
-                      </p>
-                    </Card>
-
-                    <Card className="p-3 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Award className="h-4 w-4 text-orange-600" />
-                        <span className="text-xs font-medium text-orange-900">
-                          Total Componentes
-                        </span>
-                      </div>
-                      <p className="text-2xl font-bold text-orange-700">
-                        {pricingComponents.length}
-                      </p>
-                    </Card>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="space-y-3"
-            >
-              <div className="relative">
-                <TabsList className="w-max grid grid-cols-2 gap-1 bg-transparent p-0 h-auto">
-                  <TabsTrigger
-                    value="rates"
-                    className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                  >
-                    <Calculator className="h-4 w-4 mr-1.5 inline" />
-                    Taxas e Comissões
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="specialties"
-                    className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                  >
-                    <Award className="h-4 w-4 mr-1.5 inline" />
-                    Especialidades
-                  </TabsTrigger>
-                </TabsList>
+            {/* ── Componentes ── */}
+            <section className={cardCls}>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="rounded-lg bg-green-100 p-2"><Percent className="h-4 w-4 text-green-600" /></span>
+                <div>
+                  <h2 className="text-base font-semibold">Impostos, comissão, taxas e margem</h2>
+                  <p className="text-xs text-slate-500">Aplicados nesta ordem (de cima para baixo). Use o interruptor para ligar/desligar sem apagar.</p>
+                </div>
               </div>
 
-              <TabsContent value="rates" className="space-y-3">
-                <div className="space-y-3">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-lg bg-green-100">
-                          <TrendingUp className="h-4 w-4 text-green-600" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-semibold text-gray-900">
-                            Comissões
-                          </h3>
-                          <p className="text-xs text-gray-600">
-                            {getFilteredComponents("commission").length} itens
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenSheet(undefined, "commission")}
-                        className="text-green-600 border-green-300 hover:bg-green-50 h-8 text-xs"
-                      >
-                        <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Comissão
-                      </Button>
+              <div className="space-y-2">
+                {rows.map((r, i) => (
+                  <div key={r.key} className={`flex flex-wrap items-center gap-3 rounded-xl border p-3 ${r.active ? "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900" : "border-dashed border-slate-300 bg-slate-50 opacity-70 dark:bg-slate-800/40"}`}>
+                    <span className="w-6 text-center text-xs font-bold text-slate-400">{i + 1}</span>
+                    <div className="flex flex-col">
+                      <button type="button" className="disabled:opacity-30" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Subir"><ArrowUp className="h-3.5 w-3.5" /></button>
+                      <button type="button" className="disabled:opacity-30" disabled={i === rows.length - 1} onClick={() => move(i, 1)} aria-label="Descer"><ArrowDown className="h-3.5 w-3.5" /></button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {pricingComponents
-                        .filter((component) => component.type === "commission")
-                        .map((component) => renderComponentCard(component))}
+                    <div className="min-w-[10rem] flex-1">
+                      {r.builtin ? <span className="text-sm font-medium">{r.label}</span> : <Input value={r.label} onChange={(e) => setRow(r.key, { label: e.target.value })} />}
+                      {!r.builtin && <Badge variant="outline" className="mt-1 text-[10px]">personalizado</Badge>}
                     </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-lg bg-blue-100">
-                          <DollarSign className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-semibold text-gray-900">
-                            Taxas
-                          </h3>
-                          <p className="text-xs text-gray-600">
-                            {getFilteredComponents("fee").length} itens
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenSheet(undefined, "fee")}
-                        className="text-blue-600 border-blue-300 hover:bg-blue-50 h-8 text-xs"
-                      >
-                        <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Taxa
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {pricingComponents
-                        .filter((component) => component.type === "fee")
-                        .map((component) => renderComponentCard(component))}
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-lg bg-purple-100">
-                          <Scale className="h-4 w-4 text-purple-600" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-semibold text-gray-900">
-                            Impostos
-                          </h3>
-                          <p className="text-xs text-gray-600">
-                            {getFilteredComponents("tax").length} itens
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenSheet(undefined, "tax")}
-                        className="text-purple-600 border-purple-300 hover:bg-purple-50 h-8 text-xs"
-                      >
-                        <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar Imposto
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {pricingComponents
-                        .filter((component) => component.type === "tax")
-                        .map((component) => renderComponentCard(component))}
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="specialties" className="space-y-3">
-                <div className="bg-blue-50 border-l-4 border-blue-500 rounded-md p-3 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-blue-600 shrink-0" />
-                    <p className="text-blue-800 text-xs">
-                      <strong>Visualização de Especialidades:</strong> Esta aba
-                      exibe as especialidades cadastradas em{" "}
-                      <a
-                        href="/admin/especialidades"
-                        className="underline font-semibold hover:text-blue-900"
-                      >
-                        Gestão de Especialidades
-                      </a>
-                      . Para adicionar, editar ou remover, acesse a página de
-                      gestão.
-                    </p>
-                  </div>
-                </div>
-
-                <Card className="p-4 bg-white shadow-md">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900">
-                        Custo por Hora das Especialidades
-                      </h3>
-                      <p className="text-xs text-gray-600 mt-0.5">
-                        Valores de referência utilizados no cálculo de preços
-                        dos produtos
-                      </p>
-                    </div>
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 bg-transparent border-green-300 text-green-600 hover:bg-green-50 h-8 text-xs shrink-0"
-                    >
-                      <a href="/admin/especialidades">
-                        <BadgeDollarSign className="h-3.5 w-3.5" />
-                        Gerenciar
-                      </a>
-                    </Button>
-                  </div>
-
-                  <div className="overflow-x-auto rounded-lg border border-gray-200">
-                    <table className="tabela-cartao w-full border-collapse text-sm">
-                      <thead>
-                        <tr className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                          <th className="text-left p-3 font-semibold text-xs">
-                            Especialidade
-                          </th>
-                          <th className="text-center p-3 font-semibold text-xs">
-                            Iniciante
-                            <br />
-                            <span className="text-xs font-normal opacity-90">
-                              R$/h
-                            </span>
-                          </th>
-                          <th className="text-center p-3 font-semibold text-xs">
-                            Júnior
-                            <br />
-                            <span className="text-xs font-normal opacity-90">
-                              R$/h
-                            </span>
-                          </th>
-                          <th className="text-center p-3 font-semibold text-xs">
-                            Pleno
-                            <br />
-                            <span className="text-xs font-normal opacity-90">
-                              R$/h
-                            </span>
-                          </th>
-                          <th className="text-center p-3 font-semibold text-xs">
-                            Sênior
-                            <br />
-                            <span className="text-xs font-normal opacity-90">
-                              R$/h
-                            </span>
-                          </th>
-                          <th className="text-center p-3 font-semibold text-xs">
-                            Nômades
-                            <br />
-                            <span className="text-xs font-normal opacity-90">
-                              Ativos
-                            </span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {specialties.map((specialty, index) => (
-                          <tr
-                            key={specialty.id}
-                            className={`border-b hover:bg-blue-50 transition-colors ${
-                              index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                            }`}
-                          >
-                            <td
-                              data-rotulo="Especialidade"
-                              className="p-3 font-medium text-gray-900 flex items-center gap-2"
-                            >
-                              <Award className="h-3.5 w-3.5 text-blue-600 shrink-0" />
-                              <span className="text-xs">{specialty.name}</span>
-                            </td>
-                            <td
-                              data-rotulo="Iniciante"
-                              className="p-3 text-center text-gray-700 font-semibold text-xs"
-                            >
-                              R$ {specialty.rates.iniciante.toFixed(2)}
-                            </td>
-                            <td
-                              data-rotulo="Júnior"
-                              className="p-3 text-center text-gray-700 font-semibold text-xs"
-                            >
-                              R$ {specialty.rates.junior.toFixed(2)}
-                            </td>
-                            <td
-                              data-rotulo="Pleno"
-                              className="p-3 text-center text-gray-700 font-semibold text-xs"
-                            >
-                              R$ {specialty.rates.pleno.toFixed(2)}
-                            </td>
-                            <td
-                              data-rotulo="Sênior"
-                              className="p-3 text-center text-gray-700 font-semibold text-xs"
-                            >
-                              R$ {specialty.rates.senior.toFixed(2)}
-                            </td>
-                            <td
-                              data-rotulo="Nômades"
-                              className="p-3 text-center"
-                            >
-                              <span className="bg-green-50 text-green-700 border-green-200 rounded-lg px-2 py-0.5 font-semibold text-xs">
-                                {specialty.activeNomades}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg shadow-inner">
-                    <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2 text-sm">
-                      <Calculator className="h-4 w-4" />
-                      Como funciona o cálculo de preços
-                    </h4>
-                    <ul className="text-xs text-blue-800 space-y-1.5">
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-600 font-bold mt-0.5 shrink-0">
-                          1.
-                        </span>
-                        <span>
-                          <strong>Custo Base:</strong> Valor hora da
-                          especialidade × Horas estimadas da etapa
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-600 font-bold mt-0.5 shrink-0">
-                          2.
-                        </span>
-                        <span>
-                          <strong>Comissões:</strong> Aplicadas automaticamente
-                          conforme nível da especialidade
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-600 font-bold mt-0.5 shrink-0">
-                          3.
-                        </span>
-                        <span>
-                          <strong>Taxas e Impostos:</strong> Adicionados ao
-                          subtotal para compor o preço final
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-blue-600 font-bold mt-0.5 shrink-0">
-                          4.
-                        </span>
-                        <span>
-                          <strong>Atualização Automática:</strong> Alterações
-                          aqui recalculam os preços de todos os produtos
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
-                </Card>
-              </TabsContent>
-            </Tabs>
-
-            {/* Pricing Component Dialog - Popup 1 único para adicionar/editar */}
-            <StandardModalDialog
-              open={isOpen}
-              onClose={() => setIsOpen(false)}
-              title={
-                <>
-                  {editingItem ? "Editar" : "Adicionar"}{" "}
-                  {selectedType === "commission"
-                    ? "Comissão"
-                    : selectedType === "fee"
-                      ? "Taxa"
-                      : "Imposto"}
-                </>
-              }
-              subtitle="Preencha as informações do componente de precificação"
-              footer={
-                <div className="flex justify-end gap-2.5">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsOpen(false)}
-                    className="px-5 h-9 text-sm"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    className="px-5 h-9 text-sm btn-brand shadow-lg"
-                  >
-                    <Plus className="w-3.5 h-3.5 mr-1.5" />
-                    {editingItem ? "Atualizar" : "Adicionar"}
-                  </Button>
-                </div>
-              }
-            >
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="max-w-4xl mx-auto space-y-4">
-                  {/* Card de Informações Básicas */}
-                  <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                        <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      Informações Básicas
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2 md:col-span-1">
-                        <Label htmlFor="name" className="text-xs font-medium">
-                          Nome *
-                        </Label>
-                        <Input
-                          id="name"
-                          value={formData.name}
-                          onChange={(e) =>
-                            setFormData({ ...formData, name: e.target.value })
-                          }
-                          placeholder="Ex: Comissão padrão"
-                          className="mt-1 h-9 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-2 md:col-span-1">
-                        <Label htmlFor="value" className="text-xs font-medium">
-                          Valor *
-                        </Label>
-                        <div className="relative mt-1">
-                          {/* Display % or R$ based on valueType */}
-                          {formData.valueType === "percentage" ? (
-                            <Percent className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                          ) : (
-                            <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                          )}
-                          <Input
-                            id="value"
-                            type="number"
-                            value={formData.value}
-                            onChange={(e) =>
-                              setFormData({
-                                ...formData,
-                                value: Number.parseFloat(e.target.value),
-                              })
-                            }
-                            placeholder="15"
-                            className="pl-9 h-9 text-sm"
-                          />
-                        </div>
-                      </div>
-                      <div className="col-span-2">
-                        <Label
-                          htmlFor="description"
-                          className="text-xs font-medium"
-                        >
-                          Descrição
-                        </Label>
-                        <Input
-                          id="description"
-                          value={formData.description}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              description: e.target.value,
-                            })
-                          }
-                          placeholder="Descreva o propósito desta taxa..."
-                          className="mt-1 h-9 text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card de Tipo de Empresa (apenas para comissões) */}
-                  {selectedType === "commission" && (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center">
-                          <Building2 className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-                        </div>
-                        Tipo de Empresa
-                      </h3>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                        Selecione o tipo de empresa para mostrar os níveis
-                        corretos
-                      </p>
-                      <div className="grid grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setCompanyType("partners")}
-                          className={`p-3 rounded-lg border-2 transition-all ${
-                            companyType === "partners"
-                              ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-                              : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
-                          }`}
-                        >
-                          <div className="text-center">
-                            <div className="text-sm font-semibold">
-                              Agências Partners
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                              Bronze, Prata, Ouro, Platina, Diamante
-                            </div>
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCompanyType("nomades")}
-                          className={`p-3 rounded-lg border-2 transition-all ${
-                            companyType === "nomades"
-                              ? "border-green-500 bg-green-50 dark:bg-green-900/20"
-                              : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
-                          }`}
-                        >
-                          <div className="text-center">
-                            <div className="text-sm font-semibold">Nômades</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                              Nível 1, 2, 3, 4, 5
-                            </div>
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card de Base de Aplicacao (apenas para comissoes) */}
-                  {selectedType === "commission" && (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900 flex items-center justify-center">
-                          <Calculator className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                        </div>
-                        Base de Aplicacao
-                      </h3>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                        Selecione sobre qual valor a comissao deve ser calculada
-                      </p>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setFormData({ ...formData, applyOn: "final_value" })
-                          }
-                          className={`p-3 rounded-lg border-2 transition-all text-left ${
-                            formData.applyOn === "final_value"
-                              ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
-                              : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
-                          }`}
-                        >
-                          <div className="text-sm font-semibold">
-                            Valor Final
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Preco com margem, taxas e impostos
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setFormData({
-                              ...formData,
-                              applyOn: "value_without_fees_taxes",
-                            })
-                          }
-                          className={`p-3 rounded-lg border-2 transition-all text-left ${
-                            formData.applyOn === "value_without_fees_taxes"
-                              ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
-                              : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
-                          }`}
-                        >
-                          <div className="text-sm font-semibold">
-                            Valor sem Taxas e Impostos
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Preco base com margem apenas
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setFormData({
-                              ...formData,
-                              applyOn: "value_without_taxes",
-                            })
-                          }
-                          className={`p-3 rounded-lg border-2 transition-all text-left ${
-                            formData.applyOn === "value_without_taxes"
-                              ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
-                              : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
-                          }`}
-                        >
-                          <div className="text-sm font-semibold">
-                            Valor sem Impostos
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Preco com margem e taxas, sem impostos
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setFormData({
-                              ...formData,
-                              applyOn: "specialist_value",
-                            })
-                          }
-                          className={`p-3 rounded-lg border-2 transition-all text-left ${
-                            formData.applyOn === "specialist_value"
-                              ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
-                              : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
-                          }`}
-                        >
-                          <div className="text-sm font-semibold">
-                            Valor do Especialista
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Valor que o especialista recebe
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card de Níveis — só faz sentido pra comissão (varia por
-                    nível de nômade/parceiro); taxa/imposto/margem incidem
-                    sobre o valor total do projeto, não por nível. */}
-                  {selectedType === "commission" && (
-                    <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
-                          <Target className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        Aplicável aos Níveis
-                      </h3>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                        Selecione os níveis onde este componente será aplicado
-                      </p>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5">
-                        {levelOptions.map((level) => (
-                          <label
-                            key={level}
-                            className={`flex items-center gap-2 p-2.5 rounded-lg border-2 cursor-pointer transition-all ${
-                              formData.appliesTo.includes(level)
-                                ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
-                                : selectedType === "commission" && !companyType
-                                  ? "border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed"
-                                  : "border-gray-200 dark:border-gray-700 hover:border-gray-300"
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={formData.appliesTo.includes(level)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setFormData({
-                                    ...formData,
-                                    appliesTo: [...formData.appliesTo, level],
-                                  });
-                                } else {
-                                  setFormData({
-                                    ...formData,
-                                    appliesTo: formData.appliesTo.filter(
-                                      (l) => l !== level,
-                                    ),
-                                  });
-                                }
-                              }}
-                              disabled={
-                                selectedType === "commission" && !companyType
-                              }
-                              className="w-3.5 h-3.5 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                            />
-                            <span className="text-xs font-medium capitalize">
-                              {level}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                      {selectedType === "commission" && !companyType && (
-                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-2.5 flex items-center gap-1.5">
-                          <AlertCircle className="w-3.5 h-3.5" />
-                          Selecione o tipo de empresa primeiro
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Card de Status */}
-                  <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-md">
-                    <label className="flex items-center justify-between cursor-pointer group">
-                      <div>
-                        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-0.5">
-                          Status Ativo
-                        </h3>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">
-                          Ativar este componente imediatamente após criação
-                        </p>
-                      </div>
-                      <div className="relative">
-                        <input
-                          type="checkbox"
-                          checked={formData.isActive}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              isActive: e.target.checked,
-                            })
-                          }
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                      </div>
+                    <label className="flex items-center gap-1 text-xs">
+                      <Input aria-label={`Percentual: ${r.label}`} className="w-20" type="number" value={r.percent} onChange={(e) => setRow(r.key, { percent: e.target.value })} /> %
                     </label>
+                    <label className="flex items-center gap-1 text-xs">
+                      sobre
+                      <select className="rounded border border-slate-300 bg-transparent px-1 py-1 text-xs" value={r.base} onChange={(e) => setRow(r.key, { base: e.target.value as Row["base"] })}>
+                        {Object.entries(BASE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs">
+                      <Switch checked={r.active} onCheckedChange={(v) => setRow(r.key, { active: v })} aria-label={`Usar ${r.label} no preço`} />
+                      {r.active ? "Entra no preço" : "Desligado"}
+                    </label>
+                    {r.active && r.percent.trim() === "" && <span className="text-[11px] text-amber-600">aguardando definição</span>}
+                    {!r.builtin && <button type="button" className="text-red-500 hover:text-red-700" onClick={() => setRemoveRow(r)} aria-label="Excluir"><Trash2 className="h-4 w-4" /></button>}
                   </div>
-                </div>
+                ))}
               </div>
-            </StandardModalDialog>
 
-            {/* AlertDialog para confirmação de exclusão */}
-            <AlertDialog
-              open={deleteConfirm.isOpen}
-              onOpenChange={(open) =>
-                !open && setDeleteConfirm({ isOpen: false, id: "", name: "" })
-              }
-            >
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Tem certeza que deseja excluir "{deleteConfirm.name}"? Esta
-                    ação não pode ser desfeita.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() =>
-                      handleDelete(deleteConfirm.id, deleteConfirm.name)
-                    }
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    Excluir
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <span className="text-sm font-medium">Revisão humana (% do custo humano)</span>
+                <Input aria-label="Percentual de revisão humana" className="w-20" type="number" value={review} onChange={(e) => setReview(e.target.value)} /> %
+                {review.trim() === "" && <span className="text-[11px] text-amber-600">aguardando definição</span>}
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+                <label className="text-xs">Novo imposto/taxa<Input className="mt-1 w-56" value={newComp.label} onChange={(e) => setNewComp({ ...newComp, label: e.target.value })} placeholder="ex.: ISS, taxa de cartão" /></label>
+                <label className="text-xs">%<Input className="mt-1 w-20" type="number" value={newComp.percent} onChange={(e) => setNewComp({ ...newComp, percent: e.target.value })} /></label>
+                <Button size="sm" variant="outline" onClick={addComponent}><Plus className="h-4 w-4" /> Adicionar</Button>
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <Button onClick={() => setConfirmSave(true)}>Salvar configuração de preço</Button>
+              </div>
+            </section>
+
+            {settings && <InactivationDemo settings={settings} run={run} />}
           </div>
         </div>
       </div>
+
+      <ConfirmationDialog
+        open={confirmSave}
+        onClose={() => setConfirmSave(false)}
+        title="Salvar configuração de preço?"
+        message="Vale para TODOS os produtos: valores, ordem e componentes ligados/desligados. Cotações já emitidas continuam protegidas pela regra comercial."
+        confirmText="Salvar"
+        destructive={false}
+        onConfirm={saveAll}
+      />
+      <ConfirmationDialog
+        open={!!removeRow}
+        onClose={() => setRemoveRow(null)}
+        title="Excluir componente?"
+        message={`"${removeRow?.label}" deixa de existir e sai do cálculo de todos os produtos. Para só parar de usar por enquanto, prefira desligar.`}
+        confirmText="Excluir"
+        destructive
+        onConfirm={() => run(() => apiClient.deleteCatalog2PricingComponent(removeRow!.id!), "Componente excluído.")}
+      />
     </div>
   );
-};
+}
+
+function SpecialtyLine({ s, onSave }: { s: any; onSave: (rate: number | null) => void }) {
+  const [v, setV] = useState(s.max_hourly_rate == null ? "" : String(s.max_hourly_rate));
+  useEffect(() => setV(s.max_hourly_rate == null ? "" : String(s.max_hourly_rate)), [s.id, s.max_hourly_rate]);
+  const changed = v !== (s.max_hourly_rate == null ? "" : String(s.max_hourly_rate));
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <span className="min-w-[10rem] flex-1 text-sm font-medium">{s.name}</span>
+      <label className="flex items-center gap-1 text-xs">R$
+        <Input aria-label={`Valor/hora: ${s.name}`} className="w-28" type="number" value={v} onChange={(e) => setV(e.target.value)} /> /hora
+      </label>
+      <Button size="sm" variant="outline" disabled={!changed} onClick={() => onSave(v.trim() === "" ? null : Number(v))}>Salvar</Button>
+      {s.max_hourly_rate == null && <span className="text-[11px] text-amber-600">aguardando definição</span>}
+    </div>
+  );
+}
+
+function InactivationDemo({ settings, run }: { settings: any; run: (fn: () => Promise<any>, ok: string) => Promise<void> }) {
+  const [pct, setPct] = useState(settings.demo_inactivation_compensation_percent == null ? "" : String(settings.demo_inactivation_compensation_percent));
+  const [note, setNote] = useState(settings.demo_inactivation_compensation_note ?? "");
+  const [base, setBase] = useState("");
+  const [result, setResult] = useState<any>(null);
+  return (
+    <section className={cardCls}>
+      <h2 className="text-base font-semibold">Desconto por inativação — demonstrativo</h2>
+      <p className="mb-3 text-xs text-slate-500">Percentual fictício só para simulação. Nunca gera crédito, estorno ou abatimento real.</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-xs">Percentual (%)<Input className="mt-1 w-24" type="number" value={pct} onChange={(e) => setPct(e.target.value)} /></label>
+        <label className="text-xs">Observação<Input className="mt-1 w-72" value={note} onChange={(e) => setNote(e.target.value)} /></label>
+        <Button size="sm" variant="outline" onClick={() => run(() => apiClient.updateCatalog2PricingSettings({ demo_inactivation_compensation_percent: pct === "" ? null : Number(pct), demo_inactivation_compensation_note: note || null }), "Demonstrativo salvo.")}>Salvar</Button>
+        <label className="text-xs">Base (R$)<Input className="mt-1 w-28" type="number" value={base} onChange={(e) => setBase(e.target.value)} /></label>
+        <Button size="sm" variant="ghost" disabled={base === ""} onClick={() => apiClient.simulateCatalog2InactivationCompensation(Number(base)).then(setResult).catch((e: any) => setResult({ error: e?.message }))}>Simular</Button>
+      </div>
+      {result && <pre className="mt-2 overflow-auto rounded bg-slate-50 p-2 text-xs dark:bg-slate-800">{JSON.stringify(result, null, 2)}</pre>}
+    </section>
+  );
+}
 
 export default PrecificacaoPage;

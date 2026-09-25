@@ -140,7 +140,7 @@ async function loadVersion(versionId: string) {
       variations: { include: { options: { include: { effects: true } } } },
       addons: { include: { effects: true } },
       conditions: true,
-      tasks: { include: { steps: true, ai: true, specialty: true } },
+      tasks: { include: { steps: { include: { specialty: true } }, ai: true, specialty: true } },
     },
   });
 }
@@ -290,30 +290,37 @@ export async function computePricing(versionId: string, selection: PricingSelect
   // independente de a especialidade já ter valor/hora configurado.
   let anyProvisionalEffort = false;
   const humanBreakdown: PricingResult["human_cost_breakdown"] = [];
+  const rateOf = (spec: { id: string; max_hourly_rate: number | null } | null | undefined): { rate: number | null; provisional: boolean } => {
+    if (!spec) return { rate: null, provisional: false };
+    if (!opts.simulateProvisional) return { rate: spec.max_hourly_rate ?? null, provisional: false };
+    const r = simulationRateBySpecialty.get(spec.id) ?? null;
+    return { rate: r, provisional: r != null };
+  };
+  const priceLine = (label: string, key: string, minutes: number, spec: { id: string; name: string; max_hourly_rate: number | null } | null | undefined, effortProvisional: boolean) => {
+    const { rate, provisional } = rateOf(spec);
+    if (minutes === 0) warnings.push({ code: "task_without_time", message: `${label} não tem duração estimada.` });
+    if (rate == null && spec) {
+      humanPending = true;
+      warnings.push({ code: "specialty_without_rate", message: `A especialidade "${spec.name}" não tem valor/hora definido.` });
+    }
+    const cost = rate != null ? (minutes / 60) * rate : null;
+    if (cost != null) humanCost += cost;
+    humanBreakdown.push({ task_key: key, specialty: spec?.name ?? null, minutes, rate, cost: cost != null ? round2(cost) : null, effort_is_provisional: effortProvisional, rate_is_provisional: provisional });
+  };
   for (const t of activeTasks) {
     if (t.execution_mode === "ia") continue;
-    const stepMinutes = t.steps
-      .filter((s) => activeStepSet.has(`${t.key}:${s.key}`))
-      .reduce((a, s) => a + (s.estimated_minutes ?? 0), 0);
-    const minutes = stepMinutes > 0 ? stepMinutes : t.estimated_minutes ?? 0;
-    const simulatedRate = opts.simulateProvisional && t.specialty_id
-      ? simulationRateBySpecialty.get(t.specialty_id) ?? null
-      : null;
-    const rate = opts.simulateProvisional ? simulatedRate : t.specialty?.max_hourly_rate ?? null;
-    const rateIsProvisional = !!opts.simulateProvisional && simulatedRate != null;
-    if (minutes === 0) warnings.push({ code: "task_without_time", message: `A tarefa "${t.name}" não tem duração estimada.` });
-    if (rate == null && t.specialty) {
-      humanPending = true;
-      warnings.push({ code: "specialty_without_rate", message: `A especialidade "${t.specialty.name}" não tem valor/hora definido.` });
-    }
     if (t.effort_is_provisional) {
       anyProvisionalEffort = true;
       humanPending = true;
       warnings.push({ code: "effort_provisional", message: `A tarefa "${t.name}" tem especialidade/tempo PROVISÓRIOS (dado de teste) — não pode fechar o preço comercial.` });
     }
-    const cost = rate != null ? (minutes / 60) * rate : null;
-    if (cost != null) humanCost += cost;
-    humanBreakdown.push({ task_key: t.key, specialty: t.specialty?.name ?? null, minutes, rate, cost: cost != null ? round2(cost) : null, effort_is_provisional: !!t.effort_is_provisional, rate_is_provisional: rateIsProvisional });
+    // Etapas com horas: cada etapa usa a SUA especialidade (ou a da tarefa).
+    const pricedSteps = t.steps.filter((s) => activeStepSet.has(`${t.key}:${s.key}`) && (s.estimated_minutes ?? 0) > 0);
+    if (pricedSteps.length > 0) {
+      for (const s of pricedSteps) priceLine(`A etapa "${s.name}" da tarefa "${t.name}"`, `${t.key}:${s.key}`, s.estimated_minutes ?? 0, s.specialty ?? t.specialty, !!t.effort_is_provisional);
+    } else {
+      priceLine(`A tarefa "${t.name}"`, t.key, t.estimated_minutes ?? 0, t.specialty, !!t.effort_is_provisional);
+    }
   }
   humanCost *= quantity;
 
@@ -382,9 +389,15 @@ export async function computePricing(versionId: string, selection: PricingSelect
   const subtotalWithPercent = subtotalCost * (1 + percentImpacts / 100);
 
   // ── Taxas e margens — ORDEM e BASE configuráveis (reparo 2.2) ───────
+  const disabledComponents = new Set(parseJsonArray(settings?.disabled_components_json));
+  const customComponents = await prisma.catalog2PricingComponent.findMany({ where: { is_active: true }, orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] });
+  const customKeys = customComponents.map((c) => `custom:${c.key}`).filter((k) => !disabledComponents.has(k));
   const orderCfg = parseJsonArray(activeSettings?.component_order_json);
   const orderDefined = orderCfg.length > 0;
-  const appliedOrder = orderDefined ? orderCfg : [...DEFAULT_COMPONENT_ORDER];
+  // Componentes novos (personalizados) que ainda não estão na ordem salva entram no fim.
+  const appliedOrder = orderDefined
+    ? [...orderCfg, ...customKeys.filter((k) => !orderCfg.includes(k))]
+    : [...DEFAULT_COMPONENT_ORDER, ...customKeys];
   // component_base_json só existe no singleton REAL — em modo simulação
   // sempre usa a base padrão ("acumulado"), nunca lê nem herda do real.
   const baseCfg = opts.simulateProvisional ? {} : parseJsonObject(settings?.component_base_json); // { comp: "running"|"subtotal"|"direct_cost" }
@@ -394,6 +407,8 @@ export async function computePricing(versionId: string, selection: PricingSelect
     operational: { label: "Taxa operacional", pct: activeSettings?.operational_fee_percent ?? null },
     margin: { label: "Margem de lucro", pct: activeSettings?.profit_margin_percent ?? null },
   };
+  for (const c of customComponents) COMP[`custom:${c.key}`] = { label: c.label, pct: c.percent ?? null };
+  for (const k of disabledComponents) delete COMP[k];
   let running = subtotalWithPercent;
   const taxesAndMargins: PricingLine[] = [];
   let anyRatePending = false;
