@@ -216,6 +216,9 @@ function catalogProductShortCode(p: Merged) {
 // (determinístico, nunca inventado na hora) só pra ordenar administrativamente
 // os produtos que ainda não têm preço pronto — nunca exibido como se fosse
 // comercial (o card/linha sempre mostra o selo "provisório" ao lado).
+function idForSort(p: Merged): number {
+  return p.sequence_number ?? 0;
+}
 function categoryForSort(p: Merged): string {
   return p.list?.category?.name ?? "Sem categoria";
 }
@@ -367,6 +370,8 @@ const SORTS = {
     label: "Maior preço",
     fn: (a: Merged, b: Merged) => priceForSort(b) - priceForSort(a),
   },
+  id: { label: "ID crescente", fn: (a: Merged, b: Merged) => idForSort(a) - idForSort(b) },
+  id_desc: { label: "ID decrescente", fn: (a: Merged, b: Merged) => idForSort(b) - idForSort(a) },
   category: {
     label: "Categoria A–Z",
     fn: (a: Merged, b: Merged) => categoryForSort(a).localeCompare(categoryForSort(b), "pt-BR"),
@@ -400,6 +405,7 @@ const SORTS = {
 // Ordenação por coluna (cabeçalho clicável da lista): cada coluna ordena pelo
 // MESMO valor que a linha mostra (real → simulação → provisório).
 const COLUMN_SORT: Partial<Record<ListColumnKey, { asc: keyof typeof SORTS; desc: keyof typeof SORTS }>> = {
+  id: { asc: "id", desc: "id_desc" },
   product: { asc: "name", desc: "name_desc" },
   category: { asc: "category", desc: "category_desc" },
   tasks: { asc: "tasks", desc: "tasks_desc" },
@@ -1368,6 +1374,7 @@ function ProductListRow({
     p.deadline_days ?? p.pricing_simulation?.deadline_days ?? prazoProv.value;
   return (
     <Catalog2ProductListRow
+      productId={p.sequence_number}
       name={p.name}
       description={p.list?.summary}
       categoryName={categoryName}

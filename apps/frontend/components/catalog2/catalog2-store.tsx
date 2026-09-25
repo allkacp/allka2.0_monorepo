@@ -268,6 +268,7 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
               <Catalog2ProductListRow
                 key={p.id}
                 stripe={index % 2 === 1}
+                productId={p.sequence_number}
                 name={p.name}
                 description={p.short_description}
                 categoryName={p.category?.name ?? p.pillar?.name ?? "Sem categoria"}

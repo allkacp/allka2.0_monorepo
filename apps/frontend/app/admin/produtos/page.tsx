@@ -121,7 +121,7 @@ const PENDENCY_LABEL: Record<string, string> = {
 };
 
 const PRODUCT_COLUMNS = [
-  { key: "number", label: "ID", width: 52, min: 36, align: "left" },
+  { key: "number", label: "ID", width: 64, min: 40, align: "center" },
   { key: "image", label: "Img", width: 58, min: 42, align: "left" },
   { key: "product", label: "Produto", width: 310, min: 90, align: "left" },
   { key: "category", label: "Categoria", width: 145, min: 70, align: "left" },
@@ -1155,7 +1155,7 @@ export default function AdminProdutosPage() {
                         {PRODUCT_COLUMNS.map((column) => (
                           <th
                             key={column.key}
-                            className="relative px-2 py-3.5 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400"
+                            className="relative px-2 py-3.5 text-[11px] font-bold uppercase tracking-[0.04em] text-[#365A91] dark:text-slate-400"
                             style={{
                               textAlign: column.align,
                               visibility: visibleProductColumns.has(column.key)
@@ -1239,9 +1239,9 @@ export default function AdminProdutosPage() {
                             key={p.id}
                             className="group h-12 odd:bg-slate-200/80 even:bg-slate-300/60 transition-colors hover:bg-violet-200/60 dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
                           >
-                            <td className="px-2 py-1">
-                              <span className="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">
-                                {p.sequence_number ?? "—"}
+                            <td className="px-2 py-1 text-center">
+                              <span className="text-sm font-bold text-[#31578F] dark:text-slate-300">
+                                {p.sequence_number != null ? String(p.sequence_number).padStart(2, "0") : "—"}
                               </span>
                             </td>
                             <td className="px-2 py-1">

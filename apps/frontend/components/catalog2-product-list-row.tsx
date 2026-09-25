@@ -19,16 +19,17 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowRight, ChevronDown, ChevronUp, ChevronsUpDown, Clock3 } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronUp, ChevronsUpDown, Clock3, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { catalog2CategoryTone, catalog2EditorialImage } from "@/lib/catalog2-editorial";
 
-export type ListColumnKey = "product" | "category" | "tasks" | "pendencies" | "deadline" | "price" | "status" | "actions";
+export type ListColumnKey = "id" | "product" | "category" | "tasks" | "pendencies" | "deadline" | "price" | "status" | "actions";
 export type ListSortDir = "asc" | "desc";
 
 const COLUMNS: { key: ListColumnKey; label: string; adminOnly?: boolean; min: number }[] = [
+  { key: "id", label: "ID", min: 48 },
   { key: "product", label: "Produto", min: 160 },
   { key: "category", label: "Categoria", min: 80 },
   { key: "tasks", label: "Tarefas", adminOnly: true, min: 70 },
@@ -41,9 +42,9 @@ const COLUMNS: { key: ListColumnKey; label: string; adminOnly?: boolean; min: nu
 
 // Larguras flexíveis de antes — valem até o usuário arrastar a primeira borda.
 const DEFAULT_TEMPLATE_ADMIN =
-  "minmax(300px,2.2fr) minmax(125px,.75fr) minmax(100px,.55fr) minmax(115px,.65fr) minmax(100px,.55fr) minmax(130px,.75fr) minmax(120px,.7fr) minmax(270px,1.35fr)";
+  "72px minmax(300px,2.2fr) minmax(125px,.75fr) minmax(100px,.55fr) minmax(115px,.65fr) minmax(100px,.55fr) minmax(130px,.75fr) minmax(120px,.7fr) minmax(270px,1.35fr)";
 const DEFAULT_TEMPLATE_CLIENT =
-  "minmax(300px,2.2fr) minmax(125px,.75fr) minmax(100px,.55fr) minmax(130px,.75fr) minmax(120px,.7fr) minmax(270px,1.35fr)";
+  "72px minmax(300px,2.2fr) minmax(125px,.75fr) minmax(100px,.55fr) minmax(130px,.75fr) minmax(120px,.7fr) minmax(270px,1.35fr)";
 
 const GAP_PX = 12; // gap-3
 const PADDING_PX = 32; // px-4 dos dois lados
@@ -160,13 +161,13 @@ export function Catalog2ProductListHeader({
     <div
       ref={columns?.headerRef}
       style={{ gridTemplateColumns: template }}
-      className="grid gap-3 border-b border-slate-200/60 bg-slate-50 px-4 py-3.5 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:border-slate-700/60 dark:bg-slate-900/60 dark:text-slate-400"
+      className="grid gap-3 border-b border-slate-200/60 bg-slate-50 px-4 py-3.5 text-[11px] font-bold uppercase tracking-[0.04em] text-[#365A91] dark:border-slate-700/60 dark:bg-slate-900/60 dark:text-slate-400"
     >
       {cols.map((c) => {
         const sortable = !!onSort && sortableKeys.includes(c.key);
         const active = activeSort?.key === c.key;
         return (
-          <div key={c.key} className="relative flex min-w-0 items-center">
+          <div key={c.key} className="relative flex min-w-0 items-center justify-center gap-1">
             {sortable ? (
               <button
                 type="button"
@@ -184,6 +185,7 @@ export function Catalog2ProductListHeader({
             ) : (
               <span className="truncate">{c.label}</span>
             )}
+            <Info className="h-3 w-3 shrink-0 opacity-50" aria-hidden />
             {columns && (
               <div
                 role="separator"
@@ -204,6 +206,8 @@ export function Catalog2ProductListHeader({
 }
 
 export interface Catalog2ProductListRowProps {
+  /** ID do produto (mesmo número do link /catalogo-produtos/NN). */
+  productId?: number | string | null;
   name: string;
   description?: string | null;
   categoryName: string;
@@ -223,6 +227,7 @@ export interface Catalog2ProductListRowProps {
 }
 
 export function Catalog2ProductListRow({
+  productId,
   name,
   description,
   categoryName,
@@ -264,6 +269,9 @@ export function Catalog2ProductListRow({
       style={{ gridTemplateColumns: template }}
       className={`group grid cursor-pointer ${zebra} items-center gap-3 border-b border-slate-100 px-4 py-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 dark:border-slate-800`}
     >
+      <span className="text-center text-sm font-bold text-[#31578F] dark:text-slate-300">
+        {productId != null && productId !== "" ? String(productId).padStart(2, "0") : "—"}
+      </span>
       <div className="flex min-w-0 items-center gap-3">
         <Catalog2Thumbnail productId={name} imagePath={catalog2EditorialImage(categoryName, name)} size="sm" showBadge={false} />
         <div className="min-w-0">
