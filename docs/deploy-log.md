@@ -18,6 +18,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - **Frontend+Backend** — (1) link do editor agora é `/admin/produtos/<número do produto>` (ex.: /admin/produtos/1; novo endpoint `GET /catalog2/products/by-number/:n`); links antigos `?produto=<id>` continuam abrindo. (2) Coluna **Pendências** da lista passa a contar bloqueios+pendentes da Prontidão (mesma conta do editor), com tooltip listando cada um; sumiu a contagem antiga baseada na importação. (3) Prontidão: item Portfólio removido; clique em item opcional (ex.: Etapas) leva ao lugar e destaca a linha de adicionar etapa.
 - **Frontend** — selo **ID NN** no canto inferior esquerdo da imagem dos cards (2 a 5 colunas) no Cadastro de Produtos, Catálogo de Produtos e loja company/agency.
 - **Frontend** — Cadastro de Produtos: fechar (X) do editor volta para a lista e limpa o número da URL; ícone de fixar na Bandeja de Telas visível no cabeçalho do editor; botão recarregar com giro e aviso; a lista lembra a **ordenação** e os **itens por página** (localStorage, sobrevive a Ctrl+F5).
+- **Frontend** — Catálogo de Produtos: lembra a ordenação escolhida entre acessos (não tem paginação).
 - Migration NOVA nesta leva (aditiva, sem apagar dados). Nenhum dado de produto enviado.
 
 ## Já no ar (deploy de 2026-09-25)

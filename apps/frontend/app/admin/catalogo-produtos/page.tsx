@@ -521,7 +521,18 @@ export default function AdminCatalogoProdutosPage() {
   );
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("Todos");
-  const [sort, setSort] = useState<keyof typeof SORTS>("name");
+  // Lembra a ordenação entre acessos (Ctrl+F5, novo login) neste navegador.
+  const [sort, setSort] = useState<keyof typeof SORTS>(() => {
+    try {
+      const saved = localStorage.getItem("allka:admin-catalogo-produtos-sort");
+      return saved && saved in SORTS ? (saved as keyof typeof SORTS) : "name";
+    } catch {
+      return "name";
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("allka:admin-catalogo-produtos-sort", String(sort)); } catch { /* sem armazenamento */ }
+  }, [sort]);
   const listColumns = useCatalog2ListColumns(true, "allka:admin-catalog-list-columns-v1");
   const activeColumnSort = (() => {
     for (const key of SORTABLE_COLUMN_KEYS) {
