@@ -138,11 +138,11 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
   if (!product) return <div className="p-10 text-sm text-red-600">Produto não encontrado.</div>;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="product-editor mx-auto w-full max-w-6xl space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm sm:px-5 dark:border-slate-700/60 dark:bg-slate-900">
         <div className="flex items-center gap-2">
           <Button size="sm" variant="ghost" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar</Button>
-          <h2 className="text-lg font-semibold">{product.internal_name}</h2>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{product.internal_name}</h2>
           <Badge className={catalog2StatusTone(product.status)}>{catalog2StatusLabel(product.status)}</Badge>
           {product.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
         </div>
@@ -158,36 +158,36 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
           <Button size="sm" variant="ghost" onClick={() => void load()}><RefreshCw className="h-4 w-4" /></Button>
         </div>
       </div>
-      {readOnly && <p className="rounded bg-amber-50 px-3 py-1.5 text-xs text-amber-700 dark:bg-amber-950/30">Versão publicada — somente leitura. Crie uma nova versão para editar.</p>}
+      {readOnly && <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">Versão publicada — somente leitura. Crie uma nova versão para editar.</p>}
       <ProductReadinessPanel productId={productId} versionKey={selectedVersionId} />
-      {msg && <p className="text-sm text-blue-600">{msg}</p>}
+      {msg && <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">{msg}</p>}
 
       {version && (
         <Tabs value={editorTab} onValueChange={setEditorTab}>
           {/* Etapas de trabalho (reunião 10/09). As 10 seções originais
               continuam todas aqui — reagrupadas, nada removido. */}
-          <TabsList className="flex-wrap" data-tour-id="catalog2-editor-tabs">
-            <TabsTrigger value="info">Informações do produto</TabsTrigger>
-            <TabsTrigger value="opcoes">Classificação e opções</TabsTrigger>
-            <TabsTrigger value="entrega">Entrega: tarefas, etapas e prazos</TabsTrigger>
-            <TabsTrigger value="precos">Custos e preço</TabsTrigger>
-            <TabsTrigger value="revisao">Revisão e publicação</TabsTrigger>
-            <TabsTrigger value="origem" className="ml-1 border-l border-neutral-300 pl-3 text-neutral-500 dark:border-neutral-700">
+          <TabsList className={MAIN_TABS_LIST} data-tour-id="catalog2-editor-tabs">
+            <TabsTrigger value="info" className={MAIN_TAB}>Informações do produto</TabsTrigger>
+            <TabsTrigger value="opcoes" className={MAIN_TAB}>Classificação e opções</TabsTrigger>
+            <TabsTrigger value="entrega" className={MAIN_TAB}>Entrega: tarefas, etapas e prazos</TabsTrigger>
+            <TabsTrigger value="precos" className={MAIN_TAB}>Custos e preço</TabsTrigger>
+            <TabsTrigger value="revisao" className={MAIN_TAB}>Revisão e publicação</TabsTrigger>
+            <TabsTrigger value="origem" className={`${MAIN_TAB} ml-auto !text-slate-500 data-[state=active]:!text-white`}>
               Origem e importação
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="info">
+          <TabsContent value="info" className={TAB_CARD}>
             <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} onStatus={(s) => act(() => apiClient.setCatalog2ProductStatus(productId, s), "Status salvo.", { rethrow: true })} />
           </TabsContent>
 
-          <TabsContent value="opcoes">
+          <TabsContent value="opcoes" className={TAB_CARD}>
             <StepIntro>Como o produto é classificado e as escolhas que o cliente faz na contratação.</StepIntro>
             <Tabs defaultValue="class">
-              <TabsList>
-                <TabsTrigger value="class">Classificação</TabsTrigger>
-                <TabsTrigger value="var">Variações</TabsTrigger>
-                <TabsTrigger value="add">Adicionais</TabsTrigger>
+              <TabsList className={SUB_TABS_LIST}>
+                <TabsTrigger value="class" className={SUB_TAB}>Classificação</TabsTrigger>
+                <TabsTrigger value="var" className={SUB_TAB}>Variações</TabsTrigger>
+                <TabsTrigger value="add" className={SUB_TAB}>Adicionais</TabsTrigger>
               </TabsList>
               <TabsContent value="class"><ClassTab product={product} refs={refs} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></TabsContent>
               <TabsContent value="var"><VariationsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
@@ -195,30 +195,30 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
             </Tabs>
           </TabsContent>
 
-          <TabsContent value="entrega">
+          <TabsContent value="entrega" className={TAB_CARD}>
             <StepIntro>Onde se cadastram tarefas, etapas, especialidades, prazos e as condições que ajustam a entrega.</StepIntro>
             <Tabs defaultValue="tarefas">
-              <TabsList>
-                <TabsTrigger value="tarefas">Tarefas e etapas</TabsTrigger>
-                <TabsTrigger value="cond">Prazos e condições</TabsTrigger>
+              <TabsList className={SUB_TABS_LIST}>
+                <TabsTrigger value="tarefas" className={SUB_TAB}>Tarefas e etapas</TabsTrigger>
+                <TabsTrigger value="cond" className={SUB_TAB}>Prazos e condições</TabsTrigger>
               </TabsList>
               <TabsContent value="tarefas"><TasksTab version={version} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} /></TabsContent>
               <TabsContent value="cond"><ConditionsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
             </Tabs>
           </TabsContent>
 
-          <TabsContent value="precos">
+          <TabsContent value="precos" className={TAB_CARD}>
             <StepIntro>Taxas, margens e valor/hora das especialidades. O preço e o prazo são sempre calculados no servidor.</StepIntro>
             <CostTab version={version} refs={refs} act={act} onReloadRefs={load} productId={productId} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} />
           </TabsContent>
 
-          <TabsContent value="revisao">
+          <TabsContent value="revisao" className={TAB_CARD}>
             <StepIntro>Confira como o produto aparece para o cliente e publique a versão quando estiver pronta.</StepIntro>
             <Tabs defaultValue="preview">
-              <TabsList>
-                <TabsTrigger value="preview">Pré-visualização</TabsTrigger>
-                <TabsTrigger value="hist">Publicação e versões</TabsTrigger>
-                <TabsTrigger value="historico">Histórico</TabsTrigger>
+              <TabsList className={SUB_TABS_LIST}>
+                <TabsTrigger value="preview" className={SUB_TAB}>Pré-visualização</TabsTrigger>
+                <TabsTrigger value="hist" className={SUB_TAB}>Publicação e versões</TabsTrigger>
+                <TabsTrigger value="historico" className={SUB_TAB}>Histórico</TabsTrigger>
               </TabsList>
               <TabsContent value="preview"><PreviewTab version={version} /></TabsContent>
               <TabsContent value="hist"><HistoryTab version={version} readOnly={readOnly} act={act} onResolveIssue={goToPublishIssue} /></TabsContent>
@@ -226,7 +226,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
             </Tabs>
           </TabsContent>
 
-          <TabsContent value="origem">
+          <TabsContent value="origem" className={TAB_CARD}>
             <StepIntro>Área secundária: de onde este produto veio na importação e as pendências de decisão. Não altera o produto.</StepIntro>
             <OriginReviewTab productId={productId} onChanged={load} />
           </TabsContent>
@@ -286,12 +286,12 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
   }
 
   return (
-    <div id="catalog2-general" className="mt-3 space-y-3 scroll-mt-6">
+    <div id="catalog2-general" className="space-y-5 scroll-mt-6">
       <div id="catalog2-field-title" className={highlightTarget === "catalog2-field-title" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Título comercial"><Input disabled={readOnly} value={f.title} onChange={(e) => updateInfo({ title: e.target.value })} /></Field></div>
       <Field label="Descrição curta"><Textarea rows={2} disabled={readOnly} value={f.summary} onChange={(e) => updateInfo({ summary: e.target.value })} /></Field>
       <div id="catalog2-field-full-description" className={highlightTarget === "catalog2-field-full-description" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Descrição completa"><Textarea rows={5} disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} /></Field></div>
       <Field label="Resumo da mudança (histórico)"><Input disabled={readOnly} value={f.change_summary} onChange={(e) => updateInfo({ change_summary: e.target.value })} /></Field>
-      <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+      <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4 dark:border-slate-700/60 dark:bg-slate-800/30">
         <Field label="Status do produto">
           <select aria-label="Status do produto" className="w-full rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={draftStatus} onChange={(e) => { setDraftStatus(e.target.value); setStatusError(null); }}>
             {CATALOG2_STATUSES.map((status) => <option key={status} value={status}>{CATALOG2_STATUS_LABEL[status]}</option>)}
@@ -1823,11 +1823,11 @@ function ProductReadinessPanel({ productId, versionKey }: { productId: string; v
         : `${blockers.length} bloqueador(es) · ${pendings.length} pendência(s)`;
 
   return (
-    <section className="rounded-lg border border-neutral-200 dark:border-neutral-800">
+    <section className="rounded-2xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
+        className="flex w-full items-center justify-between gap-2 px-5 py-3.5 text-left text-sm"
       >
         <span className="flex items-center gap-2 font-medium">
           Prontidão deste produto
@@ -1876,11 +1876,20 @@ function ProductReadinessPanel({ productId, versionKey }: { productId: string; v
 }
 
 // ── helpers ────────────────────────────────────────────────────────
+// Estilo do editor (pedido do usuário 2026-09-25: "sem margem, ruim de ler,
+// não segue o layout da plataforma"): abas em pílula com o degradê da marca,
+// cada aba dentro de um cartão arredondado com respiro, cabeçalho em cartão.
+const MAIN_TABS_LIST = "h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-slate-200/70 bg-white p-1.5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900";
+const MAIN_TAB = "flex-none rounded-xl px-3 py-2 text-[13px] font-semibold text-slate-600 dark:text-slate-300 data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#4a2cff] data-[state=active]:via-[#7b2cdb] data-[state=active]:to-[#d92293] data-[state=active]:text-white data-[state=active]:shadow-md";
+const SUB_TABS_LIST = "h-auto w-fit flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800";
+const SUB_TAB = "flex-none rounded-lg px-3.5 py-1.5 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-violet-700 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-violet-200";
+const TAB_CARD = "mt-4 rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm sm:p-6 dark:border-slate-700/60 dark:bg-slate-900";
+
 function StepIntro({ children }: { children: React.ReactNode }) {
-  return <p className="mt-3 text-xs text-muted-foreground">{children}</p>;
+  return <p className="mb-5 rounded-xl bg-violet-50/70 px-4 py-2.5 text-sm text-slate-600 dark:bg-violet-950/20 dark:text-slate-300">{children}</p>;
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block space-y-1"><span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{label}</span>{children}</label>;
+  return <label className="block space-y-1.5"><span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>{children}</label>;
 }
 function DeleteBtn({ label, onConfirm }: { label: string; onConfirm: () => void }) {
   const [open, setOpen] = useState(false);

@@ -1699,14 +1699,14 @@ export default function AdminProdutosPage() {
           }
         >
           {openProductId && (
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/80 px-4 py-5 sm:px-8 dark:bg-slate-950/40">
               {(() => {
                 const rp = readinessById[openProductId];
                 const hasProvisional =
                   rp && (!(rp.task_count > 0) || rp.price_amount == null);
                 return hasProvisional ? (
-                  <div className="mx-4 mt-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <div className="mx-auto mb-5 flex max-w-6xl items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>
                       Este produto tem campos provisórios (preço, prazo e/ou
                       tarefas de demonstração) — veja o resumo completo no

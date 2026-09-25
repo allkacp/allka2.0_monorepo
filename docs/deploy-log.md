@@ -9,6 +9,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - **Frontend+Backend** — coluna "#" do Cadastro de Produtos virou **"ID"** e mostra o ID real do produto (sequence_number, o mesmo do link /catalogo-produtos/NN; antes mostrava o índice de importação, vazio no produto de teste); a lista do backend passou a devolver `sequence_number` e a ordenar por ele. Cadastro mantém os cinzas mais escuros (claro/escuro).
 - **Frontend** — Catálogo, Cadastro e loja: nova coluna **ID** (primeira coluna, número em azul com 2 dígitos, ex.: 01, igual à lista de Usuários), ordenável; cabeçalhos em azul com ícone de informação como na lista de Usuários.
 - **Frontend** — alça de redimensionar coluna (Catálogo e Cadastro) idêntica à da lista de Usuários: cinza claro, mais larga, fica rosa ao passar o mouse.
+- **Frontend** — tela **Editor de produto** (Cadastro de Produtos) redesenhada: margens e respiro, largura limitada e centralizada, cabeçalho/prontidão/abas em cartões arredondados, abas em pílula com o degradê da marca, campos (input/select/textarea) com visual da plataforma e foco violeta, avisos em cartões. Arquivos: `app/admin/produtos/novo-catalogo/product-editor.tsx`, `app/admin/produtos/page.tsx`, `app/globals.css` (regras escopadas em `.product-editor`). Nenhuma regra de negócio alterada.
 - Nenhuma migration nem dado envolvido.
 
 ## Já no ar (deploy de 2026-09-25)

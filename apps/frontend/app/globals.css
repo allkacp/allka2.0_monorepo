@@ -2330,3 +2330,45 @@ a:focus-visible,
 .ac-size-sm { font-size: 0.8em; }
 .ac-size-base { font-size: 1em; }
 .ac-size-lg { font-size: 1.35em; }
+
+
+/* ── Editor de produto (Cadastro de Produtos) ───────────────────────────
+ * Campos nativos espalhados pelo editor (input/select/textarea crus) ganham
+ * o visual da plataforma num lugar só: cantos arredondados, respiro, foco
+ * violeta. Escopo: só dentro de .product-editor. :where() mantém a
+ * especificidade baixa — classes explícitas de tamanho/cor ainda vencem. */
+:where(.product-editor) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]), select, textarea) {
+  border-radius: 0.75rem;
+  border: 1px solid rgb(203 213 225);
+  background-color: #fff;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: rgb(15 23 42);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+:where(.product-editor) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]), select, textarea):focus {
+  outline: none;
+  border-color: rgb(139 92 246);
+  box-shadow: 0 0 0 3px rgb(139 92 246 / 0.18);
+}
+:where(.product-editor) :is(input, select, textarea):disabled {
+  background-color: rgb(241 245 249);
+  color: rgb(100 116 139);
+  cursor: not-allowed;
+}
+:where(.product-editor) input[type="checkbox"],
+:where(.product-editor) input[type="radio"] {
+  accent-color: rgb(124 58 237);
+  width: 1rem;
+  height: 1rem;
+}
+.dark :where(.product-editor) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]), select, textarea) {
+  background-color: rgb(15 23 42);
+  border-color: rgb(51 65 85);
+  color: rgb(226 232 240);
+}
+.dark :where(.product-editor) :is(input, select, textarea):disabled {
+  background-color: rgb(30 41 59);
+  color: rgb(148 163 184);
+}
