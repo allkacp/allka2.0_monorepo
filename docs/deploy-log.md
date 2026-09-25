@@ -8,6 +8,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - **Frontend** `components/catalog2-product-list-row.tsx` (lista compartilhada) + `app/admin/catalogo-produtos/page.tsx` + `components/catalog2/catalog2-store.tsx` — Catálogo de Produtos: cabeçalhos clicáveis para ordenar TODAS as colunas (produto, categoria, tarefas, pendências, prazo, preço, status), arrastar a borda para mudar a largura (fica salvo; botão "Restaurar larguras"), visual IGUAL ao da lista de Usuários (Gestão de Contas): linhas alternando branco / #f5f8fc, hover azulado, mesmo cabeçalho e cartão. A loja de company/agency usa o mesmo componente e ganha o mesmo visual. Só o Cadastro de Produtos mantém cinzas mais escuros.
 - **Frontend+Backend** — coluna "#" do Cadastro de Produtos virou **"ID"** e mostra o ID real do produto (sequence_number, o mesmo do link /catalogo-produtos/NN; antes mostrava o índice de importação, vazio no produto de teste); a lista do backend passou a devolver `sequence_number` e a ordenar por ele. Cadastro mantém os cinzas mais escuros (claro/escuro).
 - **Frontend** — Catálogo, Cadastro e loja: nova coluna **ID** (primeira coluna, número em azul com 2 dígitos, ex.: 01, igual à lista de Usuários), ordenável; cabeçalhos em azul com ícone de informação como na lista de Usuários.
+- **Frontend** — alça de redimensionar coluna (Catálogo e Cadastro) idêntica à da lista de Usuários: cinza claro, mais larga, fica rosa ao passar o mouse.
 - Nenhuma migration nem dado envolvido.
 
 ## Já no ar (deploy de 2026-09-25)

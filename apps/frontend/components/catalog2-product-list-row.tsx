@@ -195,7 +195,7 @@ export function Catalog2ProductListHeader({
                 onPointerMove={columns.moveResize}
                 onPointerUp={columns.endResize}
                 onPointerCancel={columns.endResize}
-                className="absolute -right-2 top-1/2 z-20 h-5 w-2 -translate-y-1/2 cursor-col-resize touch-none rounded-full after:absolute after:left-1/2 after:top-1/2 after:h-4 after:w-[3px] after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-slate-300 hover:after:bg-violet-400 dark:after:bg-slate-600"
+                className="absolute -right-0.5 top-1/2 z-20 h-7 w-1.5 -translate-y-1/2 cursor-col-resize touch-none rounded-full bg-slate-200/90 opacity-70 transition-all hover:w-2 hover:bg-fuchsia-400 hover:opacity-100"
               />
             )}
           </div>
