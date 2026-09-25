@@ -148,6 +148,15 @@ const SORTABLE_COLUMNS: Partial<Record<ProductColumnKey, string>> = {
   price: "price",
   status: "status",
 };
+// Abas rápidas: cada uma tem sua cor SEMPRE visível; selecionada fica mais forte.
+const QUICK_TAB_TONE = {
+  all: { off: "bg-blue-50/70 text-blue-600 hover:bg-blue-100/70 dark:bg-blue-950/20 dark:text-blue-300", on: "bg-blue-200 text-blue-900 shadow-inner dark:bg-blue-900/60 dark:text-blue-100" },
+  active: { off: "bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100/70 dark:bg-emerald-950/20 dark:text-emerald-300", on: "bg-emerald-200 text-emerald-900 shadow-inner dark:bg-emerald-900/60 dark:text-emerald-100" },
+  preparing: { off: "bg-amber-50/70 text-amber-600 hover:bg-amber-100/70 dark:bg-amber-950/20 dark:text-amber-300", on: "bg-amber-200 text-amber-900 shadow-inner dark:bg-amber-900/60 dark:text-amber-100" },
+  pendencies: { off: "bg-rose-50/70 text-rose-600 hover:bg-rose-100/70 dark:bg-rose-950/20 dark:text-rose-300", on: "bg-rose-200 text-rose-900 shadow-inner dark:bg-rose-900/60 dark:text-rose-100" },
+  categories: { off: "bg-violet-50/70 text-violet-600 hover:bg-violet-100/70 dark:bg-violet-950/20 dark:text-violet-300", on: "bg-violet-200 text-violet-900 shadow-inner dark:bg-violet-900/60 dark:text-violet-100" },
+} as const;
+
 const PRODUCT_LIST_PREFERENCES_KEY = "allka:admin-products-list-preferences";
 
 // Lembra ordenação e itens por página entre acessos (Ctrl+F5, novo login).
@@ -852,7 +861,7 @@ export default function AdminProdutosPage() {
             <div className={`mt-[5px] ${STANDARD_SHELL_TABLE_CARD_CLASS}`}>
               {/* Row 1 — busca + filtros + ordenar */}
               <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/70 bg-slate-50/60 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-900/30 xl:flex-nowrap">
-                <div className="relative min-w-[150px] flex-1 xl:max-w-[260px]">
+                <div className="relative min-w-[150px] flex-1 xl:w-[260px] xl:flex-none">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     placeholder="Buscar por nome ou slug"
@@ -871,23 +880,11 @@ export default function AdminProdutosPage() {
                             type="button"
                             onClick={tab.onClick}
                             aria-label={tab.label}
-                            className={`relative flex h-9 items-center gap-1 border-r border-slate-100 px-2 text-[11px] font-semibold transition-colors last:border-r-0 dark:border-slate-700 sm:px-2.5 ${
-                              tab.active
-                                ? tab.key === "active"
-                                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-                                  : tab.key === "preparing"
-                                    ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
-                                    : tab.key === "pendencies"
-                                      ? "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300"
-                                      : tab.key === "categories"
-                                        ? "bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300"
-                                        : "bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300"
-                                : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
-                            }`}
+                            className={`relative flex h-9 w-[58px] shrink-0 items-center justify-center gap-1 border-r border-slate-100 px-1 text-[11px] font-semibold transition-colors last:border-r-0 dark:border-slate-700 ${QUICK_TAB_TONE[tab.key as keyof typeof QUICK_TAB_TONE][tab.active ? "on" : "off"]}`}
                           >
                             <tab.icon className="h-3.5 w-3.5" />
                             <span
-                              className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold ${tab.active ? "bg-white/80 text-current shadow-sm dark:bg-slate-900/60" : "bg-slate-100 text-slate-500 dark:bg-slate-700"}`}
+                              className={`flex h-4 min-w-[22px] items-center justify-center rounded-full px-1 text-[9px] font-bold ${tab.active ? "bg-white text-current shadow-sm dark:bg-slate-900/60" : "bg-white/70 text-current dark:bg-slate-900/40"}`}
                             >
                               {tab.count}
                             </span>
@@ -984,7 +981,7 @@ export default function AdminProdutosPage() {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <span className="hidden shrink-0 whitespace-nowrap text-xs text-slate-400 lg:inline">
+                <span className="hidden w-[72px] shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-slate-400 lg:inline-block">
                   {list
                     ? `${list.total} ${list.total === 1 ? "item" : "itens"}`
                     : ""}
@@ -1001,13 +998,15 @@ export default function AdminProdutosPage() {
                       setPage(1);
                     }}
                   />
-                  {totalPages > 1 && (
-                    <PaginationControls
-                      page={page}
-                      totalPages={totalPages}
-                      onChange={setPage}
-                    />
-                  )}
+                  <div className="flex w-[260px] shrink-0 items-center justify-end">
+                    {totalPages > 1 && (
+                      <PaginationControls
+                        page={page}
+                        totalPages={totalPages}
+                        onChange={setPage}
+                      />
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 border-l border-slate-200 pl-2 dark:border-slate-700">
                     <input
                       type="number"
