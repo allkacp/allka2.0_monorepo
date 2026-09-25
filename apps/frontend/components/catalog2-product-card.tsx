@@ -39,6 +39,8 @@ export interface Catalog2ProductCardProps {
   /** Conteúdo extra ao lado do preço (ex.: popover de precificação do admin). */
   priceExtra?: ReactNode;
   ctaLabel?: string;
+  /** Número do produto (ID) — selo no canto inferior esquerdo da imagem. */
+  productId?: number | string | null;
 }
 
 export function Catalog2ProductCard({
@@ -55,6 +57,7 @@ export function Catalog2ProductCard({
   extraTags,
   priceExtra,
   ctaLabel = "Ver detalhes",
+  productId,
 }: Catalog2ProductCardProps) {
   const cardLabel = `${name} — ver detalhes`;
 
@@ -81,6 +84,7 @@ export function Catalog2ProductCard({
         <div className="absolute inset-0 bg-linear-to-t from-slate-950/20 via-transparent to-transparent" />
         {cornerBadgeLeft && <div className="absolute left-2.5 top-2.5">{cornerBadgeLeft}</div>}
         {cornerBadgeRight && <div className="absolute right-2.5 top-2.5">{cornerBadgeRight}</div>}
+        {productId != null && productId !== "" && <div className="absolute bottom-2.5 left-2.5"><span className="rounded-md bg-slate-900/70 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white shadow-sm backdrop-blur-sm">ID {String(productId).padStart(2, "0")}</span></div>}
       </div>
 
       <CardContent className={`flex flex-1 flex-col ${compact ? "gap-1.5 p-3" : "gap-2 p-3.5"}`}>

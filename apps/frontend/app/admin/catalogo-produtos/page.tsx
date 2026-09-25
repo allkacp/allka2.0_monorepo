@@ -1199,6 +1199,7 @@ function ProductCard({
   return (
     <Catalog2ProductCard
       name={p.name}
+      productId={p.sequence_number}
       description={p.list?.summary}
       categoryName={categoryName}
       compact={compact}

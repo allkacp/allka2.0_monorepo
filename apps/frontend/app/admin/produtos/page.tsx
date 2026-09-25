@@ -1501,6 +1501,9 @@ export default function AdminProdutosPage() {
                             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.035]"
                           />
                           <div className="absolute inset-0 bg-linear-to-t from-slate-950/20 via-transparent to-transparent" />
+                          {p.sequence_number != null && (
+                            <div className="absolute bottom-2.5 left-3"><span className="rounded-md bg-slate-900/70 px-2 py-0.5 text-[10px] font-bold tracking-wide text-white shadow-sm backdrop-blur-sm">ID {String(p.sequence_number).padStart(2, "0")}</span></div>
+                          )}
                           <Badge
                             className={`absolute left-3 top-3 border-0 px-2.5 py-1 text-[10px] font-bold shadow-sm ${STATUS_TONE[p.status] ?? "bg-white/90 text-slate-700"}`}
                           >

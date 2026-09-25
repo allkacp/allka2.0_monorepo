@@ -301,6 +301,7 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
               <Catalog2ProductCard
                 key={p.id}
                 name={p.name}
+                productId={p.sequence_number}
                 description={p.short_description}
                 categoryName={p.category?.name ?? p.pillar?.name ?? "Sem categoria"}
                 deadlineDays={p.commercial_deadline_days}
