@@ -959,6 +959,7 @@ export async function getProductDetail(productId: string) {
     status: product.status,
     origin: product.origin,
     archived_at: product.archived_at,
+    updated_at: product.updated_at,
     pillar: product.pillar ? { id: product.pillar.id, key: product.pillar.key, name: product.pillar.name } : null,
     category: product.category ? { id: product.category.id, key: product.category.key, name: product.category.name } : null,
     four_f: product.four_f.map((l) => ({ id: l.four_f.id, key: l.four_f.key, name: l.four_f.name })).sort((a, b) => a.key.localeCompare(b.key)),
@@ -974,6 +975,7 @@ export async function getProductDetail(productId: string) {
       full_description: v.full_description,
       change_summary: v.change_summary,
       published_at: v.published_at,
+      updated_at: v.updated_at,
       is_published_current: v.id === product.published_version_id,
       history: v.events.map((e) => ({ event_type: e.event_type, actor_user_id: e.actor_user_id, note: e.note, at: e.created_at })),
       variations: v.variations.map((va) => ({

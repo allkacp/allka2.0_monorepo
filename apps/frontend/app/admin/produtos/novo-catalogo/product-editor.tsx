@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, Copy, RefreshCw, Search, Link2, Unlink } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { usePinEntry, type PinnedEntry } from "@/contexts/open-screens-context";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +38,7 @@ const OPERATORS = [["eq", "igual a"], ["neq", "diferente de"], ["gte", "maior ou
 const TRIGGERS = [["variation_option", "Opção de variação"], ["addon_selected", "Adicional selecionado"], ["quantity", "Quantidade"], ["client_answer", "Resposta do cliente"], ["contract_attribute", "Atributo da contratação"]] as const;
 const EXEC_MODES = [["humano", "Humano"], ["ia", "IA"], ["hibrido", "Híbrido"]] as const;
 
-export function ProductEditor({ productId, onBack }: { productId: string; onBack: () => void }) {
+export function ProductEditor({ productId, onBack, pin, notice }: { productId: string; onBack: () => void; pin?: PinnedEntry; notice?: React.ReactNode }) {
   const [product, setProduct] = useState<any>(null);
   const [refs, setRefs] = useState<{ pillars: any[]; fourF: any[]; categories: any[]; specialties: any[]; questionnaires: any[] }>({ pillars: [], fourF: [], categories: [], specialties: [], questionnaires: [] });
   const [selectedVersionId, setSelectedVersionId] = useState<string>("");
@@ -135,29 +137,22 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
   }
 
   if (loading) return <div className="flex items-center gap-2 p-10 text-sm text-neutral-500"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>;
-  if (!product) return <div className="p-10 text-sm text-red-600">Produto não encontrado.</div>;
+  if (!product) return <div className="flex flex-1 flex-col items-start gap-3 p-10 text-sm text-red-600">Produto não encontrado.<Button size="sm" variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar</Button></div>;
 
   return (
-    <div className="product-editor mx-auto w-full max-w-6xl space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 shadow-sm sm:px-5 dark:border-slate-700/60 dark:bg-slate-900">
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar</Button>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">{product.internal_name}</h2>
-          <Badge className={catalog2StatusTone(product.status)}>{catalog2StatusLabel(product.status)}</Badge>
-          {product.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
-        </div>
-        <div className="flex items-center gap-2">
-          <select className="rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={selectedVersionId} onChange={(e) => setSelectedVersionId(e.target.value)}>
-            {product.versions.map((v: any) => (
-              <option key={v.id} value={v.id}>v{v.version_number} — {v.state}{v.is_published_current ? " (publicada atual)" : ""}</option>
-            ))}
-          </select>
-          {product.published_version_id && !product.versions.some((v: any) => v.state === "rascunho") && (
-            <Button size="sm" variant="outline" onClick={() => act(() => apiClient.newCatalog2Version(productId), "Nova versão rascunho criada.")}>Nova versão</Button>
-          )}
-          <Button size="sm" variant="ghost" onClick={() => void load()}><RefreshCw className="h-4 w-4" /></Button>
-        </div>
-      </div>
+    <div className="product-editor flex min-h-0 min-w-0 flex-1 flex-col">
+      <EditorHeader
+        product={product}
+        selectedVersionId={selectedVersionId}
+        onSelectVersion={setSelectedVersionId}
+        onBack={onBack}
+        onRefresh={() => void load()}
+        canNewVersion={!!product.published_version_id && !product.versions.some((v: any) => v.state === "rascunho")}
+        onNewVersion={() => act(() => apiClient.newCatalog2Version(productId), "Nova versão rascunho criada.")}
+        pin={pin}
+      />
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-4 sm:px-6 dark:bg-slate-900">
+      {notice}
       {readOnly && <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">Versão publicada — somente leitura. Crie uma nova versão para editar.</p>}
       <ProductReadinessPanel productId={productId} versionKey={selectedVersionId} />
       {msg && <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">{msg}</p>}
@@ -172,7 +167,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
             <TabsTrigger value="entrega" className={MAIN_TAB}>Entrega: tarefas, etapas e prazos</TabsTrigger>
             <TabsTrigger value="precos" className={MAIN_TAB}>Custos e preço</TabsTrigger>
             <TabsTrigger value="revisao" className={MAIN_TAB}>Revisão e publicação</TabsTrigger>
-            <TabsTrigger value="origem" className={`${MAIN_TAB} ml-auto !text-slate-500 data-[state=active]:!text-white`}>
+            <TabsTrigger value="origem" className={MAIN_TAB}>
               Origem e importação
             </TabsTrigger>
           </TabsList>
@@ -232,6 +227,7 @@ export function ProductEditor({ productId, onBack }: { productId: string; onBack
           </TabsContent>
         </Tabs>
       )}
+      </div>
     </div>
   );
 }
@@ -286,27 +282,64 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
   }
 
   return (
-    <div id="catalog2-general" className="space-y-5 scroll-mt-6">
-      <div id="catalog2-field-title" className={highlightTarget === "catalog2-field-title" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Título comercial"><Input disabled={readOnly} value={f.title} onChange={(e) => updateInfo({ title: e.target.value })} /></Field></div>
-      <Field label="Descrição curta"><Textarea rows={2} disabled={readOnly} value={f.summary} onChange={(e) => updateInfo({ summary: e.target.value })} /></Field>
-      <div id="catalog2-field-full-description" className={highlightTarget === "catalog2-field-full-description" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Descrição completa"><Textarea rows={5} disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} /></Field></div>
-      <Field label="Resumo da mudança (histórico)"><Input disabled={readOnly} value={f.change_summary} onChange={(e) => updateInfo({ change_summary: e.target.value })} /></Field>
-      <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-4 dark:border-slate-700/60 dark:bg-slate-800/30">
-        <Field label="Status do produto">
-          <select aria-label="Status do produto" className="w-full rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={draftStatus} onChange={(e) => { setDraftStatus(e.target.value); setStatusError(null); }}>
+    <div id="catalog2-general" className="grid scroll-mt-6 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <SectionCard icon={FileText} title="Dados principais" subtitle="Defina as informações básicas do seu produto.">
+        <div id="catalog2-field-title" className={highlightTarget === "catalog2-field-title" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}>
+          <Field label={<>Título comercial<Req /></>}><Input disabled={readOnly} value={f.title} onChange={(e) => updateInfo({ title: e.target.value })} /></Field>
+        </div>
+        <Field label={<>Descrição curta<Req /></>}>
+          <div className="space-y-1">
+            <Textarea rows={4} maxLength={500} disabled={readOnly} value={f.summary} onChange={(e) => updateInfo({ summary: e.target.value })} />
+            <CharCount value={f.summary} max={500} />
+          </div>
+        </Field>
+        <div id="catalog2-field-full-description" className={highlightTarget === "catalog2-field-full-description" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}>
+          <Field label={<>Descrição completa<Req /></>}>
+            <div className="space-y-1">
+              <Textarea rows={5} maxLength={2000} disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} />
+              <CharCount value={f.full_description} max={2000} />
+            </div>
+          </Field>
+        </div>
+      </SectionCard>
+
+      <div className="space-y-5">
+        <SectionCard icon={Settings2} title="Status do produto" subtitle="Define a disponibilidade deste produto na plataforma.">
+          <select aria-label="Status do produto" className="w-full" value={draftStatus} onChange={(e) => { setDraftStatus(e.target.value); setStatusError(null); }}>
             {CATALOG2_STATUSES.map((status) => <option key={status} value={status}>{CATALOG2_STATUS_LABEL[status]}</option>)}
           </select>
-        </Field>
-        <p className="mt-2 text-xs text-neutral-500">{CATALOG2_STATUS_MEANING[draftStatus as Catalog2Status] ?? "Status não reconhecido."}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button size="sm" disabled={savingStatus || draftStatus === product.status} onClick={() => void saveStatus()}>
-            {savingStatus ? "Salvando status…" : "Salvar status"}
-          </Button>
-          <span className="text-xs text-neutral-500">Status salvo: {catalog2StatusLabel(product.status)}.</span>
-        </div>
-        {statusError && <p role="alert" className="mt-2 text-xs text-red-600">{statusError}</p>}
+          <p className="text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">{CATALOG2_STATUS_MEANING[draftStatus as Catalog2Status] ?? "Status não reconhecido."}</p>
+          {draftStatus !== product.status && (
+            <Button size="sm" variant="outline" disabled={savingStatus} onClick={() => void saveStatus()}>
+              {savingStatus ? "Salvando status…" : "Salvar status"}
+            </Button>
+          )}
+          {statusError && <p role="alert" className="text-xs text-red-600">{statusError}</p>}
+        </SectionCard>
+
+        <SectionCard icon={Clock} title="Resumo da mudança (histórico)" subtitle="Adicione um resumo das alterações realizadas.">
+          <div className="space-y-1">
+            <Textarea rows={3} maxLength={500} disabled={readOnly} placeholder="Descreva as alterações realizadas neste produto..." value={f.change_summary} onChange={(e) => updateInfo({ change_summary: e.target.value })} />
+            <CharCount value={f.change_summary} max={500} />
+          </div>
+        </SectionCard>
+
+        {!readOnly && (
+          <div className="flex flex-wrap items-center gap-4">
+            <Button className="h-11 gap-2 rounded-xl bg-[#3b2bff] px-6 text-sm font-semibold text-white hover:bg-[#3223d6]" disabled={savingInfo} onClick={() => void saveInfo()}>
+              <Save className="h-4 w-4" /> {savingInfo ? "Salvando informações…" : "Salvar informações"}
+            </Button>
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"><CheckCircle2 className="h-5 w-5" /></span>
+              <div className="text-sm">
+                <p className="font-semibold text-emerald-700 dark:text-emerald-400">Status salvo: {catalog2StatusLabel(product.status)}.</p>
+                {infoSaved && <p role="status" className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">✓ Informações salvas.</p>}
+                {fmtUpdatedAt(version?.updated_at ?? product.updated_at) && <p className="text-xs text-slate-500">Última atualização: {fmtUpdatedAt(version?.updated_at ?? product.updated_at)}</p>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-      {!readOnly && <div className="flex flex-wrap items-center gap-2"><Button size="sm" disabled={savingInfo} onClick={() => void saveInfo()}>{savingInfo ? "Salvando informações…" : "Salvar informações"}</Button>{infoSaved && <span role="status" className="text-sm text-emerald-700">✓ Informações salvas.</span>}</div>}
     </div>
   );
 }
@@ -1822,24 +1855,49 @@ function ProductReadinessPanel({ productId, versionKey }: { productId: string; v
         ? "nada pendente"
         : `${blockers.length} bloqueador(es) · ${pendings.length} pendência(s)`;
 
+  const levelList: any[] = data?.items ? Object.values(data.items) : [];
+  const counted = levelList.filter((it: any) => it.level !== "opcional");
+  const readyCount = counted.filter((it: any) => it.level === "pronto").length;
+  const pct = counted.length > 0 ? Math.round((readyCount / counted.length) * 100) : 0;
+  const seg = (n: number) => (counted.length > 0 ? (n / counted.length) * 100 : 0);
+  const nBlock = blockers.length;
+  const nPend = pendings.length;
+
   return (
-    <section className="rounded-2xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+    <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-2 px-5 py-3.5 text-left text-sm"
+        className="block w-full px-5 py-4 text-left"
       >
-        <span className="flex items-center gap-2 font-medium">
-          Prontidão deste produto
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] ${
-              blockers.length > 0 ? "bg-red-100 text-red-700" : pendings.length > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-            }`}
-          >
-            {summary}
+        <span className="flex items-center justify-between gap-3">
+          <span className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-semibold text-slate-900 dark:text-slate-100">Prontidão para publicação ·</span>
+            {data?.error ? (
+              <span className="text-red-600">não foi possível carregar</span>
+            ) : loading && !data ? (
+              <span className="text-slate-500">carregando…</span>
+            ) : nBlock === 0 && nPend === 0 ? (
+              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">nada pendente</span>
+            ) : (
+              <>
+                {nBlock > 0 && <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">{nBlock} {nBlock === 1 ? "bloqueio" : "bloqueios"}</span>}
+                {nPend > 0 && <span className="rounded-full bg-pink-100 px-2.5 py-0.5 text-xs font-semibold text-pink-700">{nPend} {nPend === 1 ? "pendência" : "pendências"}</span>}
+              </>
+            )}
+          </span>
+          <span className="flex shrink-0 items-center gap-3 text-xs text-slate-500">
+            {data?.items && <span>{pct}% concluído</span>}
+            {open ? <ChevronDown className="h-5 w-5 text-violet-600" /> : <ChevronRight className="h-5 w-5 text-violet-600" />}
           </span>
         </span>
-        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        {data?.items && (
+          <span className="mt-3 flex h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-700/60" aria-hidden>
+            <span className="h-full bg-emerald-500" style={{ width: seg(readyCount) + "%" }} />
+            <span className="h-full bg-pink-300" style={{ width: seg(nPend) + "%" }} />
+            <span className="h-full bg-red-500" style={{ width: seg(nBlock) + "%" }} />
+          </span>
+        )}
       </button>
       {open && (
         <div className="border-t border-neutral-200 p-3 dark:border-neutral-800">
@@ -1879,16 +1937,104 @@ function ProductReadinessPanel({ productId, versionKey }: { productId: string; v
 // Estilo do editor (pedido do usuário 2026-09-25: "sem margem, ruim de ler,
 // não segue o layout da plataforma"): abas em pílula com o degradê da marca,
 // cada aba dentro de um cartão arredondado com respiro, cabeçalho em cartão.
-const MAIN_TABS_LIST = "h-auto w-full flex-wrap justify-start gap-1 rounded-2xl border border-slate-200/70 bg-white p-1.5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900";
-const MAIN_TAB = "flex-none rounded-xl px-3 py-2 text-[13px] font-semibold text-slate-600 dark:text-slate-300 data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#4a2cff] data-[state=active]:via-[#7b2cdb] data-[state=active]:to-[#d92293] data-[state=active]:text-white data-[state=active]:shadow-md";
+const MAIN_TABS_LIST = "h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-none border-b border-slate-200 bg-transparent p-0 dark:border-slate-700";
+const MAIN_TAB = "-mb-px flex-none rounded-none border-0 border-b-2 border-transparent bg-transparent px-4 py-3 text-[13px] font-semibold text-slate-500 shadow-none hover:text-slate-700 data-[state=active]:border-violet-600 data-[state=active]:bg-transparent data-[state=active]:text-violet-700 data-[state=active]:shadow-none dark:text-slate-400 dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-violet-300";
 const SUB_TABS_LIST = "h-auto w-fit flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800";
 const SUB_TAB = "flex-none rounded-lg px-3.5 py-1.5 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-violet-700 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-violet-200";
-const TAB_CARD = "mt-4 rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm sm:p-6 dark:border-slate-700/60 dark:bg-slate-900";
+const TAB_CARD = "mt-5";
+
+function SectionCard({ icon: Icon, title, subtitle, children }: { icon: React.ComponentType<{ className?: string }>; title: string; subtitle: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-900">
+      <header className="mb-4 flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-5 w-5" /></span>
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">{title}</h3>
+          <p className="text-[13px] text-slate-500 dark:text-slate-400">{subtitle}</p>
+        </div>
+      </header>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function Req() {
+  return <span className="text-red-500"> *</span>;
+}
+
+function CharCount({ value, max }: { value: string; max: number }) {
+  return <span className={`block text-right text-xs ${value.length > max ? "text-red-600" : "text-slate-400"}`}>{value.length}/{max}</span>;
+}
+
+function fmtUpdatedAt(raw?: string | null) {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+// Cabeçalho do editor no padrão da plataforma (degradê da marca): voltar,
+// nome + status, subtítulo, versão, atualizar, menu ⋮ (nova versão / fixar na
+// bandeja) e fechar. Pedido do usuário 2026-09-25 (layout de referência).
+function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin }: any) {
+  const { pinned, toggle } = usePinEntry(pin ?? null);
+  return (
+    <div
+      className="flex shrink-0 flex-wrap items-center gap-3 px-5 py-4 sm:px-6"
+      style={{ background: "var(--app-brand-gradient, var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)))" }}
+    >
+      <button type="button" onClick={onBack} aria-label="Voltar" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
+        <ArrowLeft className="h-6 w-6" />
+      </button>
+      <div className="min-w-[12rem] flex-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h2 className="min-w-0 text-xl font-bold leading-tight text-white">{product.internal_name}</h2>
+          <Badge className={catalog2StatusTone(product.status)}>{catalog2StatusLabel(product.status)}</Badge>
+          {product.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
+        </div>
+        <p className="mt-0.5 text-sm text-white/75">Editor de produto</p>
+      </div>
+      <select
+        aria-label="Versão do produto"
+        className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm"
+        value={selectedVersionId}
+        onChange={(ev) => onSelectVersion(ev.target.value)}
+      >
+        {product.versions.map((v: any) => (
+          <option key={v.id} value={v.id}>v{v.version_number} — {v.state}{v.is_published_current ? " (publicada atual)" : ""}</option>
+        ))}
+      </select>
+      <button type="button" onClick={onRefresh} aria-label="Atualizar" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
+        <RefreshCw className="h-5 w-5" />
+      </button>
+      {(canNewVersion || pin) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label="Mais ações" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
+              <MoreVertical className="h-5 w-5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {canNewVersion && <DropdownMenuItem onClick={onNewVersion}>Nova versão (rascunho)</DropdownMenuItem>}
+            {pin && (
+              <DropdownMenuItem onClick={toggle}>
+                <Pin className="h-4 w-4" /> {pinned ? "Remover da Bandeja de Telas" : "Fixar na Bandeja de Telas"}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+      <button type="button" onClick={onBack} aria-label="Fechar" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
+        <X className="h-6 w-6" />
+      </button>
+    </div>
+  );
+}
 
 function StepIntro({ children }: { children: React.ReactNode }) {
   return <p className="mb-5 rounded-xl bg-violet-50/70 px-4 py-2.5 text-sm text-slate-600 dark:bg-violet-950/20 dark:text-slate-300">{children}</p>;
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return <label className="block space-y-1.5"><span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>{children}</label>;
 }
 function DeleteBtn({ label, onConfirm }: { label: string; onConfirm: () => void }) {

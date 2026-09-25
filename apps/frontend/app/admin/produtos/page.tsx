@@ -1686,26 +1686,28 @@ export default function AdminProdutosPage() {
             void loadList();
             void bootstrap();
           }}
-          title="Editor de produto"
-          pin={
-            openProductId
-              ? {
-                  id: `catalog2-produto-${openProductId}`,
-                  label: "Editor de produto",
-                  icon: Package,
-                  path: `/admin/produtos?produto=${openProductId}`,
-                }
-              : undefined
-          }
+          hideHeader
         >
           {openProductId && (
-            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/80 px-4 py-5 sm:px-8 dark:bg-slate-950/40">
-              {(() => {
+            <ProductEditor
+              productId={openProductId}
+              onBack={() => {
+                openProduct(null);
+                void loadList();
+                void bootstrap();
+              }}
+              pin={{
+                id: `catalog2-produto-${openProductId}`,
+                label: "Editor de produto",
+                icon: Package,
+                path: `/admin/produtos?produto=${openProductId}`,
+              }}
+              notice={(() => {
                 const rp = readinessById[openProductId];
                 const hasProvisional =
                   rp && (!(rp.task_count > 0) || rp.price_amount == null);
                 return hasProvisional ? (
-                  <div className="mx-auto mb-5 flex max-w-6xl items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
+                  <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>
                       Este produto tem campos provisórios (preço, prazo e/ou
@@ -1715,15 +1717,7 @@ export default function AdminProdutosPage() {
                   </div>
                 ) : null;
               })()}
-              <ProductEditor
-                productId={openProductId}
-                onBack={() => {
-                  openProduct(null);
-                  void loadList();
-                  void bootstrap();
-                }}
-              />
-            </div>
+            />
           )}
         </EmbeddedSlideScreen>
 
