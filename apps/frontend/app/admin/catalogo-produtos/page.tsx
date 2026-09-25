@@ -355,6 +355,16 @@ function ProductCodeInfo({ p }: { p: Merged }) {
   );
 }
 
+// Cada categoria tem a sua cor (suave; mais forte quando selecionada).
+const CATEGORY_TONES = [
+  { off: "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100", on: "border-blue-600 bg-blue-600 text-white shadow-sm" },
+  { off: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100", on: "border-emerald-600 bg-emerald-600 text-white shadow-sm" },
+  { off: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100", on: "border-amber-500 bg-amber-500 text-white shadow-sm" },
+  { off: "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100", on: "border-rose-600 bg-rose-600 text-white shadow-sm" },
+  { off: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100", on: "border-violet-600 bg-violet-600 text-white shadow-sm" },
+  { off: "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100", on: "border-cyan-600 bg-cyan-600 text-white shadow-sm" },
+];
+
 const SORTS = {
   name: {
     label: "Nome A–Z",
@@ -833,8 +843,8 @@ export default function AdminCatalogoProdutosPage() {
             <div
               className={`${STANDARD_SHELL_TABLE_CARD_CLASS} m-0 space-y-3 p-3`}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative min-w-[200px] flex-1">
+              <div className="flex flex-nowrap items-center gap-2">
+                <div className="relative w-[190px] shrink-0">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     placeholder="Buscar produtos…"
@@ -853,6 +863,25 @@ export default function AdminCatalogoProdutosPage() {
                     </button>
                   )}
                 </div>
+                {/* Categorias: cada uma com a sua cor; selecionada fica mais forte. */}
+                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5">
+                  {categoryTabs.map(({ id, label, count }, i) => {
+                    const tone = CATEGORY_TONES[i % CATEGORY_TONES.length];
+                    const on = category === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setCategory(id)}
+                        aria-pressed={on}
+                        className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all ${on ? tone.on : tone.off}`}
+                      >
+                        {label}
+                        <span className="rounded-full bg-white/80 px-1 py-0.5 text-[9px] leading-none text-current dark:bg-slate-900/50">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
 
                 <Popover
                   open={filtersOpen}
@@ -863,13 +892,14 @@ export default function AdminCatalogoProdutosPage() {
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
-                      size="sm"
-                      className={`h-9 shrink-0 gap-1.5 text-xs ${activeFilterCount > 0 ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
+                      size="icon"
+                      aria-label="Filtros e ordenação"
+                      title="Filtros e ordenação"
+                      className={`relative h-9 w-9 shrink-0 text-xs ${activeFilterCount > 0 ? "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400" : "border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"}`}
                     >
-                      <SlidersHorizontal className="h-3.5 w-3.5" />
-                      Filtros
+                      <SlidersHorizontal className="h-4 w-4" />
                       {activeFilterCount > 0 && (
-                        <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
+                        <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white">
                           {activeFilterCount}
                         </span>
                       )}
@@ -884,6 +914,25 @@ export default function AdminCatalogoProdutosPage() {
                         {countActiveFilters(draftFilters)} ativo
                         {countActiveFilters(draftFilters) === 1 ? "" : "s"}
                       </span>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="cat-sort"
+                        className="mb-1 block text-[11px] font-medium text-muted-foreground"
+                      >
+                        Ordenar por
+                      </label>
+                      <select
+                        id="cat-sort"
+                        className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-800"
+                        value={sort}
+                        onChange={(e) => setSort(e.target.value as keyof typeof SORTS)}
+                      >
+                        {Object.entries(SORTS).map(([k, v]) => (
+                          <option key={k} value={k}>{v.label}</option>
+                        ))}
+                      </select>
                     </div>
 
                     <div>
@@ -972,40 +1021,7 @@ export default function AdminCatalogoProdutosPage() {
                   </PopoverContent>
                 </Popover>
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-9 shrink-0 gap-1.5 text-xs"
-                    >
-                      <ArrowUpDown className="h-3.5 w-3.5" />
-                      {SORTS[sort].label}
-                      <ChevronDown className="h-3 w-3 opacity-60" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {Object.entries(SORTS).map(([k, v]) => (
-                      <DropdownMenuItem
-                        key={k}
-                        onClick={() => setSort(k as keyof typeof SORTS)}
-                      >
-                        {v.label}
-                      </DropdownMenuItem>
-                    ))}
-                    {DISABLED_SORTS.map((d) => (
-                      <DropdownMenuItem
-                        key={d.label}
-                        disabled
-                        title={d.reason}
-                        className="opacity-50"
-                      >
-                        {d.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <span className="hidden shrink-0 text-xs text-slate-400 sm:inline">
+                <span className="hidden w-[76px] shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-slate-400 sm:inline-block">
                   {filtered.length}{" "}
                   {filtered.length === 1 ? "produto" : "produtos"}
                 </span>
@@ -1013,7 +1029,7 @@ export default function AdminCatalogoProdutosPage() {
                   value={gridMode}
                   onChange={setGridMode}
                 />
-                <div className="ml-auto flex items-center gap-2 border-l border-slate-200 pl-2 dark:border-slate-700">
+                <div className="flex shrink-0 items-center gap-2 border-l border-slate-200 pl-2 dark:border-slate-700">
                   <ItemsPerPageSelect
                     value={pageSize.toString()}
                     onValueChange={(value) => {
@@ -1021,13 +1037,15 @@ export default function AdminCatalogoProdutosPage() {
                       setPage(1);
                     }}
                   />
-                  {totalPages > 1 && (
-                    <PaginationControls
-                      page={currentPage}
-                      totalPages={totalPages}
-                      onChange={setPage}
-                    />
-                  )}
+                  <div className="flex w-[236px] shrink-0 items-center justify-end">
+                    {totalPages > 1 && (
+                      <PaginationControls
+                        page={currentPage}
+                        totalPages={totalPages}
+                        onChange={setPage}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1058,38 +1076,6 @@ export default function AdminCatalogoProdutosPage() {
                   </button>
                 </div>
               )}
-
-              {/* Category pills — categorias REAIS do catalog2. */}
-              <div className="flex flex-wrap gap-2">
-                {categoryTabs.map(({ id, label, count }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setCategory(id)}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                      category === id
-                        ? "text-white shadow-sm"
-                        : "border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                    }`}
-                    style={
-                      category === id
-                        ? {
-                            background:
-                              "linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%)",
-                          }
-                        : undefined
-                    }
-                  >
-                    <Layers className="h-3 w-3" />
-                    {label}
-                    <span
-                      className={`rounded-full px-1 py-0.5 text-[10px] leading-none ${category === id ? "bg-white/20 text-white" : "bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-400"}`}
-                    >
-                      {count}
-                    </span>
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* ── Grade de cards ── */}

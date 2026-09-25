@@ -20,6 +20,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - **Frontend** — Cadastro de Produtos: fechar (X) do editor volta para a lista e limpa o número da URL; ícone de fixar na Bandeja de Telas visível no cabeçalho do editor; botão recarregar com giro e aviso; a lista lembra a **ordenação** e os **itens por página** (localStorage, sobrevive a Ctrl+F5).
 - **Frontend** — Catálogo de Produtos: lembra a ordenação escolhida entre acessos (não tem paginação).
 - **Frontend** — Cadastro de Produtos: as 5 abas rápidas (Todos/Ativos/Em preparação/Com pendências/Categorias) mostram sempre a própria cor (mais forte quando selecionadas) e a barra de ferramentas tem larguras fixas (busca, abas, contador de itens, paginação) para nada "pular" ao trocar de aba.
+- **Frontend** — Catálogo de Produtos: barra de ferramentas numa linha só e com larguras fixas: busca menor, categorias (cada uma com sua cor, mais forte quando selecionada), botão Filtros só com ícone (a ordenação foi para dentro dele), contador, modo de exibição e paginação compacta.
 - Migration NOVA nesta leva (aditiva, sem apagar dados). Nenhum dado de produto enviado.
 
 ## Já no ar (deploy de 2026-09-25)
