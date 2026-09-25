@@ -160,7 +160,7 @@ export function Catalog2ProductListHeader({
     <div
       ref={columns?.headerRef}
       style={{ gridTemplateColumns: template }}
-      className="grid gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60"
+      className="grid gap-3 border-b border-slate-200/60 bg-slate-50 px-4 py-3.5 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:border-slate-700/60 dark:bg-slate-900/60 dark:text-slate-400"
     >
       {cols.map((c) => {
         const sortable = !!onSort && sortableKeys.includes(c.key);
@@ -240,12 +240,15 @@ export function Catalog2ProductListRow({
 }: Catalog2ProductListRowProps) {
   const rowLabel = `${name} — ver detalhes`;
   const template = gridTemplate ?? (showAdminColumns ? DEFAULT_TEMPLATE_ADMIN : DEFAULT_TEMPLATE_CLIENT);
+  // Mesma paleta da lista de Usuários (Gestão de Contas): branco / #f5f8fc,
+  // hover azulado. Pedido do usuário 2026-09-25: Catálogo de Produtos tem que
+  // ser igual a essa lista; só o Cadastro de Produtos usa cinzas mais escuros.
   const zebra =
     stripe === undefined
-      ? ""
+      ? "hover:bg-violet-50/40"
       : stripe
-        ? "bg-slate-300/60 dark:bg-slate-800/70"
-        : "bg-slate-200/80 dark:bg-slate-900/70";
+        ? "bg-[#f5f8fc] hover:bg-[#eaf2ff] dark:bg-[oklch(0.185_0.024_258)] dark:hover:bg-[oklch(0.21_0.024_258)]"
+        : "bg-white hover:bg-[#f3f7ff] dark:bg-[oklch(0.14_0.026_258)] dark:hover:bg-[oklch(0.21_0.024_258)]";
   return (
     <li
       role="button"
@@ -259,7 +262,7 @@ export function Catalog2ProductListRow({
         }
       }}
       style={{ gridTemplateColumns: template }}
-      className={`grid cursor-pointer ${zebra} items-center gap-3 px-4 py-2.5 transition-colors hover:bg-violet-200/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 active:bg-slate-300/60 dark:hover:bg-slate-700/60 dark:active:bg-slate-800`}
+      className={`group grid cursor-pointer ${zebra} items-center gap-3 border-b border-slate-100 px-4 py-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 dark:border-slate-800`}
     >
       <div className="flex min-w-0 items-center gap-3">
         <Catalog2Thumbnail productId={name} imagePath={catalog2EditorialImage(categoryName, name)} size="sm" showBadge={false} />

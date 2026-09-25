@@ -1049,7 +1049,7 @@ export default function AdminCatalogoProdutosPage() {
                 </p>
               </div>
             ) : gridMode === "list" ? (
-              <div className="overflow-x-auto rounded-xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+              <div className="overflow-x-auto rounded-[20px] border border-[#e6ebf3] bg-white shadow-[0_12px_32px_rgba(15,23,42,0.06)] dark:border-slate-700/60 dark:bg-slate-900">
                 {listColumns.customized && (
                   <div className="flex justify-end border-b border-slate-200 bg-slate-50 px-4 py-1 dark:border-slate-700 dark:bg-slate-900/60">
                     <button

@@ -1155,7 +1155,7 @@ export default function AdminProdutosPage() {
                         {PRODUCT_COLUMNS.map((column) => (
                           <th
                             key={column.key}
-                            className="relative h-8 px-2 py-1.5 text-[10px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400"
+                            className="relative px-2 py-3.5 text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:text-slate-400"
                             style={{
                               textAlign: column.align,
                               visibility: visibleProductColumns.has(column.key)
