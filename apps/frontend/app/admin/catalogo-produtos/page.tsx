@@ -91,6 +91,8 @@ import { Info } from "lucide-react";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 import { useNavigate, useParams } from "react-router-dom";
+import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import { PaginationControls } from "@/app/admin/produtos/page";
 
 // Catálogo de Produtos — visão de APRESENTAÇÃO e conferência comercial dos
 // produtos catalog2 (reunião 2026-09, consolidação "catálogo2 como cadastro
@@ -533,6 +535,19 @@ export default function AdminCatalogoProdutosPage() {
   useEffect(() => {
     try { localStorage.setItem("allka:admin-catalogo-produtos-sort", String(sort)); } catch { /* sem armazenamento */ }
   }, [sort]);
+  // Itens por página (10/20/30…) — também lembrado entre acessos.
+  const [pageSize, setPageSize] = useState<number>(() => {
+    try {
+      const n = Number(localStorage.getItem("allka:admin-catalogo-produtos-page-size"));
+      return Number.isInteger(n) && n >= 5 && n <= 200 ? n : 10;
+    } catch {
+      return 10;
+    }
+  });
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    try { localStorage.setItem("allka:admin-catalogo-produtos-page-size", String(pageSize)); } catch { /* sem armazenamento */ }
+  }, [pageSize]);
   const listColumns = useCatalog2ListColumns(true, "allka:admin-catalog-list-columns-v1");
   const activeColumnSort = (() => {
     for (const key of SORTABLE_COLUMN_KEYS) {
@@ -646,6 +661,15 @@ export default function AdminCatalogoProdutosPage() {
     rows = rows.filter((p) => matchesFilters(p, filters));
     return [...rows].sort(SORTS[sort].fn);
   }, [real, category, search, sort, filters]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedRows = useMemo(
+    () => filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [filtered, currentPage, pageSize],
+  );
+  // Mudou busca/categoria/filtros/ordem → volta para a página 1.
+  useEffect(() => { setPage(1); }, [category, search, sort, filters]);
 
   const activeFilterCount = countActiveFilters(filters);
   const openFiltersPanel = () => {
@@ -989,6 +1013,22 @@ export default function AdminCatalogoProdutosPage() {
                   value={gridMode}
                   onChange={setGridMode}
                 />
+                <div className="ml-auto flex items-center gap-2 border-l border-slate-200 pl-2 dark:border-slate-700">
+                  <ItemsPerPageSelect
+                    value={pageSize.toString()}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setPage(1);
+                    }}
+                  />
+                  {totalPages > 1 && (
+                    <PaginationControls
+                      page={currentPage}
+                      totalPages={totalPages}
+                      onChange={setPage}
+                    />
+                  )}
+                </div>
               </div>
 
               {/* Badges dos filtros ativos — só aparecem quando há algum. */}
@@ -1088,7 +1128,7 @@ export default function AdminCatalogoProdutosPage() {
                   />
                 </div>
                 <ul style={{ minWidth: listColumns.minWidth ?? 1120 }}>
-                  {filtered.map((p, index) => (
+                  {pagedRows.map((p, index) => (
                     <ProductListRow
                       key={p.id}
                       gridTemplate={listColumns.template}
@@ -1103,7 +1143,7 @@ export default function AdminCatalogoProdutosPage() {
               </div>
             ) : (
               <div className={viewModeGridClass(gridMode)}>
-                {filtered.map((p) => (
+                {pagedRows.map((p) => (
                   <ProductCard
                     key={p.id}
                     product={p}

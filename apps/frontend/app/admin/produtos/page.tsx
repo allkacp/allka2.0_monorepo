@@ -1840,7 +1840,7 @@ const SELECT_CLS =
 // Paginação numerada — mesmo desenho do layout anterior aprovado (setas +
 // números + salto direto de página), sem o campo de "ir para" (dispensável
 // no volume atual de produtos catalog2).
-function PaginationControls({
+export function PaginationControls({
   page,
   totalPages,
   onChange,
