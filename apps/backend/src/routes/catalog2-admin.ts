@@ -728,8 +728,8 @@ const SORTS: Record<string, Prisma.Catalog2ProductOrderByWithRelationInput> = {
   // servidor porque a lista é paginada — ordenar só a página visível no
   // navegador daria uma ordem errada. "Tarefas" e "Pendências" não entram:
   // são contagens calculadas, sem coluna no banco para ordenar.
-  source_index: { import_origin: { source_index: "asc" } },
-  source_index_desc: { import_origin: { source_index: "desc" } },
+  sequence_number: { sequence_number: "asc" },
+  sequence_number_desc: { sequence_number: "desc" },
   category: { category: { name: "asc" } },
   category_desc: { category: { name: "desc" } },
   status: { status: "asc" },
@@ -827,6 +827,7 @@ router.get("/products", async (req, res, next) => {
         const io = p.import_origin;
         return {
           id: p.id,
+          sequence_number: p.sequence_number,
           internal_name: p.internal_name,
           slug: p.slug,
           pillar: p.pillar,

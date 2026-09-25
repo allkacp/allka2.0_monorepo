@@ -121,7 +121,7 @@ const PENDENCY_LABEL: Record<string, string> = {
 };
 
 const PRODUCT_COLUMNS = [
-  { key: "number", label: "#", width: 48, min: 32, align: "left" },
+  { key: "number", label: "ID", width: 52, min: 36, align: "left" },
   { key: "image", label: "Img", width: 58, min: 42, align: "left" },
   { key: "product", label: "Produto", width: 310, min: 90, align: "left" },
   { key: "category", label: "Categoria", width: 145, min: 70, align: "left" },
@@ -142,7 +142,7 @@ type ProductColumnKey = (typeof PRODUCT_COLUMNS)[number]["key"];
 // backend; a variante decrescente é o mesmo valor + "_desc"). Img, Tarefas,
 // Pendências e Ações não ordenam: não há coluna no banco para isso.
 const SORTABLE_COLUMNS: Partial<Record<ProductColumnKey, string>> = {
-  number: "source_index",
+  number: "sequence_number",
   product: "name",
   category: "category",
   price: "price",
@@ -1237,11 +1237,11 @@ export default function AdminProdutosPage() {
                         return (
                           <tr
                             key={p.id}
-                            className="group h-12 odd:bg-slate-100 even:bg-slate-200/70 transition-colors hover:bg-violet-100/70 dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
+                            className="group h-12 odd:bg-slate-200/80 even:bg-slate-300/60 transition-colors hover:bg-violet-200/60 dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
                           >
                             <td className="px-2 py-1">
                               <span className="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">
-                                {p.source_index ?? "—"}
+                                {p.sequence_number ?? "—"}
                               </span>
                             </td>
                             <td className="px-2 py-1">

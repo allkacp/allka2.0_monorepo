@@ -244,8 +244,8 @@ export function Catalog2ProductListRow({
     stripe === undefined
       ? ""
       : stripe
-        ? "bg-slate-200/70 dark:bg-slate-800/70"
-        : "bg-slate-100 dark:bg-slate-900/70";
+        ? "bg-slate-300/60 dark:bg-slate-800/70"
+        : "bg-slate-200/80 dark:bg-slate-900/70";
   return (
     <li
       role="button"
@@ -259,7 +259,7 @@ export function Catalog2ProductListRow({
         }
       }}
       style={{ gridTemplateColumns: template }}
-      className={`grid cursor-pointer ${zebra} items-center gap-3 px-4 py-2.5 transition-colors hover:bg-violet-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 active:bg-slate-300/60 dark:hover:bg-slate-700/60 dark:active:bg-slate-800`}
+      className={`grid cursor-pointer ${zebra} items-center gap-3 px-4 py-2.5 transition-colors hover:bg-violet-200/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 active:bg-slate-300/60 dark:hover:bg-slate-700/60 dark:active:bg-slate-800`}
     >
       <div className="flex min-w-0 items-center gap-3">
         <Catalog2Thumbnail productId={name} imagePath={catalog2EditorialImage(categoryName, name)} size="sm" showBadge={false} />
