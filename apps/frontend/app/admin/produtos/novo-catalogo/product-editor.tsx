@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePinEntry, type PinnedEntry } from "@/contexts/open-screens-context";
@@ -51,7 +51,8 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   // à aba/sub-aba/campo certo e destaca em amarelo até o item ficar resolvido.
   const [loadCount, setLoadCount] = useState(0);
   const [subTabs, setSubTabs] = useState({ opcoes: "class", entrega: "tarefas", revisao: "preview" });
-  const [navKey, setNavKey] = useState<string | null>(null);
+  const [watch, setWatch] = useState<{ key: string; ids: string[] } | null>(null);
+  const [doneIds, setDoneIds] = useState<string[]>([]);
   const [readinessItems, setReadinessItems] = useState<Record<string, { level: string; note: string }> | null>(null);
   const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
 
@@ -86,31 +87,37 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 
   useEffect(() => { void load(); }, [load]);
 
-  // Quando o item de prontidão que o usuário veio resolver deixa de ser
-  // pendente/bloqueio (ou nunca foi), o amarelo some e o campo volta ao normal.
+  // Campo a campo: cada campo incompleto fica amarelo; ao ser resolvido fica
+  // verde por alguns segundos e volta ao normal.
   useEffect(() => {
-    if (!navKey || !readinessItems) return;
-    const level = readinessItems[navKey]?.level;
-    if (level === "pronto") {
-      setHighlightTarget(null);
-      setNavKey(null);
-    }
-  }, [navKey, readinessItems]);
+    if (!watch || !product) return;
+    const cur = product.versions.find((v: any) => v.id === selectedVersionId);
+    const level = readinessItems?.[watch.key]?.level;
+    const still = level === "pronto" ? [] : readinessPendingIds(watch.key, product, cur, level);
+    const finished = watch.ids.filter((id) => !still.includes(id));
+    if (finished.length === 0) return;
+    setWatch((w) => (w ? { ...w, ids: w.ids.filter((id) => still.includes(id)) } : w));
+    setDoneIds((d) => [...d, ...finished]);
+    window.setTimeout(() => setDoneIds((d) => d.filter((x) => !finished.includes(x))), 3500);
+  }, [product, readinessItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function goToReadinessItem(key: string) {
     const dest = readinessDestination(key, product);
-    setEditorTab(dest.tab);
-    if (dest.sub) setSubTabs((cur) => ({ ...cur, ...dest.sub }));
     const level = readinessItems?.[key]?.level;
-    const needsWork = level !== "pronto";
-    const perTask = key === "esforco_tarefas" || key === "prazo";
     const cur = product?.versions.find((v: any) => v.id === selectedVersionId);
-    setHighlightTarget(needsWork ? dest.target : null);
-    setHighlightTaskIds(needsWork && perTask ? (cur?.tasks ?? []).map((t: any) => t.id) : []);
-    setNavKey(needsWork ? key : null);
-    window.setTimeout(() => (document.getElementById(dest.target) ?? document.getElementById("catalog2-editor-tabs"))?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+    const ids = level === "pronto" ? [] : readinessPendingIds(key, product, cur, level);
+    setEditorTab(dest.tab);
+    if (dest.sub) setSubTabs((cur2) => ({ ...cur2, ...dest.sub }));
+    setHighlightTarget(null);
+    setHighlightTaskIds([]);
+    setDoneIds([]);
+    setWatch(ids.length ? { key, ids } : null);
+    window.setTimeout(() => (document.getElementById(ids[0] ?? dest.target) ?? document.getElementById("catalog2-editor-tabs"))?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
   }
-  const secRing = (id: string) => (highlightTarget === id ? "rounded-2xl bg-amber-50 p-3 ring-2 ring-amber-400 dark:bg-amber-900/20" : "");
+  const AMBER = "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30";
+  const GREEN = "rounded-lg bg-emerald-100 p-2 ring-2 ring-emerald-400 transition-colors dark:bg-emerald-900/30";
+  const ringOf = (id: string) => (doneIds.includes(id) ? GREEN : watch?.ids.includes(id) || highlightTarget === id ? AMBER : "");
+  const secRing = (id: string) => ringOf(id).replace("rounded-lg", "rounded-2xl").replace("p-2", "p-3");
 
   const version = useMemo(() => product?.versions.find((v: any) => v.id === selectedVersionId) ?? null, [product, selectedVersionId]);
   const readOnly = version?.state === "publicada";
@@ -173,6 +180,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   if (!product) return <div className="flex flex-1 flex-col items-start gap-3 p-10 text-sm text-red-600">Produto não encontrado.<Button size="sm" variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar</Button></div>;
 
   return (
+    <RingCtx.Provider value={ringOf}>
     <div className="product-editor flex min-h-0 min-w-0 flex-1 flex-col">
       <EditorHeader
         product={product}
@@ -262,11 +270,15 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       )}
       </div>
     </div>
+    </RingCtx.Provider>
   );
 }
 
 // ── 1. Geral ──────────────────────────────────────────────────────────
+const RingCtx = createContext<(id: string) => string>(() => "");
+
 function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTarget, clearHighlight }: any) {
+  const ringOf = useContext(RingCtx);
   const [f, setF] = useState({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" });
   const [draftStatus, setDraftStatus] = useState<string>(product.status ?? "em_preparacao");
   const [savingStatus, setSavingStatus] = useState(false);
@@ -317,7 +329,7 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
   return (
     <div id="catalog2-general" className="grid scroll-mt-6 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       <SectionCard icon={FileText} title="Dados principais" subtitle="Defina as informações básicas do seu produto.">
-        <div id="catalog2-field-title" className={highlightTarget === "catalog2-field-title" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}>
+        <div id="catalog2-field-title" className={ringOf("catalog2-field-title")}>
           <Field label={<>Título comercial<Req /></>}><Input disabled={readOnly} value={f.title} onChange={(e) => updateInfo({ title: e.target.value })} /></Field>
         </div>
         <Field label={<>Descrição curta<Req /></>}>
@@ -326,7 +338,7 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
             <CharCount value={f.summary} max={500} />
           </div>
         </Field>
-        <div id="catalog2-field-full-description" className={highlightTarget === "catalog2-field-full-description" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}>
+        <div id="catalog2-field-full-description" className={ringOf("catalog2-field-full-description")}>
           <Field label={<>Descrição completa<Req /></>}>
             <div className="space-y-1">
               <Textarea rows={5} maxLength={2000} disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} />
@@ -379,6 +391,7 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
 
 // ── 2. Classificações ─────────────────────────────────────────────────
 function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight }: any) {
+  const ringOf = useContext(RingCtx);
   const [pillar, setPillar] = useState(product.pillar?.id ?? "");
   const [category, setCategory] = useState(product.category?.id ?? "");
   const [fourF, setFourF] = useState<string[]>(product.four_f.map((f: any) => f.id));
@@ -389,17 +402,17 @@ function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight }: an
   });
   return (
     <div id="catalog2-classification" className="mt-3 space-y-3 scroll-mt-6">
-      <div id="catalog2-field-pillar" className={highlightTarget === "catalog2-field-pillar" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Pilar">
+      <div id="catalog2-field-pillar" className={ringOf("catalog2-field-pillar")}><Field label="Pilar">
         <select className="w-full rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={pillar} onChange={(e) => setPillar(e.target.value)}>
           <option value="">—</option>{refs.pillars.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </Field></div>
-      <div id="catalog2-field-category" className={highlightTarget === "catalog2-field-category" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Categoria">
+      <div id="catalog2-field-category" className={ringOf("catalog2-field-category")}><Field label="Categoria">
         <select className="w-full rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">—</option>{refs.categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </Field></div>
-      <div id="catalog2-field-four-f" className={highlightTarget === "catalog2-field-four-f" ? "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}><Field label="Classificações 4F">
+      <div id="catalog2-field-four-f" className={ringOf("catalog2-field-four-f")}><Field label="Classificações 4F">
         <div className="flex flex-wrap gap-3">
           {refs.fourF.map((f: any) => (
             <label key={f.id} className="flex items-center gap-1.5 text-sm">
@@ -519,6 +532,7 @@ function AddonsTab({ version, readOnly, act }: any) {
 // que são bibliotecas compartilhadas de verdade). "Criar nova" continua o
 // formulário inline já existente.
 function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTaskIds, clearHighlight }: any) {
+  const ringOf = useContext(RingCtx);
   const [nt, setNt] = useState({ key: "", name: "" });
   const [showCreate, setShowCreate] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -542,7 +556,7 @@ function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTask
               </div>
             )}
           </div>
-          {!readOnly && <TaskInlineEdit task={t} refs={refs} act={act} effortHighlighted={highlightTarget === "catalog2-task-effort" && highlightTaskIds.includes(t.id)} durationHighlighted={highlightTarget === "catalog2-task-duration" && highlightTaskIds.includes(t.id)} onSaved={(target: string) => clearHighlight(target)} />}
+          {!readOnly && <TaskInlineEdit task={t} refs={refs} act={act} effortHighlighted={(highlightTarget === "catalog2-task-effort" && highlightTaskIds.includes(t.id)) || ringOf("task-effort:" + t.id).includes("amber")} durationHighlighted={(highlightTarget === "catalog2-task-duration" && highlightTaskIds.includes(t.id)) || ringOf("task-duration:" + t.id).includes("amber")} effortDone={ringOf("task-effort:" + t.id).includes("emerald")} durationDone={ringOf("task-duration:" + t.id).includes("emerald")} onSaved={(target: string) => clearHighlight(target)} />}
           <ul className="mt-2 ml-3 space-y-1">
             {t.steps.map((s: any, si: number) => (
               <StepRow key={s.id} step={s} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} />
@@ -552,7 +566,7 @@ function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTask
         </div>
       ))}
       {!readOnly && (
-        <div id="catalog2-task-create" className={`space-y-2 rounded-lg border border-dashed border-neutral-300 p-3 dark:border-neutral-700 ${highlightTarget === "catalog2-task-create" ? "bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : ""}`}>
+        <div id="catalog2-task-create" className={`space-y-2 rounded-lg border border-dashed border-neutral-300 p-3 dark:border-neutral-700 ${ringOf("catalog2-task-create")}`}>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant={showSearch ? "outline" : "default"} onClick={() => { setShowSearch((v) => !v); setShowCreate(false); }}>
               <Search className="h-4 w-4" /> Selecionar existente
@@ -647,7 +661,7 @@ function TaskLibrarySearch({ excludeVersionId, onImport }: { excludeVersionId: s
     </div>
   );
 }
-function TaskInlineEdit({ task, refs, act, effortHighlighted, durationHighlighted, onSaved }: any) {
+function TaskInlineEdit({ task, refs, act, effortHighlighted, durationHighlighted, effortDone, durationDone, onSaved }: any) {
   const [t, setT] = useState({ execution_mode: task.execution_mode, estimated_minutes: task.estimated_minutes ?? "", specialty_id: task.specialty?.id ?? "", is_conditional: task.is_conditional, requires_review: task.requires_review, requires_client_approval: task.requires_client_approval });
   const [showNewSpecialty, setShowNewSpecialty] = useState(false);
   const saveTask = () => act(
@@ -664,11 +678,11 @@ function TaskInlineEdit({ task, refs, act, effortHighlighted, durationHighlighte
         <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.execution_mode} onChange={(e) => setT({ ...t, execution_mode: e.target.value })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.specialty_id} onChange={(e) => setT({ ...t, specialty_id: e.target.value })}><option value="">sem especialidade</option>{refs.specialties.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         <button type="button" className="text-neutral-500 underline hover:text-neutral-900 dark:hover:text-neutral-100" onClick={() => setShowNewSpecialty((v) => !v)}>+ nova especialidade</button>
-        <label>min <input type="number" className={`w-16 rounded border bg-transparent px-1 dark:border-neutral-700 ${durationHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.estimated_minutes} onChange={(e) => setT({ ...t, estimated_minutes: e.target.value })} /></label>
+        <label>min <input id={"task-duration:" + task.id} type="number" className={`w-16 rounded border bg-transparent px-1 dark:border-neutral-700 ${durationDone ? "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : durationHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.estimated_minutes} onChange={(e) => setT({ ...t, estimated_minutes: e.target.value })} /></label>
         <label><input type="checkbox" checked={t.is_conditional} onChange={(e) => setT({ ...t, is_conditional: e.target.checked })} /> condicional</label>
         <label><input type="checkbox" checked={t.requires_review} onChange={(e) => setT({ ...t, requires_review: e.target.checked })} /> revisão</label>
         <label><input type="checkbox" checked={t.requires_client_approval} onChange={(e) => setT({ ...t, requires_client_approval: e.target.checked })} /> aprovação cliente</label>
-        <Button size="sm" variant="outline" className={`h-6 ${effortHighlighted ? "border-amber-500 bg-amber-100 text-amber-950 ring-2 ring-amber-400 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-100" : ""}`} onClick={saveTask}>Salvar tarefa</Button>
+        <Button id={"task-effort:" + task.id} size="sm" variant="outline" className={`h-6 ${effortDone ? "border-emerald-500 bg-emerald-100 text-emerald-900 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : effortHighlighted ? "border-amber-500 bg-amber-100 text-amber-950 ring-2 ring-amber-400 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-100" : ""}`} onClick={saveTask}>Salvar tarefa</Button>
       </div>
       {effortHighlighted && <p className="text-amber-700 dark:text-amber-300">Dados provisórios de teste: revise os valores já preenchidos e clique em <strong>Salvar tarefa</strong> para confirmá-los como dados reais.</p>}
       {showNewSpecialty && (
@@ -988,6 +1002,7 @@ function ConditionsTab({ version, readOnly, act }: any) {
 
 // ── 7. Custos e preço (simulador) ───────────────────────────────────
 function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget, clearHighlight }: any) {
+  const ringOf = useContext(RingCtx);
   const [sel, setSel] = useState<any>({ variation_option_keys: [], addon_keys: [], quantity: 1, answers: {} });
   const [result, setResult] = useState<any>(null);
   const [pricing, setPricing] = useState<any>(null);
@@ -1004,7 +1019,7 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
   useEffect(() => { void run(); /* eslint-disable-next-line */ }, [JSON.stringify(sel), version.id]);
 
   return (
-    <div id="catalog2-costs" className="mt-3 grid gap-4 scroll-mt-6 md:grid-cols-2">
+    <div id="catalog2-costs" className={`mt-3 grid gap-4 scroll-mt-6 md:grid-cols-2 ${ringOf("catalog2-costs").replace("rounded-lg", "rounded-2xl")}`}>
       <div className="space-y-3">
         {highlightTarget === "catalog2-costs" && <p className="rounded-lg border border-amber-400 bg-amber-100 p-2 text-sm text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">Há uma pendência comercial de preço ou prazo. Revise o valor que está marcado como “aguardando definição comercial” e salve a alteração.</p>}
         <h3 className="text-sm font-semibold">Módulo de precificação (taxas e margens)</h3>
@@ -1863,6 +1878,35 @@ const READINESS_TONE: Record<string, string> = {
   bloqueador: "bg-red-100 text-red-700",
   opcional: "bg-neutral-100 text-neutral-600",
 };
+
+// Campos exatos que ainda impedem o item de ficar pronto (ids de elementos).
+function readinessPendingIds(key: string, product: any, version: any, level?: string): string[] {
+  const tasks: any[] = version?.tasks ?? [];
+  const out: string[] = [];
+  switch (key) {
+    case "conteudo":
+      if (!String(version?.title ?? "").trim()) out.push("catalog2-field-title");
+      if (!String(version?.full_description ?? "").trim()) out.push("catalog2-field-full-description");
+      if (!out.length) out.push("catalog2-field-full-description");
+      return out;
+    case "classificacao":
+      if (!product?.pillar) out.push("catalog2-field-pillar");
+      if (!product?.category) out.push("catalog2-field-category");
+      if (!(product?.four_f?.length > 0)) out.push("catalog2-field-four-f");
+      if (!out.length) out.push("catalog2-field-category");
+      return out;
+    case "esforco_tarefas": {
+      const miss = tasks.filter((t) => !t.specialty?.id || t.estimated_minutes == null).map((t) => "task-effort:" + t.id);
+      return miss.length ? miss : tasks.map((t) => "task-effort:" + t.id);
+    }
+    case "prazo": {
+      const miss = tasks.filter((t) => t.estimated_minutes == null || Number(t.estimated_minutes) <= 0).map((t) => "task-duration:" + t.id);
+      return miss.length ? miss : tasks.map((t) => "task-duration:" + t.id);
+    }
+    default:
+      return [readinessDestination(key, product).target];
+  }
+}
 
 // Destino de cada item de prontidão: aba, sub-aba e campo a destacar.
 function readinessDestination(key: string, product: any): { tab: string; sub?: Record<string, string>; target: string } {
