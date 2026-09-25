@@ -187,7 +187,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         selectedVersionId={selectedVersionId}
         onSelectVersion={setSelectedVersionId}
         onBack={onBack}
-        onRefresh={() => void load()}
+        onRefresh={async () => { await load(); setMsg("Dados do produto atualizados."); }}
         canNewVersion={!!product.published_version_id && !product.versions.some((v: any) => v.state === "rascunho")}
         onNewVersion={() => act(() => apiClient.newCatalog2Version(productId), "Nova versão rascunho criada.")}
         pin={pin}
@@ -2190,6 +2190,11 @@ function fmtUpdatedAt(raw?: string | null) {
 // bandeja) e fechar. Pedido do usuário 2026-09-25 (layout de referência).
 function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin }: any) {
   const { pinned, toggle } = usePinEntry(pin ?? null);
+  const [spinning, setSpinning] = useState(false);
+  const refresh = async () => {
+    setSpinning(true);
+    try { await onRefresh(); } finally { window.setTimeout(() => setSpinning(false), 600); }
+  };
   return (
     <div
       className="flex shrink-0 flex-wrap items-center gap-3 px-5 py-4 sm:px-6"
@@ -2216,8 +2221,19 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
           <option key={v.id} value={v.id}>v{v.version_number} — {v.state}{v.is_published_current ? " (publicada atual)" : ""}</option>
         ))}
       </select>
-      <button type="button" onClick={onRefresh} aria-label="Atualizar" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
-        <RefreshCw className="h-5 w-5" />
+      {pin && (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={pinned ? "Remover da Bandeja de Telas" : "Fixar na Bandeja de Telas"}
+          title={pinned ? "Remover da Bandeja de Telas" : "Fixar na Bandeja de Telas"}
+          className={`rounded-lg p-2 transition-colors hover:bg-white/15 ${pinned ? "text-amber-300" : "text-white/90 hover:text-white"}`}
+        >
+          <Pin className={`h-5 w-5 ${pinned ? "fill-current" : ""}`} />
+        </button>
+      )}
+      <button type="button" onClick={refresh} aria-label="Recarregar dados do produto" title="Recarregar os dados do produto (busca de novo no servidor o que foi salvo)" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
+        <RefreshCw className={`h-5 w-5 ${spinning ? "animate-spin" : ""}`} />
       </button>
       {(canNewVersion || pin) && (
         <DropdownMenu>

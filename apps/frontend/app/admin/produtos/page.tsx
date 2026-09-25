@@ -150,6 +150,20 @@ const SORTABLE_COLUMNS: Partial<Record<ProductColumnKey, string>> = {
 };
 const PRODUCT_LIST_PREFERENCES_KEY = "allka:admin-products-list-preferences";
 
+// Lembra ordenação e itens por página entre acessos (Ctrl+F5, novo login).
+function readSavedListPrefs(): { sort?: string; pageSize?: number } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PRODUCT_LIST_PREFERENCES_KEY) || "{}");
+    const pageSize = Number(saved.pageSize);
+    return {
+      sort: typeof saved.sort === "string" && saved.sort ? saved.sort : undefined,
+      pageSize: Number.isInteger(pageSize) && pageSize >= 5 && pageSize <= 200 ? pageSize : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 function defaultProductColumnWidths() {
   return Object.fromEntries(
     PRODUCT_COLUMNS.map((column) => [column.key, column.width]),
@@ -233,12 +247,15 @@ export default function AdminProdutosPage() {
 
   // Número do produto (sequence_number) do editor aberto — vira o final da URL.
   const [openProductNumber, setOpenProductNumber] = useState<number | null>(null);
+  // Evita reabrir o editor logo após fechar (a URL ainda leva o número por um instante).
+  const resolvedRouteRef = useRef<string | null>(null);
   useEffect(() => {
-    if (openProductId || !routeProductId || !/^\d+$/.test(routeProductId)) return;
+    if (!routeProductId) { resolvedRouteRef.current = null; return; }
+    if (openProductId || !/^\d+$/.test(routeProductId) || resolvedRouteRef.current === routeProductId) return;
     let cancelled = false;
     apiClient
       .getCatalog2ProductIdByNumber(routeProductId)
-      .then((r) => { if (!cancelled) setOpenProductId(r.id); })
+      .then((r) => { if (!cancelled) { resolvedRouteRef.current = routeProductId; setOpenProductId(r.id); } })
       .catch(() => { if (!cancelled) navigate("/admin/produtos", { replace: true }); });
     return () => { cancelled = true; };
   }, [openProductId, routeProductId, navigate]);
@@ -254,6 +271,7 @@ export default function AdminProdutosPage() {
   useEffect(() => {
     if (!openProductId || openProductNumber == null) return;
     if (routeProductId === String(openProductNumber) && !searchParams.get("produto")) return;
+    resolvedRouteRef.current = String(openProductNumber);
     navigate({ pathname: `/admin/produtos/${openProductNumber}`, search: "" }, { replace: true });
   }, [openProductId, openProductNumber, routeProductId, searchParams, navigate]);
 
@@ -287,7 +305,7 @@ export default function AdminProdutosPage() {
   // booleano, então "Com pendências" só reabria "Categorias" e nunca
   // filtrava nada — ver teste "bug real: Com pendências").
   const [onlyPendencies, setOnlyPendencies] = useState(false);
-  const [sort, setSort] = useState("name");
+  const [sort, setSort] = useState<string>(() => readSavedListPrefs().sort ?? "name");
   const [importSummary, setImportSummary] = useState<any>(null);
   const [readiness, setReadiness] = useState<any>(null);
   const [showCategoryFilters, setShowCategoryFilters] = useState(false);
@@ -343,7 +361,7 @@ export default function AdminProdutosPage() {
     startWidth: number;
   } | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState<number>(() => readSavedListPrefs().pageSize ?? 10);
   const [pageJumpValue, setPageJumpValue] = useState("");
   const [list, setList] = useState<{
     data: any[];
@@ -373,9 +391,11 @@ export default function AdminProdutosPage() {
       JSON.stringify({
         visible: [...visibleProductColumns],
         widths: productColumnWidths,
+        sort,
+        pageSize,
       }),
     );
-  }, [visibleProductColumns, productColumnWidths]);
+  }, [visibleProductColumns, productColumnWidths, sort, pageSize]);
 
   const beginProductColumnResize = useCallback(
     (event: React.PointerEvent, key: ProductColumnKey) => {
