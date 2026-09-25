@@ -945,6 +945,17 @@ router.get("/products", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Link curto do editor: /admin/produtos/<número do produto> -> id interno.
+router.get("/products/by-number/:n", async (req, res, next) => {
+  try {
+    const n = Number(req.params.n);
+    if (!Number.isInteger(n)) { res.status(404).json({ error: "Produto não encontrado." }); return; }
+    const p = await prisma.catalog2Product.findFirst({ where: { sequence_number: n }, select: { id: true } });
+    if (!p) { res.status(404).json({ error: "Produto não encontrado." }); return; }
+    res.json({ id: p.id });
+  } catch (e) { next(e); }
+});
+
 router.get("/products/:id", async (req, res, next) => {
   try { res.json(await getProductDetail(req.params.id as string)); } catch (e) { handle(e, res, next); }
 });
@@ -2379,9 +2390,8 @@ async function computeProductReadiness(p: ReadinessProduct) {
     prazo: pricing && !pricing.deadline.commercial_deadline_pending
       ? { level: "pronto", note: `Prazo comercial ${pricing.deadline.commercial_deadline_days} dia(s).` }
       : { level: "bloqueador", note: "Prazo comercial base não definido." },
-    // Produtos novos (sem vínculo com a plataforma antiga): portfólio é opcional
-    // e não existe mais revisão da Rose / pendências de importação.
-    portfolio: { level: "opcional", note: "Portfólio é opcional (não bloqueia a venda)." },
+    // Produtos novos (sem vínculo com a plataforma antiga): não existe mais
+    // portfólio obrigatório, revisão da Rose nem pendências de importação.
     publicacao: published
       ? { level: "pronto", note: `v${published.version_number} publicada.` }
       : { level: "bloqueador", note: "Nunca publicado — invisível para o cliente (bloco 5 não publica)." },

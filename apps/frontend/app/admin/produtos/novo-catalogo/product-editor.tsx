@@ -112,7 +112,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
     setHighlightTaskIds([]);
     setDoneIds([]);
     setWatch(ids.length ? { key, ids } : null);
-    window.setTimeout(() => (document.getElementById(ids[0] ?? dest.target) ?? document.getElementById("catalog2-editor-tabs"))?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+    window.setTimeout(() => (document.getElementById(ids[0] ?? dest.target) ?? document.getElementById(dest.target) ?? document.getElementById("catalog2-tasks") ?? document.getElementById("catalog2-editor-tabs"))?.scrollIntoView({ behavior: "smooth", block: "center" }), 350);
   }
   const AMBER = "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30";
   const GREEN = "rounded-lg bg-emerald-100 p-2 ring-2 ring-emerald-400 transition-colors dark:bg-emerald-900/30";
@@ -530,7 +530,7 @@ function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTask
   const [showSearch, setShowSearch] = useState(false);
   const tasks = version.tasks;
   return (
-    <div className="mt-3 space-y-3">
+    <div id="catalog2-tasks" className="mt-3 scroll-mt-6 space-y-3">
       <p className="text-xs text-neutral-500">Modelos do catálogo (não são tarefas de projetos). Ordene pelas setas. Publicada = imutável.</p>
       {tasks.map((t: any, i: number) => (
         <div key={t.id} className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
@@ -553,7 +553,7 @@ function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTask
             {t.steps.map((s: any, si: number) => (
               <StepRow key={s.id} step={s} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} />
             ))}
-            {!readOnly && <AddStepRow refs={refs} onAdd={(b: any) => act(() => apiClient.addCatalog2Step(t.id, b), "Etapa adicionada.")} />}
+            {!readOnly && <AddStepRow ringClass={ringOf("catalog2-step-add:" + t.id)} domId={"catalog2-step-add:" + t.id} refs={refs} onAdd={(b: any) => act(() => apiClient.addCatalog2Step(t.id, b), "Etapa adicionada.")} />}
           </ul>
         </div>
       ))}
@@ -955,10 +955,10 @@ function AiConfig({ task, act }: any) {
     </details>
   );
 }
-function AddStepRow({ onAdd, refs }: { onAdd: (b: any) => void; refs?: any }) {
+function AddStepRow({ onAdd, refs, ringClass, domId }: { onAdd: (b: any) => void; refs?: any; ringClass?: string; domId?: string }) {
   const [s, setS] = useState({ key: "", name: "", estimated_minutes: "", specialty_id: "" });
   return (
-    <li className="flex items-end gap-2">
+    <li id={domId} className={`flex items-end gap-2 ${ringClass ?? ""}`}>
       <Field label="key"><Input value={s.key} onChange={(e) => setS({ ...s, key: e.target.value })} /></Field>
       <Field label="nome"><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} /></Field>
       <Field label="especialidade"><SpecialtySelect refs={refs} value={s.specialty_id} onChange={(v: string) => setS({ ...s, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
@@ -1878,7 +1878,7 @@ function fmt(v: unknown): string {
 // ── Prontidão do produto (atalho — reunião 10/09/2026, bloco 2) ────
 // Consome GET /catalog2-admin/products/:id/readiness — MESMA regra do painel
 // geral (nenhuma validação duplicada no frontend). Só leitura.
-const READINESS_ITEM_LABEL: Record<string, string> = {
+export const READINESS_ITEM_LABEL: Record<string, string> = {
   conteudo: "Conteúdo",
   classificacao: "Classificação",
   variacoes: "Variações",
@@ -1918,6 +1918,10 @@ function readinessPendingIds(key: string, product: any, version: any, level?: st
     case "preco":
       if (priceBlockedByTasks(note)) return readinessPendingIds("esforco_tarefas", product, version, level, note);
       return ["catalog2-pricing-link"];
+    case "etapas": {
+      const first = tasks[0];
+      return first ? ["catalog2-step-add:" + first.id] : ["catalog2-tasks"];
+    }
     case "esforco_tarefas": {
       const miss = tasks.filter((t) => {
         const sm = (t.steps ?? []).filter((x: any) => (x.estimated_minutes ?? 0) > 0);
@@ -1944,8 +1948,8 @@ function readinessDestination(key: string, product: any, note?: string): { tab: 
     case "classificacao": return { tab: "opcoes", sub: { opcoes: "class" }, target: !product?.pillar ? "catalog2-field-pillar" : !product?.category ? "catalog2-field-category" : "catalog2-field-four-f" };
     case "variacoes": return { tab: "opcoes", sub: { opcoes: "var" }, target: "sec-var" };
     case "adicionais": return { tab: "opcoes", sub: { opcoes: "add" }, target: "sec-add" };
-    case "tarefas":
-    case "etapas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-create" };
+    case "tarefas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-create" };
+    case "etapas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-tasks" };
     case "esforco_tarefas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" };
     case "prazo": return { tab: "precos", target: "catalog2-deadline-base" };
     case "preco": return priceBlockedByTasks(note) ? { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" } : { tab: "precos", target: "catalog2-pricing-link" };

@@ -844,6 +844,9 @@ class ApiClient {
       `/admin/catalog2/products${qs.toString() ? `?${qs}` : ""}`,
     );
   }
+  async getCatalog2ProductIdByNumber(n: string | number) {
+    return this.get<{ id: string }>(`/admin/catalog2/products/by-number/${n}`);
+  }
   async getCatalog2Product(id: string) {
     return this.get<any>(`/admin/catalog2/products/${id}`);
   }

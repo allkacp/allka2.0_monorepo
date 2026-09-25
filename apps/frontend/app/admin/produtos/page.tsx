@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -71,7 +71,7 @@ import {
   catalog2CategoryTone,
   catalog2EditorialImage,
 } from "@/lib/catalog2-editorial";
-import { ProductEditor } from "@/app/admin/produtos/novo-catalogo/product-editor";
+import { ProductEditor, READINESS_ITEM_LABEL } from "@/app/admin/produtos/novo-catalogo/product-editor";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
@@ -156,9 +156,51 @@ function defaultProductColumnWidths() {
   ) as Record<ProductColumnKey, number>;
 }
 
+// Pendências = bloqueios + pendentes da PRONTIDÃO (mesma conta do editor).
+function openReadinessItems(rp: any): { key: string; level: string; note: string }[] {
+  if (!rp?.items) return [];
+  return Object.entries(rp.items)
+    .filter(([, v]: any) => v.level === "bloqueador" || v.level === "pendente")
+    .map(([key, v]: any) => ({ key, level: v.level, note: v.note }));
+}
+
+function ReadinessPendingBadge({ rp }: { rp: any }) {
+  if (!rp?.items) {
+    return <span className="whitespace-nowrap text-[11px] text-muted-foreground">…</span>;
+  }
+  const items = openReadinessItems(rp);
+  if (items.length === 0) {
+    return <span className="whitespace-nowrap text-[11px] text-muted-foreground">Sem pendências</span>;
+  }
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span>
+            <Badge className="whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+              {items.length} pendência(s)
+            </Badge>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="left" className="max-w-sm space-y-1">
+          {items.map((it) => (
+            <p key={it.key} className="text-xs">
+              <strong>{it.level === "bloqueador" ? "Bloqueio" : "Pendente"} · {READINESS_ITEM_LABEL[it.key] ?? it.key}:</strong> {it.note}
+            </p>
+          ))}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export default function AdminProdutosPage() {
   const isAdminMaster = useIsAdminMaster();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  // /admin/produtos/<número> abre o editor daquele produto (link curto, igual
+  // ao do Catálogo). Aceita também o id interno e o antigo ?produto=<id>.
+  const { produtoId: routeProductId } = useParams<{ produtoId?: string }>();
   const [state, setState] = useState<
     "loading" | "ready" | "forbidden" | "error"
   >("loading");
@@ -170,7 +212,8 @@ export default function AdminProdutosPage() {
   // ?produto=<id> abre o construtor direto (deep link preservado do redirect
   // de /admin/produtos/novo-catalogo e de qualquer link externo).
   const [openProductId, setOpenProductId] = useState<string | null>(() =>
-    searchParams.get("produto"),
+    searchParams.get("produto") ??
+    (routeProductId && !/^\d+$/.test(routeProductId) ? routeProductId : null),
   );
   // ?ver=<id> abre o DETALHE completo (só leitura) — ação separada do
   // construtor (?produto=<id>). Ícone de olho → detalhe; ícone de lápis →
@@ -183,18 +226,36 @@ export default function AdminProdutosPage() {
   const openProduct = useCallback(
     (id: string | null) => {
       setOpenProductId(id);
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (id) next.set("produto", id);
-          else next.delete("produto");
-          return next;
-        },
-        { replace: true },
-      );
+      if (!id) navigate({ pathname: "/admin/produtos", search: "" }, { replace: true });
     },
-    [setSearchParams],
+    [navigate],
   );
+
+  // Número do produto (sequence_number) do editor aberto — vira o final da URL.
+  const [openProductNumber, setOpenProductNumber] = useState<number | null>(null);
+  useEffect(() => {
+    if (openProductId || !routeProductId || !/^\d+$/.test(routeProductId)) return;
+    let cancelled = false;
+    apiClient
+      .getCatalog2ProductIdByNumber(routeProductId)
+      .then((r) => { if (!cancelled) setOpenProductId(r.id); })
+      .catch(() => { if (!cancelled) navigate("/admin/produtos", { replace: true }); });
+    return () => { cancelled = true; };
+  }, [openProductId, routeProductId, navigate]);
+  useEffect(() => {
+    if (!openProductId) { setOpenProductNumber(null); return; }
+    let cancelled = false;
+    apiClient
+      .getCatalog2Product(openProductId)
+      .then((d: any) => { if (!cancelled) setOpenProductNumber(d?.sequence_number ?? null); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [openProductId]);
+  useEffect(() => {
+    if (!openProductId || openProductNumber == null) return;
+    if (routeProductId === String(openProductNumber) && !searchParams.get("produto")) return;
+    navigate({ pathname: `/admin/produtos/${openProductNumber}`, search: "" }, { replace: true });
+  }, [openProductId, openProductNumber, routeProductId, searchParams, navigate]);
 
   const viewProduct = useCallback(
     (id: string | null) => {
@@ -1337,20 +1398,7 @@ export default function AdminProdutosPage() {
                               )}
                             </td>
                             <td className="px-2 py-1">
-                              {pend.length === 0 &&
-                              !!p.rose_reviewed !== false &&
-                              !p.human_edited ? (
-                                <span className="whitespace-nowrap text-[11px] text-muted-foreground">
-                                  Sem pendências
-                                </span>
-                              ) : (
-                                <Badge className="whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-                                  {pend.length +
-                                    (p.rose_reviewed ? 0 : 1) +
-                                    (p.human_edited ? 1 : 0)}{" "}
-                                  pendência(s)
-                                </Badge>
-                              )}
+                              <ReadinessPendingBadge rp={rp} />
                             </td>
                             <td className="px-2 py-1">
                               <div className="flex items-center gap-1.5 whitespace-nowrap">
@@ -1501,9 +1549,12 @@ export default function AdminProdutosPage() {
                           </TooltipProvider>
                           {!isCompact && (
                             <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">
-                              {pend.length
-                                ? `${pend.length} pendência(s) para revisar`
-                                : "Produto pronto para continuar a configuração"}
+                              {(() => {
+                                const n = openReadinessItems(rp).length;
+                                return n
+                                  ? `${n} pendência(s) para revisar`
+                                  : "Produto pronto para continuar a configuração";
+                              })()}
                             </p>
                           )}
                           <div className="mt-auto flex items-center gap-2 pt-1.5">
@@ -1700,7 +1751,7 @@ export default function AdminProdutosPage() {
                 id: `catalog2-produto-${openProductId}`,
                 label: "Editor de produto",
                 icon: Package,
-                path: `/admin/produtos?produto=${openProductId}`,
+                path: openProductNumber != null ? `/admin/produtos/${openProductNumber}` : `/admin/produtos/${openProductId}`,
               }}
               notice={(() => {
                 const rp = readinessById[openProductId];

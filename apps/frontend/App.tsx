@@ -860,11 +860,7 @@ export default function App() {
                     element={<AdminProjetosPage />}
                   />
                   <Route
-                    path="/admin/produtos"
-                    element={<AdminProdutosPage />}
-                  />
-                  <Route
-                    path="/admin/produtos/:produtoId"
+                    path="/admin/produtos/:produtoId?"
                     element={<AdminProdutosPage />}
                   />
                   <Route
