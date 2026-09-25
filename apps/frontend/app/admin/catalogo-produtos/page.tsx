@@ -59,7 +59,12 @@ import {
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { Catalog2ProductCard } from "@/components/catalog2-product-card";
-import { Catalog2ProductListRow, Catalog2ProductListHeader } from "@/components/catalog2-product-list-row";
+import {
+  Catalog2ProductListRow,
+  Catalog2ProductListHeader,
+  useCatalog2ListColumns,
+  type ListColumnKey,
+} from "@/components/catalog2-product-list-row";
 import { ProvisionalBadge } from "@/components/provisional-badge";
 import {
   usePersistedViewMode,
@@ -211,6 +216,26 @@ function catalogProductShortCode(p: Merged) {
 // (determinístico, nunca inventado na hora) só pra ordenar administrativamente
 // os produtos que ainda não têm preço pronto — nunca exibido como se fosse
 // comercial (o card/linha sempre mostra o selo "provisório" ao lado).
+function categoryForSort(p: Merged): string {
+  return p.list?.category?.name ?? "Sem categoria";
+}
+function tasksForSort(p: Merged): number {
+  return p.task_count > 0 ? p.task_count : provisionalTaskCount(p.id).value;
+}
+function pendenciesForSort(p: Merged): number {
+  return p.blockers.length + p.pendings.length;
+}
+function deadlineForSort(p: Merged): number {
+  return (
+    p.deadline_days ??
+    p.pricing_simulation?.deadline_days ??
+    p.provisional?.deadline_days ??
+    provisionalDeadlineDays(p.id).value
+  );
+}
+function statusForSort(p: Merged): string {
+  return STATUS_LABEL[p.status] ?? p.status;
+}
 function priceForSort(p: Merged): number {
   return (
     p.price_amount ??
@@ -342,6 +367,28 @@ const SORTS = {
     label: "Maior preço",
     fn: (a: Merged, b: Merged) => priceForSort(b) - priceForSort(a),
   },
+  category: {
+    label: "Categoria A–Z",
+    fn: (a: Merged, b: Merged) => categoryForSort(a).localeCompare(categoryForSort(b), "pt-BR"),
+  },
+  category_desc: {
+    label: "Categoria Z–A",
+    fn: (a: Merged, b: Merged) => categoryForSort(b).localeCompare(categoryForSort(a), "pt-BR"),
+  },
+  tasks: { label: "Menos tarefas", fn: (a: Merged, b: Merged) => tasksForSort(a) - tasksForSort(b) },
+  tasks_desc: { label: "Mais tarefas", fn: (a: Merged, b: Merged) => tasksForSort(b) - tasksForSort(a) },
+  pendencies: { label: "Menos pendências", fn: (a: Merged, b: Merged) => pendenciesForSort(a) - pendenciesForSort(b) },
+  pendencies_desc: { label: "Mais pendências", fn: (a: Merged, b: Merged) => pendenciesForSort(b) - pendenciesForSort(a) },
+  deadline: { label: "Menor prazo", fn: (a: Merged, b: Merged) => deadlineForSort(a) - deadlineForSort(b) },
+  deadline_desc: { label: "Maior prazo", fn: (a: Merged, b: Merged) => deadlineForSort(b) - deadlineForSort(a) },
+  status: {
+    label: "Status A–Z",
+    fn: (a: Merged, b: Merged) => statusForSort(a).localeCompare(statusForSort(b), "pt-BR"),
+  },
+  status_desc: {
+    label: "Status Z–A",
+    fn: (a: Merged, b: Merged) => statusForSort(b).localeCompare(statusForSort(a), "pt-BR"),
+  },
   updated: {
     label: "Alterado recentemente",
     fn: (a: Merged, b: Merged) =>
@@ -349,6 +396,19 @@ const SORTS = {
       new Date(a.list?.updated_at ?? 0).getTime(),
   },
 } as const;
+
+// Ordenação por coluna (cabeçalho clicável da lista): cada coluna ordena pelo
+// MESMO valor que a linha mostra (real → simulação → provisório).
+const COLUMN_SORT: Partial<Record<ListColumnKey, { asc: keyof typeof SORTS; desc: keyof typeof SORTS }>> = {
+  product: { asc: "name", desc: "name_desc" },
+  category: { asc: "category", desc: "category_desc" },
+  tasks: { asc: "tasks", desc: "tasks_desc" },
+  pendencies: { asc: "pendencies", desc: "pendencies_desc" },
+  deadline: { asc: "deadline", desc: "deadline_desc" },
+  price: { asc: "price_asc", desc: "price_desc" },
+  status: { asc: "status", desc: "status_desc" },
+};
+const SORTABLE_COLUMN_KEYS = Object.keys(COLUMN_SORT) as ListColumnKey[];
 
 // Do Catálogo publicado, sem dado real no catalog2 ainda: nenhum produto
 // tem venda ou avaliação registrada (nenhum campo no schema). Mostradas
@@ -456,6 +516,20 @@ export default function AdminCatalogoProdutosPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("Todos");
   const [sort, setSort] = useState<keyof typeof SORTS>("name");
+  const listColumns = useCatalog2ListColumns(true, "allka:admin-catalog-list-columns-v1");
+  const activeColumnSort = (() => {
+    for (const key of SORTABLE_COLUMN_KEYS) {
+      const m = COLUMN_SORT[key]!;
+      if (m.asc === sort) return { key, dir: "asc" as const };
+      if (m.desc === sort) return { key, dir: "desc" as const };
+    }
+    return null;
+  })();
+  const sortByColumn = (key: ListColumnKey) => {
+    const m = COLUMN_SORT[key];
+    if (!m) return;
+    setSort(activeColumnSort?.key === key && activeColumnSort.dir === "asc" ? m.desc : m.asc);
+  };
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<CatalogFilters>(DEFAULT_FILTERS);
   const [draftFilters, setDraftFilters] =
@@ -976,13 +1050,32 @@ export default function AdminCatalogoProdutosPage() {
               </div>
             ) : gridMode === "list" ? (
               <div className="overflow-x-auto rounded-xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
-                <div className="min-w-[1120px]">
-                  <Catalog2ProductListHeader showAdminColumns />
+                {listColumns.customized && (
+                  <div className="flex justify-end border-b border-slate-200 bg-slate-50 px-4 py-1 dark:border-slate-700 dark:bg-slate-900/60">
+                    <button
+                      type="button"
+                      onClick={listColumns.reset}
+                      className="text-[10px] font-semibold uppercase tracking-wide text-violet-700 hover:underline dark:text-violet-300"
+                    >
+                      Restaurar larguras das colunas
+                    </button>
+                  </div>
+                )}
+                <div style={{ minWidth: listColumns.minWidth ?? 1120 }}>
+                  <Catalog2ProductListHeader
+                    showAdminColumns
+                    columns={listColumns}
+                    sortableKeys={SORTABLE_COLUMN_KEYS}
+                    activeSort={activeColumnSort}
+                    onSort={sortByColumn}
+                  />
                 </div>
-                <ul className="min-w-[1120px] divide-y divide-slate-100 dark:divide-slate-800">
-                  {filtered.map((p) => (
+                <ul style={{ minWidth: listColumns.minWidth ?? 1120 }}>
+                  {filtered.map((p, index) => (
                     <ProductListRow
                       key={p.id}
+                      gridTemplate={listColumns.template}
+                      stripe={index % 2 === 1}
                       product={p}
                       onOpen={() => setOpenProductId(p.id)}
                       onChoose={() => openFullDetail(p)}
@@ -1240,7 +1333,11 @@ function ProductListRow({
   onOpen,
   onChoose,
   isAdminMaster = false,
+  gridTemplate,
+  stripe,
 }: {
+  gridTemplate?: string;
+  stripe?: boolean;
   product: Merged;
   onOpen: () => void;
   onChoose: () => void;
@@ -1275,6 +1372,8 @@ function ProductListRow({
       description={p.list?.summary}
       categoryName={categoryName}
       showAdminColumns
+      gridTemplate={gridTemplate}
+      stripe={stripe}
       onOpen={onChoose}
       taskCount={p.task_count > 0 ? `${p.task_count} tarefa(s)` : `${taskProv.value} tarefa(s)`}
       pendencyBadge={

@@ -1237,7 +1237,7 @@ export default function AdminProdutosPage() {
                         return (
                           <tr
                             key={p.id}
-                            className="group h-12 odd:bg-white even:bg-slate-50/70 transition-colors hover:bg-blue-50/70 dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
+                            className="group h-12 odd:bg-slate-100 even:bg-slate-200/70 transition-colors hover:bg-violet-100/70 dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
                           >
                             <td className="px-2 py-1">
                               <span className="font-mono text-xs font-semibold text-slate-500 dark:text-slate-400">

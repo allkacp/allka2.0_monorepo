@@ -5,6 +5,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 ## Pendente de deploy (local, ainda NÃO subiu)
 - **Frontend** `apps/frontend/app/admin/produtos/page.tsx` — Cadastro de Produtos: cabeçalhos clicáveis para ordenar (#, Produto, Categoria, Preço, Status; clica de novo inverte) e fundo lilás para diferenciar do Catálogo de Produtos.
 - **Backend** `apps/backend/src/routes/catalog2-admin.ts` — novas ordenações da listagem de produtos (por # de importação, categoria, status e preço; preço usa o mesmo valor mostrado na coluna) e desempate estável.
+- **Frontend** `components/catalog2-product-list-row.tsx` (lista compartilhada) + `app/admin/catalogo-produtos/page.tsx` + `components/catalog2/catalog2-store.tsx` — Catálogo de Produtos: cabeçalhos clicáveis para ordenar TODAS as colunas (produto, categoria, tarefas, pendências, prazo, preço, status), arrastar a borda para mudar a largura (fica salvo; botão "Restaurar larguras"), linhas alternando cinza claro/escuro (sem branco). A loja de company/agency usa o mesmo componente (só ganha o cinza alternado). No Cadastro de Produtos as linhas brancas também viraram cinza claro/escuro.
 - Nenhuma migration nem dado envolvido.
 
 ## Já no ar (deploy de 2026-09-25)

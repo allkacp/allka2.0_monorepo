@@ -264,9 +264,10 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
             <Catalog2ProductListHeader />
           </div>
           <ul className="min-w-[900px] divide-y divide-slate-100 dark:divide-slate-800">
-            {filteredRows.map((p: any) => (
+            {filteredRows.map((p: any, index: number) => (
               <Catalog2ProductListRow
                 key={p.id}
+                stripe={index % 2 === 1}
                 name={p.name}
                 description={p.short_description}
                 categoryName={p.category?.name ?? p.pillar?.name ?? "Sem categoria"}
@@ -295,7 +296,7 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
               components/catalog2-product-card.tsx. Mudar o visual lá
               reflete aqui e em qualquer outra tela que mostre catalog2. */}
           <div className={viewModeGridClass(viewMode)}>
-            {filteredRows.map((p: any) => (
+            {filteredRows.map((p: any, index: number) => (
               <Catalog2ProductCard
                 key={p.id}
                 name={p.name}

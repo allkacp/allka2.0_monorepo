@@ -8,32 +8,197 @@
 //
 // `showAdminColumns=true` (só admin) inclui as colunas Tarefas e
 // Pendências — informação interna, nunca mostrada pro cliente/líder.
+//
+// Pedido do usuário 2026-09-25 ("deixar igual à lista de usuários"):
+//   - cabeçalho clicável para ordenar (setinha mostra a coluna/sentido);
+//   - arrastar a borda de uma coluna para mudar a largura (fica salvo no
+//     navegador);
+//   - linhas alternando cinza claro / cinza escuro (sem linha branca).
+// Ordenar e redimensionar são opcionais: quem não passa as props continua
+// com o visual e o comportamento de antes.
 
+import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowRight, Clock3 } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronUp, ChevronsUpDown, Clock3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { catalog2CategoryTone, catalog2EditorialImage } from "@/lib/catalog2-editorial";
 
-const COLUMNS_ADMIN =
-  "grid-cols-[minmax(300px,2.2fr)_minmax(125px,.75fr)_minmax(100px,.55fr)_minmax(115px,.65fr)_minmax(100px,.55fr)_minmax(130px,.75fr)_minmax(120px,.7fr)_minmax(270px,1.35fr)]";
-const COLUMNS_CLIENT =
-  "grid-cols-[minmax(300px,2.2fr)_minmax(125px,.75fr)_minmax(100px,.55fr)_minmax(130px,.75fr)_minmax(120px,.7fr)_minmax(270px,1.35fr)]";
+export type ListColumnKey = "product" | "category" | "tasks" | "pendencies" | "deadline" | "price" | "status" | "actions";
+export type ListSortDir = "asc" | "desc";
 
-export function Catalog2ProductListHeader({ showAdminColumns = false }: { showAdminColumns?: boolean }) {
+const COLUMNS: { key: ListColumnKey; label: string; adminOnly?: boolean; min: number }[] = [
+  { key: "product", label: "Produto", min: 160 },
+  { key: "category", label: "Categoria", min: 80 },
+  { key: "tasks", label: "Tarefas", adminOnly: true, min: 70 },
+  { key: "pendencies", label: "Pendências", adminOnly: true, min: 90 },
+  { key: "deadline", label: "Prazo", min: 70 },
+  { key: "price", label: "Preço", min: 80 },
+  { key: "status", label: "Status", min: 90 },
+  { key: "actions", label: "Ações", min: 100 },
+];
+
+// Larguras flexíveis de antes — valem até o usuário arrastar a primeira borda.
+const DEFAULT_TEMPLATE_ADMIN =
+  "minmax(300px,2.2fr) minmax(125px,.75fr) minmax(100px,.55fr) minmax(115px,.65fr) minmax(100px,.55fr) minmax(130px,.75fr) minmax(120px,.7fr) minmax(270px,1.35fr)";
+const DEFAULT_TEMPLATE_CLIENT =
+  "minmax(300px,2.2fr) minmax(125px,.75fr) minmax(100px,.55fr) minmax(130px,.75fr) minmax(120px,.7fr) minmax(270px,1.35fr)";
+
+const GAP_PX = 12; // gap-3
+const PADDING_PX = 32; // px-4 dos dois lados
+
+export interface Catalog2ListColumns {
+  showAdminColumns: boolean;
+  template: string;
+  minWidth: number | undefined;
+  headerRef: React.RefObject<HTMLDivElement | null>;
+  beginResize: (event: React.PointerEvent, key: ListColumnKey) => void;
+  moveResize: (event: React.PointerEvent) => void;
+  endResize: () => void;
+  reset: () => void;
+  customized: boolean;
+}
+
+export function useCatalog2ListColumns(showAdminColumns: boolean, storageKey: string): Catalog2ListColumns {
+  const cols = COLUMNS.filter((c) => showAdminColumns || !c.adminOnly);
+  const [widths, setWidths] = useState<Partial<Record<ListColumnKey, number>> | null>(() => {
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      return raw ? (JSON.parse(raw) as Partial<Record<ListColumnKey, number>>) : null;
+    } catch {
+      return null;
+    }
+  });
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  const drag = useRef<{ key: ListColumnKey; startX: number; startWidth: number } | null>(null);
+  const latest = useRef(widths);
+  latest.current = widths;
+
+  const persist = (next: Partial<Record<ListColumnKey, number>> | null) => {
+    try {
+      if (next) window.localStorage.setItem(storageKey, JSON.stringify(next));
+      else window.localStorage.removeItem(storageKey);
+    } catch {
+      /* preferência opcional: sem localStorage, só não fica salva */
+    }
+  };
+
+  const beginResize = useCallback(
+    (event: React.PointerEvent, key: ListColumnKey) => {
+      event.preventDefault();
+      event.stopPropagation();
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+      let base = latest.current;
+      if (!base) {
+        // 1º arraste: congela as larguras flexíveis atuais em pixels.
+        const cells = Array.from(headerRef.current?.children ?? []) as HTMLElement[];
+        base = {};
+        cols.forEach((c, i) => {
+          base![c.key] = Math.round(cells[i]?.getBoundingClientRect().width ?? c.min);
+        });
+        setWidths(base);
+      }
+      drag.current = { key, startX: event.clientX, startWidth: base[key] ?? 120 };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showAdminColumns],
+  );
+
+  const moveResize = useCallback((event: React.PointerEvent) => {
+    const active = drag.current;
+    if (!active) return;
+    const min = COLUMNS.find((c) => c.key === active.key)!.min;
+    const width = Math.max(min, Math.round(active.startWidth + event.clientX - active.startX));
+    setWidths((current) => ({ ...(current ?? {}), [active.key]: width }));
+  }, []);
+
+  const endResize = useCallback(() => {
+    if (!drag.current) return;
+    drag.current = null;
+    persist(latest.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const reset = useCallback(() => {
+    setWidths(null);
+    persist(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const template = widths
+    ? cols.map((c) => `${widths[c.key] ?? c.min}px`).join(" ")
+    : showAdminColumns
+      ? DEFAULT_TEMPLATE_ADMIN
+      : DEFAULT_TEMPLATE_CLIENT;
+  const minWidth = widths
+    ? cols.reduce((sum, c) => sum + (widths[c.key] ?? c.min), 0) + GAP_PX * (cols.length - 1) + PADDING_PX
+    : undefined;
+
+  return { showAdminColumns, template, minWidth, headerRef, beginResize, moveResize, endResize, reset, customized: !!widths };
+}
+
+export interface Catalog2ProductListHeaderProps {
+  showAdminColumns?: boolean;
+  columns?: Catalog2ListColumns;
+  /** Colunas que ordenam ao clicar. */
+  sortableKeys?: ListColumnKey[];
+  activeSort?: { key: ListColumnKey; dir: ListSortDir } | null;
+  onSort?: (key: ListColumnKey) => void;
+}
+
+export function Catalog2ProductListHeader({
+  showAdminColumns = false,
+  columns,
+  sortableKeys = [],
+  activeSort = null,
+  onSort,
+}: Catalog2ProductListHeaderProps) {
+  const cols = COLUMNS.filter((c) => showAdminColumns || !c.adminOnly);
+  const template = columns?.template ?? (showAdminColumns ? DEFAULT_TEMPLATE_ADMIN : DEFAULT_TEMPLATE_CLIENT);
   return (
     <div
-      className={`grid ${showAdminColumns ? COLUMNS_ADMIN : COLUMNS_CLIENT} gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60`}
+      ref={columns?.headerRef}
+      style={{ gridTemplateColumns: template }}
+      className="grid gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2 text-[10px] font-bold uppercase tracking-[0.04em] text-slate-500 dark:border-slate-700 dark:bg-slate-900/60"
     >
-      <span>Produto</span>
-      <span>Categoria</span>
-      {showAdminColumns && <span>Tarefas</span>}
-      {showAdminColumns && <span>Pendências</span>}
-      <span>Prazo</span>
-      <span>Preço</span>
-      <span>Status</span>
-      <span>Ações</span>
+      {cols.map((c) => {
+        const sortable = !!onSort && sortableKeys.includes(c.key);
+        const active = activeSort?.key === c.key;
+        return (
+          <div key={c.key} className="relative flex min-w-0 items-center">
+            {sortable ? (
+              <button
+                type="button"
+                onClick={() => onSort!(c.key)}
+                title={`Ordenar por ${c.label}`}
+                className={`group flex min-w-0 items-center gap-1 uppercase transition-colors hover:text-violet-700 dark:hover:text-violet-300 ${active ? "text-violet-700 dark:text-violet-300" : ""}`}
+              >
+                <span className="truncate">{c.label}</span>
+                {active ? (
+                  activeSort!.dir === "desc" ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-slate-300 group-hover:text-slate-400" />
+                )}
+              </button>
+            ) : (
+              <span className="truncate">{c.label}</span>
+            )}
+            {columns && (
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={`Redimensionar coluna ${c.label}`}
+                onPointerDown={(event) => columns.beginResize(event, c.key)}
+                onPointerMove={columns.moveResize}
+                onPointerUp={columns.endResize}
+                onPointerCancel={columns.endResize}
+                className="absolute -right-2 top-1/2 z-20 h-5 w-2 -translate-y-1/2 cursor-col-resize touch-none rounded-full after:absolute after:left-1/2 after:top-1/2 after:h-4 after:w-[3px] after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-slate-300 hover:after:bg-violet-400 dark:after:bg-slate-600"
+              />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -51,6 +216,10 @@ export interface Catalog2ProductListRowProps {
   onOpen: () => void;
   showAdminColumns?: boolean;
   ctaLabel?: string;
+  /** Mesmas larguras do cabeçalho (vem de useCatalog2ListColumns). */
+  gridTemplate?: string;
+  /** Alterna cinza claro (false) / cinza escuro (true). Sem a prop, fundo neutro de antes. */
+  stripe?: boolean;
 }
 
 export function Catalog2ProductListRow({
@@ -66,8 +235,17 @@ export function Catalog2ProductListRow({
   onOpen,
   showAdminColumns = false,
   ctaLabel = "Ver detalhes",
+  gridTemplate,
+  stripe,
 }: Catalog2ProductListRowProps) {
   const rowLabel = `${name} — ver detalhes`;
+  const template = gridTemplate ?? (showAdminColumns ? DEFAULT_TEMPLATE_ADMIN : DEFAULT_TEMPLATE_CLIENT);
+  const zebra =
+    stripe === undefined
+      ? ""
+      : stripe
+        ? "bg-slate-200/70 dark:bg-slate-800/70"
+        : "bg-slate-100 dark:bg-slate-900/70";
   return (
     <li
       role="button"
@@ -80,7 +258,8 @@ export function Catalog2ProductListRow({
           onOpen();
         }
       }}
-      className={`grid cursor-pointer ${showAdminColumns ? COLUMNS_ADMIN : COLUMNS_CLIENT} items-center gap-3 px-4 py-2.5 transition-colors hover:bg-violet-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 active:bg-slate-100 dark:hover:bg-slate-800/40 dark:active:bg-slate-800`}
+      style={{ gridTemplateColumns: template }}
+      className={`grid cursor-pointer ${zebra} items-center gap-3 px-4 py-2.5 transition-colors hover:bg-violet-100/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500 active:bg-slate-300/60 dark:hover:bg-slate-700/60 dark:active:bg-slate-800`}
     >
       <div className="flex min-w-0 items-center gap-3">
         <Catalog2Thumbnail productId={name} imagePath={catalog2EditorialImage(categoryName, name)} size="sm" showBadge={false} />
@@ -93,11 +272,11 @@ export function Catalog2ProductListRow({
           </p>
         </div>
       </div>
-      <Badge className={`w-fit border-0 px-2 py-0.5 text-[10px] font-semibold shadow-none ring-1 ${catalog2CategoryTone(categoryName)}`}>
+      <Badge className={`w-fit max-w-full truncate border-0 px-2 py-0.5 text-[10px] font-semibold shadow-none ring-1 ${catalog2CategoryTone(categoryName)}`}>
         {categoryName}
       </Badge>
-      {showAdminColumns && <span className="text-xs text-slate-600">{taskCount}</span>}
-      {showAdminColumns && <span>{pendencyBadge}</span>}
+      {showAdminColumns && <span className="min-w-0 truncate text-xs text-slate-600">{taskCount}</span>}
+      {showAdminColumns && <span className="min-w-0">{pendencyBadge}</span>}
       <span className="inline-flex items-center gap-1 text-xs font-semibold text-violet-700">
         <Clock3 className="h-3.5 w-3.5" />
         {deadlineDays != null ? `${deadlineDays} dia(s)` : "—"}
@@ -106,7 +285,7 @@ export function Catalog2ProductListRow({
         {price != null ? `R$ ${price.toFixed(2)}` : "—"}
         {priceExtra}
       </span>
-      <span>{statusBadge}</span>
+      <span className="min-w-0">{statusBadge}</span>
       <div className="flex items-center gap-2">
         <Button
           size="sm"
