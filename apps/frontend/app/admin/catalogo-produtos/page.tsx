@@ -87,7 +87,7 @@ import {
   MERCH_KIND_LABEL,
   type MerchBadgeKind,
 } from "@/lib/catalog2-provisional";
-import { Info } from "lucide-react";
+import { Eye, Info } from "lucide-react";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 import { useNavigate, useParams } from "react-router-dom";
@@ -817,12 +817,22 @@ export default function AdminCatalogoProdutosPage() {
             contentClassName="lg:h-[65px]"
             actions={
               <>
-                <a
-                  href="/admin/catalog2?preview=1"
-                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-white/70 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/20"
-                >
-                  Visualizar como cliente
-                </a>
+                <TooltipProvider delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <a
+                        href="/admin/catalog2?preview=1"
+                        aria-label="Visualizar como cliente"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/70 bg-white/10 text-white transition-colors hover:bg-white/20"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </a>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={6}>
+                      Visualizar como cliente
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <PinToTrayButton
                   id="page-catalogo-produtos"
                   label="Catálogo de Produtos"
@@ -844,7 +854,7 @@ export default function AdminCatalogoProdutosPage() {
               className={`${STANDARD_SHELL_TABLE_CARD_CLASS} m-0 space-y-3 p-3`}
             >
               <div className="flex flex-nowrap items-center gap-2">
-                <div className="relative w-[190px] shrink-0">
+                <div className="relative w-[130px] shrink-0">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     placeholder="Buscar produtos…"
@@ -864,7 +874,7 @@ export default function AdminCatalogoProdutosPage() {
                   )}
                 </div>
                 {/* Categorias: cada uma com a sua cor; selecionada fica mais forte. */}
-                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
                   {categoryTabs.map(({ id, label, count }, i) => {
                     const tone = CATEGORY_TONES[i % CATEGORY_TONES.length];
                     const on = category === id;
@@ -874,7 +884,7 @@ export default function AdminCatalogoProdutosPage() {
                         type="button"
                         onClick={() => setCategory(id)}
                         aria-pressed={on}
-                        className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-all ${on ? tone.on : tone.off}`}
+                        className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold transition-all ${on ? tone.on : tone.off}`}
                       >
                         {label}
                         <span className="rounded-full bg-white/80 px-1 py-0.5 text-[9px] leading-none text-current dark:bg-slate-900/50">{count}</span>
@@ -1021,25 +1031,23 @@ export default function AdminCatalogoProdutosPage() {
                   </PopoverContent>
                 </Popover>
 
-                <span className="hidden w-[76px] shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-slate-400 sm:inline-block">
-                  {filtered.length}{" "}
-                  {filtered.length === 1 ? "produto" : "produtos"}
-                </span>
                 <ProductViewModeToggle
                   value={gridMode}
                   onChange={setGridMode}
                 />
                 <div className="flex shrink-0 items-center gap-2 border-l border-slate-200 pl-2 dark:border-slate-700">
                   <ItemsPerPageSelect
+                    compact
                     value={pageSize.toString()}
                     onValueChange={(value) => {
                       setPageSize(Number(value));
                       setPage(1);
                     }}
                   />
-                  <div className="flex w-[236px] shrink-0 items-center justify-end">
+                  <div className="flex w-[150px] shrink-0 items-center justify-end">
                     {totalPages > 1 && (
                       <PaginationControls
+                        compact
                         page={currentPage}
                         totalPages={totalPages}
                         onChange={setPage}
@@ -1104,7 +1112,7 @@ export default function AdminCatalogoProdutosPage() {
                     </button>
                   </div>
                 )}
-                <div style={{ minWidth: listColumns.minWidth ?? 1120 }}>
+                <div style={{ minWidth: listColumns.minWidth ?? 900 }}>
                   <Catalog2ProductListHeader
                     showAdminColumns
                     columns={listColumns}

@@ -260,10 +260,10 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
         // components/catalog2-product-list-row.tsx. showAdminColumns=false
         // esconde Tarefas/Pendências (informação interna).
         <div className="overflow-x-auto rounded-xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
-          <div className="min-w-[900px]">
+          <div className="min-w-[760px]">
             <Catalog2ProductListHeader />
           </div>
-          <ul className="min-w-[900px] divide-y divide-slate-100 dark:divide-slate-800">
+          <ul className="min-w-[760px] divide-y divide-slate-100 dark:divide-slate-800">
             {filteredRows.map((p: any, index: number) => (
               <Catalog2ProductListRow
                 key={p.id}

@@ -30,21 +30,21 @@ export type ListSortDir = "asc" | "desc";
 
 const COLUMNS: { key: ListColumnKey; label: string; adminOnly?: boolean; min: number }[] = [
   { key: "id", label: "ID", min: 48 },
-  { key: "product", label: "Produto", min: 160 },
+  { key: "product", label: "Produto", min: 140 },
   { key: "category", label: "Categoria", min: 80 },
   { key: "tasks", label: "Tarefas", adminOnly: true, min: 70 },
   { key: "pendencies", label: "Pendências", adminOnly: true, min: 90 },
   { key: "deadline", label: "Prazo", min: 70 },
   { key: "price", label: "Preço", min: 80 },
   { key: "status", label: "Status", min: 90 },
-  { key: "actions", label: "Ações", min: 100 },
+  { key: "actions", label: "Ações", min: 56 },
 ];
 
 // Larguras flexíveis de antes — valem até o usuário arrastar a primeira borda.
 const DEFAULT_TEMPLATE_ADMIN =
-  "72px minmax(300px,2.2fr) minmax(125px,.75fr) minmax(100px,.55fr) minmax(115px,.65fr) minmax(100px,.55fr) minmax(130px,.75fr) minmax(120px,.7fr) minmax(270px,1.35fr)";
+  "56px minmax(0,2.4fr) minmax(96px,.75fr) minmax(70px,.45fr) minmax(96px,.6fr) minmax(76px,.5fr) minmax(96px,.65fr) minmax(90px,.6fr) 52px";
 const DEFAULT_TEMPLATE_CLIENT =
-  "72px minmax(300px,2.2fr) minmax(125px,.75fr) minmax(100px,.55fr) minmax(130px,.75fr) minmax(120px,.7fr) minmax(270px,1.35fr)";
+  "56px minmax(0,2.4fr) minmax(96px,.75fr) minmax(76px,.5fr) minmax(96px,.65fr) minmax(90px,.6fr) 52px";
 
 const GAP_PX = 12; // gap-3
 const PADDING_PX = 32; // px-4 dos dois lados
@@ -275,7 +275,7 @@ export function Catalog2ProductListRow({
       <div className="flex min-w-0 items-center gap-3">
         <Catalog2Thumbnail productId={name} imagePath={catalog2EditorialImage(categoryName, name)} size="sm" showBadge={false} />
         <div className="min-w-0">
-          <span title={name} className="block truncate text-[13px] font-bold text-slate-900 dark:text-slate-100">
+          <span title={name} className="line-clamp-2 text-[12px] font-bold leading-tight text-slate-900 dark:text-slate-100">
             {name}
           </span>
           <p title={description ?? undefined} className="truncate text-[11px] text-slate-500">
@@ -299,14 +299,16 @@ export function Catalog2ProductListRow({
       <span className="min-w-0">{statusBadge}</span>
       <div className="flex items-center gap-2">
         <Button
-          size="sm"
-          className="h-9 w-full rounded-lg bg-linear-to-r from-[#4a2cff] via-[#7b2cdb] to-[#d92293] text-xs font-semibold text-white"
+          size="icon"
+          title={ctaLabel}
+          aria-label={ctaLabel}
+          className="h-9 w-9 shrink-0 rounded-lg bg-linear-to-r from-[#4a2cff] via-[#7b2cdb] to-[#d92293] text-white"
           onClick={(e) => {
             e.stopPropagation();
             onOpen();
           }}
         >
-          {ctaLabel} <ArrowRight className="h-3.5 w-3.5" />
+          <ArrowRight className="h-4 w-4" />
         </Button>
       </div>
     </li>
