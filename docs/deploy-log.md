@@ -23,6 +23,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - **Frontend** — Catálogo de Produtos: barra de ferramentas numa linha só e com larguras fixas: busca menor, categorias (cada uma com sua cor, mais forte quando selecionada), botão Filtros só com ícone (a ordenação foi para dentro dele), contador, modo de exibição e paginação compacta.
 - **Frontend** — Catálogo/Cadastro/loja: botão "Visualizar/Pré-visualizar como cliente" virou ícone (olho) com dica; lista: botão "Ver detalhes" só ícone, colunas fluidas (sem barra de rolagem horizontal), nome do produto menor em até 2 linhas; Catálogo: categorias sem rolagem (tudo visível numa linha), busca/paginação/itens por página menores.
 - **Backend** — catálogo do cliente (company/agency): produtos importados deixaram de ser escondidos por "pendências de importação" (`catalog2-client.ts`); agora só status + versão publicada + preço/prazo prontos decidem. **Frontend** — cumprimento no topo ignora etiqueta [TESTE] no nome. Conta de teste company2 renomeada localmente para "Company 2 (teste)" (no servidor o nome antigo continua até alguém renomear).
+- **Frontend** — Cadastro de Produtos: cores aproximadas da referência do usuário (painel periwinkle #d6daf0, linhas alternando #e5e9f7/#d9def1, cabeçalho #d0d5ee) e faixa colorida por categoria na borda esquerda de cada linha.
 - Migration NOVA nesta leva (aditiva, sem apagar dados). Nenhum dado de produto enviado.
 
 ## Já no ar (deploy de 2026-09-25)

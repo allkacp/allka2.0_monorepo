@@ -159,6 +159,17 @@ const QUICK_TAB_TONE = {
 
 const PRODUCT_LIST_PREFERENCES_KEY = "allka:admin-products-list-preferences";
 
+// Faixa colorida na borda esquerda da linha, por categoria (referência do usuário).
+function categoryStripeColor(name?: string | null): string {
+  const n = (name ?? "").toLowerCase();
+  if (n.includes("performance")) return "#ef4444";
+  if (n.includes("web")) return "#3b82f6";
+  if (n.includes("design")) return "#8b5cf6";
+  if (n.includes("venda") || n.includes("automa")) return "#f59e0b";
+  if (n.includes("reda")) return "#10b981";
+  return "#94a3b8";
+}
+
 // Lembra ordenação e itens por página entre acessos (Ctrl+F5, novo login).
 function readSavedListPrefs(): { sort?: string; pageSize?: number } {
   try {
@@ -730,7 +741,7 @@ export default function AdminProdutosPage() {
 
   return (
     <div
-      className={`${STANDARD_SHELL_PANEL_CLASS} !border-violet-200/80 !bg-violet-100/70 dark:!border-violet-900/60 dark:!bg-violet-950/40`}
+      className={`${STANDARD_SHELL_PANEL_CLASS} !border-[#c3c8e6] !bg-[#d6daf0] dark:!border-violet-900/60 dark:!bg-violet-950/40`}
     >
       <div className="relative flex h-full min-h-[70vh] flex-col">
         <div className="shrink-0 -mb-[11px]">
@@ -1241,7 +1252,7 @@ export default function AdminProdutosPage() {
                       ))}
                     </colgroup>
                     <thead>
-                      <tr className="border-b border-slate-200/60 bg-slate-50/60 dark:border-slate-700/60 dark:bg-slate-900/30">
+                      <tr className="border-b border-[#c3c8e6] bg-[#d0d5ee] dark:border-slate-700/60 dark:bg-slate-900/30">
                         {PRODUCT_COLUMNS.map((column) => (
                           <th
                             key={column.key}
@@ -1327,9 +1338,12 @@ export default function AdminProdutosPage() {
                         return (
                           <tr
                             key={p.id}
-                            className="group h-12 odd:bg-slate-200/80 even:bg-slate-300/60 transition-colors hover:bg-violet-200/60 dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
+                            className="group h-12 odd:bg-[#e5e9f7] even:bg-[#d9def1] transition-colors hover:bg-[#cdd5f5] dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
                           >
-                            <td className="px-2 py-1 text-center">
+                            <td
+                              className="px-2 py-1 text-center"
+                              style={{ boxShadow: `inset 4px 0 0 ${categoryStripeColor(p.category?.name)}` }}
+                            >
                               <span className="text-sm font-bold text-[#31578F] dark:text-slate-300">
                                 {p.sequence_number != null ? String(p.sequence_number).padStart(2, "0") : "—"}
                               </span>
