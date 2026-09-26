@@ -673,7 +673,8 @@ export function Header({
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
-  const firstName = ctx.name.split(" ")[0];
+  // Ignora etiquetas entre colchetes (ex.: "[TESTE] Maria") no cumprimento.
+  const firstName = ctx.name.split(" ").find((w) => !/^[.*]$/.test(w)) ?? ctx.name.split(" ")[0];
   const today = new Date().toLocaleDateString("pt-BR", {
     weekday: "long",
     day: "numeric",

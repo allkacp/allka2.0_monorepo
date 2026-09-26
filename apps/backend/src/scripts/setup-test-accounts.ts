@@ -137,7 +137,7 @@ async function main() {
     create: {
       email: "company2@allka.com.vc",
       password_hash: hash,
-      name: "[TESTE] Usuário Empresa 2",
+      name: "Company 2 (teste)",
       role: "company_admin",
       account_type: "empresas",
       is_active: true,

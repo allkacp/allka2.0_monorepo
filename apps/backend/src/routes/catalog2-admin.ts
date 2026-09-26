@@ -2432,12 +2432,10 @@ async function computeProductReadiness(p: ReadinessProduct) {
     client_visible:
       CATALOG2_CLIENT_VISIBLE_STATUSES.includes(p.status as Catalog2Status) &&
       !!published &&
-      pend.length === 0 &&
       (p.status !== "disponivel" || !!pricing?.commercial_ready),
     client_contractable:
       CATALOG2_CONTRACTABLE_STATUSES.includes(p.status as Catalog2Status) &&
       !!published &&
-      pend.length === 0 &&
       !!pricing?.commercial_ready,
     task_count: taskCount,
     step_count: stepCount,

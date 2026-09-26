@@ -175,14 +175,11 @@ export interface VisibilityCheck {
   inactivation_effective_at: Date | null;
 }
 
-function mandatoryPendencies(pendJson: string | null | undefined): string[] {
-  if (!pendJson) return [];
-  try {
-    const v = JSON.parse(pendJson);
-    return Array.isArray(v) ? v.map(String) : [];
-  } catch {
-    return [];
-  }
+// Produtos são NOVOS (sem vínculo com a plataforma antiga): pendências que vinham
+// da importação não bloqueiam mais a visibilidade nem a contratação. O que vale
+// é status + versão publicada + prontidão comercial (preço/prazo).
+function mandatoryPendencies(_pendJson: string | null | undefined): string[] {
+  return [];
 }
 
 type ProductForVisibility = {
@@ -382,16 +379,7 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
   if (f.category_id) where.category_id = f.category_id;
   if (f.four_f_id) where.four_f = { some: { four_f_id: f.four_f_id } };
   if (f.q) where.OR = [{ internal_name: { contains: f.q } }, { slug: { contains: f.q } }];
-  if (!previewMode) {
-    // produtos importados com pendência obrigatória: fora (não se aplica
-    // ao preview — lá a pendência é justamente o que se quer mostrar).
-    where.OR = [
-      ...(where.OR ? [{ OR: where.OR }] : []),
-      { import_origin: null },
-      { import_origin: { pendencies_json: null } },
-      { import_origin: { pendencies_json: "[]" } },
-    ] as unknown as typeof where.OR;
-  }
+  // (Produtos são novos: pendências de importação não escondem mais nada do catálogo.)
 
   const orderBy =
     f.sort === "name_desc"
