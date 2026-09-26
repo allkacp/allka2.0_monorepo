@@ -3,7 +3,8 @@
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
 ## Pendente de deploy (local, ainda NÃO subiu)
-- (nada pendente — tudo até bfa94a4 já está no ar)
+- **Frontend** — Custos e preço: removido o cartão azul "Abrir Precificação" (não faz parte do preenchimento do produto). Se o bloqueio de Preço vier de configuração global, clicar no item do checklist abre a Precificação por cima do produto.
+(o restante até bfa94a4 já está no ar)
 
 ## deploy-2026-09-26-1 (commits até bfa94a4) — no ar em allka.store / api.allka.store
 **Subiu:** Backend (`apps/backend`, incluindo a migration `20260926090000_step_specialty_and_pricing_components`, aplicada no servidor) e Frontend (`apps/frontend`). Conferido: site 200, `/api/health` ok, rota de precificação responde com as colunas novas, catálogo admin responde. CI segue vermelho por testes de frontend antigos (não bloqueia deploy).

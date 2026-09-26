@@ -141,6 +141,11 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   }, [product, readinessItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function goToReadinessItem(key: string) {
+    if (key === "preco" && !priceBlockedByTasks(readinessItems?.[key]?.note) && !/prazo/i.test(readinessItems?.[key]?.note ?? "")) {
+      // Falta configuração GLOBAL (valor/hora, impostos, margem…): abre a Precificação por cima, sem sair do produto.
+      setPricingOpen(true);
+      return;
+    }
     const dest = readinessDestination(key, product, readinessItems?.[key]?.note);
     const level = readinessItems?.[key]?.level;
     const cur = product?.versions.find((v: any) => v.id === selectedVersionId);
@@ -1377,13 +1382,6 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
       <div className="space-y-3">
         {highlightTarget === "catalog2-costs" && <p className="rounded-lg border border-amber-400 bg-amber-100 p-2 text-sm text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">Há uma pendência comercial de preço ou prazo. Revise o valor que está marcado como “aguardando definição comercial” e salve a alteração.</p>}
         <DeadlineBaseField version={version} act={act} ringOf={ringOf} />
-        <div id="catalog2-pricing-link" className={ringOf("catalog2-pricing-link") || "rounded-lg"}>
-        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-100">
-          <p className="font-semibold">Custos, impostos e valor/hora ficam na Precificação</p>
-          <p className="mt-1 text-xs">Valor/hora das especialidades, impostos, comissão, taxas, margem, revisão e ordem são globais e valem para todos os produtos. Aqui você só define o prazo deste produto e escolhe, em cada etapa, a especialidade e as horas.</p>
-          <button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="mt-2 inline-block rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Abrir Precificação</button>
-        </div>
-        </div>
       </div>
 
       <div className="space-y-3">
