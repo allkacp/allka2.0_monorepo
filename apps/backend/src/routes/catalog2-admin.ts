@@ -17,6 +17,7 @@ import { CATALOG2_PERIODS, isCatalog2Period, isCurrentlyContractablePeriod, list
 import { recordCatalog2ProductHistory, listCatalog2ProductHistory } from "../lib/catalog2-product-history";
 import { maybeCreateCatalog2ActivationJobOnStatusTransition, notifyValidQuoteOwnersOfCommercialChange } from "../lib/catalog2-notifications";
 import { summarizeCatalog2ProductHistory } from "../lib/catalog2-product-history-ai";
+import { summarizeVersionChanges } from "../lib/catalog2-change-summary";
 import {
   CATALOG2_STATUS_MEANING,
   CATALOG2_STATUS_LABEL,
@@ -1336,6 +1337,11 @@ router.post("/versions/:id/make-current", async (req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 
+// Resumo automático (IA + diferença calculada) do que mudou nesta versão.
+router.post("/versions/:id/change-summary", async (req, res, next) => {
+  try { res.json(await summarizeVersionChanges(req.params.id as string)); } catch (e) { handle(e, res, next); }
+});
+
 router.get("/versions/:id/validate", async (req, res, next) => {
   try { res.json(await validateVersionForPublish(req.params.id as string)); } catch (e) { handle(e, res, next); }
 });
@@ -2328,10 +2334,11 @@ async function loadProvisionalPreview(productId: string) {
   };
 }
 
-async function computeProductReadiness(p: ReadinessProduct) {
+async function computeProductReadiness(p: ReadinessProduct, forVersionId?: string) {
   const draft = p.versions.find((v) => v.state === "rascunho") ?? p.versions[0] ?? null;
   const published = p.versions.find((v) => v.id === p.published_version_id) ?? null;
-  const targetVersion = published ?? draft;
+  // No editor, a prontidão é da versão que está sendo EDITADA (rascunho); nas listas, da publicada.
+  const targetVersion = (forVersionId ? p.versions.find((v) => v.id === forVersionId) : null) ?? published ?? draft;
   const pend = safeJsonArray(p.import_origin?.pendencies_json);
   const has = (k: string) => pend.includes(k);
   const taskCount = targetVersion?._count.tasks ?? 0;
@@ -2425,7 +2432,7 @@ async function computeProductReadiness(p: ReadinessProduct) {
     preco: hasActiveTasks
       ? pricing?.commercial_ready
         ? { level: "pronto", note: `Preço comercial ${pricing.currency} ${pricing.lines.commercial_final_price.amount}.` }
-        : { level: "bloqueador", note: `Preço comercial "A definir": ${pricing?.pending_info.join("; ") || "configuração comercial incompleta"}.` }
+        : { level: "bloqueador", note: `Preço comercial "A definir": ${pricing?.pending_info.join("; ") || (pricing?.deadline.commercial_deadline_pending ? "prazo comercial base não definido" : "configuração comercial incompleta")}.` }
       : { level: "bloqueador", note: "Sem tarefas cadastradas — base de custo indefinida; a precificação não pode ser calculada." },
     prazo: pricing && !pricing.deadline.commercial_deadline_pending
       ? { level: "pronto", note: `Prazo comercial ${pricing.deadline.commercial_deadline_days} dia(s).` }
@@ -2553,7 +2560,7 @@ router.get("/products/:id/readiness", async (req, res, next) => {
   try {
     const p = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, include: READINESS_INCLUDE });
     if (!p) throw new Catalog2Error("Produto não encontrado.", 404);
-    res.json(await computeProductReadiness(p));
+    res.json(await computeProductReadiness(p, typeof req.query.version_id === "string" ? req.query.version_id : undefined));
   } catch (e) { handle(e, res, next); }
 });
 

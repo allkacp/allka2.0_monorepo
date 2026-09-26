@@ -85,6 +85,7 @@ const improveProductFieldSchema = z.object({
   mode: z.enum(["text", "list"]).optional().default("text"),
   length: z.enum(["manter", "curto", "medio", "longo"]).optional().default("manter"),
   approach: z.enum(["melhorar", "recriar"]).optional().default("melhorar"),
+  research: z.boolean().optional().default(false),
   context: z
     .object({
       name: z.string().optional(),
@@ -104,7 +105,7 @@ router.post(
   validate(improveProductFieldSchema),
   async (req, res, next) => {
     try {
-      const { field_label, current_value, mode, length, approach, context } = req.body as z.infer<
+      const { field_label, current_value, mode, length, approach, context, research } = req.body as z.infer<
         typeof improveProductFieldSchema
       >;
       const improved_value = await improveProductField(
@@ -119,6 +120,7 @@ router.post(
         mode,
         length,
         approach,
+        research,
       );
       res.json({ improved_value });
     } catch (err) {

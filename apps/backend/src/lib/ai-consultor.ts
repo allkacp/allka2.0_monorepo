@@ -273,7 +273,9 @@ export async function improveProductField(
   mode: "text" | "list" = "text",
   length: ProductFieldLength = "manter",
   approach: ProductFieldApproach = "melhorar",
+  research = false,
 ): Promise<string> {
+  const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
   const otherFieldsText = context.otherFields
     ? Object.entries(context.otherFields)
         .filter(([, v]) => v && v.trim())
@@ -305,6 +307,7 @@ Instruções:
 - ${lengthInstruction(length, currentValue, mode)}
 - Se o campo estiver vazio, escreva conteúdo novo e coerente com nome/categoria/preço e os demais campos.
 - Não invente números, prazos ou garantias que não constem no contexto.
+${research ? `- HOJE é ${today}. Pesquise na internet como esse produto/serviço é conhecido e descrito ATUALMENTE no mercado (nome mais usado, termos, benefícios e diferenciais de hoje) e use isso para deixar o campo atual e competitivo. Não cite fontes nem links no texto.` : ""}
 ${
   mode === "list"
     ? "- Devolva só os itens, um por linha, sem marcadores como '-' ou '•', sem numeração, sem linhas em branco."
@@ -318,10 +321,11 @@ ${
     config: {
       systemInstruction: await buildProductSystemInstruction(),
       temperature: 0.6,
+      ...(research ? { tools: [{ googleSearch: {} }] } : {}),
     },
   });
 
-  await recordAIUsage({ model: MODEL, feature: "improve-product-field", ...usageFromGeminiResponse(response) });
+  await recordAIUsage({ model: MODEL, feature: research ? "improve-product-field-research" : "improve-product-field", ...usageFromGeminiResponse(response) });
 
   return (response.text ?? "").trim();
 }

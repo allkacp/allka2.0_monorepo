@@ -1,13 +1,16 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin, Tag, Layers, ListChecks, CheckSquare, ListOrdered, DollarSign, CalendarClock } from "lucide-react";
+import { Suspense, lazy, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin, Tag, Layers, ListChecks, CheckSquare, ListOrdered, DollarSign, CalendarClock, Info, Sparkles, UploadCloud, Undo2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePinEntry, type PinnedEntry } from "@/contexts/open-screens-context";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
@@ -53,6 +56,22 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   const [subTabs, setSubTabs] = useState({ opcoes: "class", entrega: "tarefas", revisao: "preview" });
   const [watch, setWatch] = useState<{ key: string; ids: string[] } | null>(null);
   const [noticeHidden, setNoticeHidden] = useState(false);
+  const [pricingOpen, setPricingOpen] = useState(false);
+  const [publishing, setPublishing] = useState<{ title: string; done: boolean; error: string | null } | null>(null);
+  async function startPublish(title: string, fn: () => Promise<any>) {
+    setPublishing({ title, done: false, error: null });
+    try {
+      await fn();
+      setPublishing((cur) => (cur ? { ...cur, done: true } : cur));
+    } catch (e: any) {
+      setPublishing((cur) => (cur ? { ...cur, error: e?.message ?? "Falha ao publicar." } : cur));
+    }
+  }
+  useEffect(() => {
+    const open = () => setPricingOpen(true);
+    window.addEventListener("allka:open-pricing", open);
+    return () => window.removeEventListener("allka:open-pricing", open);
+  }, []);
   const autoDraftRef = useRef<{ promise: Promise<void> | null; draftId: string | null; baseId: string | null }>({ promise: null, draftId: null, baseId: null });
   const [pubDlg, setPubDlg] = useState<{ val: any } | null>(null);
   const [doneIds, setDoneIds] = useState<string[]>([]);
@@ -222,6 +241,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         onBack={() => void closeEditor()}
         onRefresh={async () => { await load(); setMsg("Dados do produto atualizados."); }}
         canPublish={!!version && (version.state === "rascunho" || !version.is_published_current)}
+        versionInfo={version ? { published: version.state === "publicada", current: !!version.is_published_current, number: version.version_number } : null}
         onPublish={() => { if (!version) return; if (version.state === "publicada") { setPubDlg({ val: { ok: true, restore: true } }); return; } apiClient.validateCatalog2Version(version.id).then((val: any) => setPubDlg({ val })).catch((e: any) => setMsg(e?.message ?? "Não foi possível validar a versão.")); }}
         canNewVersion={!!product.published_version_id && !product.versions.some((v: any) => v.state === "rascunho")}
         onNewVersion={() => act(() => apiClient.newCatalog2Version(productId), "Nova versão rascunho criada.")}
@@ -235,7 +255,6 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
             <button type="button" aria-label="Dispensar aviso" onClick={() => setNoticeHidden(true)} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-amber-700 hover:bg-amber-200/60"><X className="h-3.5 w-3.5" /></button>
           </div>
         )}
-        {readOnly && <p className="flex-1 min-w-[16rem] rounded-xl border border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">Versão publicada — somente leitura. Crie uma nova versão para editar.</p>}
         {msg && (
           <p className="relative min-w-[12rem] flex-1 rounded-xl border border-blue-200 bg-blue-50 py-1.5 pl-4 pr-9 text-xs text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
             {msg}
@@ -243,7 +262,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
           </p>
         )}
       </div>
-      <ProductReadinessPanel productId={productId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onItems={setReadinessItems} />
+      <ProductReadinessPanel productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onItems={setReadinessItems} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} />
 
       {version && (
         <Tabs value={editorTab} onValueChange={setEditorTab}>
@@ -309,6 +328,24 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       )}
       </div>
     </div>
+      {publishing && (
+        <PublishProgress
+          open
+          title={publishing.title}
+          done={publishing.done}
+          error={publishing.error}
+          onFinish={() => { setPublishing(null); onBack(); }}
+          onClose={() => setPublishing(null)}
+        />
+      )}
+      <Dialog open={pricingOpen} onOpenChange={(o) => { setPricingOpen(o); if (!o) void load(); }}>
+        <DialogContent className="h-[88vh] w-[96vw] max-w-[1280px] overflow-y-auto border-0 bg-[#dde2f3] p-3">
+          <DialogTitle className="sr-only">Precificação</DialogTitle>
+          <Suspense fallback={<div className="flex items-center gap-2 p-10 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>}>
+            <PricingPageLazy />
+          </Suspense>
+        </DialogContent>
+      </Dialog>
       {pubDlg && version && (() => {
         const current = product.versions.find((v: any) => v.is_published_current);
         if (pubDlg.val?.restore) {
@@ -320,7 +357,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
               message={`A v${version.version_number} volta a ser a versão publicada e SUBSTITUI a atual (v${current?.version_number ?? "?"}). O cliente passa a ver a v${version.version_number}.`}
               confirmText="Publicar novamente"
               destructive={false}
-              onConfirm={() => { setPubDlg(null); void act(() => apiClient.makeCatalog2VersionCurrent(version.id), `v${version.version_number} publicada novamente.`); }}
+              onConfirm={() => { setPubDlg(null); void startPublish(`Voltando para a v${version.version_number}`, () => apiClient.makeCatalog2VersionCurrent(version.id)); }}
             />
           );
         }
@@ -344,7 +381,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
               const val = pubDlg.val;
               setPubDlg(null);
               if (!canGo) return;
-              void act(() => apiClient.publishCatalog2Version(version.id, { client_action_id: `pub-${version.id}-${Date.now()}`, change_summary: version.change_summary ?? "", force: forceOk ? true : undefined }), "Versão publicada.");
+              void startPublish(`Publicando a v${version.version_number} — ${product.internal_name}`, () => apiClient.publishCatalog2Version(version.id, { client_action_id: `pub-${version.id}-${Date.now()}`, change_summary: version.change_summary ?? "", force: forceOk ? true : undefined }));
               void val;
             }}
           />
@@ -359,6 +396,157 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 // rascunho automático foi mexido. Conservador: na dúvida considera "mudou".
 const VOLATILE_KEYS = new Set(["id", "version_id", "task_id", "variation_id", "updated_at", "created_at", "history", "version_number", "state", "is_published_current", "published_at", "published_by_user_id", "publish_client_action_id", "updated_by_user_id", "created_by_user_id", "change_summary"]);
 const versionSignature = (v: any) => JSON.stringify(v, (k, val) => (VOLATILE_KEYS.has(k) ? undefined : val));
+
+// Botão "Melhorar com IA" por campo (a integração já existe: /ai-consultor/improve-product-field).
+// Opção "Pesquisar na internet" usa a busca do Gemini com a data de hoje.
+function AiFieldButton({ label, value, mode = "text", context, onResult, disabled, defaultResearch = true }: { label: string; value: string; mode?: "text" | "list"; context: any; onResult: (v: string) => void; disabled?: boolean; defaultResearch?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [approach, setApproach] = useState<"melhorar" | "recriar">(value.trim() ? "melhorar" : "recriar");
+  const [length, setLength] = useState<"manter" | "curto" | "medio" | "longo">("manter");
+  const [research, setResearch] = useState(defaultResearch);
+  const [prev, setPrev] = useState<string | null>(null);
+  async function run() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r: any = await apiClient.aiImproveProductField({ field_label: label, current_value: value, mode, length, approach, research, context });
+      const text = String(r?.improved_value ?? "").trim();
+      if (!text) throw new Error("A IA não devolveu texto.");
+      setPrev(value);
+      onResult(text);
+      setOpen(false);
+    } catch (e: any) {
+      setErr(e?.message ?? "Não foi possível usar a IA agora.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <span className="inline-flex items-center gap-2">
+      {prev !== null && (
+        <button type="button" onClick={() => { onResult(prev); setPrev(null); }} className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800">
+          <Undo2 className="h-3 w-3" /> Desfazer
+        </button>
+      )}
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            disabled={disabled}
+            title="Preencher ou melhorar com Inteligência Artificial"
+            className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+          >
+            <Sparkles className="h-3 w-3" /> IA
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 space-y-3 p-3 text-xs">
+          <p className="font-semibold text-slate-800">{value.trim() ? "Melhorar" : "Preencher"} “{label}” com IA</p>
+          <div className="flex gap-1.5">
+            {(["melhorar", "recriar"] as const).map((a) => (
+              <button key={a} type="button" onClick={() => setApproach(a)} className={`flex-1 rounded-lg border px-2 py-1 font-semibold ${approach === a ? "border-violet-600 bg-violet-600 text-white" : "border-slate-200 text-slate-600"}`}>{a === "melhorar" ? "Melhorar o atual" : "Recriar do zero"}</button>
+            ))}
+          </div>
+          <label className="flex items-center justify-between gap-2">Tamanho
+            <select value={length} onChange={(e) => setLength(e.target.value as any)} className="!py-1 text-xs">
+              <option value="manter">Manter</option><option value="curto">Curto</option><option value="medio">Médio</option><option value="longo">Longo</option>
+            </select>
+          </label>
+          <label className="flex items-start gap-2">
+            <input type="checkbox" checked={research} onChange={(e) => setResearch(e.target.checked)} className="mt-0.5" />
+            <span>Pesquisar na internet (como o produto é conhecido <strong>hoje</strong>)</span>
+          </label>
+          {err && <p className="text-red-600">{err}</p>}
+          <Button size="sm" className="w-full gap-1.5" disabled={busy} onClick={() => void run()}>
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {busy ? "Gerando…" : "Gerar"}
+          </Button>
+        </PopoverContent>
+      </Popover>
+    </span>
+  );
+}
+
+const PUBLISH_STEPS: { at: number; text: string }[] = [
+  { at: 0, text: "Conferindo os dados do produto…" },
+  { at: 14, text: "Validando título, descrições e classificação…" },
+  { at: 28, text: "Calculando preço e prazo comercial…" },
+  { at: 42, text: "Revisando tarefas, etapas e especialidades…" },
+  { at: 58, text: "Congelando esta versão (ela fica imutável)…" },
+  { at: 72, text: "Substituindo a versão anterior no catálogo…" },
+  { at: 84, text: "Avisando quem tem proposta em aberto…" },
+  { at: 92, text: "Atualizando o catálogo dos clientes…" },
+];
+
+// Tela de "publicando": barra de 0 a 100% + frases. O progresso sobe sozinho até ~92%
+// enquanto o servidor trabalha e vai a 100% quando a publicação termina.
+function PublishProgress({ open, title, done, error, onFinish, onClose }: { open: boolean; title: string; done: boolean; error: string | null; onFinish: () => void; onClose: () => void }) {
+  const [pct, setPct] = useState(0);
+  useEffect(() => {
+    if (!open) { setPct(0); return; }
+    const t = window.setInterval(() => {
+      setPct((cur) => {
+        if (error) return cur;
+        if (done) return Math.min(100, cur + 6);
+        const cap = 92;
+        return cur >= cap ? cur : Math.min(cap, cur + Math.max(0.4, (cap - cur) * 0.06));
+      });
+    }, 70);
+    return () => window.clearInterval(t);
+  }, [open, done, error]);
+  useEffect(() => {
+    if (open && done && !error && pct >= 100) {
+      const t = window.setTimeout(onFinish, 900);
+      return () => window.clearTimeout(t);
+    }
+  }, [open, done, error, pct]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = Math.round(pct);
+  const current = [...PUBLISH_STEPS].reverse().find((st) => pct >= st.at) ?? PUBLISH_STEPS[0];
+  const finished = done && !error && pct >= 100;
+  return (
+    <Dialog open={open} onOpenChange={() => { if (error) onClose(); }}>
+      <DialogContent className="max-w-md overflow-hidden border-0 p-0 [&>button]:hidden">
+        <DialogTitle className="sr-only">Publicando</DialogTitle>
+        <div className="bg-gradient-to-r from-[#111A4D] via-[#6E2C96] to-[#D92293] px-6 py-5 text-white">
+          <p className="text-xs font-semibold uppercase tracking-wider text-white/70">{error ? "Não foi possível publicar" : finished ? "Tudo certo" : "Publicando"}</p>
+          <h3 className="mt-0.5 text-lg font-bold leading-tight">{title}</h3>
+        </div>
+        <div className="space-y-4 px-6 py-5">
+          {error ? (
+            <>
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+              <Button className="w-full" onClick={onClose}>Fechar</Button>
+            </>
+          ) : (
+            <>
+              <div className="flex items-end justify-between">
+                <span className="text-4xl font-extrabold tabular-nums text-slate-900">{shown}<span className="text-xl text-slate-400">%</span></span>
+                <span className="text-sm font-medium text-slate-500">{finished ? "Pronto! Versão publicada." : current.text}</span>
+              </div>
+              <div className="h-3 w-full overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full rounded-full bg-gradient-to-r from-[#4a2cff] via-[#7b2cdb] to-[#d92293] transition-[width] duration-100" style={{ width: `${pct}%` }} />
+              </div>
+              <ul className="space-y-1.5 text-[13px]">
+                {PUBLISH_STEPS.map((st) => {
+                  const ok = pct > st.at + 8 || finished;
+                  const now = !ok && current === st;
+                  return (
+                    <li key={st.at} className={`flex items-center gap-2 ${ok ? "text-emerald-700" : now ? "font-semibold text-slate-900" : "text-slate-400"}`}>
+                      {ok ? <CheckCircle2 className="h-4 w-4" /> : now ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="h-4 w-4 rounded-full border border-slate-300" />}
+                      {st.text}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const PricingPageLazy = lazy(() => import("@/app/admin/precificacao/page"));
 
 const RingCtx = createContext<(id: string) => string>(() => "");
 
@@ -396,6 +584,15 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
     setInfoSaved(false);
     try {
       await onSave(f);
+      // Resumo da mudança automático (IA + diferença calculada) quando ficou em branco.
+      if (!f.change_summary.trim() && (version?.version_number ?? 1) > 1) {
+        try {
+          const r = await apiClient.generateCatalog2ChangeSummary(version.id);
+          const next = { ...f, change_summary: r.summary };
+          setF(next);
+          await onSave(next);
+        } catch { /* segue sem resumo */ }
+      }
       setInfoSaved(true);
       if (f.title.trim()) clearHighlight("catalog2-field-title");
       if (f.full_description.trim()) clearHighlight("catalog2-field-full-description");
@@ -412,68 +609,97 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
   }
 
   return (
-    <div id="catalog2-general" className="grid scroll-mt-6 items-start gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-      <SectionCard icon={FileText} title="Dados principais" subtitle="Defina as informações básicas do seu produto.">
+    <div id="catalog2-general" className="scroll-mt-6 space-y-3">
+      <SectionCard icon={FileText} title="Dados principais" subtitle="Nome e descrição comercial do produto.">
         <div id="catalog2-field-title" className={ringOf("catalog2-field-title")}>
-          <Field label={<>Título comercial<Req /></>}><Input disabled={readOnly} value={f.title} onChange={(e) => updateInfo({ title: e.target.value })} /></Field>
+          <Field label={<span className="flex w-full items-center justify-between gap-2"><span>Título comercial<Req /></span><AiFieldButton label="Título comercial" value={f.title} context={{ name: f.title, category: product.category?.name, other_fields: { "Descrição curta": f.summary, "Descrição completa": f.full_description } }} disabled={readOnly} onResult={(v) => updateInfo({ title: v.replace(/\n/g, " ").slice(0, 200) })} /></span>}><Input disabled={readOnly} value={f.title} onChange={(e) => updateInfo({ title: e.target.value })} /></Field>
         </div>
-        <Field label={<>Descrição curta<Req /></>}>
+        <Field label={<span className="flex w-full items-center justify-between gap-2"><span>Descrição curta<Req /></span><AiFieldButton label="Descrição curta" value={f.summary} context={{ name: f.title, category: product.category?.name, other_fields: { "Descrição curta": f.summary, "Descrição completa": f.full_description } }} disabled={readOnly} onResult={(v) => updateInfo({ summary: v.slice(0, 500) })} /></span>}>
           <div className="space-y-1">
-            <Textarea rows={4} maxLength={500} disabled={readOnly} value={f.summary} onChange={(e) => updateInfo({ summary: e.target.value })} />
+            <Textarea rows={3} maxLength={500} disabled={readOnly} value={f.summary} onChange={(e) => updateInfo({ summary: e.target.value })} />
             <CharCount value={f.summary} max={500} />
           </div>
         </Field>
       </SectionCard>
 
       <SectionCard icon={FileText} title="Descrição completa" subtitle="Detalhe o produto com informações completas, benefícios e diferenciais." collapsible defaultOpen={!String(f.full_description ?? "").trim()} forceOpen={ringOf("catalog2-field-full-description") !== ""}>
-      <div id="catalog2-field-full-description" className={ringOf("catalog2-field-full-description")}>
-        <Field label={<>Descrição completa<Req /></>}>
-          <div className="space-y-1">
-            <Textarea rows={4} maxLength={2000} disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} />
-            <CharCount value={f.full_description} max={2000} />
-          </div>
-        </Field>
-      </div>
+        <div id="catalog2-field-full-description" className={ringOf("catalog2-field-full-description")}>
+          <Field label={<span className="flex w-full items-center justify-between gap-2"><span>Descrição completa<Req /></span><AiFieldButton label="Descrição completa" value={f.full_description} context={{ name: f.title, category: product.category?.name, other_fields: { "Descrição curta": f.summary, "Descrição completa": f.full_description } }} disabled={readOnly} onResult={(v) => updateInfo({ full_description: v.slice(0, 2000) })} /></span>}>
+            <div className="space-y-1">
+              <Textarea rows={5} maxLength={2000} disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} />
+              <CharCount value={f.full_description} max={2000} />
+            </div>
+          </Field>
+        </div>
       </SectionCard>
 
-      <div className="space-y-3">
-        <SectionCard icon={Settings2} title="Status do produto" subtitle="Define a disponibilidade deste produto na plataforma." collapsible>
-          <select aria-label="Status do produto" className="w-full" value={draftStatus} onChange={(e) => { setDraftStatus(e.target.value); setStatusError(null); }}>
-            {CATALOG2_STATUSES.map((status) => <option key={status} value={status}>{CATALOG2_STATUS_LABEL[status]}</option>)}
-          </select>
-          <p className="text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">{CATALOG2_STATUS_MEANING[draftStatus as Catalog2Status] ?? "Status não reconhecido."}</p>
-          {draftStatus !== product.status && (
-            <Button size="sm" variant="outline" disabled={savingStatus} onClick={() => void saveStatus()}>
-              {savingStatus ? "Salvando status…" : "Salvar status"}
-            </Button>
-          )}
-          {statusError && <p role="alert" className="text-xs text-red-600">{statusError}</p>}
-        </SectionCard>
-
-        <SectionCard icon={Clock} title="Resumo da mudança (histórico)" subtitle="Acompanhe as principais alterações deste produto." collapsible defaultOpen={false}>
-          <div className="space-y-1">
-            <Textarea rows={2} maxLength={500} disabled={readOnly} placeholder="Descreva as alterações realizadas neste produto..." value={f.change_summary} onChange={(e) => updateInfo({ change_summary: e.target.value })} />
-            <CharCount value={f.change_summary} max={500} />
-          </div>
-        </SectionCard>
-
-        {!readOnly && (
-          <div className="flex flex-wrap items-center gap-4">
-            <Button className="h-11 gap-2 rounded-xl bg-[#3b2bff] px-6 text-sm font-semibold text-white hover:bg-[#3223d6]" disabled={savingInfo} onClick={() => void saveInfo()}>
-              <Save className="h-4 w-4" /> {savingInfo ? "Salvando informações…" : "Salvar informações"}
-            </Button>
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white"><CheckCircle2 className="h-5 w-5" /></span>
-              <div className="text-sm">
-                <p className="font-semibold text-emerald-700 dark:text-emerald-400">Status salvo: {catalog2StatusLabel(product.status)}.</p>
-                {infoSaved && <p role="status" className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">✓ Informações salvas.</p>}
-                {fmtUpdatedAt(version?.updated_at ?? product.updated_at) && <p className="text-xs text-slate-500">Última atualização: {fmtUpdatedAt(version?.updated_at ?? product.updated_at)}</p>}
-              </div>
-            </div>
-          </div>
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/70 bg-[#e8ecf9] px-3.5 py-2 shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200"><Settings2 className="h-4 w-4 text-violet-600" /> Status do produto</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" aria-label="Status do produto" className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold shadow-sm transition hover:brightness-95 ${catalog2StatusTone(draftStatus)}`}>
+              {catalog2StatusLabel(draftStatus)} <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {CATALOG2_STATUSES.map((status) => (
+              <DropdownMenuItem key={status} onClick={() => { setDraftStatus(status); setStatusError(null); }}>{CATALOG2_STATUS_LABEL[status]}</DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {draftStatus !== product.status && (
+          <Button size="sm" variant="outline" className="h-7" disabled={savingStatus} onClick={() => void saveStatus()}>{savingStatus ? "Salvando…" : "Salvar status"}</Button>
         )}
+        <span className="min-w-0 flex-1 text-[12px] text-slate-500 dark:text-slate-400">{CATALOG2_STATUS_MEANING[draftStatus as Catalog2Status] ?? ""}</span>
+        {statusError && <p role="alert" className="w-full text-xs text-red-600">{statusError}</p>}
       </div>
+
+      <SectionCard icon={Clock} title="Resumo da mudança" subtitle="Escrito pela IA a partir do que foi alterado — você pode editar." collapsible defaultOpen={(version?.version_number ?? 1) > 1}>
+        <div className="space-y-1">
+          <div className="flex items-center justify-end">
+            <ChangeSummaryAiButton versionId={version.id} disabled={readOnly} onResult={(v) => updateInfo({ change_summary: v.slice(0, 500) })} />
+          </div>
+          <Textarea rows={2} maxLength={500} disabled={readOnly} placeholder="Deixe em branco: ao salvar, a IA descreve o que foi alterado (preço, prazo, textos, tarefas…)." value={f.change_summary} onChange={(e) => updateInfo({ change_summary: e.target.value })} />
+          <CharCount value={f.change_summary} max={500} />
+        </div>
+      </SectionCard>
+
+      {!readOnly && (
+        <div className="flex flex-wrap items-center gap-4">
+          <Button className="h-10 gap-2 rounded-xl bg-[#3b2bff] px-5 text-sm font-semibold text-white hover:bg-[#3223d6]" disabled={savingInfo} onClick={() => void saveInfo()}>
+            <Save className="h-4 w-4" /> {savingInfo ? "Salvando…" : "Salvar informações"}
+          </Button>
+          <div className="text-sm">
+            {infoSaved && <p role="status" className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">✓ Informações salvas.</p>}
+            {fmtUpdatedAt(version?.updated_at ?? product.updated_at) && <p className="text-xs text-slate-500">Última atualização: {fmtUpdatedAt(version?.updated_at ?? product.updated_at)}</p>}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+// Gera o resumo do que mudou nesta versão (compara com a anterior já salva).
+function ChangeSummaryAiButton({ versionId, onResult, disabled }: { versionId: string; onResult: (v: string) => void; disabled?: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <span className="inline-flex items-center gap-2">
+      {err && <span className="text-[11px] text-red-600">{err}</span>}
+      <button
+        type="button"
+        disabled={disabled || busy}
+        onClick={async () => {
+          setBusy(true); setErr(null);
+          try { const r = await apiClient.generateCatalog2ChangeSummary(versionId); onResult(r.summary); }
+          catch (e: any) { setErr(e?.message ?? "Não foi possível gerar."); }
+          finally { setBusy(false); }
+        }}
+        className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
+      >
+        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />} {busy ? "Analisando…" : "Gerar com IA"}
+      </button>
+    </span>
   );
 }
 
@@ -1107,14 +1333,24 @@ function DeadlineBaseField({ version, act, ringOf }: any) {
   const n = Number(v);
   const valid = v !== "" && Number.isInteger(n) && n >= 1;
   const readOnly = version.state === "publicada";
+  const [err, setErr] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState(false);
   return (
     <div id="catalog2-deadline-base" className={`space-y-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800 ${ringOf("catalog2-deadline-base")}`}>
       <h3 className="text-sm font-semibold">Prazo comercial base (dias)</h3>
       <p className="text-xs text-neutral-500">Prazo de entrega prometido ao cliente para esta versão. Dias extras de variações, adicionais e condições são somados a ele.</p>
       <div className="flex items-center gap-2">
         <Input type="number" min={1} className="w-28" value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} />
-        <Button size="sm" disabled={readOnly || !valid} onClick={() => act(() => apiClient.updateCatalog2VersionInfo(version.id, { base_commercial_deadline_days: n }), "Prazo comercial salvo.")}>Salvar prazo</Button>
+        <Button size="sm" disabled={readOnly || !valid} onClick={async () => {
+          setErr(null); setOkMsg(false);
+          try { await act(() => apiClient.updateCatalog2VersionInfo(version.id, { base_commercial_deadline_days: n }), "Prazo comercial salvo.", { rethrow: true }); setOkMsg(true); window.setTimeout(() => setOkMsg(false), 4000); }
+          catch (e: any) { setErr(e?.message ?? "Não foi possível salvar o prazo."); }
+        }}>Salvar prazo</Button>
       </div>
+      {readOnly && <p className="text-xs text-amber-700">Esta é uma versão publicada (somente leitura). Escolha o rascunho no seletor de versões para alterar o prazo.</p>}
+      {!readOnly && v !== "" && !valid && <p className="text-xs text-red-600">Informe um número inteiro de dias, 1 ou mais.</p>}
+      {err && <p role="alert" className="text-xs font-semibold text-red-600">Não salvou: {err}</p>}
+      {okMsg && <p role="status" className="text-xs font-semibold text-emerald-700">✓ Prazo salvo.</p>}
     </div>
   );
 }
@@ -1145,7 +1381,7 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-100">
           <p className="font-semibold">Custos, impostos e valor/hora ficam na Precificação</p>
           <p className="mt-1 text-xs">Valor/hora das especialidades, impostos, comissão, taxas, margem, revisão e ordem são globais e valem para todos os produtos. Aqui você só define o prazo deste produto e escolhe, em cada etapa, a especialidade e as horas.</p>
-          <a href="/admin/precificacao" className="mt-2 inline-block rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Abrir Precificação</a>
+          <button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="mt-2 inline-block rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Abrir Precificação</button>
         </div>
         </div>
       </div>
@@ -1995,6 +2231,61 @@ const READINESS_TONE: Record<string, string> = {
   opcional: "bg-neutral-100 text-neutral-600",
 };
 
+// Lista EXATA do que falta em cada item (um ponto por campo/tarefa/etapa).
+function readinessDetailLines(key: string, product: any, version: any, note?: string): string[] {
+  const out: string[] = [];
+  const tasks: any[] = version?.tasks ?? [];
+  const mins = (x: any) => (x?.estimated_minutes ?? 0) > 0;
+  switch (key) {
+    case "conteudo":
+      if (!String(version?.title ?? "").trim()) out.push("Título comercial: vazio");
+      if (!String(version?.summary ?? "").trim()) out.push("Descrição curta: vazia");
+      if (!String(version?.full_description ?? "").trim()) out.push("Descrição completa: vazia");
+      break;
+    case "classificacao":
+      if (!product?.pillar) out.push("Pilar: não escolhido");
+      if (!product?.category) out.push("Categoria: não escolhida");
+      if (!(product?.four_f?.length > 0)) out.push("Classificação 4F: nenhuma marcada");
+      break;
+    case "tarefas":
+      if (tasks.length === 0) out.push("Nenhuma tarefa cadastrada");
+      break;
+    case "esforco_tarefas":
+    case "preco":
+    case "prazo": {
+      if (key === "prazo" || (key === "preco" && /prazo/i.test(note ?? ""))) {
+        if (version?.base_commercial_deadline_days == null) out.push("Prazo comercial base (dias): não informado (aba Custos e preço)");
+      }
+      if (key === "prazo") break;
+      if (tasks.length === 0 && key === "preco") out.push("Nenhuma tarefa: não há base de custo");
+      for (const t of tasks) {
+        if (t.effort_is_provisional) out.push(`Tarefa "${t.name}": horas/especialidade PROVISÓRIAS — confirme em Salvar tarefa`);
+        const steps = (t.steps ?? []).filter(mins);
+        if (steps.length > 0) {
+          for (const st of steps) if (!(st.specialty_id ?? t.specialty?.id)) out.push(`Tarefa "${t.name}" › etapa "${st.name}": falta a especialidade`);
+        } else {
+          if (!t.specialty?.id) out.push(`Tarefa "${t.name}": falta a especialidade`);
+          if (t.estimated_minutes == null) out.push(`Tarefa "${t.name}": faltam as horas (minutos)`);
+        }
+        if ((t.steps ?? []).some((st: any) => !mins(st)) && steps.length > 0) {
+          for (const st of t.steps.filter((x: any) => !mins(x))) out.push(`Tarefa "${t.name}" › etapa "${st.name}": faltam as horas (minutos)`);
+        }
+      }
+      if (key === "preco") {
+        const m = /"A definir":\s*(.*)\.$/.exec(note ?? "");
+        if (m) for (const part of m[1].split(";").map((x) => x.trim()).filter(Boolean)) if (!/prazo/i.test(part) && !/provis/i.test(part)) out.push(`Configuração global: ${part} (tela Precificação)`);
+      }
+      break;
+    }
+    case "variacoes":
+      for (const va of version?.variations ?? []) if (va.is_required && (va.options ?? []).length === 0) out.push(`Variação "${va.name}": obrigatória e sem opções`);
+      break;
+    default:
+      break;
+  }
+  return out;
+}
+
 // Campos exatos que ainda impedem o item de ficar pronto (ids de elementos).
 function readinessPendingIds(key: string, product: any, version: any, level?: string, note?: string): string[] {
   const tasks: any[] = version?.tasks ?? [];
@@ -2105,7 +2396,7 @@ const LEVEL_META: Record<string, { label: string; chip: string; border: string; 
 
 type ReadinessFilter = "todos" | "pronto" | "bloqueador" | "pendente" | "opcional";
 
-function ProductReadinessPanel({ productId, versionKey, onGo, onItems }: { productId: string; versionKey: string; onGo: (key: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void }) {
+function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onItems, detailFor }: { productId: string; versionId?: string; versionKey: string; onGo: (key: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void; detailFor?: (key: string) => string[] }) {
   const [data, setData] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -2114,11 +2405,11 @@ function ProductReadinessPanel({ productId, versionKey, onGo, onItems }: { produ
   const reload = useCallback(() => {
     setLoading(true);
     apiClient
-      .getCatalog2ProductReadiness(productId)
+      .getCatalog2ProductReadiness(productId, versionId)
       .then((d: any) => setData(d))
       .catch(() => setData({ error: true }))
       .finally(() => setLoading(false));
-  }, [productId]);
+  }, [productId, versionId]);
   useEffect(() => { reload(); }, [reload, versionKey]);
   useEffect(() => { if (data?.items) onItems?.(data.items); }, [data, onItems]);
 
@@ -2228,6 +2519,11 @@ function ProductReadinessPanel({ productId, versionKey, onGo, onItems }: { produ
                               {READINESS_WHERE[it.key] ?? "Abrir"} <ChevronRight className="h-4 w-4" />
                             </span>
                           </span>
+                          {it.level !== "pronto" && (detailFor?.(it.key) ?? []).length > 0 && (
+                            <ul className="mt-1.5 list-disc space-y-0.5 pl-9 text-[12px] text-slate-600 dark:text-slate-300">
+                              {(detailFor?.(it.key) ?? []).map((line, i) => <li key={i}>{line}</li>)}
+                            </ul>
+                          )}
                           {help && (
                             <span className={`mt-1.5 block rounded-lg px-2.5 py-1.5 text-[12px] leading-snug ${it.level === "bloqueador" ? "bg-red-50 text-red-800 dark:bg-red-950/20 dark:text-red-200" : "bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200"}`}>
                               <strong>{it.level === "bloqueador" ? "Por que está bloqueado: " : "Por que está pendente: "}</strong>{help}
@@ -2304,7 +2600,22 @@ function fmtUpdatedAt(raw?: string | null) {
 // Cabeçalho do editor no padrão da plataforma (degradê da marca): voltar,
 // nome + status, subtítulo, versão, atualizar, menu ⋮ (nova versão / fixar na
 // bandeja) e fechar. Pedido do usuário 2026-09-25 (layout de referência).
-function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish }: any) {
+function HeaderIconBtn({ label, onClick, children, className = "" }: { label: string; onClick?: () => void; children: React.ReactNode; className?: string }) {
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" onClick={onClick} aria-label={label} className={`rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white ${className}`}>
+            {children}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish, versionInfo }: any) {
   const { pinned, toggle } = usePinEntry(pin ?? null);
   const [spinning, setSpinning] = useState(false);
   const refresh = async () => {
@@ -2313,54 +2624,64 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
   };
   return (
     <div
-      className="flex shrink-0 flex-wrap items-center gap-3 rounded-2xl px-5 py-3.5 shadow-sm"
+      className="flex shrink-0 flex-wrap items-center gap-3 rounded-2xl px-5 py-3 shadow-sm"
       style={{ background: "var(--app-brand-gradient, var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)))" }}
     >
-      <button type="button" onClick={onBack} aria-label="Voltar" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
-        <ArrowLeft className="h-6 w-6" />
-      </button>
+      <HeaderIconBtn label="Voltar" onClick={onBack}><ArrowLeft className="h-6 w-6" /></HeaderIconBtn>
       <div className="min-w-[12rem] flex-1">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <h2 className="min-w-0 text-xl font-bold leading-tight text-white">{product.internal_name}</h2>
+        <h2 className="min-w-0 text-xl font-bold leading-tight text-white">{product.internal_name}</h2>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <Badge className={catalog2StatusTone(product.status)}>{catalog2StatusLabel(product.status)}</Badge>
           {product.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
         </div>
-        <p className="mt-0.5 text-sm text-white/75">Editor de produto</p>
       </div>
-      <select
-        aria-label="Versão do produto"
-        className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm"
-        value={selectedVersionId}
-        onChange={(ev) => onSelectVersion(ev.target.value)}
-      >
-        {product.versions.map((v: any) => (
-          <option key={v.id} value={v.id}>v{v.version_number} — {v.state}{v.is_published_current ? " (publicada atual)" : ""}</option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          aria-label="Versão do produto"
+          className="h-10 cursor-pointer appearance-none rounded-xl border border-white/25 bg-white/10 pl-3.5 pr-9 text-sm font-semibold text-white shadow-sm backdrop-blur transition-colors hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 [&>option]:bg-white [&>option]:text-slate-900"
+          value={selectedVersionId}
+          onChange={(ev) => onSelectVersion(ev.target.value)}
+        >
+          {product.versions.map((v: any) => (
+            <option key={v.id} value={v.id}>v{v.version_number} — {v.state}{v.is_published_current ? " (publicada atual)" : ""}</option>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/80" />
+      </div>
+      {versionInfo?.published && (
+        <TooltipProvider delayDuration={100}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" aria-label="Sobre esta versão" className="rounded-full p-1.5 text-white/85 transition-colors hover:bg-white/15 hover:text-white">
+                <Info className="h-5 w-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={8} className="max-w-sm space-y-2 p-4 text-[13px] leading-relaxed">
+              <p className="text-sm font-bold">{versionInfo.current ? `v${versionInfo.number} é a versão publicada atual` : `v${versionInfo.number} é uma versão anterior`}</p>
+              <p>Versões publicadas ficam <strong>somente leitura</strong> — assim o que o cliente viu e contratou nunca muda por engano.</p>
+              <p>Para alterar o produto, basta <strong>abrir o editor</strong>: o sistema cria sozinho o próximo rascunho (v{versionInfo.number + 1}) e você edita nele. Se não mudar nada, o rascunho é descartado ao fechar.</p>
+              <p>Ao clicar em <strong>Publicar</strong>, o rascunho substitui a versão atual, e a anterior fica guardada. {versionInfo.current ? "" : "Nesta versão, o botão Publicar volta a torná-la a versão vigente."}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
       {canPublish && (
         <button
           type="button"
           onClick={onPublish}
-          title="Ir para a publicação desta versão (validação, resumo e botão Publicar)"
-          className="rounded-xl bg-white/95 px-3.5 py-2 text-sm font-semibold text-violet-800 shadow-sm transition-colors hover:bg-white"
+          className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-[#4a2cff] via-[#7b2cdb] to-[#d92293] px-4 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(123,44,219,0.35)] ring-1 ring-white/25 transition hover:brightness-110"
         >
-          Publicar…
+          <UploadCloud className="h-4 w-4" /> Publicar
         </button>
       )}
       {pin && (
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={pinned ? "Remover da Bandeja de Telas" : "Fixar na Bandeja de Telas"}
-          title={pinned ? "Remover da Bandeja de Telas" : "Fixar na Bandeja de Telas"}
-          className={`rounded-lg p-2 transition-colors hover:bg-white/15 ${pinned ? "text-amber-300" : "text-white/90 hover:text-white"}`}
-        >
+        <HeaderIconBtn label={pinned ? "Remover da Bandeja de Telas" : "Fixar na Bandeja de Telas"} onClick={toggle} className={pinned ? "!text-amber-300" : ""}>
           <Pin className={`h-5 w-5 ${pinned ? "fill-current" : ""}`} />
-        </button>
+        </HeaderIconBtn>
       )}
-      <button type="button" onClick={refresh} aria-label="Recarregar dados do produto" title="Recarregar os dados do produto (busca de novo no servidor o que foi salvo)" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
+      <HeaderIconBtn label="Recarregar dados do produto (busca de novo no servidor o que foi salvo)" onClick={refresh}>
         <RefreshCw className={`h-5 w-5 ${spinning ? "animate-spin" : ""}`} />
-      </button>
+      </HeaderIconBtn>
       {(canNewVersion || pin) && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -2378,9 +2699,7 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <button type="button" onClick={onBack} aria-label="Fechar" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
-        <X className="h-6 w-6" />
-      </button>
+      <HeaderIconBtn label="Fechar" onClick={onBack}><X className="h-6 w-6" /></HeaderIconBtn>
     </div>
   );
 }
@@ -2389,7 +2708,7 @@ function StepIntro({ children }: { children: React.ReactNode }) {
   return <p className="mb-5 rounded-xl bg-violet-50/70 px-4 py-2.5 text-sm text-slate-600 dark:bg-violet-950/20 dark:text-slate-300">{children}</p>;
 }
 function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
-  return <label className="block space-y-1.5"><span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>{children}</label>;
+  return <label className="block space-y-1.5"><span className="block text-[13px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>{children}</label>;
 }
 function DeleteBtn({ label, onConfirm }: { label: string; onConfirm: () => void }) {
   const [open, setOpen] = useState(false);

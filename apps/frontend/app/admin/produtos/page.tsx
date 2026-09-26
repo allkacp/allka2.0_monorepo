@@ -1019,7 +1019,7 @@ export default function AdminProdutosPage() {
                       setPage(1);
                     }}
                   />
-                  <div className="flex w-[260px] shrink-0 items-center justify-end">
+                  <div className="flex min-w-[236px] shrink-0 items-center justify-end">
                     {totalPages > 1 && (
                       <PaginationControls
                         page={page}
@@ -1784,6 +1784,7 @@ export default function AdminProdutosPage() {
             void bootstrap();
           }}
           hideHeader
+          bare
         >
           {openProductId && (
             <ProductEditor
@@ -1799,21 +1800,6 @@ export default function AdminProdutosPage() {
                 icon: Package,
                 path: openProductNumber != null ? `/admin/produtos/${openProductNumber}` : `/admin/produtos/${openProductId}`,
               }}
-              notice={(() => {
-                const rp = readinessById[openProductId];
-                const hasProvisional =
-                  rp && (!(rp.task_count > 0) || rp.price_amount == null);
-                return hasProvisional ? (
-                  <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>
-                      Este produto tem campos provisórios (preço, prazo e/ou
-                      tarefas de demonstração) — veja o resumo completo no
-                      Catálogo de Produtos administrativo antes de publicar.
-                    </span>
-                  </div>
-                ) : null;
-              })()}
             />
           )}
         </EmbeddedSlideScreen>

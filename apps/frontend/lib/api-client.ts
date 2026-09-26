@@ -889,6 +889,7 @@ class ApiClient {
   previewCatalog2Version(versionId: string) { return this.c2("GET", `/versions/${versionId}/preview`); }
   getCatalog2PricingSettings() { return this.c2("GET", "/pricing-settings"); }
   updateCatalog2PricingSettings(body: Record<string, any>) { return this.c2("PUT", "/pricing-settings", body); }
+  generateCatalog2ChangeSummary(versionId: string) { return this.c2<{ summary: string; source: "ia" | "automatico"; changes: string[] }>("POST", `/versions/${versionId}/change-summary`, {}); }
   discardCatalog2DraftVersion(versionId: string) { return this.c2("DELETE", `/versions/${versionId}`); }
   makeCatalog2VersionCurrent(versionId: string) { return this.c2("POST", `/versions/${versionId}/make-current`, {}); }
   createCatalog2PricingComponent(body: Record<string, any>) { return this.c2("POST", "/pricing-components", body); }
@@ -962,7 +963,7 @@ class ApiClient {
   /** Prontidão dos produtos para o catálogo do cliente (bloco 5/6). */
   getCatalog2Readiness() { return this.c2("GET", "/readiness"); }
   /** Prontidão de UM produto — mesma regra do painel geral (bloco 2, 10/09). */
-  getCatalog2ProductReadiness(productId: string) { return this.c2("GET", `/products/${productId}/readiness`); }
+  getCatalog2ProductReadiness(productId: string, versionId?: string) { return this.c2("GET", `/products/${productId}/readiness${versionId ? `?version_id=${encodeURIComponent(versionId)}` : ""}`); }
   /** Detalhe completo (real + prontidão + camada provisória) — reparo 2026-09. */
   getCatalog2ProductDetailPreview(productId: string) { return this.c2("GET", `/products/${productId}/detail-preview`); }
   /** Memória de cálculo do preço (computePricing na íntegra) — Admin Master, reunião 10/09. */
@@ -2558,6 +2559,7 @@ class ApiClient {
     mode?: "text" | "list";
     length?: "manter" | "curto" | "medio" | "longo";
     approach?: "melhorar" | "recriar";
+    research?: boolean;
     context?: {
       name?: string;
       category?: string;
