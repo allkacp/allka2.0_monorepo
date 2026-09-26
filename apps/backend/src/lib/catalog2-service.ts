@@ -141,6 +141,8 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
         title: last?.title ?? product.internal_name,
         summary: last?.summary ?? null,
         full_description: last?.full_description ?? null,
+        // O prazo comercial base acompanha a versão (senão a nova versão "perde" o prazo).
+        base_commercial_deadline_days: last?.base_commercial_deadline_days ?? null,
         created_by_user_id: actorUserId,
       },
     });
@@ -177,6 +179,9 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         specialty_id: t.specialty_id,
         execution_mode: t.execution_mode,
         estimated_minutes: t.estimated_minutes,
+        effort_is_provisional: t.effort_is_provisional,
+        effort_provisional_reason: t.effort_provisional_reason,
+        effort_source: t.effort_source,
         requires_review: t.requires_review,
         requires_client_approval: t.requires_client_approval,
         is_conditional: t.is_conditional,

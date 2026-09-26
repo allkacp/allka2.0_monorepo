@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin, Tag, Layers, ListChecks, CheckSquare, ListOrdered, DollarSign, CalendarClock } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePinEntry, type PinnedEntry } from "@/contexts/open-screens-context";
 import { apiClient } from "@/lib/api-client";
@@ -52,6 +52,9 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   const [loadCount, setLoadCount] = useState(0);
   const [subTabs, setSubTabs] = useState({ opcoes: "class", entrega: "tarefas", revisao: "preview" });
   const [watch, setWatch] = useState<{ key: string; ids: string[] } | null>(null);
+  const [noticeHidden, setNoticeHidden] = useState(false);
+  const autoDraftRef = useRef<{ promise: Promise<void> | null; draftId: string | null; baseId: string | null }>({ promise: null, draftId: null, baseId: null });
+  const [pubDlg, setPubDlg] = useState<{ val: any } | null>(null);
   const [doneIds, setDoneIds] = useState<string[]>([]);
   const [readinessItems, setReadinessItems] = useState<Record<string, { level: string; note: string }> | null>(null);
   const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
@@ -78,9 +81,26 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       apiClient.getCatalog2Specialties(),
       apiClient.getCatalog2Questionnaires(),
     ]);
-    setProduct(p);
+    let cur = p;
+    // Abriu para editar um produto com versão publicada e sem rascunho: já cria o
+    // próximo rascunho (v2, v3…). Se ninguém mexer, ele é descartado ao fechar.
+    if (p.published_version_id && !p.versions.some((v: any) => v.state === "rascunho")) {
+      const ad = autoDraftRef.current;
+      if (!ad.promise) {
+        ad.promise = (async () => {
+          try {
+            const nv: any = await apiClient.newCatalog2Version(productId);
+            ad.draftId = nv.version_id;
+            ad.baseId = p.published_version_id;
+          } catch { /* segue somente leitura */ }
+        })();
+      }
+      await ad.promise;
+      if (ad.draftId) cur = await apiClient.getCatalog2Product(productId);
+    }
+    setProduct(cur);
     setRefs({ pillars: pil.data, fourF: ff.data, categories: cat.data, specialties: sp.data, questionnaires: qn.data });
-    setSelectedVersionId((cur) => cur && p.versions.some((v: any) => v.id === cur) ? cur : (p.versions.find((v: any) => v.state === "rascunho")?.id ?? p.versions[0]?.id ?? ""));
+    setSelectedVersionId((sel) => sel && cur.versions.some((v: any) => v.id === sel) ? sel : (cur.versions.find((v: any) => v.state === "rascunho")?.id ?? cur.versions[0]?.id ?? ""));
     setLoading(false);
     setLoadCount((c) => c + 1);
   }, [productId]);
@@ -160,6 +180,19 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 
   const clearPublishHighlight = (target: string) => setHighlightTarget((current) => current === target ? null : current);
 
+  async function closeEditor() {
+    const ad = autoDraftRef.current;
+    if (ad.draftId && ad.baseId) {
+      try {
+        const fresh = await apiClient.getCatalog2Product(productId);
+        const draft = fresh.versions.find((v: any) => v.id === ad.draftId && v.state === "rascunho");
+        const base = fresh.versions.find((v: any) => v.id === ad.baseId);
+        if (draft && base && versionSignature(draft) === versionSignature(base)) await apiClient.discardCatalog2DraftVersion(ad.draftId);
+      } catch { /* mantém o rascunho na dúvida */ }
+    }
+    onBack();
+  }
+
   async function act(fn: () => Promise<any>, ok?: string | ((r: any) => string | undefined), opts?: { rethrow?: boolean }) {
     setMsg(null);
     try {
@@ -181,22 +214,36 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 
   return (
     <RingCtx.Provider value={ringOf}>
-    <div className="product-editor flex min-h-0 min-w-0 flex-1 flex-col">
+    <div className="product-editor flex min-h-0 min-w-0 flex-1 flex-col gap-3 bg-[#dde2f3] p-3 dark:bg-slate-950">
       <EditorHeader
         product={product}
         selectedVersionId={selectedVersionId}
         onSelectVersion={setSelectedVersionId}
-        onBack={onBack}
+        onBack={() => void closeEditor()}
         onRefresh={async () => { await load(); setMsg("Dados do produto atualizados."); }}
+        canPublish={!!version && (version.state === "rascunho" || !version.is_published_current)}
+        onPublish={() => { if (!version) return; if (version.state === "publicada") { setPubDlg({ val: { ok: true, restore: true } }); return; } apiClient.validateCatalog2Version(version.id).then((val: any) => setPubDlg({ val })).catch((e: any) => setMsg(e?.message ?? "Não foi possível validar a versão.")); }}
         canNewVersion={!!product.published_version_id && !product.versions.some((v: any) => v.state === "rascunho")}
         onNewVersion={() => act(() => apiClient.newCatalog2Version(productId), "Nova versão rascunho criada.")}
         pin={pin}
       />
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-white px-5 py-4 sm:px-6 dark:bg-slate-900">
-      {notice}
-      {readOnly && <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">Versão publicada — somente leitura. Crie uma nova versão para editar.</p>}
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+      <div className="flex flex-wrap items-stretch gap-2">
+        {notice && !noticeHidden && (
+          <div className="relative min-w-[16rem] flex-1 [&>div]:!rounded-xl [&>div]:!py-1.5 [&>div]:!pr-9 [&>div]:!text-xs">
+            {notice}
+            <button type="button" aria-label="Dispensar aviso" onClick={() => setNoticeHidden(true)} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-amber-700 hover:bg-amber-200/60"><X className="h-3.5 w-3.5" /></button>
+          </div>
+        )}
+        {readOnly && <p className="flex-1 min-w-[16rem] rounded-xl border border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">Versão publicada — somente leitura. Crie uma nova versão para editar.</p>}
+        {msg && (
+          <p className="relative min-w-[12rem] flex-1 rounded-xl border border-blue-200 bg-blue-50 py-1.5 pl-4 pr-9 text-xs text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
+            {msg}
+            <button type="button" aria-label="Dispensar mensagem" onClick={() => setMsg(null)} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 hover:bg-blue-200/60"><X className="h-3.5 w-3.5" /></button>
+          </p>
+        )}
+      </div>
       <ProductReadinessPanel productId={productId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onItems={setReadinessItems} />
-      {msg && <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">{msg}</p>}
 
       {version && (
         <Tabs value={editorTab} onValueChange={setEditorTab}>
@@ -210,7 +257,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
             <TabsTrigger value="revisao" className={MAIN_TAB}>Revisão e publicação</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="info" className={TAB_CARD}>
+          <TabsContent value="info" className="mt-3">
             <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} onStatus={(s) => act(() => apiClient.setCatalog2ProductStatus(productId, s), "Status salvo.", { rethrow: true })} />
           </TabsContent>
 
@@ -262,11 +309,57 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       )}
       </div>
     </div>
+      {pubDlg && version && (() => {
+        const current = product.versions.find((v: any) => v.is_published_current);
+        if (pubDlg.val?.restore) {
+          return (
+            <ConfirmationDialog
+              open
+              onClose={() => setPubDlg(null)}
+              title={`Voltar para a v${version.version_number}?`}
+              message={`A v${version.version_number} volta a ser a versão publicada e SUBSTITUI a atual (v${current?.version_number ?? "?"}). O cliente passa a ver a v${version.version_number}.`}
+              confirmText="Publicar novamente"
+              destructive={false}
+              onConfirm={() => { setPubDlg(null); void act(() => apiClient.makeCatalog2VersionCurrent(version.id), `v${version.version_number} publicada novamente.`); }}
+            />
+          );
+        }
+        const ok = !!pubDlg.val?.ok;
+        const forceOk = !ok && !!pubDlg.val?.force_allowed;
+        const canGo = ok || forceOk;
+        const message = canGo
+          ? (current
+              ? `A versão v${version.version_number} (rascunho) vai SUBSTITUIR a versão publicada atual (v${current.version_number}). A v${version.version_number} fica imutável; mudanças futuras exigem uma nova versão.`
+              : `A versão v${version.version_number} será a primeira publicada e fica imutável; mudanças futuras exigem uma nova versão.`) + (forceOk ? " Atenção: há pendência comercial de preço ou prazo; ela será publicada assim mesmo." : "")
+          : `Ainda não dá para publicar: ${(pubDlg.val?.issues ?? []).join(" ")}`;
+        return (
+          <ConfirmationDialog
+            open
+            onClose={() => setPubDlg(null)}
+            title={canGo ? `Publicar a v${version.version_number}?` : "Não é possível publicar ainda"}
+            message={message}
+            confirmText={canGo ? "Publicar" : "Entendi"}
+            destructive={false}
+            onConfirm={() => {
+              const val = pubDlg.val;
+              setPubDlg(null);
+              if (!canGo) return;
+              void act(() => apiClient.publishCatalog2Version(version.id, { client_action_id: `pub-${version.id}-${Date.now()}`, change_summary: version.change_summary ?? "", force: forceOk ? true : undefined }), "Versão publicada.");
+              void val;
+            }}
+          />
+        );
+      })()}
     </RingCtx.Provider>
   );
 }
 
 // ── 1. Geral ──────────────────────────────────────────────────────────
+// Assinatura do conteúdo de uma versão (sem ids/datas) — serve para saber se o
+// rascunho automático foi mexido. Conservador: na dúvida considera "mudou".
+const VOLATILE_KEYS = new Set(["id", "version_id", "task_id", "variation_id", "updated_at", "created_at", "history", "version_number", "state", "is_published_current", "published_at", "published_by_user_id", "publish_client_action_id", "updated_by_user_id", "created_by_user_id", "change_summary"]);
+const versionSignature = (v: any) => JSON.stringify(v, (k, val) => (VOLATILE_KEYS.has(k) ? undefined : val));
+
 const RingCtx = createContext<(id: string) => string>(() => "");
 
 function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTarget, clearHighlight }: any) {
@@ -319,7 +412,7 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
   }
 
   return (
-    <div id="catalog2-general" className="grid scroll-mt-6 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+    <div id="catalog2-general" className="grid scroll-mt-6 items-start gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       <SectionCard icon={FileText} title="Dados principais" subtitle="Defina as informações básicas do seu produto.">
         <div id="catalog2-field-title" className={ringOf("catalog2-field-title")}>
           <Field label={<>Título comercial<Req /></>}><Input disabled={readOnly} value={f.title} onChange={(e) => updateInfo({ title: e.target.value })} /></Field>
@@ -330,18 +423,21 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
             <CharCount value={f.summary} max={500} />
           </div>
         </Field>
-        <div id="catalog2-field-full-description" className={ringOf("catalog2-field-full-description")}>
-          <Field label={<>Descrição completa<Req /></>}>
-            <div className="space-y-1">
-              <Textarea rows={5} maxLength={2000} disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} />
-              <CharCount value={f.full_description} max={2000} />
-            </div>
-          </Field>
-        </div>
       </SectionCard>
 
-      <div className="space-y-5">
-        <SectionCard icon={Settings2} title="Status do produto" subtitle="Define a disponibilidade deste produto na plataforma.">
+      <SectionCard icon={FileText} title="Descrição completa" subtitle="Detalhe o produto com informações completas, benefícios e diferenciais." collapsible defaultOpen={!String(f.full_description ?? "").trim()} forceOpen={ringOf("catalog2-field-full-description") !== ""}>
+      <div id="catalog2-field-full-description" className={ringOf("catalog2-field-full-description")}>
+        <Field label={<>Descrição completa<Req /></>}>
+          <div className="space-y-1">
+            <Textarea rows={4} maxLength={2000} disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} />
+            <CharCount value={f.full_description} max={2000} />
+          </div>
+        </Field>
+      </div>
+      </SectionCard>
+
+      <div className="space-y-3">
+        <SectionCard icon={Settings2} title="Status do produto" subtitle="Define a disponibilidade deste produto na plataforma." collapsible>
           <select aria-label="Status do produto" className="w-full" value={draftStatus} onChange={(e) => { setDraftStatus(e.target.value); setStatusError(null); }}>
             {CATALOG2_STATUSES.map((status) => <option key={status} value={status}>{CATALOG2_STATUS_LABEL[status]}</option>)}
           </select>
@@ -354,9 +450,9 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
           {statusError && <p role="alert" className="text-xs text-red-600">{statusError}</p>}
         </SectionCard>
 
-        <SectionCard icon={Clock} title="Resumo da mudança (histórico)" subtitle="Adicione um resumo das alterações realizadas.">
+        <SectionCard icon={Clock} title="Resumo da mudança (histórico)" subtitle="Acompanhe as principais alterações deste produto." collapsible defaultOpen={false}>
           <div className="space-y-1">
-            <Textarea rows={3} maxLength={500} disabled={readOnly} placeholder="Descreva as alterações realizadas neste produto..." value={f.change_summary} onChange={(e) => updateInfo({ change_summary: e.target.value })} />
+            <Textarea rows={2} maxLength={500} disabled={readOnly} placeholder="Descreva as alterações realizadas neste produto..." value={f.change_summary} onChange={(e) => updateInfo({ change_summary: e.target.value })} />
             <CharCount value={f.change_summary} max={500} />
           </div>
         </SectionCard>
@@ -1988,6 +2084,18 @@ const READINESS_HELP: Record<string, Partial<Record<"bloqueador" | "pendente", s
   publicacao: { bloqueador: "O produto nunca foi publicado, então o cliente não o enxerga. Quando os outros bloqueios estiverem resolvidos, publique a versão em Revisão e publicação › Publicação e versões." },
 };
 
+const READINESS_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  conteudo: FileText,
+  classificacao: Tag,
+  variacoes: Layers,
+  adicionais: ListChecks,
+  tarefas: CheckSquare,
+  etapas: ListOrdered,
+  esforco_tarefas: Clock,
+  preco: DollarSign,
+  prazo: CalendarClock,
+};
+
 const LEVEL_META: Record<string, { label: string; chip: string; border: string; rank: number }> = {
   bloqueador: { label: "Bloqueio", chip: "bg-red-100 text-red-700", border: "border-l-red-500", rank: 0 },
   pendente: { label: "Pendente", chip: "bg-amber-100 text-amber-700", border: "border-l-amber-400", rank: 1 },
@@ -2017,7 +2125,7 @@ function ProductReadinessPanel({ productId, versionKey, onGo, onItems }: { produ
   const blockers = data?.blockers ?? [];
   const pendings = data?.pendings ?? [];
   const entries: { key: string; level: string; note: string }[] = data?.items
-    ? Object.entries(data.items).map(([key, it]: any) => ({ key, level: it.level, note: it.note }))
+    ? Object.entries(data.items).filter(([key]) => key !== "publicacao").map(([key, it]: any) => ({ key, level: it.level, note: it.note }))
     : [];
   const counted = entries.filter((it) => it.level !== "opcional");
   const readyCount = counted.filter((it) => it.level === "pronto").length;
@@ -2038,7 +2146,7 @@ function ProductReadinessPanel({ productId, versionKey, onGo, onItems }: { produ
   ];
 
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+    <section className="rounded-2xl border border-white/70 bg-[#e8ecf9] shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -2046,7 +2154,7 @@ function ProductReadinessPanel({ productId, versionKey, onGo, onItems }: { produ
       >
         <span className="flex items-center justify-between gap-3">
           <span className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-semibold text-slate-900 dark:text-slate-100">Prontidão para publicação ·</span>
+            <span className="font-semibold text-slate-900 dark:text-slate-100">Checklist do produto ·</span>
             {data?.error ? (
               <span className="text-red-600">não foi possível carregar</span>
             ) : loading && !data ? (
@@ -2081,7 +2189,7 @@ function ProductReadinessPanel({ productId, versionKey, onGo, onItems }: { produ
             <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>
           ) : (
             <>
-              <div className="mb-3 flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtrar itens de prontidão">
+              <div className="mb-2 flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtrar itens do checklist">
                 {filters.map((f) => (
                   <button
                     key={f.id}
@@ -2089,41 +2197,39 @@ function ProductReadinessPanel({ productId, versionKey, onGo, onItems }: { produ
                     role="tab"
                     aria-selected={filter === f.id}
                     onClick={() => setFilter(f.id)}
-                    className={`rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors ${filter === f.id ? "border-violet-600 bg-violet-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${filter === f.id ? "border-violet-600 bg-violet-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
                   >
                     {f.label} <span className={filter === f.id ? "text-white/80" : "text-slate-400"}>({f.n})</span>
                   </button>
                 ))}
+                <span className="ml-auto text-[11px] text-slate-500">Clique num item para ir ao lugar de resolver.</span>
               </div>
-              <p className="mb-3 text-xs text-slate-500">
-                Clique num item para ir direto ao lugar de resolver. O campo aparece em amarelo até ficar pronto.
-              </p>
               {visible.length === 0 ? (
                 <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-800/40">Nenhum item nesta categoria.</p>
               ) : (
-                <ul className="space-y-2.5">
+                <ul className="space-y-1.5">
                   {visible.map((it) => {
                     const meta = LEVEL_META[it.level] ?? LEVEL_META.opcional;
                     const help = (READINESS_HELP[it.key] as any)?.[it.level] as string | undefined;
+                    const Icon = READINESS_ICON[it.key] ?? FileText;
                     return (
                       <li key={it.key}>
                         <button
                           type="button"
                           onClick={() => onGo(it.key)}
-                          className={`w-full rounded-xl border border-l-4 border-slate-200/80 bg-white p-4 text-left transition-colors hover:border-violet-300 hover:bg-violet-50/40 dark:border-slate-700/60 dark:bg-slate-900 dark:hover:bg-slate-800/50 ${meta.border}`}
+                          className="w-full rounded-xl border border-white/70 bg-[#f2f4fc] px-3 py-1.5 text-left transition-colors hover:border-violet-300 hover:bg-white dark:border-slate-700/60 dark:bg-slate-900 dark:hover:bg-slate-800/50"
                         >
-                          <span className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="flex items-center gap-2.5">
-                              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${meta.chip}`}>{meta.label}</span>
-                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{READINESS_ITEM_LABEL[it.key] ?? it.key}</span>
-                            </span>
-                            <span className="flex items-center gap-1 text-xs font-semibold text-violet-700 dark:text-violet-300">
+                          <span className="flex items-center gap-3">
+                            <span className={`w-[74px] shrink-0 rounded-full px-2 py-0.5 text-center text-[11px] font-semibold ${meta.chip}`}>{meta.label}</span>
+                            <Icon className="h-4 w-4 shrink-0 text-violet-600" />
+                            <span className="w-[210px] shrink-0 truncate text-[13px] font-bold text-slate-900 dark:text-slate-100">{READINESS_ITEM_LABEL[it.key] ?? it.key}</span>
+                            <span className="min-w-0 flex-1 truncate text-xs text-slate-500 dark:text-slate-400" title={it.note}>{it.note}</span>
+                            <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-violet-700 dark:text-violet-300">
                               {READINESS_WHERE[it.key] ?? "Abrir"} <ChevronRight className="h-4 w-4" />
                             </span>
                           </span>
-                          <span className="mt-1.5 block text-sm text-slate-600 dark:text-slate-300">{it.note}</span>
                           {help && (
-                            <span className={`mt-2 block rounded-lg px-3 py-2 text-[13px] leading-relaxed ${it.level === "bloqueador" ? "bg-red-50 text-red-800 dark:bg-red-950/20 dark:text-red-200" : "bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200"}`}>
+                            <span className={`mt-1.5 block rounded-lg px-2.5 py-1.5 text-[12px] leading-snug ${it.level === "bloqueador" ? "bg-red-50 text-red-800 dark:bg-red-950/20 dark:text-red-200" : "bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200"}`}>
                               <strong>{it.level === "bloqueador" ? "Por que está bloqueado: " : "Por que está pendente: "}</strong>{help}
                             </span>
                           )}
@@ -2153,19 +2259,29 @@ const MAIN_TABS_LIST = "h-auto w-full flex-nowrap justify-start gap-1 overflow-x
 const MAIN_TAB = "-mb-px flex-none rounded-none border-0 border-b-2 border-transparent bg-transparent px-4 py-3 text-[13px] font-semibold text-slate-500 shadow-none hover:text-slate-700 data-[state=active]:border-violet-600 data-[state=active]:bg-transparent data-[state=active]:text-violet-700 data-[state=active]:shadow-none dark:text-slate-400 dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-violet-300";
 const SUB_TABS_LIST = "h-auto w-fit flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800";
 const SUB_TAB = "flex-none rounded-lg px-3.5 py-1.5 text-sm font-semibold data-[state=active]:bg-white data-[state=active]:text-violet-700 data-[state=active]:shadow-sm dark:data-[state=active]:bg-slate-700 dark:data-[state=active]:text-violet-200";
-const TAB_CARD = "mt-5";
+const TAB_CARD = "mt-3 rounded-2xl border border-white/70 bg-[#e8ecf9] p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900";
 
-function SectionCard({ icon: Icon, title, subtitle, children }: { icon: React.ComponentType<{ className?: string }>; title: string; subtitle: string; children: React.ReactNode }) {
+function SectionCard({ icon: Icon, title, subtitle, children, collapsible = false, defaultOpen = true, forceOpen = false }: { icon: React.ComponentType<{ className?: string }>; title: string; subtitle: string; children: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean; forceOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const shown = !collapsible || open || forceOpen;
+  const head = (
+    <>
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-4 w-4" /></span>
+      <div className="min-w-0 flex-1 text-left">
+        <h3 className="text-[14px] font-bold leading-tight text-slate-900 dark:text-slate-100">{title}</h3>
+        <p className="text-[12px] text-slate-500 dark:text-slate-400">{subtitle}</p>
+      </div>
+      {collapsible && (shown ? <ChevronUp className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />)}
+    </>
+  );
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white p-5 dark:border-slate-700/60 dark:bg-slate-900">
-      <header className="mb-4 flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-5 w-5" /></span>
-        <div className="min-w-0">
-          <h3 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">{title}</h3>
-          <p className="text-[13px] text-slate-500 dark:text-slate-400">{subtitle}</p>
-        </div>
-      </header>
-      <div className="space-y-4">{children}</div>
+    <section className="rounded-2xl border border-white/70 bg-[#e8ecf9] p-3.5 shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+      {collapsible ? (
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={shown} className="flex w-full items-center gap-3">{head}</button>
+      ) : (
+        <header className="flex items-center gap-3">{head}</header>
+      )}
+      {shown && <div className="mt-3 space-y-2.5">{children}</div>}
     </section>
   );
 }
@@ -2188,7 +2304,7 @@ function fmtUpdatedAt(raw?: string | null) {
 // Cabeçalho do editor no padrão da plataforma (degradê da marca): voltar,
 // nome + status, subtítulo, versão, atualizar, menu ⋮ (nova versão / fixar na
 // bandeja) e fechar. Pedido do usuário 2026-09-25 (layout de referência).
-function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin }: any) {
+function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish }: any) {
   const { pinned, toggle } = usePinEntry(pin ?? null);
   const [spinning, setSpinning] = useState(false);
   const refresh = async () => {
@@ -2197,7 +2313,7 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
   };
   return (
     <div
-      className="flex shrink-0 flex-wrap items-center gap-3 px-5 py-4 sm:px-6"
+      className="flex shrink-0 flex-wrap items-center gap-3 rounded-2xl px-5 py-3.5 shadow-sm"
       style={{ background: "var(--app-brand-gradient, var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)))" }}
     >
       <button type="button" onClick={onBack} aria-label="Voltar" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
@@ -2221,6 +2337,16 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
           <option key={v.id} value={v.id}>v{v.version_number} — {v.state}{v.is_published_current ? " (publicada atual)" : ""}</option>
         ))}
       </select>
+      {canPublish && (
+        <button
+          type="button"
+          onClick={onPublish}
+          title="Ir para a publicação desta versão (validação, resumo e botão Publicar)"
+          className="rounded-xl bg-white/95 px-3.5 py-2 text-sm font-semibold text-violet-800 shadow-sm transition-colors hover:bg-white"
+        >
+          Publicar…
+        </button>
+      )}
       {pin && (
         <button
           type="button"

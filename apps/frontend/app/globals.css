@@ -2338,12 +2338,12 @@ a:focus-visible,
  * violeta. Escopo: só dentro de .product-editor. :where() mantém a
  * especificidade baixa — classes explícitas de tamanho/cor ainda vencem. */
 :where(.product-editor) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]), select, textarea) {
-  border-radius: 0.75rem;
+  border-radius: 0.6rem;
   border: 1px solid rgb(203 213 225);
-  background-color: #fff;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  background-color: #f4f6fd;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8125rem;
+  line-height: 1.15rem;
   color: rgb(15 23 42);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
@@ -2353,7 +2353,7 @@ a:focus-visible,
   box-shadow: 0 0 0 3px rgb(139 92 246 / 0.18);
 }
 :where(.product-editor) :is(input, select, textarea):disabled {
-  background-color: rgb(241 245 249);
+  background-color: rgb(226 231 246);
   color: rgb(100 116 139);
   cursor: not-allowed;
 }

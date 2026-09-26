@@ -1305,6 +1305,37 @@ router.post("/products/:id/versions", async (req, res, next) => {
     res.status(201).json({ ok: true, version_id: v.id, version_number: v.version_number, state: v.state });
   } catch (e) { handle(e, res, next); }
 });
+// Descarta um RASCUNHO (ex.: o rascunho criado automaticamente ao abrir o editor
+// e que ninguém alterou). Nunca apaga versão publicada nem a vigente.
+router.delete("/versions/:id", async (req, res, next) => {
+  try {
+    const v = await prisma.catalog2ProductVersion.findUnique({ where: { id: req.params.id as string }, include: { product: { select: { published_version_id: true } } } });
+    if (!v) throw new Catalog2Error("Versão não encontrada.", 404);
+    if (v.state !== "rascunho" || v.product.published_version_id === v.id) throw new Catalog2Error("Só é possível descartar um rascunho.", 409, "not_a_draft");
+    await prisma.catalog2ProductVersion.delete({ where: { id: v.id } });
+    await audit(req, "version_draft_discarded", { version_id: v.id, product_id: v.product_id, version_number: v.version_number });
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
+});
+
+// Volta a publicar uma versão ANTERIOR (ela passa a ser a vigente de novo).
+router.post("/versions/:id/make-current", async (req, res, next) => {
+  try {
+    const v = await prisma.catalog2ProductVersion.findUnique({ where: { id: req.params.id as string }, include: { product: true } });
+    if (!v) throw new Catalog2Error("Versão não encontrada.", 404);
+    if (v.state !== "publicada") throw new Catalog2Error("Só uma versão já publicada pode voltar a ser a vigente. Para rascunhos, use Publicar.", 409, "not_published_before");
+    if (v.product.published_version_id === v.id) throw new Catalog2Error("Esta já é a versão vigente.", 409, "already_current");
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2Product.update({ where: { id: v.product_id }, data: { published_version_id: v.id } });
+      await tx.catalog2VersionEvent.create({ data: { version_id: v.id, event_type: "restored", actor_user_id: req.user!.id, note: "Versão anterior publicada novamente (voltou a ser a vigente)." } });
+      await logCommercialChangeEvent(tx, { scope: "product_version", product_id: v.product_id, version_id: v.id, actor_user_id: req.user!.id, note: "versão anterior voltou a ser a vigente" });
+      await notifyValidQuoteOwnersOfCommercialChange(tx, { scope: "product_version", productId: v.product_id });
+    });
+    await audit(req, "version_made_current", { version_id: v.id, product_id: v.product_id, version_number: v.version_number });
+    res.json({ ok: true, version_id: v.id, version_number: v.version_number });
+  } catch (e) { handle(e, res, next); }
+});
+
 router.get("/versions/:id/validate", async (req, res, next) => {
   try { res.json(await validateVersionForPublish(req.params.id as string)); } catch (e) { handle(e, res, next); }
 });
@@ -2348,13 +2379,22 @@ async function computeProductReadiness(p: ReadinessProduct) {
   const hasActiveTasks = (pricing?.active_task_keys.length ?? taskCount) > 0;
 
   const items: Record<string, { level: ReadinessLevel; note: string }> = {
-    conteudo: has("content_review_pending")
-      ? { level: "bloqueador", note: "Revisão de conteúdo pendente (texto preservado da importação)." }
-      : { level: "pronto", note: "Conteúdo revisável." },
+    // Produtos novos: o conteúdo é avaliado pelos campos reais (não mais por
+    // marcações da importação antiga).
+    conteudo: (() => {
+      const missing = [
+        !String(targetVersion?.title ?? "").trim() && "título comercial",
+        !String(targetVersion?.summary ?? "").trim() && "descrição curta",
+        !String(targetVersion?.full_description ?? "").trim() && "descrição completa",
+      ].filter(Boolean) as string[];
+      return missing.length
+        ? { level: "bloqueador" as ReadinessLevel, note: `Falta preencher: ${missing.join(", ")}.` }
+        : { level: "pronto" as ReadinessLevel, note: "Título e descrições preenchidos." };
+    })(),
     classificacao: !p.pillar_id || !p.category_id
       ? { level: "bloqueador", note: "Falta pilar ou categoria." }
-      : has("classification_decision_pending")
-        ? { level: "bloqueador", note: "Divergência categoria × área aguardando decisão." }
+      : p.four_f.length === 0
+        ? { level: "bloqueador", note: "Falta ao menos uma classificação 4F." }
         : { level: "pronto", note: `${p.pillar?.name ?? "—"} / ${p.category?.name ?? "—"} / ${p.four_f.length} 4F` },
     variacoes: (targetVersion?._count.variations ?? 0) > 0
       ? { level: "pronto", note: `${targetVersion?._count.variations} variação(ões).` }
@@ -2397,7 +2437,8 @@ async function computeProductReadiness(p: ReadinessProduct) {
       : { level: "bloqueador", note: "Nunca publicado — invisível para o cliente (bloco 5 não publica)." },
   };
 
-  const blockers = Object.entries(items).filter(([, v]) => v.level === "bloqueador").map(([k]) => k);
+  // "Publicação" não é pendência de preparo: é uma AÇÃO (botão Publicar no editor).
+  const blockers = Object.entries(items).filter(([k, v]) => k !== "publicacao" && v.level === "bloqueador").map(([k]) => k);
   const pendings = Object.entries(items).filter(([, v]) => v.level === "pendente").map(([k]) => k);
   return {
     id: p.id,
@@ -2468,7 +2509,7 @@ async function computeProductReadiness(p: ReadinessProduct) {
     items,
     blockers,
     pendings,
-    ready_for_client: blockers.length === 0,
+    ready_for_client: blockers.length === 0 && !!published,
     // Merchandising administrável (reunião 10/09) — mesma regra do
     // /products: sempre real, nunca preenchido automaticamente.
     merchandising: {

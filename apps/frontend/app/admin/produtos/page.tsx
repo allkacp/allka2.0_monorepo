@@ -194,7 +194,7 @@ function defaultProductColumnWidths() {
 function openReadinessItems(rp: any): { key: string; level: string; note: string }[] {
   if (!rp?.items) return [];
   return Object.entries(rp.items)
-    .filter(([, v]: any) => v.level === "bloqueador" || v.level === "pendente")
+    .filter(([k, v]: any) => k !== "publicacao" && (v.level === "bloqueador" || v.level === "pendente"))
     .map(([key, v]: any) => ({ key, level: v.level, note: v.note }));
 }
 

@@ -889,6 +889,8 @@ class ApiClient {
   previewCatalog2Version(versionId: string) { return this.c2("GET", `/versions/${versionId}/preview`); }
   getCatalog2PricingSettings() { return this.c2("GET", "/pricing-settings"); }
   updateCatalog2PricingSettings(body: Record<string, any>) { return this.c2("PUT", "/pricing-settings", body); }
+  discardCatalog2DraftVersion(versionId: string) { return this.c2("DELETE", `/versions/${versionId}`); }
+  makeCatalog2VersionCurrent(versionId: string) { return this.c2("POST", `/versions/${versionId}/make-current`, {}); }
   createCatalog2PricingComponent(body: Record<string, any>) { return this.c2("POST", "/pricing-components", body); }
   updateCatalog2PricingComponent(id: string, body: Record<string, any>) { return this.c2("PUT", `/pricing-components/${id}`, body); }
   deleteCatalog2PricingComponent(id: string) { return this.c2("DELETE", `/pricing-components/${id}`); }
