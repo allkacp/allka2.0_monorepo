@@ -2301,6 +2301,9 @@ function readinessDetailLines(key: string, product: any, version: any, note?: st
     case "tarefas":
       if (tasks.length === 0) out.push("Nenhuma tarefa cadastrada");
       break;
+    case "etapas":
+      for (const t of tasks) if ((t.steps ?? []).length === 0) out.push(`Tarefa "${t.name}": sem etapa — toda tarefa precisa de ao menos uma`);
+      break;
     case "esforco_tarefas":
     case "preco":
     case "prazo": {
@@ -2311,15 +2314,14 @@ function readinessDetailLines(key: string, product: any, version: any, note?: st
       if (tasks.length === 0 && key === "preco") out.push("Nenhuma tarefa: não há base de custo");
       for (const t of tasks) {
         if (t.effort_is_provisional) out.push(`Tarefa "${t.name}": horas/especialidade PROVISÓRIAS — confirme em Salvar tarefa`);
-        const steps = (t.steps ?? []).filter(mins);
-        if (steps.length > 0) {
-          for (const st of steps) if (!(st.specialty_id ?? t.specialty?.id)) out.push(`Tarefa "${t.name}" › etapa "${st.name}": falta a especialidade`);
+        const allSteps = t.steps ?? [];
+        if (allSteps.length > 0) {
+          for (const st of allSteps) {
+            if (!mins(st)) out.push(`Tarefa "${t.name}" › etapa "${st.name}": faltam as horas (minutos)`);
+            if (!(st.specialty_id ?? t.specialty?.id)) out.push(`Tarefa "${t.name}" › etapa "${st.name}": falta a especialidade`);
+          }
         } else {
-          if (!t.specialty?.id) out.push(`Tarefa "${t.name}": falta a especialidade`);
-          if (t.estimated_minutes == null) out.push(`Tarefa "${t.name}": faltam as horas (minutos)`);
-        }
-        if ((t.steps ?? []).some((st: any) => !mins(st)) && steps.length > 0) {
-          for (const st of t.steps.filter((x: any) => !mins(x))) out.push(`Tarefa "${t.name}" › etapa "${st.name}": faltam as horas (minutos)`);
+          out.push(`Tarefa "${t.name}": sem etapa (cadastre ao menos uma, com especialidade e horas)`);
         }
       }
       if (key === "preco") {
@@ -2357,14 +2359,16 @@ function readinessPendingIds(key: string, product: any, version: any, level?: st
       if (priceBlockedByTasks(note)) return readinessPendingIds("esforco_tarefas", product, version, level, note);
       return /prazo/i.test(note ?? "") ? ["catalog2-deadline-base"] : ["catalog2-price-pending"];
     case "etapas": {
+      const miss = tasks.filter((t) => (t.steps ?? []).length === 0).map((t) => "catalog2-step-add:" + t.id);
+      if (miss.length) return miss;
       const first = tasks[0];
       return first ? ["catalog2-step-add:" + first.id] : ["catalog2-tasks"];
     }
     case "esforco_tarefas": {
       const miss = tasks.filter((t) => {
-        const sm = (t.steps ?? []).filter((x: any) => (x.estimated_minutes ?? 0) > 0);
+        const all = t.steps ?? [];
         if (t.effort_is_provisional) return true;
-        return sm.length > 0 ? sm.some((x: any) => !(x.specialty_id ?? t.specialty?.id)) : (!t.specialty?.id || t.estimated_minutes == null);
+        return all.length > 0 ? all.some((x: any) => !((x.estimated_minutes ?? 0) > 0) || !(x.specialty_id ?? t.specialty?.id)) : (!t.specialty?.id || t.estimated_minutes == null);
       }).map((t) => "task-effort:" + t.id);
       return miss.length ? miss : tasks.map((t) => "task-effort:" + t.id);
     }
@@ -2419,6 +2423,7 @@ const READINESS_HELP: Record<string, Partial<Record<"bloqueador" | "pendente", s
   classificacao: {
     bloqueador: "Escolha o pilar e a categoria do produto. Se houver divergência entre a categoria e a área de origem da importação, é preciso decidir qual vale. Sem isso o produto não fica classificado corretamente no catálogo.",
   },
+  etapas: { bloqueador: "Toda tarefa precisa de ao menos uma etapa: é a etapa que tem a especialidade, as horas e o valor pago (nômade ou custo interno). Ex.: tarefa \"Criação de conteúdo\" → etapas \"Roteiro\", \"Redação\", \"Revisão\". Clique em Adicionar etapa dentro da tarefa." },
   tarefas: { pendente: "Cadastre pelo menos uma tarefa (o que será executado quando o produto for contratado). Sem tarefas não há operação nem base de custo para calcular o preço." },
   esforco_tarefas: { pendente: "Cada tarefa precisa de especialidade e horas estimadas reais. Mesmo que já estejam preenchidas, se estiverem marcadas como PROVISÓRIAS (dado de teste) o item continua pendente até você revisar e confirmar os valores reais." },
   preco: { bloqueador: "O preço sai de: horas de cada tarefa × valor/hora da especialidade, + revisão humana, + impostos, comissão, taxa operacional e margem, aplicados na ordem definida. O motivo exato aparece na linha acima (ex.: valor/hora de especialidade, percentual de revisão, impostos/margem, ordem de incidência, dados provisórios). Tudo se configura em Custos e preço: coluna da esquerda (taxas e margens; valor/hora das especialidades); horas e especialidade de cada tarefa ficam em Entrega › Tarefas e etapas." },

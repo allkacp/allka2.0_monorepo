@@ -2302,7 +2302,7 @@ const READINESS_INCLUDE = {
       // alguma tarefa está sem esforço definido (reunião 10/09, correção
       // "task_effort_fields_pending") — nunca lido de um registro
       // histórico de pendência.
-      tasks: { select: { specialty_id: true, estimated_minutes: true, effort_is_provisional: true, _count: { select: { steps: true } }, steps: { select: { specialty_id: true, estimated_minutes: true } } } },
+      tasks: { select: { name: true, specialty_id: true, estimated_minutes: true, effort_is_provisional: true, _count: { select: { steps: true } }, steps: { select: { name: true, specialty_id: true, estimated_minutes: true } } } },
     },
   },
 } satisfies Prisma.Catalog2ProductInclude;
@@ -2359,8 +2359,9 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
   // Esforço definido no nível da tarefa (especialidade + minutos) OU nas etapas
   // (cada etapa com minutos usa a própria especialidade ou a da tarefa).
   const hasMissingTaskEffort = tasksForEffort.some((t: any) => {
-    const stepsWithMinutes = (t.steps ?? []).filter((s: any) => (s.estimated_minutes ?? 0) > 0);
-    if (stepsWithMinutes.length > 0) return stepsWithMinutes.some((s: any) => !(s.specialty_id ?? t.specialty_id));
+    const allSteps = t.steps ?? [];
+    // Com etapas: cada etapa precisa de horas E especialidade (própria ou da tarefa).
+    if (allSteps.length > 0) return allSteps.some((s: any) => !((s.estimated_minutes ?? 0) > 0) || !(s.specialty_id ?? t.specialty_id));
     return !t.specialty_id || t.estimated_minutes == null;
   });
   const hasProvisionalTaskEffort = tasksForEffort.some((t) => t.effort_is_provisional);
@@ -2419,9 +2420,13 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
     tarefas: taskCount > 0
       ? { level: "pronto", note: `${taskCount} tarefa(s).` }
       : { level: "pendente", note: "Nenhuma tarefa — não vira operação sem tarefas (bloco 6)." },
-    etapas: stepCount > 0
-      ? { level: "pronto", note: `${stepCount} etapa(s).` }
-      : { level: "opcional", note: taskCount > 0 ? "Sem etapas nas tarefas (permitido)." : "Etapas dependem de tarefas cadastradas." },
+    // Toda tarefa precisa de ao menos uma etapa (a etapa carrega especialidade, horas e o pagamento).
+    etapas: (() => {
+      const noSteps = (targetVersion?.tasks ?? []).filter((t: any) => t._count.steps === 0).map((t: any) => t.name);
+      if (taskCount === 0) return { level: "opcional" as ReadinessLevel, note: "Etapas dependem de tarefas cadastradas." };
+      if (noSteps.length > 0) return { level: "bloqueador" as ReadinessLevel, note: `${noSteps.length} tarefa(s) sem etapa: ${noSteps.join(", ")}.` };
+      return { level: "pronto" as ReadinessLevel, note: `${stepCount} etapa(s).` };
+    })(),
     // Reunião 10/09 ("tarefas e etapas dos 36 produtos reais"): as tarefas
     // vieram do texto "Etapas Executáveis por IA" da fonte original — real,
     // mas sem especialidade/horas/dependências (a fonte não define isso).

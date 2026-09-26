@@ -375,6 +375,16 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
   const fourF = await prisma.catalog2ProductFourF.count({ where: { product_id: v.product_id } });
   if (fourF === 0) issues.push("Selecione ao menos uma classificação 4F.");
   if (v.tasks.length === 0) issues.push("O produto precisa de ao menos uma tarefa.");
+  // Toda tarefa precisa de ao menos uma ETAPA: é a etapa que carrega especialidade,
+  // horas e o pagamento do nômade (ou o custo interno).
+  for (const t of v.tasks) {
+    if (t.steps.length === 0) issues.push(`A tarefa "${t.name}" precisa de ao menos uma etapa.`);
+    for (const st of t.steps) {
+      if (!(st.estimated_minutes && st.estimated_minutes > 0) || !(st.specialty_id ?? t.specialty_id)) {
+        issues.push(`A etapa "${st.name}" da tarefa "${t.name}" precisa de especialidade e horas.`);
+      }
+    }
+  }
 
   // Reunião 10/09: dado de esforço PROVISÓRIO (teste) nunca vira decisão
   // comercial — bloqueia a publicação incondicionalmente (ver publishVersion,
@@ -432,6 +442,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
     if (message.includes("uma categoria")) return { message, target: "category" };
     if (message.includes("classificação 4F")) return { message, target: "four_f" };
     if (message.includes("ao menos uma tarefa")) return { message, target: "task_create" };
+    if (message.includes("ao menos uma etapa") || message.includes("precisa de especialidade e horas")) return { message, target: "task_create" };
     if (message.includes("especialidade/tempo PROVISÓRIOS")) {
       return { message, target: "task_effort", task_ids: v.tasks.filter((t) => t.effort_is_provisional).map((t) => t.id) };
     }
