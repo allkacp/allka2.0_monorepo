@@ -674,7 +674,7 @@ export function Header({
   const greeting =
     hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
   // Ignora etiquetas entre colchetes (ex.: "[TESTE] Maria") no cumprimento.
-  const firstName = ctx.name.split(" ").find((w) => !/^[.*]$/.test(w)) ?? ctx.name.split(" ")[0];
+  const firstName = ctx.name.split(" ").find((w) => !(w.startsWith("[") && w.endsWith("]"))) ?? ctx.name.split(" ")[0];
   const today = new Date().toLocaleDateString("pt-BR", {
     weekday: "long",
     day: "numeric",
