@@ -980,9 +980,16 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task }: any)
   }
   return (
     <li className="flex items-center justify-between text-sm">
-      <span>{index + 1}. {step.name} <span className="text-xs text-neutral-400">{step.estimated_minutes ?? "?"} min · {specName ?? "sem especialidade"}{step.is_conditional ? " · condicional" : ""}</span></span>
+      <span>{index + 1}. {step.name} <span className="text-xs text-neutral-400">{step.estimated_minutes ?? "?"} min · {specName ?? "sem especialidade"}{step.is_conditional ? " · condicional" : ""}</span>{task?.effort_is_provisional && !readOnly && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">revisar</span>}</span>
       {!readOnly && (
         <span className="flex gap-1">
+          {task?.effort_is_provisional && (
+            <button
+              className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-700"
+              title="Conferi esta etapa (nome, horas e especialidade) — confirmar"
+              onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: step.name, estimated_minutes: step.estimated_minutes ?? null, specialty_id: step.specialty_id ?? task?.specialty?.id ?? null }), "Etapa confirmada.")}
+            >Ok</button>
+          )}
           <button className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100" onClick={() => setEditing(true)}>editar</button>
           <button disabled={index === 0} className="disabled:opacity-30" onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, -1)))}><ChevronUp className="h-3.5 w-3.5" /></button>
           <button disabled={index === steps.length - 1} className="disabled:opacity-30" onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, 1)))}><ChevronDown className="h-3.5 w-3.5" /></button>

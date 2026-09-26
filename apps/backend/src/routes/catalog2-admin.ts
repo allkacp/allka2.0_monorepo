@@ -1870,6 +1870,13 @@ router.put("/steps/:id", async (req, res, next) => {
     const d = stepSchema.partial().parse(req.body);
     const updated = await prisma.$transaction(async (tx) => {
       const u = await tx.catalog2TaskStep.update({ where: { id: req.params.id as string }, data: d });
+      // Um humano salvando/confirmando a etapa também confirma o esforço da tarefa (sai de "provisório").
+      if (d.name !== undefined || d.estimated_minutes !== undefined || d.specialty_id !== undefined) {
+        await tx.catalog2Task.updateMany({
+          where: { id: before.task_id, effort_is_provisional: true },
+          data: { effort_is_provisional: false, effort_source: "human_reviewed", effort_provisional_reason: null },
+        });
+      }
       const changed: string[] = [];
       if (d.name !== undefined && d.name !== before.name) changed.push(`nome de "${before.name}" para "${d.name}"`);
       if (d.estimated_minutes !== undefined && d.estimated_minutes !== before.estimated_minutes) changed.push(`tempo estimado de ${before.estimated_minutes ?? "?"} para ${d.estimated_minutes ?? "?"} min`);

@@ -8,6 +8,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - **Frontend** — Cadastro de Produtos: barra do topo compacta (busca menor, itens por página e paginação menores, botão Ir menor) — páginas 1 a N sempre visíveis.
 - **Backend** — Cadastro de Produtos: aba/filtro **Com pendências** e o número dela agora usam a MESMA conta do checklist (bloqueios + pendentes); antes contavam marcações antigas da importação (mostrava 36 mesmo com produtos prontos).
 - **Backend+Frontend** — **Toda tarefa precisa de ao menos uma etapa** (a etapa carrega especialidade, horas e o pagamento). Checklist: "Etapas" virou BLOQUEIO quando alguma tarefa não tem etapa (lista quais) e cada etapa precisa de horas + especialidade; a validação de PUBLICAR também exige. ATENÇÃO: hoje os 36 produtos têm tarefas sem etapa (vieram da importação), então não publicam nova versão até criar as etapas (a vitrine do cliente NÃO muda: usa preço/prazo e versão publicada).
+- **Backend+Frontend+dados locais** — Etapas padrão (108, uma por tarefa sem etapa) ficaram marcadas como **"revisar"**: cada etapa mostra o selo amarelo e um botão **Ok** para confirmar (salvar a etapa confirma a tarefa). Script `add-default-steps.ts`.
 (o restante até bfa94a4 já está no ar)
 
 ## deploy-2026-09-26-1 (commits até bfa94a4) — no ar em allka.store / api.allka.store

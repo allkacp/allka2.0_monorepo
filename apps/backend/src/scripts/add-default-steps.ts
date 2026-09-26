@@ -38,6 +38,8 @@ async function main() {
           is_conditional: false,
         },
       });
+      // Fica marcada para REVISÃO humana: o admin confere a etapa e clica em Salvar/Ok para confirmar.
+      await tx.catalog2Task.update({ where: { id: t.id }, data: { effort_is_provisional: true, effort_source: "auto_default_step", effort_provisional_reason: "Etapa padrão criada automaticamente a partir da tarefa — revise e confirme." } });
       created++;
     }
   });
