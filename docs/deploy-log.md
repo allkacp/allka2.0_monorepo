@@ -5,6 +5,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 ## Pendente de deploy (local, ainda NÃO subiu)
 - **Frontend** — Custos e preço: removido o cartão azul "Abrir Precificação" (não faz parte do preenchimento do produto). Se o bloqueio de Preço vier de configuração global, clicar no item do checklist abre a Precificação por cima do produto.
 - **Frontend** — Editor de produto agora é **passo a passo** (1 Informações → 2 Entrega: tarefas, etapas e prazos → 3 Classificação e opções → 4 Custos e preço → 5 Revisão e publicação), com selo de cada passo (completo/pendente/bloqueado), botões Passo anterior/Próximo e **preço de venda ao vivo** ao lado do nome. O campo Prazo comercial base foi para o passo 2. Passo 4 mostra a composição do preço (das tarefas/etapas + taxas) e, se faltar algo global, lista o que falta (sem abrir tela).
+- **Frontend** — Cadastro de Produtos: barra do topo compacta (busca menor, itens por página e paginação menores, botão Ir menor) — páginas 1 a N sempre visíveis.
 (o restante até bfa94a4 já está no ar)
 
 ## deploy-2026-09-26-1 (commits até bfa94a4) — no ar em allka.store / api.allka.store

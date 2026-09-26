@@ -882,7 +882,7 @@ export default function AdminProdutosPage() {
             <div className={`mt-[5px] ${STANDARD_SHELL_TABLE_CARD_CLASS}`}>
               {/* Row 1 — busca + filtros + ordenar */}
               <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/70 bg-slate-50/60 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-900/30 xl:flex-nowrap">
-                <div className="relative min-w-[150px] flex-1 xl:w-[260px] xl:flex-none">
+                <div className="relative min-w-[150px] flex-1 xl:w-[190px] xl:flex-none">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <Input
                     placeholder="Buscar por nome ou slug"
@@ -1011,17 +1011,19 @@ export default function AdminProdutosPage() {
                   value={gridMode}
                   onChange={setGridMode}
                 />
-                <div className="ml-auto hidden items-center gap-2 border-l border-slate-200 pl-2 xl:flex dark:border-slate-700">
+                <div className="ml-auto hidden shrink-0 items-center gap-1.5 border-l border-slate-200 pl-2 xl:flex dark:border-slate-700">
                   <ItemsPerPageSelect
+                    compact
                     value={pageSize.toString()}
                     onValueChange={(value) => {
                       setPageSize(Number(value));
                       setPage(1);
                     }}
                   />
-                  <div className="flex min-w-[236px] shrink-0 items-center justify-end">
+                  <div className="flex min-w-[150px] shrink-0 items-center justify-end">
                     {totalPages > 1 && (
                       <PaginationControls
+                        compact
                         page={page}
                         totalPages={totalPages}
                         onChange={setPage}
@@ -1040,13 +1042,13 @@ export default function AdminProdutosPage() {
                       }}
                       placeholder="Pág."
                       aria-label="Ir para a página"
-                      className="h-9 w-14 rounded-lg border border-slate-200 bg-white text-center text-xs text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-[#8a1477]/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      className="h-7 w-11 rounded-lg border border-slate-200 bg-white text-center text-xs text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-[#8a1477]/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
                     />
                     <button
                       type="button"
                       onClick={commitPageJump}
                       disabled={!pageJumpValue}
-                      className="h-9 rounded-lg border border-slate-200 px-2 text-xs font-semibold text-[#8a1477] transition-colors hover:border-transparent hover:bg-gradient-to-r hover:from-[#101b4c] hover:via-[#4b1c83] hover:to-[#bf087f] hover:text-white disabled:pointer-events-none disabled:opacity-40 dark:border-slate-700"
+                      className="h-7 rounded-lg border border-slate-200 px-1.5 text-xs font-semibold text-[#8a1477] transition-colors hover:border-transparent hover:bg-gradient-to-r hover:from-[#101b4c] hover:via-[#4b1c83] hover:to-[#bf087f] hover:text-white disabled:pointer-events-none disabled:opacity-40 dark:border-slate-700"
                     >
                       Ir
                     </button>
