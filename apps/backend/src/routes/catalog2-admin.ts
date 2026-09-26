@@ -731,7 +731,7 @@ router.get("/overview", async (_req, res, next) => {
     ]);
 
     const byStatusMap = Object.fromEntries(byStatus.map((s) => [s.status, s._count._all]));
-    const productsWithPendencies = origins.filter((o) => safeJsonArray(o.pendencies_json).length > 0).length;
+    const productsWithPendencies = (await productIdsWithOpenReadiness()).length;
     // "Produtos finais importados" = importados que NÃO são o produto demo.
     const finalImportedProducts = importedCount - testLocalImportedCount;
     // Número esperado da importação vem do lote real, nunca de "36" fixo.
@@ -832,13 +832,9 @@ router.get("/products", async (req, res, next) => {
     if (roseReviewed !== undefined) originWhere.rose_reviewed = roseReviewed;
     if (reviewState) originWhere.review_state = reviewState;
     if (pendency) originWhere.pendencies_json = { contains: `"${pendency}"` };
-    if (hasPendencies) {
-      originWhere.AND = [
-        { pendencies_json: { not: null } },
-        { pendencies_json: { not: "[]" } },
-      ];
-    }
-    if (importedOnly || hasPendencies || Object.keys(originWhere).length > 0) where.import_origin = { is: originWhere };
+    // "Com pendências" = a MESMA conta do checklist do editor (bloqueios + pendentes).
+    if (hasPendencies) where.id = { in: await productIdsWithOpenReadiness() };
+    if (importedOnly || Object.keys(originWhere).length > 0) where.import_origin = { is: originWhere };
 
     const listInclude = {
       pillar: { select: { key: true, name: true } },
@@ -2332,6 +2328,17 @@ async function loadProvisionalPreview(productId: string) {
     options: safeJsonArray(row.options_json) as unknown as { name: string; price: number; deadline_days: number; modality: string; features: string[] }[],
     portfolio_refs: safeJsonArray(row.portfolio_refs_json),
   };
+}
+
+// Ids dos produtos que têm ao menos um bloqueio/pendência no checklist (mesma regra do editor).
+async function productIdsWithOpenReadiness(): Promise<string[]> {
+  const all = await prisma.catalog2Product.findMany({ include: READINESS_INCLUDE });
+  const out: string[] = [];
+  for (const prod of all) {
+    const r = await computeProductReadiness(prod);
+    if (r.blockers.length + r.pendings.length > 0) out.push(prod.id);
+  }
+  return out;
 }
 
 async function computeProductReadiness(p: ReadinessProduct, forVersionId?: string) {
