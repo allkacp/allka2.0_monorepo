@@ -57,6 +57,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   const [watch, setWatch] = useState<{ key: string; ids: string[] } | null>(null);
   const [noticeHidden, setNoticeHidden] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [readinessData, setReadinessData] = useState<any>(null);
   const [publishing, setPublishing] = useState<{ title: string; done: boolean; error: string | null } | null>(null);
   async function startPublish(title: string, fn: () => Promise<any>) {
     setPublishing({ title, done: false, error: null });
@@ -141,11 +142,6 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   }, [product, readinessItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function goToReadinessItem(key: string) {
-    if (key === "preco" && !priceBlockedByTasks(readinessItems?.[key]?.note) && !/prazo/i.test(readinessItems?.[key]?.note ?? "")) {
-      // Falta configuração GLOBAL (valor/hora, impostos, margem…): abre a Precificação por cima, sem sair do produto.
-      setPricingOpen(true);
-      return;
-    }
     const dest = readinessDestination(key, product, readinessItems?.[key]?.note);
     const level = readinessItems?.[key]?.level;
     const cur = product?.versions.find((v: any) => v.id === selectedVersionId);
@@ -246,6 +242,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         onBack={() => void closeEditor()}
         onRefresh={async () => { await load(); setMsg("Dados do produto atualizados."); }}
         canPublish={!!version && (version.state === "rascunho" || !version.is_published_current)}
+        priceInfo={(() => { const real = readinessData?.price_amount; const sim = readinessData?.pricing_simulation?.price_amount; const f = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`; return real != null ? { text: f(real), hint: "Preço de venda calculado a partir das tarefas, etapas e taxas" } : sim != null ? { text: `≈ ${f(sim)}`, hint: "Preço estimado (ainda há pendências para fechar o preço comercial)" } : { text: "Preço a definir", hint: "Falta completar tarefas, etapas e prazo para calcular" }; })()}
         versionInfo={version ? { published: version.state === "publicada", current: !!version.is_published_current, number: version.version_number } : null}
         onPublish={() => { if (!version) return; if (version.state === "publicada") { setPubDlg({ val: { ok: true, restore: true } }); return; } apiClient.validateCatalog2Version(version.id).then((val: any) => setPubDlg({ val })).catch((e: any) => setMsg(e?.message ?? "Não foi possível validar a versão.")); }}
         canNewVersion={!!product.published_version_id && !product.versions.some((v: any) => v.state === "rascunho")}
@@ -267,19 +264,13 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
           </p>
         )}
       </div>
-      <ProductReadinessPanel productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onItems={setReadinessItems} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} />
+      <ProductReadinessPanel productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onItems={setReadinessItems} onData={setReadinessData} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} />
 
       {version && (
         <Tabs value={editorTab} onValueChange={setEditorTab}>
           {/* Etapas de trabalho (reunião 10/09). As 10 seções originais
               continuam todas aqui — reagrupadas, nada removido. */}
-          <TabsList className={MAIN_TABS_LIST} data-tour-id="catalog2-editor-tabs">
-            <TabsTrigger value="info" className={MAIN_TAB}>Informações do produto</TabsTrigger>
-            <TabsTrigger value="opcoes" className={MAIN_TAB}>Classificação e opções</TabsTrigger>
-            <TabsTrigger value="entrega" className={MAIN_TAB}>Entrega: tarefas, etapas e prazos</TabsTrigger>
-            <TabsTrigger value="precos" className={MAIN_TAB}>Custos e preço</TabsTrigger>
-            <TabsTrigger value="revisao" className={MAIN_TAB}>Revisão e publicação</TabsTrigger>
-          </TabsList>
+          <Stepper current={editorTab} onSelect={setEditorTab} items={readinessItems} />
 
           <TabsContent value="info" className="mt-3">
             <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} onStatus={(s) => act(() => apiClient.setCatalog2ProductStatus(productId, s), "Status salvo.", { rethrow: true })} />
@@ -301,6 +292,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 
           <TabsContent value="entrega" className={TAB_CARD}>
             <StepIntro>Onde se cadastram tarefas, etapas, especialidades, prazos e as condições que ajustam a entrega.</StepIntro>
+            <DeadlineBaseField version={version} act={act} ringOf={ringOf} />
             <Tabs value={subTabs.entrega} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, entrega: v }))}>
               <TabsList className={SUB_TABS_LIST}>
                 <TabsTrigger value="tarefas" className={SUB_TAB}>Tarefas e etapas</TabsTrigger>
@@ -331,6 +323,19 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
           </TabsContent>
         </Tabs>
       )}
+      {version && (() => {
+        const idx = Math.max(0, EDITOR_STEPS.findIndex((st) => st.id === editorTab));
+        const prev = EDITOR_STEPS[idx - 1];
+        const next = EDITOR_STEPS[idx + 1];
+        const go = (id: string) => { setEditorTab(id); document.getElementById("catalog2-editor-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+        return (
+          <div className="flex items-center justify-between gap-3 pb-1">
+            <Button variant="outline" className="gap-1.5" disabled={!prev} onClick={() => prev && go(prev.id)}><ArrowLeft className="h-4 w-4" /> {prev ? `Passo ${idx}` : "Início"}</Button>
+            <span className="text-xs font-medium text-slate-500">Passo {idx + 1} de {EDITOR_STEPS.length}</span>
+            <Button className="gap-1.5 bg-[#3b2bff] text-white hover:bg-[#3223d6]" disabled={!next} onClick={() => next && go(next.id)}>{next ? `Passo ${idx + 2}: ${next.label.split(":")[0]}` : "Fim"} <ChevronRight className="h-4 w-4" /></Button>
+          </div>
+        );
+      })()}
       </div>
     </div>
       {publishing && (
@@ -548,6 +553,44 @@ function PublishProgress({ open, title, done, error, onFinish, onClose }: { open
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Passo a passo na ORDEM de montar o produto. Cada passo mostra se está ok/pendente/bloqueado
+// a partir dos itens do checklist que pertencem a ele.
+const EDITOR_STEPS: { id: string; label: string; keys: string[] }[] = [
+  { id: "info", label: "Informações do produto", keys: ["conteudo"] },
+  { id: "entrega", label: "Entrega: tarefas, etapas e prazos", keys: ["tarefas", "etapas", "esforco_tarefas", "prazo"] },
+  { id: "opcoes", label: "Classificação e opções", keys: ["classificacao", "variacoes", "adicionais"] },
+  { id: "precos", label: "Custos e preço", keys: ["preco"] },
+  { id: "revisao", label: "Revisão e publicação", keys: [] },
+];
+
+function Stepper({ current, onSelect, items }: { current: string; onSelect: (id: string) => void; items: Record<string, { level: string; note: string }> | null }) {
+  return (
+    <nav id="catalog2-editor-tabs" data-tour-id="catalog2-editor-tabs" aria-label="Passos do produto" className="flex items-stretch gap-1.5 overflow-x-auto rounded-2xl border border-white/70 bg-[#e8ecf9] p-1.5 shadow-sm">
+      {EDITOR_STEPS.map((st, i) => {
+        const levels = st.keys.map((k) => items?.[k]?.level).filter(Boolean) as string[];
+        const state = !items || st.keys.length === 0 ? "neutral" : levels.includes("bloqueador") ? "blocked" : levels.includes("pendente") ? "pending" : "ok";
+        const active = current === st.id;
+        const dot = state === "blocked" ? "bg-red-500" : state === "pending" ? "bg-amber-400" : state === "ok" ? "bg-emerald-500" : "bg-slate-300";
+        return (
+          <button
+            key={st.id}
+            type="button"
+            onClick={() => onSelect(st.id)}
+            aria-current={active ? "step" : undefined}
+            className={`flex min-w-[10.5rem] flex-1 items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-colors ${active ? "bg-white shadow-sm ring-1 ring-violet-200" : "hover:bg-white/60"}`}
+          >
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${active ? "bg-gradient-to-br from-[#4a2cff] to-[#d92293] text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{state === "ok" && !active ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : i + 1}</span>
+            <span className="min-w-0 flex-1">
+              <span className={`block truncate text-[12.5px] font-semibold ${active ? "text-violet-800" : "text-slate-700"}`}>{st.label}</span>
+              <span className="flex items-center gap-1 text-[10.5px] text-slate-500"><span className={`h-1.5 w-1.5 rounded-full ${dot}`} />{state === "blocked" ? "Tem bloqueio" : state === "pending" ? "Pendente" : state === "ok" ? "Completo" : "Passo " + (i + 1)}</span>
+            </span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -1381,11 +1424,22 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
     <div id="catalog2-costs" className={`mt-3 grid gap-4 scroll-mt-6 md:grid-cols-2`}>
       <div className="space-y-3">
         {highlightTarget === "catalog2-costs" && <p className="rounded-lg border border-amber-400 bg-amber-100 p-2 text-sm text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">Há uma pendência comercial de preço ou prazo. Revise o valor que está marcado como “aguardando definição comercial” e salve a alteração.</p>}
-        <DeadlineBaseField version={version} act={act} ringOf={ringOf} />
+        <h3 className="text-sm font-semibold">Composição do preço</h3>
+        <p className="text-xs text-neutral-500">Calculada automaticamente a partir das tarefas, etapas e especialidades deste produto, mais as taxas cadastradas em Precificação.</p>
+        {result?.pending_info?.length > 0 && (
+          <div id="catalog2-price-pending" className={`rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 ${ringOf("catalog2-price-pending")}`}>
+            <p className="font-semibold">Ainda falta para fechar o preço:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">{result.pending_info.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
+            {result.pending_info.some((x: string) => /valor\/hora|percentual|ordem|imposto|token/i.test(x)) && (
+              <button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="mt-2 rounded-lg bg-white px-2.5 py-1 font-semibold text-amber-900 ring-1 ring-amber-300 hover:bg-amber-100">Conferir na Precificação</button>
+            )}
+          </div>
+        )}
+        {result?.error ? <p className="text-sm text-red-600">{result.error}</p> : result && <PricingResultView r={result} />}
       </div>
 
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold">Simulador</h3>
+        <h3 className="text-sm font-semibold">Simular cenário (variações, adicionais e quantidade)</h3>
         {version.variations.map((va: any) => (
           <Field key={va.id} label={va.name}>
             <select className="w-full rounded border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700" value={sel.variation_option_keys.find((k: string) => va.options.some((o: any) => o.key === k)) ?? ""} onChange={(e) => setSel({ ...sel, variation_option_keys: [...sel.variation_option_keys.filter((k: string) => !va.options.some((o: any) => o.key === k)), e.target.value] })}>
@@ -1411,7 +1465,6 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
           }} />
         </Field>
 
-        {result?.error ? <p className="text-sm text-red-600">{result.error}</p> : result && <PricingResultView r={result} />}
       </div>
 
       <div className="md:col-span-2">
@@ -2252,7 +2305,7 @@ function readinessDetailLines(key: string, product: any, version: any, note?: st
     case "preco":
     case "prazo": {
       if (key === "prazo" || (key === "preco" && /prazo/i.test(note ?? ""))) {
-        if (version?.base_commercial_deadline_days == null) out.push("Prazo comercial base (dias): não informado (aba Custos e preço)");
+        if (version?.base_commercial_deadline_days == null) out.push("Prazo comercial base (dias): não informado (passo 2, campo Prazo comercial base)");
       }
       if (key === "prazo") break;
       if (tasks.length === 0 && key === "preco") out.push("Nenhuma tarefa: não há base de custo");
@@ -2302,7 +2355,7 @@ function readinessPendingIds(key: string, product: any, version: any, level?: st
       return out;
     case "preco":
       if (priceBlockedByTasks(note)) return readinessPendingIds("esforco_tarefas", product, version, level, note);
-      return ["catalog2-pricing-link"];
+      return /prazo/i.test(note ?? "") ? ["catalog2-deadline-base"] : ["catalog2-price-pending"];
     case "etapas": {
       const first = tasks[0];
       return first ? ["catalog2-step-add:" + first.id] : ["catalog2-tasks"];
@@ -2336,8 +2389,8 @@ function readinessDestination(key: string, product: any, note?: string): { tab: 
     case "tarefas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-create" };
     case "etapas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-tasks" };
     case "esforco_tarefas": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" };
-    case "prazo": return { tab: "precos", target: "catalog2-deadline-base" };
-    case "preco": return priceBlockedByTasks(note) ? { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" } : { tab: "precos", target: "catalog2-pricing-link" };
+    case "prazo": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-deadline-base" };
+    case "preco": return priceBlockedByTasks(note) ? { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" } : /prazo/i.test(note ?? "") ? { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-deadline-base" } : { tab: "precos", target: "catalog2-price-pending" };
     case "portfolio": return { tab: "info", target: "catalog2-general" };
     case "publicacao": return { tab: "revisao", sub: { revisao: "hist" }, target: "sec-publicacao" };
     default: return { tab: "info", target: "catalog2-general" };
@@ -2345,15 +2398,15 @@ function readinessDestination(key: string, product: any, note?: string): { tab: 
 }
 
 const READINESS_WHERE: Record<string, string> = {
-  conteudo: "Informações do produto",
-  classificacao: "Classificação e opções › Classificação",
-  variacoes: "Classificação e opções › Variações",
-  adicionais: "Classificação e opções › Adicionais",
-  tarefas: "Entrega › Tarefas e etapas",
-  etapas: "Entrega › Tarefas e etapas",
-  esforco_tarefas: "Entrega › Tarefas e etapas",
-  prazo: "Custos e preço › Prazo comercial base",
-  preco: "Custos e preço",
+  conteudo: "Passo 1 · Informações",
+  classificacao: "Passo 3 · Classificação",
+  variacoes: "Passo 3 · Variações",
+  adicionais: "Passo 3 · Adicionais",
+  tarefas: "Passo 2 · Tarefas e etapas",
+  etapas: "Passo 2 · Tarefas e etapas",
+  esforco_tarefas: "Passo 2 · Tarefas e etapas",
+  prazo: "Passo 2 · Prazo comercial",
+  preco: "Passo 4 · Custos e preço",
   portfolio: "Informações do produto",
   publicacao: "Revisão e publicação › Publicação e versões",
 };
@@ -2394,7 +2447,7 @@ const LEVEL_META: Record<string, { label: string; chip: string; border: string; 
 
 type ReadinessFilter = "todos" | "pronto" | "bloqueador" | "pendente" | "opcional";
 
-function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onItems, detailFor }: { productId: string; versionId?: string; versionKey: string; onGo: (key: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void; detailFor?: (key: string) => string[] }) {
+function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onItems, onData, detailFor }: { productId: string; versionId?: string; versionKey: string; onGo: (key: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void; onData?: (d: any) => void; detailFor?: (key: string) => string[] }) {
   const [data, setData] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -2409,7 +2462,7 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onItems
       .finally(() => setLoading(false));
   }, [productId, versionId]);
   useEffect(() => { reload(); }, [reload, versionKey]);
-  useEffect(() => { if (data?.items) onItems?.(data.items); }, [data, onItems]);
+  useEffect(() => { if (data?.items) onItems?.(data.items); if (data && !data.error) onData?.(data); }, [data, onItems, onData]);
 
   const blockers = data?.blockers ?? [];
   const pendings = data?.pendings ?? [];
@@ -2613,7 +2666,7 @@ function HeaderIconBtn({ label, onClick, children, className = "" }: { label: st
   );
 }
 
-function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish, versionInfo }: any) {
+function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish, versionInfo, priceInfo }: any) {
   const { pinned, toggle } = usePinEntry(pin ?? null);
   const [spinning, setSpinning] = useState(false);
   const refresh = async () => {
@@ -2631,6 +2684,7 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <Badge className={catalog2StatusTone(product.status)}>{catalog2StatusLabel(product.status)}</Badge>
           {product.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
+          {priceInfo && <span title={priceInfo.hint} className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-0.5 text-sm font-bold text-white ring-1 ring-white/25">{priceInfo.text}</span>}
         </div>
       </div>
       <div className="relative">
