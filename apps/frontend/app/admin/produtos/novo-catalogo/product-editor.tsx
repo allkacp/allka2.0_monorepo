@@ -923,7 +923,7 @@ function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTask
             {t.steps.map((s: any, si: number) => (
               <StepRow key={s.id} step={s} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} />
             ))}
-            {!readOnly && <AddStepRow ringClass={ringOf("catalog2-step-add:" + t.id)} domId={"catalog2-step-add:" + t.id} refs={refs} onAdd={(b: any) => act(() => apiClient.addCatalog2Step(t.id, b), "Etapa adicionada.")} />}
+            {!readOnly && <AddStepRow ringClass={ringOf("catalog2-step-add:" + t.id)} domId={"catalog2-step-add:" + t.id} refs={refs} task={t} onAdd={(b: any) => act(() => apiClient.addCatalog2Step(t.id, b), "Etapa adicionada.")} />}
           </ul>
         </div>
       ))}
@@ -1332,15 +1332,24 @@ function AiConfig({ task, act }: any) {
     </details>
   );
 }
-function AddStepRow({ onAdd, refs, ringClass, domId }: { onAdd: (b: any) => void; refs?: any; ringClass?: string; domId?: string }) {
-  const [s, setS] = useState({ key: "", name: "", estimated_minutes: "", specialty_id: "" });
+// Vem PRÉ-PREENCHIDA com o nome, a especialidade e as horas da própria tarefa
+// (pedido do usuário: já vir preenchido, só clicar para confirmar e ajustar depois).
+function AddStepRow({ onAdd, refs, ringClass, domId, task }: { onAdd: (b: any) => void; refs?: any; ringClass?: string; domId?: string; task?: any }) {
+  const defaults = () => ({
+    key: "principal",
+    name: task?.name ?? "",
+    estimated_minutes: task?.estimated_minutes != null ? String(task.estimated_minutes) : "",
+    specialty_id: task?.specialty?.id ?? "",
+  });
+  const [s, setS] = useState(defaults);
+  useEffect(() => { setS(defaults()); }, [task?.id, task?.name, task?.estimated_minutes, task?.specialty?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <li id={domId} className={`flex items-end gap-2 ${ringClass ?? ""}`}>
       <Field label="key"><Input value={s.key} onChange={(e) => setS({ ...s, key: e.target.value })} /></Field>
       <Field label="nome"><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} /></Field>
       <Field label="especialidade"><SpecialtySelect refs={refs} value={s.specialty_id} onChange={(v: string) => setS({ ...s, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
       <Field label="min"><Input type="number" value={s.estimated_minutes} onChange={(e) => setS({ ...s, estimated_minutes: e.target.value })} /></Field>
-      <Button size="sm" variant="outline" onClick={() => s.key && s.name && (onAdd({ key: s.key, name: s.name, estimated_minutes: s.estimated_minutes ? Number(s.estimated_minutes) : null, specialty_id: s.specialty_id || null }), setS({ key: "", name: "", estimated_minutes: "", specialty_id: "" }))}>Adicionar etapa</Button>
+      <Button size="sm" variant="outline" onClick={() => s.key && s.name && (onAdd({ key: s.key, name: s.name, estimated_minutes: s.estimated_minutes ? Number(s.estimated_minutes) : null, specialty_id: s.specialty_id || null }), setS(defaults()))}>Adicionar etapa</Button>
     </li>
   );
 }
