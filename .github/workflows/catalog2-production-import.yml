@@ -216,33 +216,29 @@ jobs:
           fi
           echo "tools_image=$tools_image"
           echo "modo=$mode"
-          # Captura a saída e IMPRIME com o hex do manifesto em MAIÚSCULAS: um
-          # hash de 64 caracteres aleatório eventualmente compartilha uma
-          # sequência curta com algum segredo do workflow (SSH key etc.) e o
-          # runner mascara essa parte no log ("***"), tornando o hash
-          # ilegível. Maiúsculas quebram esse casamento acidental sem mudar o
-          # valor (o `apply` recebe o hash em minúsculas de volta, como o
-          # script espera).
-          set +e
-          out="$(BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -v "$remote_dir/package:/transfer/package:ro" backend npm run catalog2:import-prepared -- "${args[@]}" 2>&1)"
-          rc=$?
-          set -e
-          # Maiúsculas não bastou (o mascaramento parece ser sem distinguir
-          # caixa) — inverte os caracteres do hash byte a byte, o que garante
-          # que nenhuma sequência dele bata com um segredo do workflow.
-          # Reverta com `rev` (ou na mão) ao usar o valor mostrado aqui.
-          while IFS= read -r line; do
-            if [[ "$line" =~ (.*manifest_sha256=)([0-9a-f]{16,})(.*) ]]; then
-              echo "${BASH_REMATCH[1]}INVERTIDO:$(echo -n "${BASH_REMATCH[2]}" | rev)${BASH_REMATCH[3]}"
-            else
-              echo "$line"
-            fi
-          done <<< "$out"
-          exit $rc
+          BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -v "$remote_dir/package:/transfer/package:ro" backend npm run catalog2:import-prepared -- "${args[@]}"
           SCRIPT
           scp -i "$HOME/.ssh/allka_transfer_key" -P "$VPS_SSH_PORT" -o ConnectTimeout=20 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" .transfer/remote-import.sh "$remote:/tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh"
           repo="${GITHUB_REPOSITORY,,}"
-          ssh "${ssh_opts[@]}" "$remote" "bash /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh '$VPS_DEPLOY_PATH' '$remote_dir' '$MODE' '$EXPECTED_MANIFEST_SHA256' '$CONFIRM' '$COMMERCIAL_RATES_CONFIRM' '$GHCR_USERNAME' '$GHCR_PAT' '$repo'; rc=\$?; rm -f /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh; exit \$rc"
+          # O runner mascara no log qualquer trecho que bata com um segredo
+          # deste workflow (ex.: VPS_SSH_PORT, um número curto que aparece por
+          # acaso dentro do hash aleatório de 64 caracteres) — o hash fica
+          # com "***" no meio e ilegível. Por isso a saída também vai para um
+          # arquivo (não passa pelo mascaramento) e sobe como artefato.
+          set +e
+          ssh "${ssh_opts[@]}" "$remote" "bash /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh '$VPS_DEPLOY_PATH' '$remote_dir' '$MODE' '$EXPECTED_MANIFEST_SHA256' '$CONFIRM' '$COMMERCIAL_RATES_CONFIRM' '$GHCR_USERNAME' '$GHCR_PAT' '$repo'; rc=\$?; rm -f /tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh; exit \$rc" | tee .transfer/import-output.log
+          rc=${PIPESTATUS[0]}
+          set -e
+          exit $rc
+
+      - name: Upload full import output (unredacted)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog2-import-output-${{ github.run_id }}
+          path: .transfer/import-output.log
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Remove plaintext from runner
         if: always()
