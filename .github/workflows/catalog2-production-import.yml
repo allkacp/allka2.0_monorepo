@@ -40,9 +40,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     env:
-      RELEASE_TAG: catalog2-transfer-2026-09-17
-      ASSET_NAME: catalog2-prepared-20260917-v2.enc
-      PACKAGE_SHA256: db59440d342095264dc8cf2d50573d21870763bd894d4a12d71d31a627a2c545
+      RELEASE_TAG: catalog2-transfer-2026-09-27
+      ASSET_NAME: catalog2-prepared-20260927.enc
+      PACKAGE_SHA256: 2c0a6529665f7d33fd5c187e9fab5def4f94abce9db3f2361c6ac48106c1da92
     steps:
       - name: Validate controlled inputs and secrets
         shell: bash

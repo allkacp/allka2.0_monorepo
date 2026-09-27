@@ -1,0 +1,149 @@
+name: Prod Delete Catalog2 Product (manual)
+
+# Apaga UM produto catalog2 do banco do SERVIDOR (por número), com tudo que
+# depende dele (versões, tarefas, cotações, itens de carrinho, produtos de
+# projeto e os projetos que ficarem sem nenhum produto por causa disso).
+#
+# Disparo manual only. Dois modos:
+#   dry_run (padrão) — só conta o que seria afetado; NÃO escreve.
+#   apply            — exige a frase de confirmação; gera e valida um backup
+#                      completo do banco ANTES; roda tudo numa transação única
+#                      (qualquer violação de chave estrangeira desfaz tudo).
+#
+# O script (apps/backend/src/scripts/delete-catalog2-product.ts) roda com a
+# imagem de ferramentas pinada no commit que está no ar (mesmo padrão de
+# prod-baseline-cleanup.yml).
+
+on:
+  workflow_dispatch:
+    inputs:
+      sequence_number:
+        description: "Número do produto a apagar (ex.: 1)"
+        required: true
+        type: string
+      mode:
+        description: "dry_run só confere; apply APAGA o produto do servidor"
+        required: true
+        default: dry_run
+        type: choice
+        options: [dry_run, apply]
+      confirm:
+        description: "Obrigatório só no apply: APAGAR PRODUTO DA PRODUCAO"
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  delete_product:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Validate inputs and secrets
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRM: ${{ inputs.confirm }}
+          SEQUENCE_NUMBER: ${{ inputs.sequence_number }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          : "${VPS_HOST:?Set the VPS_HOST secret}"
+          : "${VPS_USER:?Set the VPS_USER secret}"
+          : "${VPS_SSH_PORT:?Set the VPS_SSH_PORT secret}"
+          : "${VPS_SSH_KEY:?Set the VPS_SSH_KEY secret}"
+          [[ "$SEQUENCE_NUMBER" =~ ^[0-9]+$ ]] || { echo "::error::sequence_number precisa ser um número."; exit 1; }
+          if [ "$MODE" = "apply" ] && [ "$CONFIRM" != "APAGAR PRODUTO DA PRODUCAO" ]; then
+            echo "::error::Para apply, informe exatamente: APAGAR PRODUTO DA PRODUCAO"
+            exit 1
+          fi
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          touch ~/.ssh/allka_deploy_key
+          chmod 600 ~/.ssh/allka_deploy_key
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_deploy_key
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Render remote script
+        shell: bash
+        run: |
+          mkdir -p .deploy
+          cat > .deploy/remote-delete-product.sh <<'SCRIPT'
+          set -euo pipefail
+          deploy_path="$1"; mode="$2"; confirm="$3"; sequence_number="$4"; ghcr_user="$5"; ghcr_pat="$6"; repo="$7"
+          cd "$deploy_path"
+          set -a; source ./.env; set +a
+
+          backup_ok="nao"
+          if [ "$mode" = "apply" ]; then
+            mkdir -p backups
+            ts="$(date -u +%Y%m%dT%H%M%SZ)"
+            file="backups/allka-pre-delete-product-${sequence_number}-${ts}.sql.gz"
+            docker compose --env-file .env -f docker-compose.yml exec -T mysql \
+              sh -c 'exec mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers "$MYSQL_DATABASE"' \
+              | gzip > "$file"
+            size="$(stat -c%s "$file")"
+            gzip -t "$file"
+            if [ "$size" -lt 1000000 ]; then
+              echo "ERRO: backup suspeitamente pequeno (${size} bytes) — abortando antes de apagar." >&2
+              exit 1
+            fi
+            echo "backup_file=${file}"
+            echo "backup_size_bytes=${size}"
+            echo "backup_sha256=$(sha256sum "$file" | cut -d' ' -f1)"
+            backup_ok="sim"
+          fi
+
+          runtime_image="$(grep '^BACKEND_IMAGE=' .env | cut -d= -f2-)"
+          [ -n "$runtime_image" ] || { echo "ERRO: BACKEND_IMAGE ausente no .env" >&2; exit 1; }
+          tools_image="ghcr.io/${repo}/backend:tools-${runtime_image##*:}"
+          printf '%s' "$ghcr_pat" | docker login ghcr.io -u "$ghcr_user" --password-stdin
+          docker pull "$tools_image"
+          echo "tools_image=${tools_image}"
+
+          apply_flag=""
+          [ "$mode" = "apply" ] && apply_flag="--apply"
+          BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps \
+            -e DELETE_PRODUCT_TARGET_ENV=production \
+            -e DELETE_PRODUCT_EXPECTED_DB="$MYSQL_DATABASE" \
+            -e DELETE_PRODUCT_CONFIRM="$confirm" \
+            -e DELETE_PRODUCT_BACKUP_CONFIRMED="$backup_ok" \
+            backend npx tsx src/scripts/delete-catalog2-product.ts "$sequence_number" $apply_flag
+          SCRIPT
+
+      - name: Run on the VPS
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRM: ${{ inputs.confirm }}
+          SEQUENCE_NUMBER: ${{ inputs.sequence_number }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+          GHCR_PAT: ${{ github.token }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: |
+          VPS_HOST="$(echo -n "$VPS_HOST" | tr -d '[:space:]')"
+          VPS_USER="$(echo -n "$VPS_USER" | tr -d '[:space:]')"
+          VPS_SSH_PORT="$(echo -n "$VPS_SSH_PORT" | tr -d '[:space:]')"
+          remote="${VPS_USER}@${VPS_HOST}"
+          SSH_OPTS=(-i "$HOME/.ssh/allka_deploy_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=15 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          repo="${GITHUB_REPOSITORY,,}"
+          scp -i "$HOME/.ssh/allka_deploy_key" -P "$VPS_SSH_PORT" -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            .deploy/remote-delete-product.sh "$remote:/tmp/allka-remote-delete-product.sh"
+          ssh "${SSH_OPTS[@]}" "$remote" "bash /tmp/allka-remote-delete-product.sh '${VPS_DEPLOY_PATH}' '${MODE}' '${CONFIRM}' '${SEQUENCE_NUMBER}' '${GHCR_USERNAME}' '${GHCR_PAT}' '${repo}'; rc=\$?; rm -f /tmp/allka-remote-delete-product.sh; exit \$rc"
