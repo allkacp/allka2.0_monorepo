@@ -216,7 +216,19 @@ jobs:
           fi
           echo "tools_image=$tools_image"
           echo "modo=$mode"
-          BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -v "$remote_dir/package:/transfer/package:ro" backend npm run catalog2:import-prepared -- "${args[@]}"
+          # Captura a saída e IMPRIME com o hex do manifesto em MAIÚSCULAS: um
+          # hash de 64 caracteres aleatório eventualmente compartilha uma
+          # sequência curta com algum segredo do workflow (SSH key etc.) e o
+          # runner mascara essa parte no log ("***"), tornando o hash
+          # ilegível. Maiúsculas quebram esse casamento acidental sem mudar o
+          # valor (o `apply` recebe o hash em minúsculas de volta, como o
+          # script espera).
+          set +e
+          out="$(BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -v "$remote_dir/package:/transfer/package:ro" backend npm run catalog2:import-prepared -- "${args[@]}" 2>&1)"
+          rc=$?
+          set -e
+          echo "$out" | sed -E 's/(manifest_sha256=)([0-9a-f]{16,})/\1\U\2/'
+          exit $rc
           SCRIPT
           scp -i "$HOME/.ssh/allka_transfer_key" -P "$VPS_SSH_PORT" -o ConnectTimeout=20 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" .transfer/remote-import.sh "$remote:/tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh"
           repo="${GITHUB_REPOSITORY,,}"
