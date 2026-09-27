@@ -42,7 +42,7 @@ jobs:
     env:
       RELEASE_TAG: catalog2-transfer-2026-09-27
       ASSET_NAME: catalog2-prepared-20260927.enc
-      PACKAGE_SHA256: 2c0a6529665f7d33fd5c187e9fab5def4f94abce9db3f2361c6ac48106c1da92
+      PACKAGE_SHA256: e3ac07a0a65f741612751beec828f2dcf39b974de496890e1994fef39605bb50
     steps:
       - name: Validate controlled inputs and secrets
         shell: bash
