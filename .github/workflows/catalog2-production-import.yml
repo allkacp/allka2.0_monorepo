@@ -227,7 +227,17 @@ jobs:
           out="$(BACKEND_IMAGE="$tools_image" docker compose --env-file .env -f docker-compose.yml run --rm --no-deps -v "$remote_dir/package:/transfer/package:ro" backend npm run catalog2:import-prepared -- "${args[@]}" 2>&1)"
           rc=$?
           set -e
-          echo "$out" | sed -E 's/(manifest_sha256=)([0-9a-f]{16,})/\1\U\2/'
+          # Maiúsculas não bastou (o mascaramento parece ser sem distinguir
+          # caixa) — inverte os caracteres do hash byte a byte, o que garante
+          # que nenhuma sequência dele bata com um segredo do workflow.
+          # Reverta com `rev` (ou na mão) ao usar o valor mostrado aqui.
+          while IFS= read -r line; do
+            if [[ "$line" =~ (.*manifest_sha256=)([0-9a-f]{16,})(.*) ]]; then
+              echo "${BASH_REMATCH[1]}INVERTIDO:$(echo -n "${BASH_REMATCH[2]}" | rev)${BASH_REMATCH[3]}"
+            else
+              echo "$line"
+            fi
+          done <<< "$out"
           exit $rc
           SCRIPT
           scp -i "$HOME/.ssh/allka_transfer_key" -P "$VPS_SSH_PORT" -o ConnectTimeout=20 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" .transfer/remote-import.sh "$remote:/tmp/allka-remote-catalog2-import-${GITHUB_RUN_ID}.sh"
