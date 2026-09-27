@@ -3,6 +3,8 @@
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
 ## Pendente de deploy (local, ainda NÃO subiu)
+- **Backend** — Precificação/checklist: corrigido falso aviso de "valor/hora de especialidade". Tarefas com horas/especialidade provisórias continuam bloqueando o preço, mas só aparece ajuste de valor/hora quando a especialidade realmente não possui taxa cadastrada.
+- **Frontend** — Checklist do produto mais simples: cada pendência agora aparece como ajustes numerados, separados e **clicáveis individualmente**; cada número leva exatamente à tarefa/campo correspondente e destaca somente aquele ajuste. O bloqueio de Preço não repete a lista completa de tarefas (aponta para o ajuste específico "Especialidade e horas das tarefas") e a explicação longa foi trocada por uma orientação curta de como resolver.
 - **Frontend** — Custos e preço: removido o cartão azul "Abrir Precificação" (não faz parte do preenchimento do produto). Se o bloqueio de Preço vier de configuração global, clicar no item do checklist abre a Precificação por cima do produto.
 - **Frontend** — Editor de produto agora é **passo a passo** (1 Informações → 2 Entrega: tarefas, etapas e prazos → 3 Classificação e opções → 4 Custos e preço → 5 Revisão e publicação), com selo de cada passo (completo/pendente/bloqueado), botões Passo anterior/Próximo e **preço de venda ao vivo** ao lado do nome. O campo Prazo comercial base foi para o passo 2. Passo 4 mostra a composição do preço (das tarefas/etapas + taxas) e, se faltar algo global, lista o que falta (sem abrir tela).
 - **Frontend** — Cadastro de Produtos: barra do topo compacta (busca menor, itens por página e paginação menores, botão Ir menor) — páginas 1 a N sempre visíveis.

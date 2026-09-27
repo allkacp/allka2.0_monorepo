@@ -659,6 +659,7 @@ describe("Novo catálogo — fundação", () => {
       const pricing = await computePricing(v1.id, await defaultSelection(v1.id));
       assert.equal(pricing.commercial_ready, false, "nunca fecha com esforço provisório, mesmo com tudo mais configurado");
       assert.ok(pricing.pending_info.some((s) => s.includes("provisórios")));
+      assert.ok(!pricing.pending_info.includes("valor/hora de especialidade"), "não deve acusar valor/hora quando a especialidade já tem taxa configurada");
       assert.equal(pricing.human_cost_breakdown[0].effort_is_provisional, true);
       // mas o custo AINDA é calculado — alimenta a memória administrativa (regra 7).
       assert.equal(pricing.human_cost_breakdown[0].cost, 80); // 60 min a R$80/h

@@ -154,6 +154,23 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
     setWatch(ids.length ? { key, ids } : null);
     window.setTimeout(() => (document.getElementById(ids[0] ?? dest.target) ?? document.getElementById(dest.target) ?? document.getElementById("catalog2-tasks") ?? document.getElementById("catalog2-editor-tabs"))?.scrollIntoView({ behavior: "smooth", block: "center" }), 350);
   }
+  function goToReadinessAdjustment(key: string, targetId: string) {
+    const base = readinessDestination(key, product, readinessItems?.[key]?.note);
+    const dest = targetId.startsWith("task-effort:") || targetId.startsWith("catalog2-step-add:")
+      ? { tab: "entrega", sub: { entrega: "tarefas" }, target: targetId }
+      : targetId === "catalog2-deadline-base"
+        ? { tab: "entrega", sub: { entrega: "tarefas" }, target: targetId }
+        : targetId === "catalog2-price-pending"
+          ? { tab: "precos", target: targetId }
+          : { ...base, target: targetId };
+    setEditorTab(dest.tab);
+    if (dest.sub) setSubTabs((cur2) => ({ ...cur2, ...dest.sub }));
+    setHighlightTarget(null);
+    setHighlightTaskIds([]);
+    setDoneIds([]);
+    setWatch({ key, ids: [targetId] });
+    window.setTimeout(() => (document.getElementById(targetId) ?? document.getElementById(dest.target) ?? document.getElementById("catalog2-editor-tabs"))?.scrollIntoView({ behavior: "smooth", block: "center" }), 350);
+  }
   const AMBER = "rounded-lg bg-amber-100 p-2 ring-2 ring-amber-400 dark:bg-amber-900/30";
   const GREEN = "rounded-lg bg-emerald-100 p-2 ring-2 ring-emerald-400 transition-colors dark:bg-emerald-900/30";
   const ringOf = (id: string) => (doneIds.includes(id) ? GREEN : watch?.ids.includes(id) || highlightTarget === id ? AMBER : "");
@@ -264,7 +281,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
           </p>
         )}
       </div>
-      <ProductReadinessPanel productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onItems={setReadinessItems} onData={setReadinessData} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} />
+      <ProductReadinessPanel productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onGoDetail={goToReadinessAdjustment} onItems={setReadinessItems} onData={setReadinessData} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} detailTargetFor={(key: string, index: number) => readinessDetailTargets(key, product, version, readinessItems?.[key]?.note)[index]} />
 
       {version && (
         <Tabs value={editorTab} onValueChange={setEditorTab}>
@@ -2320,30 +2337,33 @@ function readinessDetailLines(key: string, product: any, version: any, note?: st
     case "etapas":
       for (const t of tasks) if ((t.steps ?? []).length === 0) out.push(`Tarefa "${t.name}": sem etapa — toda tarefa precisa de ao menos uma`);
       break;
-    case "esforco_tarefas":
-    case "preco":
-    case "prazo": {
-      if (key === "prazo" || (key === "preco" && /prazo/i.test(note ?? ""))) {
-        if (version?.base_commercial_deadline_days == null) out.push("Prazo comercial base (dias): não informado (passo 2, campo Prazo comercial base)");
-      }
-      if (key === "prazo") break;
-      if (tasks.length === 0 && key === "preco") out.push("Nenhuma tarefa: não há base de custo");
+    case "esforco_tarefas": {
       for (const t of tasks) {
-        if (t.effort_is_provisional) out.push(`Tarefa "${t.name}": horas/especialidade PROVISÓRIAS — confirme em Salvar tarefa`);
+        if (t.effort_is_provisional) out.push(`Revisar "${t.name}": confirmar especialidade e horas reais`);
         const allSteps = t.steps ?? [];
         if (allSteps.length > 0) {
           for (const st of allSteps) {
-            if (!mins(st)) out.push(`Tarefa "${t.name}" › etapa "${st.name}": faltam as horas (minutos)`);
-            if (!(st.specialty_id ?? t.specialty?.id)) out.push(`Tarefa "${t.name}" › etapa "${st.name}": falta a especialidade`);
+            if (!mins(st)) out.push(`Definir horas: "${t.name}" › "${st.name}"`);
+            if (!(st.specialty_id ?? t.specialty?.id)) out.push(`Definir especialidade: "${t.name}" › "${st.name}"`);
           }
         } else {
-          out.push(`Tarefa "${t.name}": sem etapa (cadastre ao menos uma, com especialidade e horas)`);
+          out.push(`Criar etapa em "${t.name}" e informar especialidade e horas`);
         }
       }
-      if (key === "preco") {
-        const m = /"A definir":\s*(.*)\.$/.exec(note ?? "");
-        if (m) for (const part of m[1].split(";").map((x) => x.trim()).filter(Boolean)) if (!/prazo/i.test(part) && !/provis/i.test(part)) out.push(`Configuração global: ${part} (tela Precificação)`);
+      break;
+    }
+    case "preco": {
+      if (/prazo/i.test(note ?? "")) {
+        if (version?.base_commercial_deadline_days == null) out.push("Prazo comercial base (dias): não informado (passo 2, campo Prazo comercial base)");
       }
+      if (tasks.length === 0) out.push("Cadastrar tarefas para formar a base de custo");
+      if (priceBlockedByTasks(note)) out.push("Concluir o ajuste separado: Especialidade e horas das tarefas");
+      const m = /"A definir":\s*(.*)\.$/.exec(note ?? "");
+      if (m) for (const part of m[1].split(";").map((x) => x.trim()).filter(Boolean)) if (!/prazo/i.test(part) && !/provis|tarefa/i.test(part)) out.push(`Configurar em Precificação: ${part}`);
+      break;
+    }
+    case "prazo": {
+      if (version?.base_commercial_deadline_days == null) out.push("Informar o prazo comercial base em dias");
       break;
     }
     case "variacoes":
@@ -2353,6 +2373,41 @@ function readinessDetailLines(key: string, product: any, version: any, note?: st
       break;
   }
   return out;
+}
+
+// Um destino por linha do checklist. A ordem espelha readinessDetailLines para
+// que cada ajuste seja uma ação independente, não apenas texto decorativo.
+function readinessDetailTargets(key: string, product: any, version: any, note?: string): string[] {
+  const targets: string[] = [];
+  const tasks: any[] = version?.tasks ?? [];
+  const mins = (x: any) => (x?.estimated_minutes ?? 0) > 0;
+  if (key === "esforco_tarefas") {
+    for (const t of tasks) {
+      const target = "task-effort:" + t.id;
+      if (t.effort_is_provisional) targets.push(target);
+      const steps = t.steps ?? [];
+      if (steps.length > 0) {
+        for (const st of steps) {
+          if (!mins(st)) targets.push(target);
+          if (!(st.specialty_id ?? t.specialty?.id)) targets.push(target);
+        }
+      } else {
+        targets.push(target);
+      }
+    }
+    return targets;
+  }
+  if (key === "preco") {
+    if (/prazo/i.test(note ?? "") && version?.base_commercial_deadline_days == null) targets.push("catalog2-deadline-base");
+    if (tasks.length === 0) targets.push("catalog2-task-create");
+    if (priceBlockedByTasks(note)) targets.push(readinessPendingIds("esforco_tarefas", product, version, undefined, note)[0] ?? "catalog2-task-effort");
+    const m = /"A definir":\s*(.*)\.$/.exec(note ?? "");
+    if (m) for (const part of m[1].split(";").map((x) => x.trim()).filter(Boolean)) if (!/prazo/i.test(part) && !/provis|tarefa/i.test(part)) targets.push("catalog2-price-pending");
+    return targets;
+  }
+  const generic = readinessPendingIds(key, product, version, undefined, note);
+  const lineCount = readinessDetailLines(key, product, version, note).length;
+  return Array.from({ length: lineCount }, (_, index) => generic[index] ?? generic[0] ?? readinessDestination(key, product, note).target);
 }
 
 // Campos exatos que ainda impedem o item de ficar pronto (ids de elementos).
@@ -2442,7 +2497,7 @@ const READINESS_HELP: Record<string, Partial<Record<"bloqueador" | "pendente", s
   etapas: { bloqueador: "Toda tarefa precisa de ao menos uma etapa: é a etapa que tem a especialidade, as horas e o valor pago (nômade ou custo interno). Ex.: tarefa \"Criação de conteúdo\" → etapas \"Roteiro\", \"Redação\", \"Revisão\". Clique em Adicionar etapa dentro da tarefa." },
   tarefas: { pendente: "Cadastre pelo menos uma tarefa (o que será executado quando o produto for contratado). Sem tarefas não há operação nem base de custo para calcular o preço." },
   esforco_tarefas: { pendente: "Cada tarefa precisa de especialidade e horas estimadas reais. Mesmo que já estejam preenchidas, se estiverem marcadas como PROVISÓRIAS (dado de teste) o item continua pendente até você revisar e confirmar os valores reais." },
-  preco: { bloqueador: "O preço sai de: horas de cada tarefa × valor/hora da especialidade, + revisão humana, + impostos, comissão, taxa operacional e margem, aplicados na ordem definida. O motivo exato aparece na linha acima (ex.: valor/hora de especialidade, percentual de revisão, impostos/margem, ordem de incidência, dados provisórios). Tudo se configura em Custos e preço: coluna da esquerda (taxas e margens; valor/hora das especialidades); horas e especialidade de cada tarefa ficam em Entrega › Tarefas e etapas." },
+  preco: { bloqueador: "Resolva os ajustes listados acima. A base de custo usa as horas das tarefas e o valor/hora das especialidades; taxas e margens são configuradas em Custos e preço." },
   prazo: { bloqueador: "O prazo que o cliente vê NÃO é a soma das tarefas: é o \"Prazo comercial base\" da versão, que ainda não foi informado. Preencha o campo em Custos e preço › Prazo comercial base (dias) e salve." },
   publicacao: { bloqueador: "O produto nunca foi publicado, então o cliente não o enxerga. Quando os outros bloqueios estiverem resolvidos, publique a versão em Revisão e publicação › Publicação e versões." },
 };
@@ -2468,7 +2523,7 @@ const LEVEL_META: Record<string, { label: string; chip: string; border: string; 
 
 type ReadinessFilter = "todos" | "pronto" | "bloqueador" | "pendente" | "opcional";
 
-function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onItems, onData, detailFor }: { productId: string; versionId?: string; versionKey: string; onGo: (key: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void; onData?: (d: any) => void; detailFor?: (key: string) => string[] }) {
+function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDetail, onItems, onData, detailFor, detailTargetFor }: { productId: string; versionId?: string; versionKey: string; onGo: (key: string) => void; onGoDetail: (key: string, targetId: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void; onData?: (d: any) => void; detailFor?: (key: string) => string[]; detailTargetFor?: (key: string, index: number) => string | undefined }) {
   const [data, setData] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -2575,12 +2630,13 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onItems
                     const meta = LEVEL_META[it.level] ?? LEVEL_META.opcional;
                     const help = (READINESS_HELP[it.key] as any)?.[it.level] as string | undefined;
                     const Icon = READINESS_ICON[it.key] ?? FileText;
+                    const details = detailFor?.(it.key) ?? [];
                     return (
-                      <li key={it.key}>
+                      <li key={it.key} className="overflow-hidden rounded-xl border border-white/70 bg-[#f2f4fc] transition-colors hover:border-violet-300 dark:border-slate-700/60 dark:bg-slate-900">
                         <button
                           type="button"
                           onClick={() => onGo(it.key)}
-                          className="w-full rounded-xl border border-white/70 bg-[#f2f4fc] px-3 py-1.5 text-left transition-colors hover:border-violet-300 hover:bg-white dark:border-slate-700/60 dark:bg-slate-900 dark:hover:bg-slate-800/50"
+                          className="w-full px-3 py-1.5 text-left hover:bg-white dark:hover:bg-slate-800/50"
                         >
                           <span className="flex items-center gap-3">
                             <span className={`w-[74px] shrink-0 rounded-full px-2 py-0.5 text-center text-[11px] font-semibold ${meta.chip}`}>{meta.label}</span>
@@ -2591,17 +2647,37 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onItems
                               {READINESS_WHERE[it.key] ?? "Abrir"} <ChevronRight className="h-4 w-4" />
                             </span>
                           </span>
-                          {it.level !== "pronto" && (detailFor?.(it.key) ?? []).length > 0 && (
-                            <ul className="mt-1.5 list-disc space-y-0.5 pl-9 text-[12px] text-slate-600 dark:text-slate-300">
-                              {(detailFor?.(it.key) ?? []).map((line, i) => <li key={i}>{line}</li>)}
-                            </ul>
-                          )}
-                          {help && (
-                            <span className={`mt-1.5 block rounded-lg px-2.5 py-1.5 text-[12px] leading-snug ${it.level === "bloqueador" ? "bg-red-50 text-red-800 dark:bg-red-950/20 dark:text-red-200" : "bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200"}`}>
-                              <strong>{it.level === "bloqueador" ? "Por que está bloqueado: " : "Por que está pendente: "}</strong>{help}
-                            </span>
-                          )}
                         </button>
+                        {it.level !== "pronto" && details.length > 0 && (
+                          <div className="mx-3 mb-2 rounded-lg border border-slate-200/80 bg-white/70 p-2.5 dark:border-slate-700 dark:bg-slate-800/60">
+                            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                              {details.length} {details.length === 1 ? "ajuste necessário" : "ajustes necessários"} · clique em cada um para resolver
+                            </div>
+                            <div className="grid gap-1 sm:grid-cols-2">
+                              {details.map((line, i) => {
+                                const targetId = detailTargetFor?.(it.key, i);
+                                return (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    disabled={!targetId}
+                                    onClick={() => targetId && onGoDetail(it.key, targetId)}
+                                    className="group flex items-start gap-1.5 rounded-md bg-slate-50 px-2 py-1.5 text-left text-[12px] leading-snug text-slate-700 transition-colors hover:bg-violet-100 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:cursor-default dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-violet-950/50 dark:hover:text-violet-200"
+                                  >
+                                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700 group-hover:bg-violet-600 group-hover:text-white dark:bg-violet-950 dark:text-violet-300">{i + 1}</span>
+                                    <span className="flex-1">{line}</span>
+                                    <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500 opacity-0 transition-opacity group-hover:opacity-100" />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {help && (
+                          <div className={`mx-3 mb-2 rounded-lg px-2.5 py-1.5 text-[12px] leading-snug ${it.level === "bloqueador" ? "bg-red-50 text-red-800 dark:bg-red-950/20 dark:text-red-200" : "bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200"}`}>
+                            <strong>{it.level === "bloqueador" ? "Como resolver: " : "Como concluir: "}</strong>{help}
+                          </div>
+                        )}
                       </li>
                     );
                   })}

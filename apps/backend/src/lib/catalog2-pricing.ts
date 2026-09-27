@@ -281,6 +281,7 @@ export async function computePricing(versionId: string, selection: PricingSelect
   // ── Custo humano ──────────────────────────────────────────────────────
   let humanCost = 0;
   let humanPending = false;
+  let anySpecialtyRateMissing = false;
   // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
   // tarefa com effort_is_provisional=true tem specialty_id/estimated_minutes
   // preenchidos só como DADO DE TESTE (nunca decisão comercial real) — o
@@ -301,6 +302,7 @@ export async function computePricing(versionId: string, selection: PricingSelect
     if (minutes === 0) warnings.push({ code: "task_without_time", message: `${label} não tem duração estimada.` });
     if (rate == null && spec) {
       humanPending = true;
+      anySpecialtyRateMissing = true;
       warnings.push({ code: "specialty_without_rate", message: `A especialidade "${spec.name}" não tem valor/hora definido.` });
     }
     const cost = rate != null ? (minutes / 60) * rate : null;
@@ -434,7 +436,9 @@ export async function computePricing(versionId: string, selection: PricingSelect
   // `pending_info` é SÓ sobre PREÇO (reparo 2.2). O prazo comercial tem
   // pendência PRÓPRIA (`deadline.commercial_deadline_pending`).
   const pendingInfo: string[] = [];
-  if (humanPending) pendingInfo.push("valor/hora de especialidade");
+  // Esforço provisório também deixa o custo humano pendente, mas não
+  // significa que o valor/hora esteja ausente. Exiba cada causa separadamente.
+  if (anySpecialtyRateMissing) pendingInfo.push("valor/hora de especialidade");
   if (anyProvisionalEffort) pendingInfo.push("especialidade/tempo de tarefa(s) provisórios (dado de teste, revisão humana pendente)");
   if (iaPending) pendingInfo.push("custo por token de IA");
   if (reviewPct == null) pendingInfo.push("percentual de revisão humana");
