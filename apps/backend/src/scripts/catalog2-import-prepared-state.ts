@@ -141,11 +141,11 @@ function loadPackage(packageDir: string): ExportedPackage {
 const CONFIRM_PHRASE = "TRANSFERIR PARA PRODUCAO";
 type TargetEnv = "production" | "development";
 
-function canonicalManifestJSON(lines: ProductManifestLine[]): string {
+function canonicalManifestJSON(value: unknown): string {
   // Ordem estável (já vem ordenado por slug na query) — determinístico pra
   // permitir checksum-lock (mesmo padrão já usado em qa-migration-reconcile.yml:
   // diff computado -> sha256 -> só aplica se o sha256 revisado bater de novo).
-  return JSON.stringify(lines);
+  return JSON.stringify(value);
 }
 
 function sha256(s: string): string {
@@ -258,6 +258,37 @@ async function main() {
   }
 
   const products = pkg.products as any[];
+  const desiredSequences = new Map<string, number>();
+  for (const p of products) {
+    if (!Number.isInteger(p.sequence_number) || p.sequence_number < 1 || p.sequence_number > products.length) {
+      throw new Error(`sequence_number inválido no pacote para ${p.slug}: ${p.sequence_number}`);
+    }
+    if ([...desiredSequences.values()].includes(p.sequence_number)) {
+      throw new Error(`sequence_number duplicado no pacote: ${p.sequence_number}`);
+    }
+    desiredSequences.set(p.slug, p.sequence_number);
+  }
+  const expectedSequence = Array.from({ length: products.length }, (_, index) => index + 1);
+  const actualSequence = [...desiredSequences.values()].sort((a, b) => a - b);
+  if (JSON.stringify(actualSequence) !== JSON.stringify(expectedSequence)) {
+    throw new Error(`o pacote precisa conter a sequência contínua de 1 a ${products.length}`);
+  }
+
+  const destinationInventory = await dst.catalog2Product.findMany({
+    select: { id: true, slug: true, internal_name: true, sequence_number: true },
+    orderBy: { sequence_number: "asc" },
+  });
+  const packageSlugs = new Set(products.map((p) => p.slug));
+  const extraProducts = destinationInventory.filter((p) => !packageSlugs.has(p.slug));
+  const sequenceMismatches = destinationInventory
+    .filter((p) => packageSlugs.has(p.slug) && desiredSequences.get(p.slug) !== p.sequence_number)
+    .map((p) => ({ slug: p.slug, current: p.sequence_number, expected: desiredSequences.get(p.slug)! }));
+  const inventoryManifest = {
+    expected_count: products.length,
+    destination_count: destinationInventory.length,
+    extras: extraProducts.map((p) => ({ slug: p.slug, sequence_number: p.sequence_number, internal_name: p.internal_name })),
+    sequence_mismatches: sequenceMismatches,
+  };
 
   // ── Pré-visualização SEMPRE calculada primeiro (só leitura) — usada tanto
   // para imprimir o manifesto em dry-run quanto como travamento de checksum
@@ -318,10 +349,13 @@ async function main() {
   }
 
   const readOnlyManifest = await buildReadOnlyManifest();
-  const readOnlyManifestHash = sha256(canonicalManifestJSON(readOnlyManifest));
+  const readOnlyManifestHash = sha256(canonicalManifestJSON({ products: readOnlyManifest, inventory: inventoryManifest }));
 
   if (mode === "dry_run") {
     console.log(`\n════════ MANIFESTO — PRÉVIA (${products.length} produtos avaliados) ════════`);
+    console.log(`  inventário: destino=${inventoryManifest.destination_count} esperado=${inventoryManifest.expected_count} extras=${inventoryManifest.extras.length} números_divergentes=${inventoryManifest.sequence_mismatches.length}`);
+    for (const p of inventoryManifest.extras) console.log(`     ⚠ EXTRA #${p.sequence_number}: ${p.internal_name} (${p.slug})`);
+    for (const p of inventoryManifest.sequence_mismatches) console.log(`     ↪ RENUMERAR ${p.slug}: ${p.current} → ${p.expected}`);
     for (const l of readOnlyManifest) {
       console.log(`  ${l.slug} — produto:${l.product} versão:${l.version} tarefas:${jstr(l.tasks)} questionários:${jstr(l.questionnaires)}`);
       if (l.global_config_divergences.length) for (const d of l.global_config_divergences) console.log(`     ⚠ ${d}`);
@@ -352,6 +386,7 @@ async function main() {
     else if (expectedManifestSha256 !== readOnlyManifestHash) problems.push(`--expected-manifest-sha256 ("${expectedManifestSha256}") não bate com o manifesto recalculado agora ("${readOnlyManifestHash}") — o destino pode ter mudado desde a revisão, ou o hash informado está errado. Rode --dry-run de novo e revise o novo manifesto.`);
     const anyConflict = readOnlyManifest.some((l) => l.product === "conflict" || l.questionnaires.conflict > 0);
     const anyGlobalDivergence = readOnlyManifest.some((l) => l.global_config_divergences.length > 0);
+    if (extraProducts.length > 0) problems.push(`o destino ainda contém ${extraProducts.length} produto(s) fora do pacote local — exclua os extras antes de aplicar`);
     if (anyConflict) problems.push("o manifesto tem pelo menos um conflito (produto ou questionário) — nunca aplicável em produção sem resolver antes, mesmo com confirmação");
     if (anyGlobalDivergence) problems.push("o manifesto tem pelo menos uma divergência de configuração global (ex.: especialidade) — nunca aplicável em produção sem resolver antes, mesmo com confirmação");
     if (problems.length > 0) {
@@ -652,6 +687,24 @@ async function main() {
 
     manifest.push(line);
   }
+
+  // O catálogo publicado deve espelhar também a numeração curta do pacote
+  // local. A troca ocorre em duas fases dentro de uma transação para nunca
+  // colidir com a restrição UNIQUE durante a reordenação.
+  await dst.$transaction(async (tx) => {
+    const current = await tx.catalog2Product.findMany({ select: { id: true, slug: true } });
+    const remainingExtras = current.filter((p) => !packageSlugs.has(p.slug));
+    if (remainingExtras.length > 0 || current.length !== products.length) {
+      throw new Error(`inventário final divergente: destino=${current.length}, esperado=${products.length}, extras=${remainingExtras.length}`);
+    }
+    for (const p of current) {
+      await tx.catalog2Product.update({ where: { id: p.id }, data: { sequence_number: -(1_000_000 + desiredSequences.get(p.slug)!) } });
+    }
+    for (const p of current) {
+      await tx.catalog2Product.update({ where: { id: p.id }, data: { sequence_number: desiredSequences.get(p.slug)! } });
+    }
+  });
+  console.log(`  numeração sincronizada: 1 a ${products.length}, exatamente como no pacote local.`);
 
   console.log(`\n════════ MANIFESTO — APLICADO (${products.length} produtos avaliados, target-env=${targetEnv}) ════════`);
   for (const l of manifest) {
