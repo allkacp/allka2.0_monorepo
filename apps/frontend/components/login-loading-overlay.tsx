@@ -165,11 +165,18 @@ export function LoginLoadingOverlay({
           </>
         )}
 
-        {/* Minijogo do lobinho (pedido do usuário 2026-09-28) — só enquanto
-            carrega de verdade; some no erro pra não distrair da ação de
-            retry/continuar mesmo assim. */}
-        {status !== "error" && <LoadingWolfGame />}
       </div>
+
+      {/* Minijogo do lobinho (pedido do usuário 2026-09-28) — fora do
+          max-w-sm do texto: precisa de mais largura pra não ficar
+          minúsculo (senão lembra a página de "sem internet" do
+          navegador). Some no erro pra não distrair da ação de
+          retry/continuar mesmo assim. */}
+      {status !== "error" && (
+        <div className="w-full max-w-xl">
+          <LoadingWolfGame />
+        </div>
+      )}
     </div>
   );
 }
