@@ -16,6 +16,10 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 
 (local sincronizado com o deploy anterior — nada pendente antes deste)
 
+## Envio de produtos 2026-09-28 (local → allka.store, ambiente de TESTE)
+Usuário pediu para subir os produtos como estão no local (ainda incompletos — ele vai terminar de editar online e pode pedir novo envio depois; **allka.store hoje é ambiente de teste, não é o site final 100%**). Rodei o procedimento do README (export local → zip → cifrar → release temporário → dry_run → aplicar): **0 divergências, 0 conflitos** — o servidor já estava idêntico ao local (a outra sessão já tinha sincronizado). O apply só criou 4 versões-rascunho (v2) nos produtos 1, 3, 4 e 5 — refletindo rascunhos que existiam só localmente; nenhum produto publicado/contratável foi alterado. Backup do servidor antes: `allka-before-catalog2-apply-20260928T212356Z.sql.gz`. Conferido depois: 36 produtos, numeração 1–36 intacta, produto 1 continua "disponivel".
+Release/secret/artefatos temporários apagados ao final, como sempre.
+
 ## deploy-2026-09-28-2 (commits até 66f32b3) — no ar em allka.store
 **Subiu (Frontend):** passo a passo do editor de produto na ordem de montar (Informações → Entrega → Classificação → Custos e preço → Revisão), preço de venda ao vivo no cabeçalho; toda tarefa exige etapa (checklist + validação de publicar); IA por campo com pesquisa na internet; resumo automático da mudança; tela de progresso ao publicar; cores do editor; seletor/paginação/filtro "Com pendências" do Cadastro de Produtos corrigidos; cumprimento sem etiqueta [TESTE]; **minijogo do lobinho** na tela de login — só aparece se a internet cair ou o carregamento passar de 6s, grande, com SVG de lobo real (CC0) e obstáculos temáticos (Imposto, Multa, Reclamação…).
 **Conferido:** site 200, `/api/health` ok, `wolf-runner.svg` acessível.
