@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import type { LoginRoleConfig, Locale } from "@/components/login-page-template";
 import { LoadingWolfGame } from "@/components/loading-wolf-game";
@@ -72,6 +73,27 @@ const ERROR_TEXT: Record<
   },
 };
 
+const SLOW_LOADING_MS = 6000;
+
+const STUCK_TEXT: Record<Locale, { offline: string; slow: string }> = {
+  pt: {
+    offline: "Sua internet caiu. Assim que voltar, a gente continua sozinho.",
+    slow: "Isso está demorando mais que o normal…",
+  },
+  en: {
+    offline: "Your internet dropped. We'll pick back up the moment it's back.",
+    slow: "This is taking longer than usual…",
+  },
+  es: {
+    offline: "Se cayó tu internet. En cuanto vuelva, seguimos solos.",
+    slow: "Esto está tardando más de lo normal…",
+  },
+  zh: {
+    offline: "您的网络断开了，恢复后会自动继续。",
+    slow: "这次加载比平时慢……",
+  },
+};
+
 interface Props {
   config: LoginRoleConfig;
   locale: Locale;
@@ -83,10 +105,12 @@ interface Props {
 
 /**
  * Conteúdo exibido dentro do painel de marca depois que ele se expande pra
- * tela inteira (ver LoginPageTemplate). Propositalmente simples e isolado
- * pra ficar fácil, no futuro, acrescentar uma área de conteúdo (novidades,
- * dicas, banners) sem reestruturar nada — ver o comentário "future slot"
- * abaixo.
+ * tela inteira (ver LoginPageTemplate).
+ *
+ * Minijogo do lobinho (pedido do usuário 2026-09-28/29) — igual ao dino do
+ * Chrome: NÃO aparece sempre, só quando a internet caiu de verdade ou o
+ * carregamento passou de `SLOW_LOADING_MS`. Quando aparece, toma conta da
+ * tela (o card de progresso encolhe pra um resuminho no topo).
  */
 export function LoginLoadingOverlay({
   config,
@@ -99,10 +123,38 @@ export function LoginLoadingOverlay({
   const content = config.translations[locale];
   const pct = Math.round(progress);
   const errorText = ERROR_TEXT[locale];
+  const stuckText = STUCK_TEXT[locale];
+
+  const [isOffline, setIsOffline] = useState(
+    () => typeof navigator !== "undefined" && !navigator.onLine,
+  );
+  const [isSlow, setIsSlow] = useState(false);
+
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status !== "running") { setIsSlow(false); return; }
+    const t = window.setTimeout(() => setIsSlow(true), SLOW_LOADING_MS);
+    return () => window.clearTimeout(t);
+  }, [status]);
+
+  const showGame = status !== "error" && (isOffline || isSlow);
 
   return (
     <div className="flex flex-col items-center justify-center flex-1 px-6 text-center">
-      <div className="w-full max-w-sm">
+      <div
+        className="w-full max-w-sm transition-[max-width,transform] duration-300"
+        style={showGame ? { maxWidth: "22rem", transform: "scale(0.82)" } : undefined}
+      >
         <img
           src="/logo-allka-full.png"
           alt="ALLKA"
@@ -137,7 +189,10 @@ export function LoginLoadingOverlay({
           </div>
         ) : (
           <>
-            <p className="text-white font-extrabold tabular-nums leading-none mb-6" style={{ fontSize: "clamp(2.5rem, 8vw, 4rem)" }}>
+            <p
+              className="text-white font-extrabold tabular-nums leading-none mb-6 transition-[font-size] duration-300"
+              style={{ fontSize: showGame ? "clamp(1.5rem, 5vw, 2rem)" : "clamp(2.5rem, 8vw, 4rem)" }}
+            >
               {pct}%
             </p>
 
@@ -160,21 +215,18 @@ export function LoginLoadingOverlay({
             </div>
 
             <p className="text-white/70 text-sm mt-4 min-h-[1.25rem]">
-              {loadingMessageFor(progress, locale)}
+              {showGame ? (isOffline ? stuckText.offline : stuckText.slow) : loadingMessageFor(progress, locale)}
             </p>
           </>
         )}
-
       </div>
 
-      {/* Minijogo do lobinho (pedido do usuário 2026-09-28) — fora do
-          max-w-sm do texto: precisa de mais largura pra não ficar
-          minúsculo (senão lembra a página de "sem internet" do
-          navegador). Some no erro pra não distrair da ação de
-          retry/continuar mesmo assim. */}
-      {status !== "error" && (
-        <div className="w-full max-w-xl">
-          <LoadingWolfGame />
+      {/* Minijogo — só aparece quando a internet caiu ou o carregamento
+          está demorando (igual ao dino do Chrome). Some no erro pra não
+          distrair da ação de retry/continuar mesmo assim. */}
+      {showGame && (
+        <div className="mt-6 w-full max-w-[820px] animate-in fade-in zoom-in-95 duration-300">
+          <LoadingWolfGame big />
         </div>
       )}
     </div>
