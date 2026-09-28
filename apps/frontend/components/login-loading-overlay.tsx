@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import type { LoginRoleConfig, Locale } from "@/components/login-page-template";
+import { LoadingWolfGame } from "@/components/loading-wolf-game";
 
 /** Mesma progressão sugerida no pedido original, mapeada pra faixas de %. */
 export function loadingMessageFor(percent: number, locale: Locale): string {
@@ -164,8 +165,10 @@ export function LoginLoadingOverlay({
           </>
         )}
 
-        {/* future slot: novidades da plataforma, dicas, banners institucionais —
-            renderizar aqui embaixo quando existir, sem mexer no resto do layout */}
+        {/* Minijogo do lobinho (pedido do usuário 2026-09-28) — só enquanto
+            carrega de verdade; some no erro pra não distrair da ação de
+            retry/continuar mesmo assim. */}
+        {status !== "error" && <LoadingWolfGame />}
       </div>
     </div>
   );
