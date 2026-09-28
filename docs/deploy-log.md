@@ -14,6 +14,13 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - **Frontend** — Adicionar etapa vem PRÉ-PREENCHIDA com o nome, as horas e a especialidade da própria tarefa (antes vinha em branco); é só clicar em "Adicionar etapa" e depois ajustar se precisar.
 (o restante até bfa94a4 já está no ar)
 
+(local sincronizado com o deploy anterior — nada pendente antes deste)
+
+## deploy-2026-09-28-2 (commits até 66f32b3) — no ar em allka.store
+**Subiu (Frontend):** passo a passo do editor de produto na ordem de montar (Informações → Entrega → Classificação → Custos e preço → Revisão), preço de venda ao vivo no cabeçalho; toda tarefa exige etapa (checklist + validação de publicar); IA por campo com pesquisa na internet; resumo automático da mudança; tela de progresso ao publicar; cores do editor; seletor/paginação/filtro "Com pendências" do Cadastro de Produtos corrigidos; cumprimento sem etiqueta [TESTE]; **minijogo do lobinho** na tela de login — só aparece se a internet cair ou o carregamento passar de 6s, grande, com SVG de lobo real (CC0) e obstáculos temáticos (Imposto, Multa, Reclamação…).
+**Conferido:** site 200, `/api/health` ok, `wolf-runner.svg` acessível.
+**NÃO subiu (dados):** nada de produtos/config comercial — isso já foi feito antes (deploy-2026-09-26/27, mais o que a outra sessão aplicou). CI segue vermelho por testes de frontend desatualizados (não bloqueia).
+
 ## deploy-2026-09-26-1 (commits até bfa94a4) — no ar em allka.store / api.allka.store
 **Subiu:** Backend (`apps/backend`, incluindo a migration `20260926090000_step_specialty_and_pricing_components`, aplicada no servidor) e Frontend (`apps/frontend`). Conferido: site 200, `/api/health` ok, rota de precificação responde com as colunas novas, catálogo admin responde. CI segue vermelho por testes de frontend antigos (não bloqueia deploy).
 **NÃO subiu (dados):** nenhum dado/produto foi enviado. O produto de teste nº 37 foi apagado só no computador local — no servidor ainda existe até a hora de "sobe os produtos". Valores da tela Precificação (valor/hora, impostos, margem, revisão) preenchidos localmente NÃO foram para o servidor (lá seguem os antigos, ex.: revisão 10%, local 15%).
