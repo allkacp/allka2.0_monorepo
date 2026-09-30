@@ -11,7 +11,7 @@ import { isCatalogRoute } from "@/lib/catalog-access";
 describe("isCatalogRoute", () => {
   it("aceita os catálogos de COMPRA de cada portal (os que usam useProjectBasket)", () => {
     for (const path of [
-      "/admin/catalogo-produtos",
+      "/admin/produtos",
       "/company/produtos",
       "/agency/catalogo",
       "/agencia/catalogo",
@@ -24,7 +24,7 @@ describe("isCatalogRoute", () => {
 
   it("aceita a página de detalhe do produto dentro do catálogo (`/:produtoId`)", () => {
     for (const path of [
-      "/admin/catalogo-produtos/prod-123",
+      "/admin/produtos/prod-123",
       "/company/produtos/abc",
       "/agency/catalogo/xpto",
       "/agencia/catalogo/xpto",
@@ -35,7 +35,7 @@ describe("isCatalogRoute", () => {
   });
 
   it("tolera barra final e query/hash", () => {
-    expect(isCatalogRoute("/admin/catalogo-produtos/")).toBe(true);
+    expect(isCatalogRoute("/admin/produtos/")).toBe(true);
     expect(isCatalogRoute("/company/produtos?busca=logo")).toBe(true);
     expect(isCatalogRoute("/company/produtos/abc?tab=info#preco")).toBe(true);
     expect(isCatalogRoute("/agency/catalogo#topo")).toBe(true);
@@ -63,9 +63,9 @@ describe("isCatalogRoute", () => {
     }
   });
 
-  it("recusa a GESTÃO de produtos (`/admin/produtos`) — não é catálogo de compra e não usa cesta", () => {
-    expect(isCatalogRoute("/admin/produtos")).toBe(false);
-    expect(isCatalogRoute("/admin/produtos/novo")).toBe(false);
+  it("recusa a GESTÃO de produtos (`/admin/cadastro-produtos`) — não é catálogo de compra e não usa cesta", () => {
+    expect(isCatalogRoute("/admin/cadastro-produtos")).toBe(false);
+    expect(isCatalogRoute("/admin/cadastro-produtos/novo")).toBe(false);
   });
 
   it("recusa combos (têm rota própria e não usam a cesta de projeto)", () => {
@@ -75,7 +75,7 @@ describe("isCatalogRoute", () => {
 
   it("não casa por prefixo amplo — subrotas administrativas profundas do catálogo não contam", () => {
     // duas ou mais subrotas depois do catálogo não são "detalhe do produto"
-    expect(isCatalogRoute("/admin/catalogo-produtos/prod-1/editar")).toBe(false);
+    expect(isCatalogRoute("/admin/produtos/prod-1/editar")).toBe(false);
     expect(isCatalogRoute("/company/produtos/abc/tarefas/9")).toBe(false);
   });
 

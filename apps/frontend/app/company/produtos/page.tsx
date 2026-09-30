@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { PageLoader } from "@/components/ui/loading";
 import { ShoppingCart, X, Trash2, Minus, Plus, Package, PackageX, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";

@@ -222,11 +222,11 @@ export const TOURS: TourDefinition[] = [
     category: "produtos-catalogo",
     allowedAccountTypes: ["admin"],
     isEligible: isAdminMaster,
-    // 2026-09 (consolidação catalog2): rota antiga (/admin/produtos/
+    // 2026-09 (consolidação catalog2): rota antiga (/admin/cadastro-produtos/
     // novo-catalogo) agora só redireciona pra cá — o tour segue a rota
     // definitiva. Versão incrementada pra reexibir o tour a quem já viu
     // a versão antiga (o passo "header" mudou de conteúdo).
-    routes: ["/admin/produtos"],
+    routes: ["/admin/cadastro-produtos"],
     steps: [
       { id: "header", target: "catalog2-admin-header", title: "Cadastro de Produtos", description: "Administra exclusivamente os produtos novos (catalog2) — os 162 produtos antigos não aparecem mais aqui. Preço e prazo são sempre calculados no servidor.", placement: "bottom" },
       { id: "create", target: "catalog2-admin-create", title: "Criar produto", description: "Cria um novo produto em preparação, com uma versão rascunho — nunca visível ao cliente ainda.", placement: "bottom" },

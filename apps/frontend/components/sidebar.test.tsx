@@ -191,9 +191,9 @@ describe("Sidebar — Produtos: Cadastro/Catálogo exigem Admin Master (consolid
     await waitFor(() => expect(getCurrentUser).toHaveBeenCalled());
     await userEvent.click(await screen.findByText("Produtos"));
     const cadastro = await screen.findByRole("link", { name: /^Cadastro de Produtos$/i });
-    expect(cadastro).toHaveAttribute("href", "/admin/produtos");
+    expect(cadastro).toHaveAttribute("href", "/admin/cadastro-produtos");
     const catalogo = await screen.findByRole("link", { name: /^Catálogo de Produtos$/i });
-    expect(catalogo).toHaveAttribute("href", "/admin/catalogo-produtos");
+    expect(catalogo).toHaveAttribute("href", "/admin/produtos");
     expect(screen.queryByRole("link", { name: /Preparação de Produtos/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Novo Catálogo/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/operacional atual/i)).not.toBeInTheDocument();

@@ -10,7 +10,8 @@
  * - buildTabUrl(id, tab): returns basePath/id?tab=tab
  */
 
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 
 export function useDeepLink(paramKey: string, basePath: string) {
   const params = useParams<Record<string, string>>();

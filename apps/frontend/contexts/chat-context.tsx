@@ -8,6 +8,7 @@ import React, {
 } from "react";
 import type { ChatRoom, ChatRoomMessage } from "@/types/chat";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { useSoundOnIncrease } from "@/hooks/use-notification-sound";
 
 // ─── Chat interno restaurado (ata 2026-08, bloco 3/5) ───────────────────
 // Antes: contexto mock (ids fabricados `conv-<userId>`, sender fixo "admin",
@@ -62,6 +63,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isMinimized, setIsMinimized] = useState(false);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [roomsError, setRoomsError] = useState(false);
+  // null até a 1ª carga das salas: o som de chat só toca pra mensagem nova depois disso.
+  const [soundUnread, setSoundUnread] = useState<number | null>(null);
+  useSoundOnIncrease("chat", soundUnread);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messagesError, setMessagesError] = useState(false);
 
@@ -86,7 +90,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setRoomsError(false);
     try {
       const res = await apiClient.getConversations({ limit: 100 });
-      setRooms((res?.data ?? []) as ChatRoom[]);
+      const loaded = (res?.data ?? []) as ChatRoom[];
+      setRooms(loaded);
+      setSoundUnread(loaded.reduce((s, r) => s + (r.unread_count || 0), 0));
     } catch {
       if (!opts.silent) setRoomsError(true);
     } finally {
@@ -141,6 +147,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }, POLL_MS);
     return () => clearInterval(t);
   }, [isOpen, loadRooms, loadMessages]);
+
+  // Chat fechado: o polling acima não roda — confere em segundo plano pra o
+  // som de mensagem nova tocar mesmo sem o chat aberto.
+  useEffect(() => {
+    if (isOpen) return;
+    const t = setInterval(() => void loadRooms({ silent: true }), 30_000);
+    return () => clearInterval(t);
+  }, [isOpen, loadRooms]);
 
   const openChat = useCallback(() => {
     setIsOpen(true);

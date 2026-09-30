@@ -49,7 +49,7 @@ function ScreenStub({ context }: { context: IallkaScreenContext | null }) {
 
 function renderPanel(context: IallkaScreenContext | null) {
   return render(
-    <MemoryRouter initialEntries={["/admin/produtos"]}>
+    <MemoryRouter initialEntries={["/admin/cadastro-produtos"]}>
       <OpenScreensProvider>
         <AccountTypeProvider>
           <SidebarProvider>
@@ -121,7 +121,7 @@ describe("IallkaAssistantPanel — envia productId/quoteId do contexto da tela (
     function Harness() {
       const [onProductB, setOnProductB] = useState(false);
       return (
-        <MemoryRouter initialEntries={["/admin/produtos"]}>
+        <MemoryRouter initialEntries={["/admin/cadastro-produtos"]}>
           <OpenScreensProvider>
             <AccountTypeProvider>
               <SidebarProvider>

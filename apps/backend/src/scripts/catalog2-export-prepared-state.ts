@@ -71,7 +71,8 @@ async function main() {
         include: {
           variations: { include: { options: { include: { effects: true } } } },
           addons: { include: { effects: true } },
-          tasks: { include: { steps: { include: { specialty: { select: { key: true } } } }, specialty: { select: { key: true, max_hourly_rate: true } }, questionnaire: { include: { questions: true } } } },
+          access_requirements: { orderBy: { sort_order: "asc" } },
+          tasks: { include: { task_model: { include: { specialty: { select: { key: true } } } }, steps: { include: { step_model: { include: { specialty: { select: { key: true } } } }, specialty: { select: { key: true } } } }, specialty: { select: { key: true, max_hourly_rate: true } }, questionnaire: { include: { questions: true } } } },
         },
       },
     },
@@ -107,11 +108,16 @@ async function main() {
     images.push({ path: rel, sha256: sha256File(srcPath), size: stat.size, found: true });
   }
 
+  // Modelos padrão do catálogo global (ex.: "Validação e organização dos acessos") vão junto mesmo sem uso
+  // em produto, pra terem o MESMO ID no destino.
+  const standard_step_models = await src.catalog2StepModel.findMany({ where: { is_access_validation: true }, include: { specialty: { select: { key: true } } } });
+
   const pkg = {
     format_version: PACKAGE_FORMAT_VERSION,
     exported_at: new Date().toISOString(),
     product_count: products.length,
     products,
+    standard_step_models,
     images,
   };
 

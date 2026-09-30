@@ -7,7 +7,8 @@
 // filtros e configurações próprios, sem nenhuma aba pra Alertas (ver
 // alerts-panel.tsx pro painel irmão, de verdade separado).
 import { useCallback, useEffect, useState } from "react"
-import { useLocation, useNavigate } from "react-router-dom"
+import { useLocation } from "react-router-dom"
+import { useNavigate } from "@/hooks/use-navigate"
 import { useChat } from "@/contexts/chat-context"
 import {
   Bell, Mail, MessageSquare, Smartphone,
@@ -21,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ConfirmationDialog } from "@/components/confirmation-dialog"
 import { NotificationGroupRequestModal } from "@/components/modals/notification-group-request-modal"
 import { CommsChannelPreferences } from "@/components/comms-channel-preferences"
+import { NotificationSoundSettings } from "@/components/notification-sound-settings"
 import { apiClient } from "@/lib/api-client"
 import { alertIcon } from "@/components/alerts-header-icon"
 import { cn } from "@/lib/utils"
@@ -541,6 +543,8 @@ function PrefsTab({
     <div className="p-5 space-y-6">
       {/* Preferência de canal + opt-in marketing + Web Push (ata 2026-08, bloco 5/5). */}
       <CommsChannelPreferences />
+
+      <NotificationSoundSettings />
 
       <div>
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Canais por tipo de evento</p>

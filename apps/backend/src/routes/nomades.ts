@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
-import { concluirEtapa, atribuirExecutorDaEtapa } from "../lib/stage-engine";
+import { concluirEtapa, atribuirExecutorDaEtapa, garantirQualificador } from "../lib/stage-engine";
+import { kickDependenciesForTask } from "../lib/project-dependencies";
 import { validate, parsePagination } from "../middleware/validate";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 // Lista canônica de áreas — mesma fonte usada pelo cadastro do admin, para a
@@ -458,6 +459,12 @@ router.patch("/me/etapas/:stageId/concluir", verifyToken, async (req, res, next)
     if (resultado.proxima?.status === "AGUARDANDO_EXECUTOR") {
       atribuirExecutorDaEtapa(resultado.proxima.stageId).catch((err) =>
         console.error("[stage-engine] atribuir executor:", err),
+      );
+    }
+    kickDependenciesForTask(resultado.tarefaId);
+    if (resultado.enviadaParaQualificacao) {
+      garantirQualificador(resultado.tarefaId).catch((err) =>
+        console.error("[stage-engine] qualificador:", err),
       );
     }
 

@@ -18,6 +18,8 @@ export class TaskStatusGuardError extends Error {
 }
 
 const TERMINAL_REMOVAL_STATUSES = new Set(["CANCELADA"]);
+// Estados que só existem depois do aceite interno quando a tarefa exige qualificação.
+const QUALIFICATION_GATED_TARGETS = new Set(["EM_APROVACAO", "APROVACAO_PENDENTE_CLIENTE", "APROVADA", "CONCLUIDA"]);
 
 /**
  * 1. Uma tarefa PENDENTE_DE_LIBERACAO/RASCUNHO_OPERACIONAL só pode sair
@@ -43,5 +45,18 @@ export async function assertTaskStatusTransitionAllowed(
 
   if (TERMINAL_REMOVAL_STATUSES.has(targetStatus)) {
     await assertSafeToCancelOrArchive(task.id, db);
+  }
+
+  // Qualificação obrigatória: sem o aceite do líder/qualificador na entrega
+  // atual, nenhuma edição direta de status pode aprovar/concluir a tarefa.
+  if (QUALIFICATION_GATED_TARGETS.has(targetStatus)) {
+    const row = await db.projectTask.findUnique({ where: { id: task.id }, select: { requires_qualification: true, qualified_at: true } });
+    if (row?.requires_qualification && !row.qualified_at) {
+      throw new TaskStatusGuardError(
+        "Esta tarefa exige qualificação: ela só pode ser aprovada ou concluída depois do aceite do líder/qualificador.",
+        409,
+        "qualification_required",
+      );
+    }
   }
 }

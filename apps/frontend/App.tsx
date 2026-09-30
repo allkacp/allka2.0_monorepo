@@ -1,11 +1,6 @@
 import React, { Suspense, useState, useEffect } from "react";
-import {
-  Routes,
-  Route,
-  Navigate,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { cn } from "@/lib/utils";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import {
@@ -59,6 +54,23 @@ function RedirectToAgency() {
   return <Navigate to={`${target}${location.search}${location.hash}`} replace />;
 }
 
+// /admin/produtos era o cadastro/edição; virou o catálogo. Links antigos do
+// cadastro (?produto=… / ?ver=…, ex.: avisos já gravados) vão pro lugar novo.
+function LegacyAdminProdutosEntry() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  if (params.has("produto") || params.has("ver")) {
+    return <Navigate to={`/admin/cadastro-produtos${location.search}${location.hash}`} replace />;
+  }
+  return <AdminCatalogoProdutosPage />;
+}
+
+function LegacyCatalogoProdutoRedirect() {
+  const { produtoId } = useParams();
+  const location = useLocation();
+  return <Navigate to={`/admin/produtos/${produtoId}${location.search}${location.hash}`} replace />;
+}
+
 // ─── Admin Pages ────────────────────────────────────────────────────────────
 const AdminDashboardPage = React.lazy(
   () => import("@/app/admin/dashboard/page"),
@@ -86,6 +98,7 @@ const AdminPrecificacaoPage = React.lazy(
   () => import("@/app/admin/precificacao/page"),
 );
 const AdminCombosPage = React.lazy(() => import("@/app/admin/combos/page"));
+const AdminPacotesPage = React.lazy(() => import("@/app/admin/pacotes/page"));
 const AgencyCombosPage = React.lazy(() => import("@/app/agency/combos/page"));
 const AdminTarefasPage = React.lazy(() => import("@/app/admin/tarefas/page"));
 const AdminModelosTarefasPage = React.lazy(
@@ -860,22 +873,33 @@ export default function App() {
                     element={<AdminProjetosPage />}
                   />
                   <Route
-                    path="/admin/produtos/:produtoId?"
+                    path="/admin/cadastro-produtos/:produtoId?"
                     element={<AdminProdutosPage />}
+                  />
+                  {/* 2026-09: /admin/produtos/:id agora é o CATÁLOGO (link
+                      curto); o cadastro/edição vive em /admin/cadastro-produtos. */}
+                  <Route
+                    path="/admin/produtos"
+                    element={<LegacyAdminProdutosEntry />}
+                  />
+                  <Route
+                    path="/admin/produtos/:produtoId"
+                    element={<AdminCatalogoProdutosPage />}
                   />
                   <Route
                     path="/admin/catalogo-produtos"
-                    element={<AdminCatalogoProdutosPage />}
+                    element={<Navigate to="/admin/produtos" replace />}
                   />
                   <Route
                     path="/admin/catalogo-produtos/:produtoId"
-                    element={<AdminCatalogoProdutosPage />}
+                    element={<LegacyCatalogoProdutoRedirect />}
                   />
                   <Route
                     path="/admin/precificacao"
                     element={<AdminPrecificacaoPage />}
                   />
                   <Route path="/admin/combos" element={<AdminCombosPage />} />
+                  <Route path="/admin/pacotes" element={<AdminPacotesPage />} />
                   <Route path="/admin/tarefas" element={<AdminTarefasPage />} />
                   <Route
                     path="/admin/tarefas/:tarefaId"

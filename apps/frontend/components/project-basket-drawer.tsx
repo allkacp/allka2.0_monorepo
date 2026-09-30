@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { HeaderSlideScreen } from "@/components/header-slide-screen";
 import {
@@ -144,14 +145,14 @@ const VIEW_MODE_OPTIONS: Array<{
 // projeto) — aqui mapeando pro catálogo de cada portal, não pra tela de
 // projetos. Cobre só os portais que realmente têm catálogo próprio e
 // adicionam itens à cesta hoje (admin, empresa/company, agência —
-// confirmado em app/admin/catalogo-produtos, app/company/produtos e
+// confirmado em app/admin/produtos, app/company/produtos e
 // app/agencia/catalogo, este último servindo tanto /agencia quanto
 // /agency). Líder nunca vê o botão da cesta no cabeçalho; nômade e
 // parceiro não têm tela de catálogo nem adicionam item à cesta hoje — pra
 // esses casos retorna null de propósito, pra nunca navegar pra uma rota
 // que não existe (o clique ainda fecha a cesta normalmente).
 function resolveCatalogPath(pathname: string): string | null {
-  if (pathname.startsWith("/admin")) return "/admin/catalogo-produtos";
+  if (pathname.startsWith("/admin")) return "/admin/produtos";
   if (pathname.startsWith("/company")) return "/company/produtos";
   if (pathname.startsWith("/agencia")) return "/agencia/catalogo";
   if (pathname.startsWith("/agency")) return "/agency/catalogo";

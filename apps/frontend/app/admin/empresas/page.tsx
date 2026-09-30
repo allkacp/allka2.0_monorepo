@@ -14,7 +14,8 @@ import type {
   CompanyStatusFilter,
 } from "@/types/company";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
-import { useNavigate, useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { PageLoader } from "@/components/ui/loading";
 import {
   STANDARD_SHELL_PANEL_CLASS,

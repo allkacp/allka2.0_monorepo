@@ -20,7 +20,7 @@ function itemFixture(id = "p1") {
   return { id, productId: id, productName: "Produto X", finalPrice: 100, quantity: 1 };
 }
 
-function renderBar(props: Partial<React.ComponentProps<typeof CatalogCartStickyBar>> = {}, path = "/admin/catalogo-produtos") {
+function renderBar(props: Partial<React.ComponentProps<typeof CatalogCartStickyBar>> = {}, path = "/admin/produtos") {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <CatalogCartStickyBar
@@ -57,7 +57,7 @@ describe("CatalogCartStickyBar", () => {
   });
 
   it("posiciona respeitando a largura da sidebar em rota de container padrão (desktop)", () => {
-    const { container } = renderBar({}, "/admin/catalogo-produtos");
+    const { container } = renderBar({}, "/admin/produtos");
     const outer = container.firstElementChild as HTMLElement;
     expect(outer.style.left).toBe("240px");
     // Item 6 (complemento 09/09/2026) — molduras compactadas, espelhando o

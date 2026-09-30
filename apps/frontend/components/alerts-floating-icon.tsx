@@ -22,7 +22,8 @@
  * sugestões" — empilhado acima dele, nunca os dois ícones (desktop/mobile)
  * visíveis ao mesmo tempo (alternam por breakpoint, igual ao padrão existente).
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { playCategorySound } from "@/lib/notification-sounds";
 import { AlertTriangle } from "lucide-react";
 import { AlertsPanel } from "@/components/alerts-panel";
 import { useGlobalHeaderPanel } from "@/contexts/global-header-panel-context";
@@ -82,13 +83,24 @@ export function AlertsFloatingIcon() {
   // um único polling aqui, não duplica o que o sino já faz para notificação).
   const [unreadCount, setUnreadCount] = useState(0);
   const [bySeverity, setBySeverity] = useState<{ info?: number; warning?: number; error?: number } | null>(null);
+  const lastSeverityRef = useRef<{ info?: number; warning?: number; error?: number } | null>(null);
   useEffect(() => {
     const fetchCount = () => {
       apiClient
         .getUnreadSystemAlertsCount({ category: "alerta" })
         .then((r) => {
+          const sev = r?.bySeverity ?? null;
+          // Som pela gravidade que AUMENTOU (a mais grave primeiro); a 1ª
+          // leitura ao abrir a página nunca toca.
+          const before = lastSeverityRef.current;
+          if (before) {
+            if ((sev?.error ?? 0) > (before.error ?? 0)) playCategorySound("alerta_vermelho");
+            else if ((sev?.warning ?? 0) > (before.warning ?? 0)) playCategorySound("alerta_amarelo");
+            else if ((sev?.info ?? 0) > (before.info ?? 0)) playCategorySound("alerta_verde");
+          }
+          lastSeverityRef.current = sev ?? {};
           setUnreadCount(r?.count ?? 0);
-          setBySeverity(r?.bySeverity ?? null);
+          setBySeverity(sev);
         })
         .catch(() => {});
     };

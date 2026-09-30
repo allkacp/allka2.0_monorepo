@@ -1,4 +1,5 @@
 import { DashboardShellFrame } from "@/features/dashboards/shared/dashboard-shell-frame";
+import { openHref } from "@/hooks/use-navigate";
 import { useDashboardScrollCompact } from "@/hooks/useDashboardScrollCompact";
 import { WIDGETS_BY_ROLE } from "@/lib/dashboard-widget-roles";
 import { LEADER_PRESETS, buildWidgets, DASHBOARD_STORAGE_KEY, CURRENT_DASHBOARD_KEY } from "@/lib/dashboard-presets-by-role";
@@ -73,7 +74,8 @@ import {
   Eye,
   RefreshCw,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -5211,7 +5213,7 @@ export default function AdminDashboardPage() {
                         <button
                           key={item.status}
                           onClick={() => {
-                            window.location.href = `${section.href}?status=${item.status}`;
+                            openHref(`${section.href}?status=${item.status}`);
                           }}
                           className={`p-2.5 rounded-lg ${item.bg} hover:brightness-90 transition-all duration-200 text-left group`}
                         >

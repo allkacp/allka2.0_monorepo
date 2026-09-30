@@ -7,7 +7,8 @@
  * em remover aqui ou de novo no pin de origem (ver open-screens-context.tsx).
  */
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { Layers, Check, X } from "lucide-react";
 import { useOpenScreens } from "@/contexts/open-screens-context";
 import {

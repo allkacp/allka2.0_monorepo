@@ -426,7 +426,7 @@ const navigationConfig = {
           // outros admins; essa mudança de acesso é intencional e está
           // documentada no relatório da consolidação, não acidental).
           name: "Cadastro de Produtos",
-          href: "/admin/produtos",
+          href: "/admin/cadastro-produtos",
           icon: Package,
           current: false,
           masterOnly: true,
@@ -435,7 +435,7 @@ const navigationConfig = {
           // Mesma observação de acesso do item acima — visão comercial dos
           // mesmos produtos catalog2, não mais os 162 antigos.
           name: "Catálogo de Produtos",
-          href: "/admin/catalogo-produtos",
+          href: "/admin/produtos",
           icon: BookOpen,
           current: false,
           masterOnly: true,
@@ -457,6 +457,14 @@ const navigationConfig = {
           href: "/admin/combos",
           icon: Boxes,
           current: false,
+        },
+        {
+          // Pacotes de produtos contratados juntos, com regras de dependência.
+          name: "Pacotes e Dependências",
+          href: "/admin/pacotes",
+          icon: Boxes,
+          current: false,
+          masterOnly: true,
         },
       ],
     },
@@ -1755,8 +1763,9 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                               <Link
                                 key={subitem.name}
                                 to={subitem.href}
-                                onClick={() => {
+                                onClick={(e) => {
                                   setOpenPopover(null);
+                                  if (e.ctrlKey || e.metaKey || e.shiftKey) return;
                                   if (pathname !== subitem.href) setNavigatingTo(subitem.href);
                                 }}
                                 className={cn(
@@ -1879,7 +1888,8 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                               <TooltipTrigger asChild>
                               <Link
                                 to={subitem.href}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  if (e.ctrlKey || e.metaKey || e.shiftKey) return;
                                   if (pathname !== subitem.href) setNavigatingTo(subitem.href);
                                 }}
                                 className={cn(
@@ -2036,7 +2046,8 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                     <TooltipTrigger asChild>
                       <Link
                         to={item.href}
-                        onClick={() => {
+                        onClick={(e) => {
+                          if (e.ctrlKey || e.metaKey || e.shiftKey) return;
                           if (pathname !== item.href) setNavigatingTo(item.href);
                         }}
                         className={cn(

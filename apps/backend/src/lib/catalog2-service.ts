@@ -10,6 +10,7 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import { taskDivergesFromModel, stepDivergesFromModel } from "./catalog2-models";
 import { CATALOG2_STATUSES, CATALOG2_CLIENT_VISIBLE_STATUSES, type Catalog2Status } from "./catalog2-foundation";
 import {
   CONDITION_OPERATORS,
@@ -122,6 +123,7 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
             variations: { include: { options: { include: { effects: true } } } },
             addons: { include: { effects: true } },
             conditions: true,
+            access_requirements: true,
             tasks: { include: { steps: true, ai: true, dependencies: true } },
           },
         },
@@ -143,6 +145,12 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
         full_description: last?.full_description ?? null,
         // O prazo comercial base acompanha a versão (senão a nova versão "perde" o prazo).
         base_commercial_deadline_days: last?.base_commercial_deadline_days ?? null,
+        accepts_one_time: last?.accepts_one_time ?? undefined,
+        accepts_recurring: last?.accepts_recurring ?? undefined,
+        has_initial_implementation: last?.has_initial_implementation ?? undefined,
+        implementation_rule: last?.implementation_rule ?? undefined,
+        implementation_blocks_operation: last?.implementation_blocks_operation ?? undefined,
+        sell_mode: last?.sell_mode ?? undefined,
         created_by_user_id: actorUserId,
       },
     });
@@ -160,16 +168,29 @@ type FullVersion = Prisma.Catalog2ProductVersionGetPayload<{
     variations: { include: { options: { include: { effects: true } } } };
     addons: { include: { effects: true } };
     conditions: true;
+    access_requirements: true;
     tasks: { include: { steps: true; ai: true; dependencies: true } };
   };
 }>;
 
 async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVersion, destId: string) {
+  for (const a of src.access_requirements) {
+    await db.catalog2VersionAccess.create({ data: { version_id: destId, access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes, sort_order: a.sort_order } });
+  }
   const taskIdByKey = new Map<string, string>();
   const stepIdByRef = new Map<string, string>();
   for (const t of src.tasks) {
     const nt = await db.catalog2Task.create({
       data: {
+        task_model_id: t.task_model_id,
+        task_model_revision: t.task_model_revision,
+        requires_qualification: t.requires_qualification,
+        cycle_type: t.cycle_type,
+        repeat_rule: t.repeat_rule,
+        repeat_every_cycles: t.repeat_every_cycles,
+        executor_continuity: t.executor_continuity,
+        asset_rule: t.asset_rule,
+        asset_revalidate_days: t.asset_revalidate_days,
         version_id: destId,
         key: t.key,
         name: t.name,
@@ -195,6 +216,13 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
     for (const s of t.steps) {
       const ns = await db.catalog2TaskStep.create({
         data: {
+          step_model_id: s.step_model_id,
+          step_model_revision: s.step_model_revision,
+          purpose: s.purpose,
+          execution_mode: s.execution_mode,
+          completion_criteria: s.completion_criteria,
+          first_execution_only: s.first_execution_only,
+          skip_when_same_executor: s.skip_when_same_executor,
           task_id: nt.id,
           key: s.key,
           name: s.name,
@@ -816,7 +844,7 @@ async function notifyInactivationRecipients(
 
   const recipients: Catalog2NotificationRecipientInput[] = [
     ...[...adminRecipients].map((userId): Catalog2NotificationRecipientInput => ({
-      userId, type, title, message, severity: "warning", category: "alerta", actionUrl: `/admin/produtos?produto=${product.id}`,
+      userId, type, title, message, severity: "warning", category: "alerta", actionUrl: `/admin/cadastro-produtos?produto=${product.id}`,
     })),
     ...[...clientRecipients].map((userId): Catalog2NotificationRecipientInput => ({
       userId, type, title, message, severity: "warning", category: "alerta", actionUrl: "/dashboard",
@@ -957,9 +985,10 @@ export async function getProductDetail(productId: string) {
           variations: { orderBy: { sort_order: "asc" }, include: { options: { orderBy: { sort_order: "asc" }, include: { effects: { orderBy: { sort_order: "asc" } } } } } },
           addons: { orderBy: { sort_order: "asc" }, include: { effects: { orderBy: { sort_order: "asc" } } } },
           conditions: { orderBy: { sort_order: "asc" } },
+          access_requirements: { orderBy: { sort_order: "asc" } },
           tasks: {
             orderBy: { sort_order: "asc" },
-            include: { steps: { orderBy: { sort_order: "asc" } }, specialty: true, ai: true, dependencies: true, questionnaire: { include: { questions: { orderBy: { sort_order: "asc" } } } } },
+            include: { steps: { orderBy: { sort_order: "asc" }, include: { step_model: true } }, task_model: true, specialty: true, ai: true, dependencies: true, questionnaire: { include: { questions: { orderBy: { sort_order: "asc" } } } } },
           },
         },
       },
@@ -992,10 +1021,17 @@ export async function getProductDetail(productId: string) {
       full_description: v.full_description,
       change_summary: v.change_summary,
       base_commercial_deadline_days: v.base_commercial_deadline_days ?? null,
+      accepts_one_time: v.accepts_one_time,
+      accepts_recurring: v.accepts_recurring,
+      has_initial_implementation: v.has_initial_implementation,
+      implementation_rule: v.implementation_rule,
+      implementation_blocks_operation: v.implementation_blocks_operation,
+      sell_mode: v.sell_mode,
       published_at: v.published_at,
       updated_at: v.updated_at,
       is_published_current: v.id === product.published_version_id,
       history: v.events.map((e) => ({ event_type: e.event_type, actor_user_id: e.actor_user_id, note: e.note, at: e.created_at })),
+      access_requirements: v.access_requirements.map((a) => ({ id: a.id, access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes })),
       variations: v.variations.map((va) => ({
         id: va.id,
         key: va.key,
@@ -1043,6 +1079,24 @@ export async function getProductDetail(productId: string) {
       tasks: v.tasks.map((t) => ({
         id: t.id,
         key: t.key,
+        // Catálogo global: "Tarefa #ID" e a revisão do modelo usada por esta linha.
+        task_model_id: t.task_model_id,
+        task_model_revision: t.task_model_revision,
+        requires_qualification: t.requires_qualification,
+        cycle_type: t.cycle_type,
+        repeat_rule: t.repeat_rule,
+        repeat_every_cycles: t.repeat_every_cycles,
+        executor_continuity: t.executor_continuity,
+        asset_rule: t.asset_rule,
+        asset_revalidate_days: t.asset_revalidate_days,
+        // "Modelo global" x "Configuração específica deste produto" (+ modelo mudou depois?)
+        model: t.task_model
+          ? {
+              id: t.task_model.id, revision: t.task_model.revision, is_active: t.task_model.is_active,
+              customized: taskDivergesFromModel(t, t.task_model),
+              outdated: t.task_model.revision > (t.task_model_revision ?? 0),
+            }
+          : null,
         name: t.name,
         description: t.description,
         objective: t.objective,
@@ -1091,6 +1145,22 @@ export async function getProductDetail(productId: string) {
           estimated_minutes: s.estimated_minutes,
           is_conditional: s.is_conditional,
           specialty_id: s.specialty_id,
+          step_model_id: s.step_model_id,
+          step_model_revision: s.step_model_revision,
+          // valores efetivos (ajuste do produto, senão o do modelo global)
+          purpose: s.purpose ?? s.step_model?.purpose ?? "execucao",
+          execution_mode: s.execution_mode ?? s.step_model?.execution_mode ?? "humano",
+          completion_criteria: s.completion_criteria ?? s.step_model?.completion_criteria ?? null,
+          is_access_validation: s.step_model?.is_access_validation ?? false,
+          first_execution_only: s.first_execution_only,
+          skip_when_same_executor: s.skip_when_same_executor,
+          model: s.step_model
+            ? {
+                id: s.step_model.id, revision: s.step_model.revision, is_active: s.step_model.is_active,
+                customized: stepDivergesFromModel(s, s.step_model),
+                outdated: s.step_model.revision > (s.step_model_revision ?? 0),
+              }
+            : null,
         })),
       })),
     })),

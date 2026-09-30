@@ -35,6 +35,8 @@ import { prisma } from "./prisma";
 import { startTaskRotation } from "./task-rotation-engine";
 import { atribuirLiderParaTarefa } from "./atribuir-lider";
 import { nestedAlertEventCreate } from "./alert-events";
+import { unmetRules, DependencyBlockedError } from "./project-dependencies";
+import { logProjectDecision } from "./catalog2-cycles";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -347,7 +349,7 @@ async function avisarReprovacao(
   db: Db,
   stageId: string,
   motivo: string,
-  nivel: NivelAprovacao,
+  nivel: NivelAprovacao | "qualificacao",
 ): Promise<void> {
   try {
     const etapa = await db.projectTaskStage.findUnique({
@@ -378,7 +380,7 @@ async function avisarReprovacao(
       data: {
         type: "tarefa_reprovada",
         title: `Ajuste solicitado: ${etapa.titulo}`,
-        message: `${nivel === "cliente" ? "O cliente" : "A agência"} pediu ajustes na tarefa "${etapa.project_task.title}". Motivo: ${motivo}`,
+        message: `${nivel === "cliente" ? "O cliente" : nivel === "qualificacao" ? "O líder/qualificador" : "A agência"} pediu ajustes na tarefa "${etapa.project_task.title}". Motivo: ${motivo}`,
         severity: "warning",
         category: "alerta",
         entity_type: "project_task_stage",
@@ -398,11 +400,17 @@ async function avisarReprovacao(
 
 export interface ResultadoConclusao {
   etapaConcluida: string;
+  /** Tarefa-pai da etapa (pra quem precisa agir depois da transação). */
+  tarefaId: string;
   proxima: AberturaEtapa | null;
   /** Só true quando a tarefa realmente encerrou (após os aceites). */
   tarefaConcluida: boolean;
   /** Última etapa concluída: a tarefa foi para aprovação de quem contratou. */
   enviadaParaAprovacao: boolean;
+  /** Última etapa concluída numa tarefa com qualificação obrigatória: aguarda o líder/qualificador. */
+  enviadaParaQualificacao?: boolean;
+  /** Última etapa concluída, mas a entrega ficou segura por uma dependência (anexo/aprovação/item de outro produto). */
+  aguardandoDependencia?: boolean;
 }
 
 /**
@@ -416,16 +424,30 @@ export async function concluirEtapa(
 ): Promise<ResultadoConclusao> {
   const stage = await db.projectTaskStage.findUniqueOrThrow({
     where: { id: stageId },
-    include: { project_task: { select: { id: true, status: true } } },
+    include: { project_task: { select: { id: true, status: true, requires_qualification: true, qualification_round: true } } },
   });
 
   if (stage.status === STAGE_STATUS.CONCLUIDA) {
     return {
       etapaConcluida: stageId,
+      tarefaId: stage.project_task_id,
       proxima: null,
       tarefaConcluida: false,
       enviadaParaAprovacao: false,
+      enviadaParaQualificacao: false,
     };
+  }
+
+  // Dependência "bloquear a execução final/publicação": pode iniciar e executar, mas a
+  // ÚLTIMA etapa obrigatória não conclui enquanto o item vinculado não estiver pronto.
+  const outrasPendentes = await db.projectTaskStage.count({
+    where: { project_task_id: stage.project_task_id, obrigatoria: true, status: { not: STAGE_STATUS.CONCLUIDA }, id: { not: stageId } },
+  });
+  if (outrasPendentes === 0) {
+    const bloqueios = await unmetRules(db, stage.project_task_id, ["block_final"]);
+    if (bloqueios.length > 0) {
+      throw new DependencyBlockedError(`A execução final está bloqueada: ${bloqueios.map((b) => b.reason).join("; ")}`);
+    }
   }
 
   const agora = new Date();
@@ -472,19 +494,62 @@ export async function concluirEtapa(
 
   // Executor terminar não é a tarefa terminar: quem contratou ainda confere.
   // A tarefa vai para aprovação da agência e só encerra depois do aceite —
-  // ver PATCH /api/project-tasks/:id/aprovar.
+  // ver PATCH /api/project-tasks/:id/aprovar. Com qualificação obrigatória, antes
+  // disso o líder/qualificador precisa aceitar. Com dependência "exigir antes da
+  // entrega" pendente, a entrega fica segura até o item/aprovação existir.
   let tarefaConcluida = false;
   let enviadaParaAprovacao = false;
+  let enviadaParaQualificacao = false;
+  let aguardandoDependencia = false;
   if (pendentesObrigatorias === 0 && !["CONCLUIDA", "CANCELADA"].includes(stage.project_task.status)) {
-    await db.projectTask.update({
-      where: { id: stage.project_task_id },
-      data: { status: "EM_APROVACAO", data_conclusao: agora },
-    });
-    enviadaParaAprovacao = true;
-    await avisarAprovadores(db, stage.project_task_id, "agencia");
+    const seguradas = await unmetRules(db, stage.project_task_id, ["require_before_delivery"]);
+    if (seguradas.length > 0) {
+      await db.projectTask.update({ where: { id: stage.project_task_id }, data: { status: "AGUARDANDO_DEPENDENCIA_PRODUTO", data_conclusao: agora } });
+      const t = await db.projectTask.findUnique({ where: { id: stage.project_task_id }, select: { project_id: true, project_product_id: true, title: true } });
+      if (t) {
+        await logProjectDecision(db, {
+          projectId: t.project_id, projectProductId: t.project_product_id, projectTaskId: stage.project_task_id, kind: "dependency_blocked",
+          message: `A entrega de "${t.title}" aguarda: ${seguradas.map((s) => s.reason).join("; ")}.`,
+        });
+      }
+      aguardandoDependencia = true;
+    } else {
+      const destino = await enviarParaAceite(db, stage.project_task_id, { userId: opts.userId, agora });
+      enviadaParaQualificacao = destino === "qualificacao";
+      enviadaParaAprovacao = destino === "aprovacao";
+    }
   }
 
-  return { etapaConcluida: stageId, proxima, tarefaConcluida, enviadaParaAprovacao };
+  return { etapaConcluida: stageId, tarefaId: stage.project_task_id, proxima, tarefaConcluida, enviadaParaAprovacao, enviadaParaQualificacao, aguardandoDependencia };
+}
+
+/**
+ * Manda a entrega concluída para o próximo aceite: qualificação do líder (quando a
+ * tarefa exige) ou conferência de quem contratou. Reaproveitada quando uma dependência
+ * que segurava a entrega é cumprida.
+ */
+export async function enviarParaAceite(
+  db: Db,
+  taskId: string,
+  opts: { userId?: string; agora?: Date } = {},
+): Promise<"qualificacao" | "aprovacao" | "nenhum"> {
+  const agora = opts.agora ?? new Date();
+  const task = await db.projectTask.findUnique({ where: { id: taskId }, select: { status: true, requires_qualification: true, qualification_round: true } });
+  if (!task || ["CONCLUIDA", "CANCELADA"].includes(task.status)) return "nenhum";
+  if (task.requires_qualification) {
+    // Qualificação obrigatória: a entrega NÃO segue pra agência/cliente. Fica aguardando o
+    // aceite interno do líder/qualificador — a cada nova entrega começa uma rodada nova.
+    const round = (task.qualification_round ?? 0) + 1;
+    await db.projectTask.update({
+      where: { id: taskId },
+      data: { status: "AGUARDANDO_QUALIFICACAO", data_conclusao: agora, qualified_at: null, qualified_by: null, qualification_round: round },
+    });
+    await db.projectTaskQualification.create({ data: { project_task_id: taskId, round, decision: "solicitada", actor_user_id: opts.userId ?? null } });
+    return "qualificacao";
+  }
+  await db.projectTask.update({ where: { id: taskId }, data: { status: "EM_APROVACAO", data_conclusao: agora } });
+  await avisarAprovadores(db, taskId, "agencia");
+  return "aprovacao";
 }
 
 /**
@@ -556,6 +621,116 @@ export async function atribuirExecutorDaEtapa(
   }
 
   return { status: stage.status, nomade_id: stage.nomade_id, lider_id: stage.lider_id };
+}
+
+// ─── Qualificação obrigatória (aceite INTERNO, antes de agência/cliente) ──────
+// A tarefa com qualificação obrigatória, ao terminar a execução, fica em
+// AGUARDANDO_QUALIFICACAO. O líder/qualificador pode: aprovar (segue para a
+// aprovação de quem contratou/cliente), reprovar pedindo ajustes (volta ao
+// executor em EM_AJUSTES — NÃO conta como alteração grátis do cliente) ou só
+// comentar. "Revisão" (conferência técnica) não substitui esta etapa.
+
+export type DecisaoQualificacao = "aprovar" | "reprovar" | "comentar";
+
+/**
+ * Depois de a tarefa entrar em AGUARDANDO_QUALIFICACAO (fora da transação da
+ * entrega): garante um líder qualificador e avisa. Nunca lança.
+ */
+export async function garantirQualificador(taskId: string): Promise<void> {
+  try {
+    let tarefa = await prisma.projectTask.findUnique({
+      where: { id: taskId },
+      select: { title: true, task_code: true, status: true, lider_responsavel_id: true },
+    });
+    if (!tarefa || tarefa.status !== "AGUARDANDO_QUALIFICACAO") return;
+    if (!tarefa.lider_responsavel_id) {
+      await atribuirLiderParaTarefa(taskId).catch(() => null);
+      tarefa = await prisma.projectTask.findUnique({
+        where: { id: taskId },
+        select: { title: true, task_code: true, status: true, lider_responsavel_id: true },
+      });
+    }
+    if (!tarefa?.lider_responsavel_id) return; // atribuirLider já avisa o admin quando não há líder
+    const codigo = tarefa.task_code ? ` (${tarefa.task_code})` : "";
+    await prisma.systemAlert.create({
+      data: {
+        type: "qualificacao_pendente",
+        title: `Entrega para qualificar: ${tarefa.title}`,
+        message: `A execução da tarefa "${tarefa.title}"${codigo} terminou e aguarda a sua qualificação (aprovar, pedir ajustes ou comentar).`,
+        severity: "info",
+        category: "alerta",
+        entity_type: "project_task",
+        entity_id: taskId,
+        user_id: tarefa.lider_responsavel_id,
+        action_url: "/leader/tarefas",
+      },
+    });
+  } catch (err) {
+    console.error("[stage-engine] garantir qualificador:", err);
+  }
+}
+
+export class QualificacaoError extends Error {
+  httpStatus: number;
+  constructor(message: string, httpStatus = 422) {
+    super(message);
+    this.httpStatus = httpStatus;
+  }
+}
+
+export async function qualificarTarefa(
+  db: Db,
+  taskId: string,
+  opts: { userId: string; decisao: DecisaoQualificacao; comentario?: string | null },
+): Promise<{ status: string; round: number; proximoNivel: NivelAprovacao | null; etapaReaberta: string | null }> {
+  const tarefa = await db.projectTask.findUniqueOrThrow({ where: { id: taskId } });
+  if (!tarefa.requires_qualification) throw new QualificacaoError("Esta tarefa não exige qualificação.");
+  const comentario = opts.comentario?.trim() || null;
+  const round = Math.max(tarefa.qualification_round, 1);
+
+  if (opts.decisao === "comentar") {
+    if (!comentario) throw new QualificacaoError("Escreva o comentário.");
+    await db.projectTaskQualification.create({ data: { project_task_id: taskId, round, decision: "comentario", comment: comentario, actor_user_id: opts.userId } });
+    return { status: tarefa.status, round, proximoNivel: null, etapaReaberta: null };
+  }
+
+  if (tarefa.status !== "AGUARDANDO_QUALIFICACAO") {
+    throw new QualificacaoError(`Tarefa com status "${tarefa.status}" não está aguardando qualificação.`);
+  }
+  const agora = new Date();
+
+  if (opts.decisao === "aprovar") {
+    await db.projectTaskQualification.create({ data: { project_task_id: taskId, round, decision: "aprovada", comment: comentario, actor_user_id: opts.userId } });
+    // Segue o fluxo já existente: aceite de quem contratou (agência) e, se
+    // configurado, do cliente. O aceite do cliente só acontece DEPOIS desta etapa.
+    await db.projectTask.update({
+      where: { id: taskId },
+      data: { status: "EM_APROVACAO", qualified_at: agora, qualified_by: opts.userId },
+    });
+    await avisarAprovadores(db, taskId, "agencia");
+    return { status: "EM_APROVACAO", round, proximoNivel: nivelPendente(tarefa), etapaReaberta: null };
+  }
+
+  // reprovar
+  if (!comentario) throw new QualificacaoError("Explique o que precisa ser ajustado.");
+  await db.projectTaskQualification.create({ data: { project_task_id: taskId, round, decision: "reprovada", comment: comentario, actor_user_id: opts.userId } });
+  await db.projectTask.update({
+    where: { id: taskId },
+    // Ajuste interno: NÃO incrementa `reprovacoes` (alterações grátis são do cliente).
+    data: { status: "EM_AJUSTES", qualified_at: null, qualified_by: null, data_conclusao: null, completed_at: null },
+  });
+  const ultima = await db.projectTaskStage.findFirst({
+    where: { project_task_id: taskId, status: STAGE_STATUS.CONCLUIDA },
+    orderBy: [{ ordem: "desc" }, { created_at: "desc" }],
+  });
+  if (ultima) {
+    await db.projectTaskStage.update({
+      where: { id: ultima.id },
+      data: { status: STAGE_STATUS.EM_ANDAMENTO, concluida_em: null, concluida_por: null },
+    });
+    await avisarReprovacao(db, ultima.id, comentario, "qualificacao");
+  }
+  return { status: "EM_AJUSTES", round, proximoNivel: null, etapaReaberta: ultima?.id ?? null };
 }
 
 // ─── Aprovação em dois níveis ───────────────────────────────────────────────
@@ -665,6 +840,8 @@ export async function reprovarTarefa(
       aprovado_agencia_por: null,
       aprovado_cliente_em: null,
       aprovado_cliente_por: null,
+      qualified_at: null,
+      qualified_by: null,
       data_conclusao: null,
       completed_at: null,
     },

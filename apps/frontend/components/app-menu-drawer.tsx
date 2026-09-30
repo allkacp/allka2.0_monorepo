@@ -151,7 +151,7 @@ const navigationConfig = {
       color: "from-green-500 to-green-600",
       subitems: [
         { name: "Projetos", href: "/admin/projetos", icon: FolderOpen, badge: "156" },
-        { name: "Produtos", href: "/admin/produtos", icon: Package },
+        { name: "Produtos", href: "/admin/cadastro-produtos", icon: Package },
         { name: "Precificação", href: "/admin/precificacao", icon: Calculator },
         { name: "Campanhas", href: "/admin/campanhas-indicacao", icon: Share2 },
       ],

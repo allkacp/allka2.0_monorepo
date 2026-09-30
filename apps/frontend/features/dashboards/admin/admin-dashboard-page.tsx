@@ -1,4 +1,5 @@
 ﻿// @ts-nocheck
+import { openHref } from "@/hooks/use-navigate";
 import {
   Tooltip,
   TooltipContent,
@@ -3205,7 +3206,7 @@ export function AdminDashboardPage() {
     totalProjects: "/admin/projetos",
     pendingPayments: "/admin/financeiro",
     linkedProducts: "/admin/projetos",
-    catalogProducts: "/admin/produtos",
+    catalogProducts: "/admin/cadastro-produtos",
     orgPartners: "/admin/empresas",
   };
 
@@ -10483,7 +10484,7 @@ export function AdminDashboardPage() {
                         <button
                           key={item.status}
                           onClick={() => {
-                            window.location.href = `${section.href}?status=${item.status}`;
+                            openHref(`${section.href}?status=${item.status}`);
                           }}
                           className={`p-2.5 rounded-lg ${item.bg} hover:brightness-90 transition-all duration-200 text-left group`}
                         >

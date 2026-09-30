@@ -1,7 +1,8 @@
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
-import { concluirEtapa, atribuirExecutorDaEtapa } from "../lib/stage-engine";
+import { concluirEtapa, atribuirExecutorDaEtapa, garantirQualificador } from "../lib/stage-engine";
+import { kickDependenciesForTask } from "../lib/project-dependencies";
 import { verifyToken } from "../middleware/auth";
 import { reevaluateSuccessors } from "../lib/task-release-service";
 
@@ -312,6 +313,12 @@ router.patch("/tasks/:id/stages/:stageId/approve", async (req: Request, res: Res
         console.error("[stage-engine] atribuir executor:", err),
       );
     }
+    kickDependenciesForTask(resultado.tarefaId);
+    if (resultado.enviadaParaQualificacao) {
+      garantirQualificador(resultado.tarefaId).catch((err) =>
+        console.error("[stage-engine] qualificador:", err),
+      );
+    }
 
     const task = await prisma.projectTask.findUnique({
       where: { id },
@@ -325,6 +332,7 @@ router.patch("/tasks/:id/stages/:stageId/approve", async (req: Request, res: Res
       motor: {
         proxima_etapa: resultado.proxima,
         enviada_para_aprovacao: resultado.enviadaParaAprovacao,
+        enviada_para_qualificacao: !!resultado.enviadaParaQualificacao,
         tarefa_concluida: resultado.tarefaConcluida,
       },
     });

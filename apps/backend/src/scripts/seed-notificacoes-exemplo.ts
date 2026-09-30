@@ -81,7 +81,7 @@ async function main() {
       severity: "info",
       entity_type: null,
       entity_id: null,
-      action_url: "/admin/catalogo-produtos",
+      action_url: "/admin/produtos",
       created_at: horasAtras(30),
       is_read: true,
       read_at: horasAtras(28),

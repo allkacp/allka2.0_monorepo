@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, lazy, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin, Tag, Layers, ListChecks, CheckSquare, ListOrdered, DollarSign, CalendarClock, Info, Sparkles, UploadCloud, Undo2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin, Tag, Layers, ListChecks, CheckSquare, ListOrdered, DollarSign, CalendarClock, Info, Sparkles, UploadCloud, Undo2, Pencil, Lock } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePinEntry, type PinnedEntry } from "@/contexts/open-screens-context";
 import { apiClient } from "@/lib/api-client";
@@ -15,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useIallkaContext } from "@/contexts/iallka-context";
+import { ModelPickerDialog, TaskModelInfoDialog, ModelScopeDialog, ModelStatusChips, TaskIndicators, EXEC_LABEL, PURPOSE_LABEL, CYCLE_TYPE_LABEL, REPEAT_RULE_LABEL, IMPLEMENTATION_RULE_LABEL, CONTINUITY_LABEL, ASSET_RULE_LABEL, fmtMinutes } from "./catalog2-models-ui";
+import { DependencyRuleForm, type DependencyOptions } from "@/components/dependency-rule-form";
 import { CATALOG2_STATUSES, CATALOG2_STATUS_LABEL, CATALOG2_STATUS_MEANING, catalog2StatusLabel, catalog2StatusTone, type Catalog2Status } from "@/lib/catalog2-status";
 
 // Construtor de produto do novo catálogo (sprint de produtos, bloco 3/6).
@@ -39,7 +41,7 @@ const EFFECT_TYPES = [
 ] as const;
 const OPERATORS = [["eq", "igual a"], ["neq", "diferente de"], ["gte", "maior ou igual a"], ["lte", "menor ou igual a"], ["contains", "contém"], ["selected", "está selecionado"], ["not_selected", "não está selecionado"]] as const;
 const TRIGGERS = [["variation_option", "Opção de variação"], ["addon_selected", "Adicional selecionado"], ["quantity", "Quantidade"], ["client_answer", "Resposta do cliente"], ["contract_attribute", "Atributo da contratação"]] as const;
-const EXEC_MODES = [["humano", "Humano"], ["ia", "IA"], ["hibrido", "Híbrido"]] as const;
+const EXEC_MODES = [["humano", "Humano"], ["ia", "IA"], ["hibrido", "Humano ou IA"]] as const;
 
 export function ProductEditor({ productId, onBack, pin, notice }: { productId: string; onBack: () => void; pin?: PinnedEntry; notice?: React.ReactNode }) {
   const [product, setProduct] = useState<any>(null);
@@ -57,6 +59,9 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   const [watch, setWatch] = useState<{ key: string; ids: string[] } | null>(null);
   const [noticeHidden, setNoticeHidden] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
+  // A tela abre TRAVADA (só leitura): só o botão "Editar" libera os campos, pra
+  // ninguém alterar produto sem querer.
+  const [editMode, setEditMode] = useState(false);
   const [readinessData, setReadinessData] = useState<any>(null);
   const [publishing, setPublishing] = useState<{ title: string; done: boolean; error: string | null } | null>(null);
   async function startPublish(title: string, fn: () => Promise<any>) {
@@ -101,23 +106,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       apiClient.getCatalog2Specialties(),
       apiClient.getCatalog2Questionnaires(),
     ]);
-    let cur = p;
-    // Abriu para editar um produto com versão publicada e sem rascunho: já cria o
-    // próximo rascunho (v2, v3…). Se ninguém mexer, ele é descartado ao fechar.
-    if (p.published_version_id && !p.versions.some((v: any) => v.state === "rascunho")) {
-      const ad = autoDraftRef.current;
-      if (!ad.promise) {
-        ad.promise = (async () => {
-          try {
-            const nv: any = await apiClient.newCatalog2Version(productId);
-            ad.draftId = nv.version_id;
-            ad.baseId = p.published_version_id;
-          } catch { /* segue somente leitura */ }
-        })();
-      }
-      await ad.promise;
-      if (ad.draftId) cur = await apiClient.getCatalog2Product(productId);
-    }
+    const cur = p;
     setProduct(cur);
     setRefs({ pillars: pil.data, fourF: ff.data, categories: cat.data, specialties: sp.data, questionnaires: qn.data });
     setSelectedVersionId((sel) => sel && cur.versions.some((v: any) => v.id === sel) ? sel : (cur.versions.find((v: any) => v.state === "rascunho")?.id ?? cur.versions[0]?.id ?? ""));
@@ -177,7 +166,43 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   const secRing = (id: string) => ringOf(id).replace("rounded-lg", "rounded-2xl").replace("p-2", "p-3");
 
   const version = useMemo(() => product?.versions.find((v: any) => v.id === selectedVersionId) ?? null, [product, selectedVersionId]);
-  const readOnly = version?.state === "publicada";
+  const readOnly = version?.state === "publicada" || !editMode;
+
+  // Status COMERCIAL do produto (Ativo/Inativo…), separado do status da versão
+  // (Rascunho/Publicada). Salva na hora, a partir do cabeçalho.
+  function changeStatus(status: string) {
+    if (status === product.status) return;
+    const needsPublishedVersion = ["pre_lancamento", "disponivel", "temporariamente_inativo", "esgotado_temporariamente"].includes(status) && !product.published_version_id;
+    if (needsPublishedVersion) {
+      setMsg("Publique uma versão antes de usar este status, pois ele pode aparecer no catálogo do cliente.");
+      return;
+    }
+    void act(() => apiClient.setCatalog2ProductStatus(productId, status), "Status do produto salvo.");
+  }
+
+  // "Editar": libera os campos. Se a versão aberta é uma publicada e ainda não
+  // há rascunho, cria o próximo (v2, v3…) — se ninguém mudar nada, é descartado
+  // ao fechar (ver closeEditor).
+  async function startEditing() {
+    setMsg(null);
+    try {
+      if (version?.state === "publicada") {
+        const draft = product.versions.find((v: any) => v.state === "rascunho");
+        if (draft) {
+          setSelectedVersionId(draft.id);
+        } else {
+          const nv: any = await apiClient.newCatalog2Version(productId);
+          autoDraftRef.current = { promise: null, draftId: nv.version_id, baseId: product.published_version_id ?? version.id };
+          await load();
+          setSelectedVersionId(nv.version_id);
+          setMsg("Rascunho criado — as alterações ficam nele até você publicar.");
+        }
+      }
+      setEditMode(true);
+    } catch (e: any) {
+      setMsg(e?.message ?? "Não foi possível iniciar a edição.");
+    }
+  }
 
   function goToPublishIssue(issue: string, detail?: { target?: string; task_ids?: string[] }) {
     const text = issue.toLocaleLowerCase("pt-BR");
@@ -258,7 +283,11 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         onSelectVersion={setSelectedVersionId}
         onBack={() => void closeEditor()}
         onRefresh={async () => { await load(); setMsg("Dados do produto atualizados."); }}
-        canPublish={!!version && (version.state === "rascunho" || !version.is_published_current)}
+        editMode={editMode}
+        onStartEdit={() => void startEditing()}
+        onStopEdit={() => setEditMode(false)}
+        onChangeStatus={changeStatus}
+        canPublish={editMode && !!version && (version.state === "rascunho" || !version.is_published_current)}
         priceInfo={(() => { const real = readinessData?.price_amount; const sim = readinessData?.pricing_simulation?.price_amount; const f = (n: number) => `R$ ${n.toFixed(2).replace(".", ",")}`; return real != null ? { text: f(real), hint: "Preço de venda calculado a partir das tarefas, etapas e taxas" } : sim != null ? { text: `≈ ${f(sim)}`, hint: "Preço estimado (ainda há pendências para fechar o preço comercial)" } : { text: "Preço a definir", hint: "Falta completar tarefas, etapas e prazo para calcular" }; })()}
         versionInfo={version ? { published: version.state === "publicada", current: !!version.is_published_current, number: version.version_number } : null}
         onPublish={() => { if (!version) return; if (version.state === "publicada") { setPubDlg({ val: { ok: true, restore: true } }); return; } apiClient.validateCatalog2Version(version.id).then((val: any) => setPubDlg({ val })).catch((e: any) => setMsg(e?.message ?? "Não foi possível validar a versão.")); }}
@@ -273,6 +302,11 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
             {notice}
             <button type="button" aria-label="Dispensar aviso" onClick={() => setNoticeHidden(true)} className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-amber-700 hover:bg-amber-200/60"><X className="h-3.5 w-3.5" /></button>
           </div>
+        )}
+        {!editMode && (
+          <p className="flex min-w-[12rem] flex-1 items-center gap-2 rounded-xl border border-slate-300 bg-white/70 py-1.5 px-4 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+            <Lock className="h-3.5 w-3.5 shrink-0" /> Somente leitura — clique em <strong>Editar</strong> (no topo) para liberar os campos.
+          </p>
         )}
         {msg && (
           <p className="relative min-w-[12rem] flex-1 rounded-xl border border-blue-200 bg-blue-50 py-1.5 pl-4 pr-9 text-xs text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
@@ -290,7 +324,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
           <Stepper current={editorTab} onSelect={setEditorTab} items={readinessItems} />
 
           <TabsContent value="info" className="mt-3">
-            <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} onStatus={(s) => act(() => apiClient.setCatalog2ProductStatus(productId, s), "Status salvo.", { rethrow: true })} />
+            <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} />
           </TabsContent>
 
           <TabsContent value="opcoes" className={TAB_CARD}>
@@ -309,13 +343,13 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 
           <TabsContent value="entrega" className={TAB_CARD}>
             <StepIntro>Onde se cadastram tarefas, etapas, especialidades, prazos e as condições que ajustam a entrega.</StepIntro>
-            <DeadlineBaseField version={version} act={act} ringOf={ringOf} />
+            <DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={!editMode} />
             <Tabs value={subTabs.entrega} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, entrega: v }))}>
               <TabsList className={SUB_TABS_LIST}>
                 <TabsTrigger value="tarefas" className={SUB_TAB}>Tarefas e etapas</TabsTrigger>
                 <TabsTrigger value="cond" className={SUB_TAB}>Prazos e condições</TabsTrigger>
               </TabsList>
-              <TabsContent value="tarefas"><TasksTab version={version} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} /></TabsContent>
+              <TabsContent value="tarefas"><TasksTab version={version} productId={productId} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} /></TabsContent>
               <TabsContent value="cond"><ConditionsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
             </Tabs>
           </TabsContent>
@@ -615,35 +649,12 @@ const PricingPageLazy = lazy(() => import("@/app/admin/precificacao/page"));
 
 const RingCtx = createContext<(id: string) => string>(() => "");
 
-function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTarget, clearHighlight }: any) {
+function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clearHighlight }: any) {
   const ringOf = useContext(RingCtx);
   const [f, setF] = useState({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" });
-  const [draftStatus, setDraftStatus] = useState<string>(product.status ?? "em_preparacao");
-  const [savingStatus, setSavingStatus] = useState(false);
   const [savingInfo, setSavingInfo] = useState(false);
   const [infoSaved, setInfoSaved] = useState(false);
-  const [statusError, setStatusError] = useState<string | null>(null);
   useEffect(() => setF({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" }), [version.id]);
-  useEffect(() => setDraftStatus(product.status ?? "em_preparacao"), [product.status]);
-
-  async function saveStatus() {
-    if (draftStatus === product.status) return;
-    const needsPublishedVersion = ["pre_lancamento", "disponivel", "temporariamente_inativo", "esgotado_temporariamente"].includes(draftStatus) && !product.published_version_id;
-    if (needsPublishedVersion) {
-      setStatusError("Publique uma versão antes de usar este status, pois ele pode aparecer no catálogo do cliente.");
-      return;
-    }
-    setSavingStatus(true);
-    setStatusError(null);
-    try {
-      await onStatus(draftStatus);
-    } catch (e: any) {
-      setStatusError(e?.message ?? "Não foi possível salvar o status.");
-    } finally {
-      setSavingStatus(false);
-    }
-  }
-
   async function saveInfo() {
     setSavingInfo(true);
     setInfoSaved(false);
@@ -697,27 +708,6 @@ function GeneralTab({ version, readOnly, onSave, product, onStatus, highlightTar
           </Field>
         </div>
       </SectionCard>
-
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/70 bg-[#e8ecf9] px-3.5 py-2 shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
-        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200"><Settings2 className="h-4 w-4 text-violet-600" /> Status do produto</span>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" aria-label="Status do produto" className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold shadow-sm transition hover:brightness-95 ${catalog2StatusTone(draftStatus)}`}>
-              {catalog2StatusLabel(draftStatus)} <ChevronDown className="h-3.5 w-3.5" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {CATALOG2_STATUSES.map((status) => (
-              <DropdownMenuItem key={status} onClick={() => { setDraftStatus(status); setStatusError(null); }}>{CATALOG2_STATUS_LABEL[status]}</DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        {draftStatus !== product.status && (
-          <Button size="sm" variant="outline" className="h-7" disabled={savingStatus} onClick={() => void saveStatus()}>{savingStatus ? "Salvando…" : "Salvar status"}</Button>
-        )}
-        <span className="min-w-0 flex-1 text-[12px] text-slate-500 dark:text-slate-400">{CATALOG2_STATUS_MEANING[draftStatus as Catalog2Status] ?? ""}</span>
-        {statusError && <p role="alert" className="w-full text-xs text-red-600">{statusError}</p>}
-      </div>
 
       <SectionCard icon={Clock} title="Resumo da mudança" subtitle="Escrito pela IA a partir do que foi alterado — você pode editar." collapsible defaultOpen={(version?.version_number ?? 1) > 1}>
         <div className="space-y-1">
@@ -910,65 +900,231 @@ function AddonsTab({ version, readOnly, act }: any) {
 // vínculo por referência aqui (diferente de especialidade/questionário,
 // que são bibliotecas compartilhadas de verdade). "Criar nova" continua o
 // formulário inline já existente.
-function TasksTab({ version, readOnly, refs, act, highlightTarget, highlightTaskIds, clearHighlight }: any) {
+// Modalidades de contratação (vale para qualquer produto): avulso, recorrente mensal,
+// recorrente com implementação inicial, só em pacote. Congelada junto com a versão.
+function ContractModesSection({ version, readOnly, act }: any) {
+  const pick = () => ({
+    accepts_one_time: version.accepts_one_time ?? true,
+    accepts_recurring: version.accepts_recurring ?? false,
+    has_initial_implementation: version.has_initial_implementation ?? false,
+    implementation_rule: version.implementation_rule ?? "first_only",
+    implementation_blocks_operation: version.implementation_blocks_operation ?? true,
+    sell_mode: version.sell_mode ?? "standalone",
+  });
+  const [f, setF] = useState(pick);
+  const sig = JSON.stringify(pick());
+  useEffect(() => { setF(pick()); }, [version.id, sig]); // eslint-disable-line react-hooks/exhaustive-deps
+  const set = (patch: Partial<typeof f>) => setF((cur) => ({ ...cur, ...patch }));
+  const summary = [f.accepts_one_time && "Avulso", f.accepts_recurring && (f.has_initial_implementation ? "Recorrente mensal com implementação inicial" : "Recorrente mensal"), f.sell_mode === "package_only" && "Somente em pacote"].filter(Boolean).join(" · ") || "Nenhuma modalidade";
+  return (
+    <details className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+      <summary className="cursor-pointer select-none text-sm font-medium">Modalidades de contratação <span className="text-xs font-normal text-neutral-500">({summary})</span></summary>
+      <div className="mt-2 space-y-3 text-sm">
+        <p className="text-xs text-neutral-500">Define como este produto pode ser vendido e como os ciclos de tarefas nascem. Em cada tarefa, escolha o <strong>tipo de ciclo</strong> (implementação inicial, recorrente, avulsa…) e a <strong>regra de repetição</strong>.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="flex items-center gap-2"><input type="checkbox" disabled={readOnly} checked={f.accepts_one_time} onChange={(e) => set({ accepts_one_time: e.target.checked })} /> Aceita contratação <strong>avulsa</strong> (uma entrega)</label>
+          <label className="flex items-center gap-2"><input type="checkbox" disabled={readOnly} checked={f.accepts_recurring} onChange={(e) => set({ accepts_recurring: e.target.checked })} /> Aceita contratação <strong>recorrente mensal</strong></label>
+          <label className="flex items-center gap-2"><input type="checkbox" disabled={readOnly} checked={f.has_initial_implementation} onChange={(e) => set({ has_initial_implementation: e.target.checked })} /> Tem <strong>implementação inicial</strong> (implantação, configuração ou diagnóstico)</label>
+          <label className="flex items-center gap-2">
+            Venda:
+            <select disabled={readOnly} className="h-8 rounded border border-neutral-300 bg-transparent px-1 dark:border-neutral-700" value={f.sell_mode} onChange={(e) => set({ sell_mode: e.target.value })}>
+              <option value="standalone">Pode ser vendido sozinho</option>
+              <option value="package_only">Somente em conjunto/pacote</option>
+            </select>
+          </label>
+        </div>
+        {f.has_initial_implementation && (
+          <div className="space-y-2 rounded border border-dashed border-neutral-300 p-2 dark:border-neutral-700">
+            <label className="flex flex-wrap items-center gap-2">
+              A implementação inicial roda:
+              <select disabled={readOnly} className="h-8 max-w-full rounded border border-neutral-300 bg-transparent px-1 dark:border-neutral-700" value={f.implementation_rule} onChange={(e) => set({ implementation_rule: e.target.value })}>
+                {Object.entries(IMPLEMENTATION_RULE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center gap-2"><input type="checkbox" disabled={readOnly} checked={f.implementation_blocks_operation} onChange={(e) => set({ implementation_blocks_operation: e.target.checked })} /> As tarefas operacionais ficam <strong>bloqueadas</strong> até a implementação concluir</label>
+            <p className="text-xs text-neutral-500">Implementação já concluída para o mesmo cliente <strong>não é repetida</strong>, exceto na regra "em toda contratação" ou quando houver revalidação.</p>
+          </div>
+        )}
+        {!readOnly && <Button size="sm" onClick={() => void act(() => apiClient.updateCatalog2VersionInfo(version.id, f), "Modalidades de contratação salvas.")}>Salvar modalidades</Button>}
+      </div>
+    </details>
+  );
+}
+
+// Pré-requisitos do PRODUTO: exige outro produto/tarefa/aprovação já concluído pelo mesmo cliente
+// antes de começar (fora de pacote). Regras de pacote ficam em Pacotes e Dependências.
+function ProductPrerequisitesSection({ productDetailId, readOnly }: any) {
+  const productId: string | undefined = productDetailId;
+  const [rules, setRules] = useState<any[]>([]);
+  const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
+  const [options, setOptions] = useState<DependencyOptions | null>(null);
+  const [open, setOpen] = useState(false);
+  const load = useCallback(() => {
+    if (!productId) return;
+    apiClient.getCatalog2ProductPrerequisites(productId).then((r) => setRules(r.data)).catch(() => {});
+  }, [productId]);
+  useEffect(() => { if (open) { load(); apiClient.getCatalog2DependencyOptions().then(setOptions).catch(() => {}); apiClient.getCatalog2Products({ page_size: 100 }).then((r) => setProducts(r.data.map((p: any) => ({ id: p.id, name: p.internal_name })))).catch(() => {}); } }, [open, load]);
+  if (!productId) return null;
+  return (
+    <details className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary className="cursor-pointer select-none text-sm font-medium">Pré-requisitos deste produto <span className="text-xs font-normal text-neutral-500">(exige outro produto, tarefa ou aprovação antes de começar)</span></summary>
+      <div className="mt-2 space-y-2 text-sm">
+        <ul className="space-y-1">
+          {rules.map((r) => (
+            <li key={r.id} className={`flex flex-wrap items-center justify-between gap-2 rounded border border-neutral-200 px-2 py-1 dark:border-neutral-800 ${r.is_active ? "" : "opacity-50"}`}>
+              <span>{r.dependent_task_key ? `Tarefa ${r.dependent_task_key}` : "Todas as tarefas"} espera {options?.target_kinds.find((k) => k.key === r.target_kind)?.label ?? r.target_kind}{r.target_product ? ` de ${r.target_product.internal_name}` : ""}{r.target_task_key ? ` › ${r.target_task_key}` : ""} — {options?.behaviors.find((b) => b.key === r.behavior)?.label ?? r.behavior}</span>
+              {!readOnly && <button type="button" className="text-xs text-neutral-500 underline" onClick={async () => { await apiClient.setCatalog2DependencyRuleActive(r.id, !r.is_active); load(); }}>{r.is_active ? "desativar" : "reativar"}</button>}
+            </li>
+          ))}
+          {rules.length === 0 && <li className="text-xs text-neutral-500">Nenhum pré-requisito: o produto pode começar sem depender de outro.</li>}
+        </ul>
+        {!readOnly && (
+          <DependencyRuleForm
+            products={products.filter((p) => p.id !== productId)}
+            dependentProductId={productId}
+            options={options}
+            submitLabel="Adicionar pré-requisito"
+            onSubmit={async (body) => { await apiClient.addCatalog2ProductPrerequisite(productId, body); load(); }}
+          />
+        )}
+      </div>
+    </details>
+  );
+}
+
+// Acessos externos que este produto exige do cliente (Google Ads, Meta, Pixel…).
+// Só diz QUAIS acessos são necessários — nunca senha. A etapa padrão "Validação e
+// organização dos acessos" usa esta lista.
+const ACCESS_OPTIONS: [string, string][] = [
+  ["google_ads", "Google Ads"], ["meta_business_manager", "Meta Business Manager"], ["ad_account", "Conta de anúncios"],
+  ["pixel_capi", "Pixel / Conversions API"], ["google_analytics", "Google Analytics"], ["google_tag_manager", "Google Tag Manager"],
+  ["crm", "CRM"], ["site_landing", "Site / landing page"],
+];
+function AccessRequirementsSection({ version, readOnly, act }: any) {
+  const current: any[] = version.access_requirements ?? [];
+  const build = () => {
+    const sel: Record<string, { on: boolean; required: boolean }> = {};
+    for (const [k] of ACCESS_OPTIONS) {
+      const found = current.find((a) => a.access_type === k);
+      sel[k] = { on: !!found, required: found ? found.is_required : true };
+    }
+    return { sel, others: current.filter((a) => a.access_type === "other").map((a) => ({ label: a.label, required: a.is_required })) };
+  };
+  const [st, setSt] = useState(build);
+  const [newOther, setNewOther] = useState("");
+  const sig = JSON.stringify(current.map((a) => [a.access_type, a.label, a.is_required]));
+  useEffect(() => { setSt(build()); }, [version.id, sig]); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = () => act(() => apiClient.updateCatalog2AccessRequirements(version.id, [
+    ...ACCESS_OPTIONS.filter(([k]) => st.sel[k].on).map(([k, label]) => ({ access_type: k, label, is_required: st.sel[k].required })),
+    ...st.others.map((o) => ({ access_type: "other", label: o.label, is_required: o.required })),
+  ]), "Acessos necessários salvos.");
+  const total = ACCESS_OPTIONS.filter(([k]) => st.sel[k].on).length + st.others.length;
+  return (
+    <details className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800" open={total > 0 && !readOnly ? undefined : undefined}>
+      <summary className="cursor-pointer select-none text-sm font-medium">Acessos necessários deste produto <span className="text-xs font-normal text-neutral-500">({total} selecionado{total === 1 ? "" : "s"})</span></summary>
+      <div className="mt-2 space-y-2 text-sm">
+        <p className="text-xs text-neutral-500">Marque o que o cliente precisa liberar para a execução. A etapa padrão <strong>Validação e organização dos acessos</strong> confere isso. <strong>Nunca é pedida nem guardada senha do cliente</strong> — ele compartilha permissões pela própria ferramenta (convite de usuário, papel de acesso, parceiro/agência).</p>
+        <ul className="grid gap-1 sm:grid-cols-2">
+          {ACCESS_OPTIONS.map(([k, label]) => (
+            <li key={k} className="flex items-center justify-between gap-2 rounded border border-neutral-200 px-2 py-1 dark:border-neutral-800">
+              <label className="flex items-center gap-2"><input type="checkbox" disabled={readOnly} checked={st.sel[k].on} onChange={(e) => setSt({ ...st, sel: { ...st.sel, [k]: { ...st.sel[k], on: e.target.checked } } })} /> {label}</label>
+              {st.sel[k].on && <label className="text-xs text-neutral-500"><input type="checkbox" disabled={readOnly} checked={st.sel[k].required} onChange={(e) => setSt({ ...st, sel: { ...st.sel, [k]: { ...st.sel[k], required: e.target.checked } } })} /> obrigatório</label>}
+            </li>
+          ))}
+          {st.others.map((o, i) => (
+            <li key={"o" + i} className="flex items-center justify-between gap-2 rounded border border-neutral-200 px-2 py-1 dark:border-neutral-800">
+              <span>{o.label} <span className="text-xs text-neutral-500">(outro)</span></span>
+              {!readOnly && <button type="button" className="text-xs text-red-600" onClick={() => setSt({ ...st, others: st.others.filter((_, j) => j !== i) })}>remover</button>}
+            </li>
+          ))}
+        </ul>
+        {!readOnly && (
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label="Outro acesso"><Input className="w-64" placeholder="Ex.: ERP do cliente" value={newOther} onChange={(e) => setNewOther(e.target.value)} /></Field>
+            <Button size="sm" variant="outline" disabled={!newOther.trim()} onClick={() => { setSt({ ...st, others: [...st.others, { label: newOther.trim(), required: true }] }); setNewOther(""); }}>Adicionar</Button>
+            <Button size="sm" onClick={() => void save()}>Salvar acessos</Button>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, highlightTaskIds, clearHighlight }: any) {
   const ringOf = useContext(RingCtx);
-  const [nt, setNt] = useState({ key: "", name: "" });
+  const [nt, setNt] = useState({ name: "" });
   const [showCreate, setShowCreate] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
+  const [pickTask, setPickTask] = useState(false);
+  const [viewModel, setViewModel] = useState<number | null>(null);
   const tasks = version.tasks;
   return (
     <div id="catalog2-tasks" className="mt-3 scroll-mt-6 space-y-3">
-      <p className="text-xs text-neutral-500">Modelos do catálogo (não são tarefas de projetos). Ordene pelas setas. Publicada = imutável.</p>
+      <ContractModesSection version={version} readOnly={readOnly} act={act} />
+      <ProductPrerequisitesSection productDetailId={productId} readOnly={readOnly} />
+      <AccessRequirementsSection version={version} readOnly={readOnly} act={act} />
+      <p className="text-xs text-neutral-500">Cada tarefa e etapa tem um número permanente (<strong>Tarefa #ID</strong>, <strong>Etapa #ID</strong>) e vem do catálogo global de modelos. Clique no número para ver o modelo. Ordene pelas setas. Publicada = imutável.</p>
       {tasks.map((t: any, i: number) => (
         <div key={t.id} className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <span className="font-medium">#{t.sort_order} {t.name}</span>
-              <span className="ml-2 text-xs text-neutral-400">{t.execution_mode} · {t.estimated_minutes ?? "?"} min{t.specialty ? ` · ${t.specialty.name}` : ""}{t.is_conditional ? " · condicional" : ""}{t.requires_review ? " · revisão" : ""}{t.questionnaire ? ` · questionário: ${t.questionnaire.name}` : ""}</span>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="font-medium">{i + 1}. {t.name}</span>
+                {t.task_model_id != null && <button type="button" title="Ver o modelo global desta tarefa" onClick={() => setViewModel(t.task_model_id)} className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700 hover:bg-violet-200 dark:bg-violet-900/40 dark:text-violet-200">Tarefa #{t.task_model_id}</button>}
+                <ModelStatusChips model={t.model} readOnly={readOnly} onSync={() => act(() => apiClient.syncCatalog2TaskModel(t.id), "Tarefa atualizada para a revisão atual do modelo global.")} />
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
+                <span>{EXEC_LABEL[t.execution_mode] ?? t.execution_mode}</span>
+                <span>· {t.specialty?.name ?? "sem especialidade"}</span>
+                <span>· {fmtMinutes(t.estimated_minutes)}</span>
+                {t.questionnaire && <span>· questionário: {t.questionnaire.name}</span>}
+                <TaskIndicators task={t} />
+              </div>
+              <details className="text-[11px] text-neutral-400">
+                <summary className="cursor-pointer select-none">Avançado</summary>
+                <span>Identificador técnico (gerado automaticamente): <code>{t.key}</code></span>
+              </details>
             </div>
             {!readOnly && (
               <div className="flex gap-1">
                 <Button size="sm" variant="ghost" disabled={i === 0} onClick={() => act(() => apiClient.reorderCatalog2Tasks(version.id, move(tasks.map((x: any) => x.id), i, -1)))}><ChevronUp className="h-4 w-4" /></Button>
                 <Button size="sm" variant="ghost" disabled={i === tasks.length - 1} onClick={() => act(() => apiClient.reorderCatalog2Tasks(version.id, move(tasks.map((x: any) => x.id), i, 1)))}><ChevronDown className="h-4 w-4" /></Button>
                 <Button size="sm" variant="ghost" onClick={() => act(() => apiClient.duplicateCatalog2Task(t.id), "Tarefa duplicada.")}><Copy className="h-4 w-4" /></Button>
-                <DeleteBtn label="Excluir tarefa?" onConfirm={() => act(() => apiClient.deleteCatalog2Task(t.id), "Tarefa removida.")} />
+                <DeleteBtn label="Remover tarefa deste produto?" onConfirm={() => act(() => apiClient.deleteCatalog2Task(t.id), "Tarefa removida do produto.")} />
               </div>
             )}
           </div>
           {!readOnly && <TaskInlineEdit task={t} refs={refs} act={act} effortHighlighted={(highlightTarget === "catalog2-task-effort" && highlightTaskIds.includes(t.id)) || ringOf("task-effort:" + t.id).includes("amber")} durationHighlighted={(highlightTarget === "catalog2-task-duration" && highlightTaskIds.includes(t.id)) || ringOf("task-duration:" + t.id).includes("amber")} effortDone={ringOf("task-effort:" + t.id).includes("emerald")} durationDone={ringOf("task-duration:" + t.id).includes("emerald")} onSaved={(target: string) => clearHighlight(target)} />}
-          <ul className="mt-2 ml-3 space-y-1">
-            {t.steps.map((s: any, si: number) => (
-              <StepRow key={s.id} step={s} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} />
+          <ul className="mt-2 ml-3 space-y-1.5">
+            {t.steps.map((st: any, si: number) => (
+              <StepRow key={st.id} step={st} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} />
             ))}
-            {!readOnly && <AddStepRow ringClass={ringOf("catalog2-step-add:" + t.id)} domId={"catalog2-step-add:" + t.id} refs={refs} task={t} onAdd={(b: any) => act(() => apiClient.addCatalog2Step(t.id, b), "Etapa adicionada.")} />}
+            {!readOnly && <AddStepControl ringClass={ringOf("catalog2-step-add:" + t.id)} domId={"catalog2-step-add:" + t.id} refs={refs} task={t} act={act} />}
           </ul>
         </div>
       ))}
       {!readOnly && (
         <div id="catalog2-task-create" className={`space-y-2 rounded-lg border border-dashed border-neutral-300 p-3 dark:border-neutral-700 ${ringOf("catalog2-task-create")}`}>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant={showSearch ? "outline" : "default"} onClick={() => { setShowSearch((v) => !v); setShowCreate(false); }}>
-              <Search className="h-4 w-4" /> Selecionar existente
-            </Button>
-            <Button size="sm" variant={showCreate ? "outline" : "default"} onClick={() => { setShowCreate((v) => !v); setShowSearch(false); }}>
-              <Plus className="h-4 w-4" /> Criar nova
-            </Button>
-          </div>
-          {showSearch && (
-            <TaskLibrarySearch
-              excludeVersionId={version.id}
-              onImport={(taskId: string) => act(() => apiClient.importCatalog2Task(version.id, taskId), "Tarefa importada (cópia).")}
-            />
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm"><Plus className="h-4 w-4" /> Adicionar tarefa <ChevronDown className="h-3.5 w-3.5" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => { setPickTask(true); setShowCreate(false); }}><Search className="h-4 w-4" /> Selecionar modelo existente</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> Criar nova tarefa</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {showCreate && (
-            <div className="flex items-end gap-2">
-              <Field label="key"><Input value={nt.key} onChange={(e) => setNt({ ...nt, key: e.target.value })} /></Field>
-              <Field label="nome"><Input value={nt.name} onChange={(e) => setNt({ ...nt, name: e.target.value })} /></Field>
-              <Button size="sm" onClick={() => nt.key && nt.name && act(() => apiClient.addCatalog2Task(version.id, nt), "Tarefa criada.").then((result) => { if (result) { setNt({ key: "", name: "" }); clearHighlight("catalog2-task-create"); } })}>Criar tarefa</Button>
+            <div className="flex flex-wrap items-end gap-2">
+              <Field label="Nome da nova tarefa"><Input className="w-72" value={nt.name} onChange={(e) => setNt({ name: e.target.value })} /></Field>
+              <Button size="sm" disabled={!nt.name.trim()} onClick={() => act(() => apiClient.addCatalog2Task(version.id, { name: nt.name.trim() }), "Tarefa criada e cadastrada no catálogo global de modelos.").then((result) => { if (result) { setNt({ name: "" }); setShowCreate(false); clearHighlight("catalog2-task-create"); } })}>Criar tarefa</Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>Cancelar</Button>
+              <p className="w-full text-xs text-neutral-500">A nova tarefa recebe um número próprio (Tarefa #ID) e fica disponível no catálogo global para outros produtos. Depois de criada, ajuste executor, especialidade e tempo no cartão dela.</p>
             </div>
           )}
         </div>
       )}
+      <ModelPickerDialog kind="task" open={pickTask} refs={refs} onClose={() => setPickTask(false)} onPick={(id) => act(() => apiClient.addCatalog2TaskFromModel(version.id, id), "Tarefa adicionada a partir do modelo global.")} />
+      {viewModel != null && <TaskModelInfoDialog id={viewModel} onClose={() => setViewModel(null)} />}
     </div>
   );
 }
@@ -982,91 +1138,90 @@ const SpecialtySelect = ({ refs, value, onChange, emptyLabel }: any) => (
 
 function StepRow({ step, index, steps, taskId, readOnly, act, refs, task }: any) {
   const [editing, setEditing] = useState(false);
-  const [f, setF] = useState({ name: step.name, estimated_minutes: step.estimated_minutes ?? "", specialty_id: step.specialty_id ?? "" });
+  const [viewModel, setViewModel] = useState(false);
+  const [scopeAsk, setScopeAsk] = useState(false);
+  const initial = () => ({ name: step.name, estimated_minutes: step.estimated_minutes ?? "", specialty_id: step.specialty_id ?? "", purpose: step.purpose ?? "execucao", execution_mode: step.execution_mode ?? "humano", completion_criteria: step.completion_criteria ?? "", first_execution_only: !!step.first_execution_only, skip_when_same_executor: !!step.skip_when_same_executor });
+  const [f, setF] = useState(initial);
   const specName = (refs?.specialties ?? []).find((sp: any) => sp.id === (step.specialty_id ?? task?.specialty?.id))?.name;
+  const payload = () => ({ name: f.name, estimated_minutes: f.estimated_minutes === "" ? null : Number(f.estimated_minutes), specialty_id: f.specialty_id || null, purpose: f.purpose, execution_mode: f.execution_mode, completion_criteria: f.completion_criteria.trim() ? f.completion_criteria : null, first_execution_only: f.first_execution_only, skip_when_same_executor: f.skip_when_same_executor });
+  const doSave = (scope?: "product" | "model") => act(() => apiClient.updateCatalog2Step(step.id, { ...payload(), ...(scope ? { scope } : {}) }), "Etapa salva.").then(() => setEditing(false));
+  const save = () => (step.step_model_id != null ? setScopeAsk(true) : void doSave());
   if (editing) {
     return (
-      <li className="flex items-end gap-2">
-        <Field label="nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-        <Field label="especialidade"><SpecialtySelect refs={refs} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
-        <Field label="min"><Input type="number" value={f.estimated_minutes} onChange={(e) => setF({ ...f, estimated_minutes: e.target.value })} /></Field>
-        <Button size="sm" variant="outline" onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: f.name, estimated_minutes: f.estimated_minutes === "" ? null : Number(f.estimated_minutes), specialty_id: f.specialty_id || null }), "Etapa salva.").then(() => setEditing(false))}>Salvar</Button>
-        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>
+      <li className="space-y-2 rounded border border-neutral-200 p-2 dark:border-neutral-800">
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="Nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+          <Field label="Finalidade"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+          <Field label="Executor"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={f.execution_mode} onChange={(e) => setF({ ...f, execution_mode: e.target.value })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+          <Field label="Especialidade"><SpecialtySelect refs={refs} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
+          <Field label="Min"><Input className="w-20" type="number" value={f.estimated_minutes} onChange={(e) => setF({ ...f, estimated_minutes: e.target.value })} /></Field>
+        </div>
+        <Field label="Critério de conclusão"><Input value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
+        <div className="flex flex-wrap gap-4 text-xs">
+          <label className="flex items-center gap-1" title="Nunca se repete nos ciclos seguintes"><input type="checkbox" checked={f.first_execution_only} onChange={(e) => setF({ ...f, first_execution_only: e.target.checked })} /> somente na primeira execução</label>
+          <label className="flex items-center gap-1" title="Se o mesmo executor for mantido no ciclo seguinte, esta etapa é dispensada"><input type="checkbox" checked={f.skip_when_same_executor} onChange={(e) => setF({ ...f, skip_when_same_executor: e.target.checked })} /> dispensável quando o mesmo executor continua</label>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={save}>Salvar</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setF(initial()); setEditing(false); }}>Cancelar</Button>
+        </div>
+        <ModelScopeDialog open={scopeAsk} kindLabel="etapa" modelId={step.step_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void doSave(sc); }} />
       </li>
     );
   }
   return (
-    <li className="flex items-center justify-between text-sm">
-      <span>{index + 1}. {step.name} <span className="text-xs text-neutral-400">{step.estimated_minutes ?? "?"} min · {specName ?? "sem especialidade"}{step.is_conditional ? " · condicional" : ""}</span>{task?.effort_is_provisional && !readOnly && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">revisar</span>}</span>
-      {!readOnly && (
-        <span className="flex gap-1">
-          {task?.effort_is_provisional && (
-            <button
-              className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-700"
-              title="Conferi esta etapa (nome, horas e especialidade) — confirmar"
-              onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: step.name, estimated_minutes: step.estimated_minutes ?? null, specialty_id: step.specialty_id ?? task?.specialty?.id ?? null }), "Etapa confirmada.")}
-            >Ok</button>
-          )}
-          <button className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100" onClick={() => setEditing(true)}>editar</button>
-          <button disabled={index === 0} className="disabled:opacity-30" onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, -1)))}><ChevronUp className="h-3.5 w-3.5" /></button>
-          <button disabled={index === steps.length - 1} className="disabled:opacity-30" onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, 1)))}><ChevronDown className="h-3.5 w-3.5" /></button>
-          <DeleteBtn label="Excluir etapa?" onConfirm={() => act(() => apiClient.deleteCatalog2Step(step.id), "Etapa removida.")} />
-        </span>
-      )}
+    <li className="text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span>{index + 1}. {step.name}</span>
+            {step.step_model_id != null && <button type="button" title="Ver o modelo global desta etapa" onClick={() => setViewModel(true)} className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-200">Etapa #{step.step_model_id}</button>}
+            <ModelStatusChips model={step.model} readOnly={readOnly} onSync={() => act(() => apiClient.syncCatalog2StepModel(step.id), "Etapa atualizada para a revisão atual do modelo global.")} />
+            {step.first_execution_only && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">Só na 1ª execução</span>}
+            {step.skip_when_same_executor && <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">Dispensável c/ mesmo executor</span>}
+            {step.is_access_validation && <span title="Bloqueia as etapas seguintes até os acessos serem validados" className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">Pré-requisito: acessos</span>}
+            {task?.effort_is_provisional && !readOnly && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">revisar</span>}
+          </div>
+          <div className="text-xs text-neutral-500">
+            {PURPOSE_LABEL[step.purpose] ?? step.purpose} · {EXEC_LABEL[step.execution_mode] ?? step.execution_mode} · {specName ?? "sem especialidade"} · {fmtMinutes(step.estimated_minutes)}{step.is_conditional ? " · condicional" : ""}
+          </div>
+          {step.completion_criteria && <div className="text-xs text-neutral-500">Critério de conclusão: {step.completion_criteria}</div>}
+        </div>
+        {!readOnly && (
+          <span className="flex shrink-0 gap-1">
+            {task?.effort_is_provisional && (
+              <button
+                className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                title="Conferi esta etapa (nome, horas e especialidade) — confirmar"
+                onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: step.name, estimated_minutes: step.estimated_minutes ?? null, specialty_id: step.specialty_id ?? task?.specialty?.id ?? null }), "Etapa confirmada.")}
+              >Ok</button>
+            )}
+            <button className="text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100" onClick={() => setEditing(true)}>editar</button>
+            <button disabled={index === 0} className="disabled:opacity-30" onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, -1)))}><ChevronUp className="h-3.5 w-3.5" /></button>
+            <button disabled={index === steps.length - 1} className="disabled:opacity-30" onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, 1)))}><ChevronDown className="h-3.5 w-3.5" /></button>
+            <DeleteBtn label="Remover etapa desta tarefa?" onConfirm={() => act(() => apiClient.deleteCatalog2Step(step.id), "Etapa removida da tarefa.")} />
+          </span>
+        )}
+      </div>
+      {viewModel && step.step_model_id != null && <TaskModelInfoDialog kind="step" id={step.step_model_id} onClose={() => setViewModel(false)} />}
     </li>
   );
 }
 
-// Busca tarefas em QUALQUER produto/versão (bloco 3/6 + reunião 2026-09-14).
-// Importar sempre COPIA a tarefa encontrada (com etapas + config de IA) pra
-// esta versão — nunca altera a tarefa/produto de origem.
-function TaskLibrarySearch({ excludeVersionId, onImport }: { excludeVersionId: string; onImport: (taskId: string) => void }) {
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (q.trim().length < 2) { setResults([]); return; }
-    let cancelled = false;
-    setLoading(true);
-    const t = setTimeout(() => {
-      apiClient.searchCatalog2Tasks(q.trim(), excludeVersionId)
-        .then((r: any) => { if (!cancelled) setResults(r.data); })
-        .finally(() => { if (!cancelled) setLoading(false); });
-    }, 300);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [q, excludeVersionId]);
-  return (
-    <div className="space-y-2">
-      <Input placeholder="Buscar tarefa por nome ou key (mín. 2 letras)…" value={q} onChange={(e) => setQ(e.target.value)} />
-      {loading && <p className="text-xs text-neutral-500">Buscando…</p>}
-      {!loading && q.trim().length >= 2 && results.length === 0 && <p className="text-xs text-neutral-500">Nenhuma tarefa encontrada.</p>}
-      <ul className="space-y-1">
-        {results.map((r) => (
-          <li key={r.id} className="flex items-center justify-between gap-2 rounded border border-neutral-200 px-2 py-1.5 text-sm dark:border-neutral-800">
-            <div className="min-w-0">
-              <div className="truncate font-medium">{r.name} <span className="text-xs text-neutral-400">({r.key})</span></div>
-              <div className="truncate text-xs text-neutral-500">
-                {r.product_name} · {r.version_label} · {r.step_count} etapa(s){r.specialty_name ? ` · ${r.specialty_name}` : ""}{r.questionnaire ? ` · questionário: ${r.questionnaire.name}` : ""}
-              </div>
-            </div>
-            <Button size="sm" variant="outline" onClick={() => onImport(r.id)}>Importar cópia</Button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 function TaskInlineEdit({ task, refs, act, effortHighlighted, durationHighlighted, effortDone, durationDone, onSaved }: any) {
-  const [t, setT] = useState({ execution_mode: task.execution_mode, estimated_minutes: task.estimated_minutes ?? "", specialty_id: task.specialty?.id ?? "", is_conditional: task.is_conditional, requires_review: task.requires_review, requires_client_approval: task.requires_client_approval });
+  const [t, setT] = useState({ execution_mode: task.execution_mode, estimated_minutes: task.estimated_minutes ?? "", specialty_id: task.specialty?.id ?? "", is_conditional: task.is_conditional, requires_review: task.requires_review, requires_client_approval: task.requires_client_approval, requires_qualification: task.requires_qualification ?? false, cycle_type: task.cycle_type ?? "recorrente", repeat_rule: task.repeat_rule ?? "all_cycles", repeat_every_cycles: task.repeat_every_cycles ?? "", executor_continuity: task.executor_continuity ?? "not_allowed", asset_rule: task.asset_rule ?? "first_only", asset_revalidate_days: task.asset_revalidate_days ?? "" });
+  const [scopeAsk, setScopeAsk] = useState(false);
   const [showNewSpecialty, setShowNewSpecialty] = useState(false);
-  const saveTask = () => act(
-    () => apiClient.updateCatalog2Task(task.id, { ...t, estimated_minutes: t.estimated_minutes === "" ? null : Number(t.estimated_minutes), specialty_id: t.specialty_id || null }),
-    "Tarefa salva."
+  const doSaveTask = (scope?: "product" | "model") => act(
+    () => apiClient.updateCatalog2Task(task.id, { ...t, estimated_minutes: t.estimated_minutes === "" ? null : Number(t.estimated_minutes), specialty_id: t.specialty_id || null, repeat_every_cycles: t.repeat_rule === "every_n_cycles" && t.repeat_every_cycles !== "" ? Number(t.repeat_every_cycles) : null, asset_revalidate_days: t.asset_rule === "every_x_days" && t.asset_revalidate_days !== "" ? Number(t.asset_revalidate_days) : null, ...(scope ? { scope } : {}) }),
+    scope === "model" ? "Modelo global atualizado." : "Tarefa salva."
   ).then((result: any) => {
     if (!result) return;
     if (effortHighlighted) onSaved("catalog2-task-effort");
     if (durationHighlighted && t.estimated_minutes !== "" && Number(t.estimated_minutes) >= 0) onSaved("catalog2-task-duration");
   });
+  // Tarefa vinculada a modelo global: sempre pergunta ONDE aplicar (só neste produto x modelo global).
+  const saveTask = () => (task.task_model_id != null ? setScopeAsk(true) : void doSaveTask());
   return (
     <div className="mt-2 space-y-2 text-xs">
       <div className="flex flex-wrap items-center gap-2">
@@ -1077,6 +1232,21 @@ function TaskInlineEdit({ task, refs, act, effortHighlighted, durationHighlighte
         <label><input type="checkbox" checked={t.is_conditional} onChange={(e) => setT({ ...t, is_conditional: e.target.checked })} /> condicional</label>
         <label><input type="checkbox" checked={t.requires_review} onChange={(e) => setT({ ...t, requires_review: e.target.checked })} /> revisão</label>
         <label><input type="checkbox" checked={t.requires_client_approval} onChange={(e) => setT({ ...t, requires_client_approval: e.target.checked })} /> aprovação cliente</label>
+        <label className="flex items-center gap-1">ciclo
+          <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.cycle_type} onChange={(e) => setT({ ...t, cycle_type: e.target.value })}>{Object.entries(CYCLE_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        </label>
+        <label className="flex items-center gap-1">repetição
+          <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.repeat_rule} onChange={(e) => setT({ ...t, repeat_rule: e.target.value })}>{Object.entries(REPEAT_RULE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          {t.repeat_rule === "every_n_cycles" && <input type="number" min={1} className="w-14 rounded border border-neutral-300 bg-transparent px-1 dark:border-neutral-700" value={t.repeat_every_cycles} onChange={(e) => setT({ ...t, repeat_every_cycles: e.target.value })} />}
+        </label>
+        <label className="flex items-center gap-1" title="Quando a etapa de validação dos acessos pode ser dispensada ou precisa repetir">acessos
+          <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.asset_rule} onChange={(e) => setT({ ...t, asset_rule: e.target.value })}>{Object.entries(ASSET_RULE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          {t.asset_rule === "every_x_days" && <input type="number" min={1} placeholder="dias" className="w-14 rounded border border-neutral-300 bg-transparent px-1 dark:border-neutral-700" value={t.asset_revalidate_days} onChange={(e) => setT({ ...t, asset_revalidate_days: e.target.value })} />}
+        </label>
+        <label className="flex items-center gap-1" title="Permitir continuidade com o mesmo executor do ciclo anterior">continuidade
+          <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.executor_continuity} onChange={(e) => setT({ ...t, executor_continuity: e.target.value })}>{Object.entries(CONTINUITY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        </label>
+        <label title="A entrega concluída só é aceita depois da aprovação de um líder/qualificador"><input type="checkbox" checked={t.requires_qualification} onChange={(e) => setT({ ...t, requires_qualification: e.target.checked })} /> qualificação obrigatória</label>
         <Button id={"task-effort:" + task.id} size="sm" variant="outline" className={`h-6 ${effortDone ? "border-emerald-500 bg-emerald-100 text-emerald-900 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : effortHighlighted ? "border-amber-500 bg-amber-100 text-amber-950 ring-2 ring-amber-400 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-100" : ""}`} onClick={saveTask}>Salvar tarefa</Button>
       </div>
       {effortHighlighted && <p className="text-amber-700 dark:text-amber-300">Dados provisórios de teste: revise os valores já preenchidos e clique em <strong>Salvar tarefa</strong> para confirmá-los como dados reais.</p>}
@@ -1088,6 +1258,7 @@ function TaskInlineEdit({ task, refs, act, effortHighlighted, durationHighlighte
       )}
       {(t.execution_mode === "ia" || t.execution_mode === "hibrido") && <AiConfig task={task} act={act} />}
       <QuestionnaireSection task={task} refs={refs} act={act} />
+      {task.task_model_id != null && <ModelScopeDialog open={scopeAsk} kindLabel="tarefa" modelId={task.task_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void doSaveTask(sc); }} />}
     </div>
   );
 }
@@ -1351,22 +1522,48 @@ function AiConfig({ task, act }: any) {
 }
 // Vem PRÉ-PREENCHIDA com o nome, a especialidade e as horas da própria tarefa
 // (pedido do usuário: já vir preenchido, só clicar para confirmar e ajustar depois).
-function AddStepRow({ onAdd, refs, ringClass, domId, task }: { onAdd: (b: any) => void; refs?: any; ringClass?: string; domId?: string; task?: any }) {
+function AddStepControl({ refs, ringClass, domId, task, act }: { refs?: any; ringClass?: string; domId?: string; task?: any; act: any }) {
   const defaults = () => ({
-    key: "principal",
     name: task?.name ?? "",
     estimated_minutes: task?.estimated_minutes != null ? String(task.estimated_minutes) : "",
     specialty_id: task?.specialty?.id ?? "",
+    purpose: "execucao",
+    execution_mode: task?.execution_mode ?? "humano",
+    completion_criteria: "",
   });
   const [s, setS] = useState(defaults);
+  const [showCreate, setShowCreate] = useState(false);
+  const [pick, setPick] = useState(false);
   useEffect(() => { setS(defaults()); }, [task?.id, task?.name, task?.estimated_minutes, task?.specialty?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <li id={domId} className={`flex items-end gap-2 ${ringClass ?? ""}`}>
-      <Field label="key"><Input value={s.key} onChange={(e) => setS({ ...s, key: e.target.value })} /></Field>
-      <Field label="nome"><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} /></Field>
-      <Field label="especialidade"><SpecialtySelect refs={refs} value={s.specialty_id} onChange={(v: string) => setS({ ...s, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
-      <Field label="min"><Input type="number" value={s.estimated_minutes} onChange={(e) => setS({ ...s, estimated_minutes: e.target.value })} /></Field>
-      <Button size="sm" variant="outline" onClick={() => s.key && s.name && (onAdd({ key: s.key, name: s.name, estimated_minutes: s.estimated_minutes ? Number(s.estimated_minutes) : null, specialty_id: s.specialty_id || null }), setS(defaults()))}>Adicionar etapa</Button>
+    <li id={domId} className={`space-y-2 ${ringClass ?? ""}`}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline"><Plus className="h-4 w-4" /> Adicionar etapa <ChevronDown className="h-3.5 w-3.5" /></Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={() => { setPick(true); setShowCreate(false); }}><Search className="h-4 w-4" /> Selecionar etapa existente</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> Criar nova etapa</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => act(() => apiClient.addCatalog2AccessValidationStep(task.id), "Etapa \"Validação e organização dos acessos\" adicionada no início da tarefa.")}><ChevronRight className="h-4 w-4" /> Validação e organização dos acessos (padrão)</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {showCreate && (
+        <div className="space-y-2 rounded border border-dashed border-neutral-300 p-2 dark:border-neutral-700">
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label="Nome"><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} /></Field>
+            <Field label="Finalidade"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={s.purpose} onChange={(e) => setS({ ...s, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+            <Field label="Executor"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={s.execution_mode} onChange={(e) => setS({ ...s, execution_mode: e.target.value })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+            <Field label="Especialidade"><SpecialtySelect refs={refs} value={s.specialty_id} onChange={(v: string) => setS({ ...s, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
+            <Field label="Min"><Input className="w-20" type="number" value={s.estimated_minutes} onChange={(e) => setS({ ...s, estimated_minutes: e.target.value })} /></Field>
+          </div>
+          <Field label="Critério de conclusão"><Input value={s.completion_criteria} onChange={(e) => setS({ ...s, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
+          <div className="flex gap-2">
+            <Button size="sm" disabled={!s.name.trim()} onClick={() => act(() => apiClient.addCatalog2Step(task.id, { name: s.name.trim(), estimated_minutes: s.estimated_minutes ? Number(s.estimated_minutes) : null, specialty_id: s.specialty_id || null, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria.trim() || null }), "Etapa criada e cadastrada no catálogo global de modelos.").then((r: any) => { if (r) { setS(defaults()); setShowCreate(false); } })}>Criar etapa</Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>Cancelar</Button>
+          </div>
+        </div>
+      )}
+      <ModelPickerDialog kind="step" open={pick} refs={refs} onClose={() => setPick(false)} onPick={(id) => act(() => apiClient.addCatalog2StepFromModel(task.id, id), "Etapa adicionada a partir do modelo global.")} />
     </li>
   );
 }
@@ -1408,12 +1605,12 @@ function ConditionsTab({ version, readOnly, act }: any) {
 // ── 7. Custos e preço (simulador) ───────────────────────────────────
 // Prazo comercial base da versão: é o que o cliente vê como prazo de entrega.
 // Não é a soma das tarefas (isso é só a estimativa interna de esforço).
-function DeadlineBaseField({ version, act, ringOf }: any) {
+function DeadlineBaseField({ version, act, ringOf, locked }: any) {
   const [v, setV] = useState<string>(version.base_commercial_deadline_days == null ? "" : String(version.base_commercial_deadline_days));
   useEffect(() => { setV(version.base_commercial_deadline_days == null ? "" : String(version.base_commercial_deadline_days)); }, [version.id, version.base_commercial_deadline_days]);
   const n = Number(v);
   const valid = v !== "" && Number.isInteger(n) && n >= 1;
-  const readOnly = version.state === "publicada";
+  const readOnly = version.state === "publicada" || !!locked;
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState(false);
   return (
@@ -2763,7 +2960,7 @@ function HeaderIconBtn({ label, onClick, children, className = "" }: { label: st
   );
 }
 
-function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish, versionInfo, priceInfo }: any) {
+function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish, versionInfo, priceInfo, editMode, onStartEdit, onStopEdit, onChangeStatus }: any) {
   const { pinned, toggle } = usePinEntry(pin ?? null);
   const [spinning, setSpinning] = useState(false);
   const refresh = async () => {
@@ -2779,7 +2976,27 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
       <div className="min-w-[12rem] flex-1">
         <h2 className="min-w-0 text-xl font-bold leading-tight text-white">{product.internal_name}</h2>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <Badge className={catalog2StatusTone(product.status)}>{catalog2StatusLabel(product.status)}</Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                disabled={!editMode}
+                aria-label="Status do produto"
+                title={editMode ? "Status comercial do produto — clique para alterar" : "Status comercial do produto — clique em Editar para alterar"}
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold shadow-sm transition disabled:cursor-default ${editMode ? "hover:brightness-95" : ""} ${catalog2StatusTone(product.status)}`}
+              >
+                {catalog2StatusLabel(product.status)}{editMode && <ChevronDown className="h-3 w-3" />}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {CATALOG2_STATUSES.map((st) => (
+                <DropdownMenuItem key={st} onClick={() => onChangeStatus(st)} className="flex flex-col items-start gap-0.5">
+                  <span className="font-semibold">{CATALOG2_STATUS_LABEL[st]}{st === product.status ? " ✓" : ""}</span>
+                  <span className="max-w-[16rem] text-[11px] leading-snug text-muted-foreground">{CATALOG2_STATUS_MEANING[st]}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           {product.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
           {priceInfo && <span title={priceInfo.hint} className="inline-flex items-center gap-1 rounded-full bg-white/15 px-3 py-0.5 text-sm font-bold text-white ring-1 ring-white/25">{priceInfo.text}</span>}
         </div>
@@ -2787,15 +3004,15 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
       <div className="relative">
         <select
           aria-label="Versão do produto"
-          className="h-10 cursor-pointer appearance-none rounded-xl border border-white/25 bg-white/10 pl-3.5 pr-9 text-sm font-semibold text-white shadow-sm backdrop-blur transition-colors hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 [&>option]:bg-white [&>option]:text-slate-900"
+          className="h-8 max-w-[13rem] cursor-pointer appearance-none rounded-lg border border-white/25 bg-white/10 pl-2.5 pr-7 text-xs font-semibold text-white shadow-sm backdrop-blur transition-colors hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 [&>option]:bg-white [&>option]:text-slate-900"
           value={selectedVersionId}
           onChange={(ev) => onSelectVersion(ev.target.value)}
         >
           {product.versions.map((v: any) => (
-            <option key={v.id} value={v.id}>v{v.version_number} — {v.state}{v.is_published_current ? " (publicada atual)" : ""}</option>
+            <option key={v.id} value={v.id}>v{v.version_number} — {v.state === "publicada" ? "Publicada" : v.state === "rascunho" ? "Rascunho" : v.state}{v.is_published_current ? " (atual)" : ""}</option>
           ))}
         </select>
-        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/80" />
+        <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/80" />
       </div>
       {versionInfo?.published && (
         <TooltipProvider delayDuration={100}>
@@ -2808,12 +3025,19 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
             <TooltipContent side="bottom" sideOffset={8} className="max-w-sm space-y-2 p-4 text-[13px] leading-relaxed">
               <p className="text-sm font-bold">{versionInfo.current ? `v${versionInfo.number} é a versão publicada atual` : `v${versionInfo.number} é uma versão anterior`}</p>
               <p>Versões publicadas ficam <strong>somente leitura</strong> — assim o que o cliente viu e contratou nunca muda por engano.</p>
-              <p>Para alterar o produto, basta <strong>abrir o editor</strong>: o sistema cria sozinho o próximo rascunho (v{versionInfo.number + 1}) e você edita nele. Se não mudar nada, o rascunho é descartado ao fechar.</p>
+              <p>Para alterar o produto, clique em <strong>Editar</strong>: o sistema cria o próximo rascunho (v{versionInfo.number + 1}) e você edita nele. Se não mudar nada, o rascunho é descartado ao fechar.</p>
               <p>Ao clicar em <strong>Publicar</strong>, o rascunho substitui a versão atual, e a anterior fica guardada. {versionInfo.current ? "" : "Nesta versão, o botão Publicar volta a torná-la a versão vigente."}</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
+      <button
+        type="button"
+        onClick={editMode ? onStopEdit : onStartEdit}
+        className={`inline-flex h-10 items-center gap-2 rounded-xl px-4 text-sm font-semibold shadow-sm ring-1 ring-white/25 transition ${editMode ? "bg-white/15 text-white hover:bg-white/25" : "bg-white text-slate-900 hover:bg-white/90"}`}
+      >
+        {editMode ? <><Lock className="h-4 w-4" /> Travar edição</> : <><Pencil className="h-4 w-4" /> Editar</>}
+      </button>
       {canPublish && (
         <button
           type="button"

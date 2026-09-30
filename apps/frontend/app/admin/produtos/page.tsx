@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -92,7 +93,7 @@ import { StandardModalDialog } from "@/components/standard-modal-dialog";
 // de Produtos"); aquela rota agora só redireciona pra cá (ver
 // novo-catalogo/page.tsx), preservando o produto selecionado via ?produto=.
 
-// Rótulo/cor de status — módulo compartilhado com /admin/catalogo-produtos
+// Rótulo/cor de status — módulo compartilhado com /admin/produtos
 // (reunião 2026-09-14, Item 2): ver apps/frontend/lib/catalog2-status.ts.
 const STATUS_LABEL: Record<string, string> = CATALOG2_STATUS_LABEL;
 const STATUS_TONE: Record<string, string> = CATALOG2_STATUS_TONE;
@@ -232,7 +233,7 @@ export default function AdminProdutosPage() {
   const isAdminMaster = useIsAdminMaster();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  // /admin/produtos/<número> abre o editor daquele produto (link curto, igual
+  // /admin/cadastro-produtos/<número> abre o editor daquele produto (link curto, igual
   // ao do Catálogo). Aceita também o id interno e o antigo ?produto=<id>.
   const { produtoId: routeProductId } = useParams<{ produtoId?: string }>();
   const [state, setState] = useState<
@@ -260,7 +261,7 @@ export default function AdminProdutosPage() {
   const openProduct = useCallback(
     (id: string | null) => {
       setOpenProductId(id);
-      if (!id) navigate({ pathname: "/admin/produtos", search: "" }, { replace: true });
+      if (!id) navigate({ pathname: "/admin/cadastro-produtos", search: "" }, { replace: true });
     },
     [navigate],
   );
@@ -276,7 +277,7 @@ export default function AdminProdutosPage() {
     apiClient
       .getCatalog2ProductIdByNumber(routeProductId)
       .then((r) => { if (!cancelled) { resolvedRouteRef.current = routeProductId; setOpenProductId(r.id); } })
-      .catch(() => { if (!cancelled) navigate("/admin/produtos", { replace: true }); });
+      .catch(() => { if (!cancelled) navigate("/admin/cadastro-produtos", { replace: true }); });
     return () => { cancelled = true; };
   }, [openProductId, routeProductId, navigate]);
   useEffect(() => {
@@ -292,7 +293,7 @@ export default function AdminProdutosPage() {
     if (!openProductId || openProductNumber == null) return;
     if (routeProductId === String(openProductNumber) && !searchParams.get("produto")) return;
     resolvedRouteRef.current = String(openProductNumber);
-    navigate({ pathname: `/admin/produtos/${openProductNumber}`, search: "" }, { replace: true });
+    navigate({ pathname: `/admin/cadastro-produtos/${openProductNumber}`, search: "" }, { replace: true });
   }, [openProductId, openProductNumber, routeProductId, searchParams, navigate]);
 
   const viewProduct = useCallback(
@@ -796,7 +797,7 @@ export default function AdminProdutosPage() {
                   id="page-produtos"
                   label="Cadastro de Produtos"
                   icon={Package}
-                  path="/admin/produtos"
+                  path="/admin/cadastro-produtos"
                 />
               </>
             }
@@ -1800,7 +1801,7 @@ export default function AdminProdutosPage() {
                 id: `catalog2-produto-${openProductId}`,
                 label: "Editor de produto",
                 icon: Package,
-                path: openProductNumber != null ? `/admin/produtos/${openProductNumber}` : `/admin/produtos/${openProductId}`,
+                path: openProductNumber != null ? `/admin/cadastro-produtos/${openProductNumber}` : `/admin/cadastro-produtos/${openProductId}`,
               }}
             />
           )}
@@ -1818,7 +1819,7 @@ export default function AdminProdutosPage() {
                   id: `catalog2-detalhe-${viewProductId}`,
                   label: "Detalhe do produto",
                   icon: Eye,
-                  path: `/admin/produtos?ver=${viewProductId}`,
+                  path: `/admin/cadastro-produtos?ver=${viewProductId}`,
                 }
               : undefined
           }

@@ -6,7 +6,7 @@ import { SidebarProvider } from "@/contexts/sidebar-context"
 import { OpenScreensProvider } from "@/contexts/open-screens-context"
 import AdminProdutosPage from "@/app/admin/produtos/page"
 
-// 2026-09 (consolidação catalog2): esta é a rota /admin/produtos ("Cadastro
+// 2026-09 (consolidação catalog2): esta é a rota /admin/cadastro-produtos ("Cadastro
 // de Produtos"), antes /admin/produtos/novo-catalogo ("Preparação de
 // Produtos") — mesmo componente, mesmos dados (catalog2), nome/rota novos.
 // O construtor agora abre dentro do container padrão (EmbeddedSlideScreen +

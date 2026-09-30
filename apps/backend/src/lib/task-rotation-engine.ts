@@ -485,6 +485,11 @@ export async function startTaskRotation(taskId: string): Promise<void> {
   });
   if (!task || task.nomade_responsavel_id) return;
 
+  // Continuidade com o mesmo executor (Pedido 2): pode direcionar direto, ou segurar a
+  // tarefa até o cliente/líder escolher — antes de qualquer oferta na fila.
+  const continuity = await (await import("./catalog2-continuity")).applyContinuityAssignment(taskId);
+  if (continuity !== "none") return;
+
   // O motor de etapas pode reavaliar uma etapa enquanto ela aguarda a
   // resposta. Não recrie o episódio nem cancele a oferta já pendente: só
   // avance se ela tiver expirado. Isso torna a chamada segura/idempotente.
@@ -805,7 +810,7 @@ export async function sendManualOffer(taskId: string, nomadeId: string, actorUse
   return { offerId: offer.id };
 }
 
-export async function assignNomadeDirectly(taskId: string, nomadeId: string, actorUserId: string): Promise<void> {
+export async function assignNomadeDirectly(taskId: string, nomadeId: string, actorUserId: string, opts: { criterio?: string; detalhes?: string } = {}): Promise<void> {
   const nomade = await prisma.nomade.findUnique({ where: { id: nomadeId }, select: { id: true, status: true } });
   if (!nomade || nomade.status !== "ativo") throw new RotationError("Nômade indisponível.", 422, "nomade_unavailable");
   const now = new Date();
@@ -821,7 +826,7 @@ export async function assignNomadeDirectly(taskId: string, nomadeId: string, act
     });
     if (waitingStage) await tx.projectTaskStage.update({ where: { id: waitingStage.id }, data: { nomade_id: nomadeId, status: "EM_ANDAMENTO" } });
     await tx.taskOffer.updateMany({ where: { project_task_id: taskId, status: "pendente" }, data: { status: "cancelada", close_reason: "cancelled_task_assigned", responded_at: now } });
-    await tx.taskAssignmentHistory.create({ data: { project_task_id: taskId, nomade_id: nomadeId, criterio: "admin_master", automatico: false, resultado: "atribuido", detalhes: JSON.stringify({ accepted_previously_confirmed: true, actor_user_id: actorUserId }) } });
+    await tx.taskAssignmentHistory.create({ data: { project_task_id: taskId, nomade_id: nomadeId, criterio: opts.criterio ?? "admin_master", automatico: opts.criterio === "continuidade", resultado: "atribuido", detalhes: JSON.stringify({ accepted_previously_confirmed: true, actor_user_id: actorUserId, ...(opts.detalhes ? { note: opts.detalhes } : {}) }) } });
     return true;
   });
   if (!changed) throw new RotationError("A tarefa já foi atribuída ou não existe.", 409, "task_already_assigned");

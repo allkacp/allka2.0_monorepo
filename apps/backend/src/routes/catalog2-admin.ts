@@ -15,6 +15,12 @@ import { writeAccessAudit } from "../lib/product-feedback-service";
 import { logCommercialChangeEvent } from "../lib/catalog2-commercial-change-log";
 import { CATALOG2_PERIODS, isCatalog2Period, isCurrentlyContractablePeriod, listPeriodsForAdmin } from "../lib/catalog2-periods";
 import { recordCatalog2ProductHistory, listCatalog2ProductHistory } from "../lib/catalog2-product-history";
+import { CONTINUITY_MODES } from "../lib/catalog2-continuity";
+import { DEPENDENCY_TARGET_KINDS, DEPENDENCY_BEHAVIORS, DEPENDENCY_TARGET_LABEL, DEPENDENCY_BEHAVIOR_LABEL } from "../lib/project-dependencies";
+import { ASSET_RULES } from "../lib/client-assets";
+import { CYCLE_TYPES, REPEAT_RULES, IMPLEMENTATION_RULES, SELL_MODES } from "../lib/catalog2-cycles";
+import { ACCESS_TYPES, ACCESS_TYPE_KEYS, replaceVersionAccess } from "../lib/catalog2-access";
+import { createTaskModel, createStepModel, findOrCreateTaskModel, syncTaskModelSteps, taskModelSignature, stepModelSignature, STEP_PURPOSES, autoKey, addTaskFromModel, addStepFromModel, taskDataFromModel, stepDataFromModel } from "../lib/catalog2-models";
 import { maybeCreateCatalog2ActivationJobOnStatusTransition, notifyValidQuoteOwnersOfCommercialChange } from "../lib/catalog2-notifications";
 import { summarizeCatalog2ProductHistory } from "../lib/catalog2-product-history-ai";
 import { summarizeVersionChanges } from "../lib/catalog2-change-summary";
@@ -987,13 +993,20 @@ router.put("/versions/:id", async (req, res, next) => {
       internal_notes: z.string().max(8000).nullish(),
       change_summary: z.string().max(2000).nullish(),
       base_commercial_deadline_days: z.number().int().min(1).max(3650).nullish(),
+      // Modalidades de contratação (Pedido 2)
+      accepts_one_time: z.boolean().optional(),
+      accepts_recurring: z.boolean().optional(),
+      has_initial_implementation: z.boolean().optional(),
+      implementation_rule: z.enum(IMPLEMENTATION_RULES).optional(),
+      implementation_blocks_operation: z.boolean().optional(),
+      sell_mode: z.enum(SELL_MODES).optional(),
     }).parse(req.body);
     // deliverables/client_info/internal_notes ficam no full_description
     // estruturado por marcadores? Não — mantemos simples: só os campos do
     // schema. Os extras entram no summary/description conforme a UI.
     const before = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: req.params.id as string } });
     const data: Record<string, unknown> = { updated_by_user_id: req.user!.id };
-    for (const k of ["title", "summary", "full_description", "change_summary", "base_commercial_deadline_days"] as const) if (d[k] !== undefined) data[k] = d[k];
+    for (const k of ["title", "summary", "full_description", "change_summary", "base_commercial_deadline_days", "accepts_one_time", "accepts_recurring", "has_initial_implementation", "implementation_rule", "implementation_blocks_operation", "sell_mode"] as const) if (d[k] !== undefined) data[k] = d[k];
     const updated = await prisma.catalog2ProductVersion.update({ where: { id: req.params.id as string }, data });
     // Item 7 (reunião 2026-09-14): descrição legível com o que realmente
     // mudou — reaproveita o MESMO Catalog2VersionEvent já escrito aqui
@@ -1676,18 +1689,32 @@ router.get("/tasks/search", async (req, res, next) => {
   } catch (e) { next(e); }
 });
 const taskSchema = z.object({
-  key: z.string().min(1).max(60), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), objective: z.string().max(4000).nullish(),
+  key: z.string().min(1).max(60).optional(), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), objective: z.string().max(4000).nullish(),
   sort_order: z.number().int().optional(), specialty_id: z.string().nullish(),
   execution_mode: z.enum(CATALOG2_EXECUTION_MODES).optional(),
   estimated_minutes: z.number().int().nonnegative().nullish(),
   requires_review: z.boolean().optional(), requires_client_approval: z.boolean().optional(), is_conditional: z.boolean().optional(),
+  requires_qualification: z.boolean().optional(),
+  // Qualificador designado (nulo = líder da área) — modelagem preparada pra mais de um qualificador.
+  qualifier_user_id: z.string().nullish(),
+  // Ciclo: implementação inicial, recorrente, revalidação, avulso ou sob demanda.
+  cycle_type: z.enum(CYCLE_TYPES).optional(),
+  repeat_rule: z.enum(REPEAT_RULES).optional(),
+  repeat_every_cycles: z.number().int().min(1).max(60).nullish(),
+  executor_continuity: z.enum(CONTINUITY_MODES).optional(),
+  asset_rule: z.enum(ASSET_RULES).optional(),
+  asset_revalidate_days: z.number().int().min(1).max(730).nullish(),
 });
+// Campos do modelo global de tarefa que uma edição "no modelo" pode levar junto.
+const TASK_MODEL_FIELDS = ["name", "description", "execution_mode", "specialty_id", "estimated_minutes", "is_conditional", "requires_client_approval", "requires_qualification", "cycle_type", "repeat_rule", "repeat_every_cycles", "executor_continuity", "asset_rule", "asset_revalidate_days"] as const;
 router.post("/versions/:id/tasks", async (req, res, next) => {
   try {
     const version = await editableVersionOrThrow(req.params.id as string);
     const d = taskSchema.parse(req.body);
     const created = await prisma.$transaction(async (tx) => {
-      const c = await tx.catalog2Task.create({ data: { version_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, objective: d.objective ?? null, sort_order: d.sort_order ?? 99, specialty_id: d.specialty_id ?? null, execution_mode: d.execution_mode ?? "humano", estimated_minutes: d.estimated_minutes ?? null, requires_review: d.requires_review ?? false, requires_client_approval: d.requires_client_approval ?? false, is_conditional: d.is_conditional ?? false } });
+      const model = await createTaskModel(tx, { name: d.name, description: d.description, execution_mode: d.execution_mode, specialty_id: d.specialty_id, estimated_minutes: d.estimated_minutes, is_conditional: d.is_conditional, requires_client_approval: d.requires_client_approval, requires_qualification: d.requires_qualification, cycle_type: d.cycle_type, repeat_rule: d.repeat_rule, repeat_every_cycles: d.repeat_every_cycles, executor_continuity: d.executor_continuity, asset_rule: d.asset_rule, asset_revalidate_days: d.asset_revalidate_days }, req.user!.id);
+      const takenKeys = new Set((await tx.catalog2Task.findMany({ where: { version_id: req.params.id as string }, select: { key: true } })).map((t) => t.key));
+      const c = await tx.catalog2Task.create({ data: { task_model_id: model.id, task_model_revision: model.revision, requires_qualification: d.requires_qualification ?? false, cycle_type: d.cycle_type ?? "recorrente", repeat_rule: d.repeat_rule ?? "all_cycles", repeat_every_cycles: d.repeat_every_cycles ?? null, executor_continuity: d.executor_continuity ?? "not_allowed", asset_rule: d.asset_rule ?? "first_only", asset_revalidate_days: d.asset_revalidate_days ?? null, version_id: req.params.id as string, key: d.key ?? autoKey("tarefa", model.id, takenKeys), name: d.name, description: d.description ?? null, objective: d.objective ?? null, sort_order: d.sort_order ?? 99, specialty_id: d.specialty_id ?? null, execution_mode: d.execution_mode ?? "humano", estimated_minutes: d.estimated_minutes ?? null, requires_review: d.requires_review ?? false, requires_client_approval: d.requires_client_approval ?? false, is_conditional: d.is_conditional ?? false } });
       await recordCatalog2ProductHistory(tx, {
         productId: version.product_id, versionId: version.id, eventType: "task_added",
         description: `Tarefa "${c.name}" adicionada.`, after: { key: c.key, name: c.name },
@@ -1703,7 +1730,9 @@ router.put("/tasks/:id", async (req, res, next) => {
     const version = await versionOfTask(req.params.id as string);
     const before = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string } });
     const d = taskSchema.partial().parse(req.body);
-    const data: typeof d & { effort_is_provisional?: boolean; effort_source?: string; effort_provisional_reason?: string | null } = { ...d };
+    // "Alterar somente neste produto" (padrão) x "Atualizar modelo global".
+    const scope: "product" | "model" = req.body?.scope === "model" ? "model" : "product";
+    const data: typeof d & { task_model_revision?: number; effort_is_provisional?: boolean; effort_source?: string; effort_provisional_reason?: string | null } = { ...d };
     // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
     // um humano editando especialidade/tempo aqui pelo admin SEMPRE
     // "gradua" a tarefa pra dado real revisado — nunca deixa um valor
@@ -1715,8 +1744,17 @@ router.put("/tasks/:id", async (req, res, next) => {
       data.effort_provisional_reason = null;
     }
     const updated = await prisma.$transaction(async (tx) => {
+      if (scope === "model" && before.task_model_id != null) {
+        const cur = await tx.catalog2TaskModel.findUniqueOrThrow({ where: { id: before.task_model_id } });
+        const patch: Record<string, unknown> = {};
+        for (const k of TASK_MODEL_FIELDS) if (k in d) patch[k] = (d as Record<string, unknown>)[k];
+        const merged = { ...cur, ...patch } as typeof cur;
+        const nm = await tx.catalog2TaskModel.update({ where: { id: cur.id }, data: { ...patch, signature: taskModelSignature(merged), revision: { increment: 1 } } });
+        data.task_model_revision = nm.revision;
+      }
       const u = await tx.catalog2Task.update({ where: { id: req.params.id as string }, data });
       const changed: string[] = [];
+      if (scope === "model" && before.task_model_id != null) changed.push(`modelo global Tarefa #${before.task_model_id} atualizado`);
       if (d.name !== undefined && d.name !== before.name) changed.push(`nome de "${before.name}" para "${d.name}"`);
       if (d.specialty_id !== undefined && d.specialty_id !== before.specialty_id) changed.push("especialidade");
       if (d.estimated_minutes !== undefined && d.estimated_minutes !== before.estimated_minutes) changed.push(`tempo estimado de ${before.estimated_minutes ?? "?"} para ${d.estimated_minutes ?? "?"} min`);
@@ -1755,15 +1793,17 @@ router.post("/tasks/:id/duplicate", async (req, res, next) => {
     await versionOfTask(req.params.id as string);
     const src = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string }, include: { steps: true, ai: true } });
     const dup = await prisma.$transaction(async (tx) => {
+      const dupModel = await findOrCreateTaskModel(tx, { name: `${src.name} (cópia)`, description: src.description, execution_mode: src.execution_mode, specialty_id: src.specialty_id, estimated_minutes: src.estimated_minutes, questionnaire_id: src.questionnaire_id, is_conditional: src.is_conditional, requires_client_approval: src.requires_client_approval });
       const t = await tx.catalog2Task.create({
         data: {
+          task_model_id: dupModel.id, task_model_revision: dupModel.revision, requires_qualification: src.requires_qualification, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
           version_id: src.version_id, key: `${src.key}-copia-${Date.now().toString(36)}`, name: `${src.name} (cópia)`,
           description: src.description, objective: src.objective, sort_order: src.sort_order + 1,
           specialty_id: src.specialty_id, execution_mode: src.execution_mode, estimated_minutes: src.estimated_minutes,
           requires_review: src.requires_review, requires_client_approval: src.requires_client_approval, is_conditional: src.is_conditional,
         },
       });
-      for (const s of src.steps) await tx.catalog2TaskStep.create({ data: { task_id: t.id, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
+      for (const s of src.steps) await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
       if (src.ai) await tx.catalog2TaskAI.create({ data: { task_id: t.id, provider: src.ai.provider, model: src.ai.model, est_input_tokens: src.ai.est_input_tokens, est_output_tokens: src.ai.est_output_tokens, unit_cost_input_per_1k: src.ai.unit_cost_input_per_1k, unit_cost_output_per_1k: src.ai.unit_cost_output_per_1k, currency: src.ai.currency, est_review_rounds: src.ai.est_review_rounds, cost_note: src.ai.cost_note, human_review_required: src.ai.human_review_required } });
       return t;
     });
@@ -1796,6 +1836,7 @@ router.post("/versions/:id/tasks/import", async (req, res, next) => {
     const imported = await prisma.$transaction(async (tx) => {
       const t = await tx.catalog2Task.create({
         data: {
+          task_model_id: src.task_model_id, task_model_revision: src.task_model_revision, requires_qualification: src.requires_qualification, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
           version_id: destVersionId, key, name: src.name,
           description: src.description, objective: src.objective, sort_order: 99,
           specialty_id: src.specialty_id, execution_mode: src.execution_mode, estimated_minutes: src.estimated_minutes,
@@ -1809,7 +1850,7 @@ router.post("/versions/:id/tasks/import", async (req, res, next) => {
         },
       });
       for (const s of src.steps) {
-        await tx.catalog2TaskStep.create({ data: { task_id: t.id, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
+        await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
       }
       if (src.ai) {
         await tx.catalog2TaskAI.create({ data: { task_id: t.id, provider: src.ai.provider, model: src.ai.model, est_input_tokens: src.ai.est_input_tokens, est_output_tokens: src.ai.est_output_tokens, unit_cost_input_per_1k: src.ai.unit_cost_input_per_1k, unit_cost_output_per_1k: src.ai.unit_cost_output_per_1k, currency: src.ai.currency, est_review_rounds: src.ai.est_review_rounds, cost_note: src.ai.cost_note, human_review_required: src.ai.human_review_required } });
@@ -1837,7 +1878,8 @@ router.put("/versions/:id/tasks/order", async (req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 
-const stepSchema = z.object({ key: z.string().min(1).max(60), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), sort_order: z.number().int().optional(), estimated_minutes: z.number().int().nonnegative().nullish(), is_conditional: z.boolean().optional(), specialty_id: z.string().nullish() });
+const stepSchema = z.object({ key: z.string().min(1).max(60).optional(), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), sort_order: z.number().int().optional(), estimated_minutes: z.number().int().nonnegative().nullish(), is_conditional: z.boolean().optional(), specialty_id: z.string().nullish(), purpose: z.enum(STEP_PURPOSES).nullish(), execution_mode: z.enum(CATALOG2_EXECUTION_MODES).nullish(), completion_criteria: z.string().max(4000).nullish(), first_execution_only: z.boolean().optional(), skip_when_same_executor: z.boolean().optional() });
+const STEP_MODEL_FIELDS = ["name", "description", "estimated_minutes", "specialty_id", "purpose", "execution_mode", "completion_criteria", "first_execution_only", "skip_when_same_executor"] as const;
 // Item 7.1: "etapas" — o Item 7 nunca instrumentou etapas (só tarefas) —
 // fechado aqui (add/update/remove; reordenar segue o mesmo padrão de baixo
 // valor informativo já adotado pra tarefas/perguntas, não instrumentado).
@@ -1847,7 +1889,9 @@ router.post("/tasks/:id/steps", async (req, res, next) => {
     const task = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string }, select: { name: true } });
     const d = stepSchema.parse(req.body);
     const created = await prisma.$transaction(async (tx) => {
-      const c = await tx.catalog2TaskStep.create({ data: { task_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, estimated_minutes: d.estimated_minutes ?? null, is_conditional: d.is_conditional ?? false, specialty_id: d.specialty_id ?? null } });
+      const stepModel = await createStepModel(tx, { name: d.name, description: d.description, specialty_id: d.specialty_id, estimated_minutes: d.estimated_minutes, purpose: d.purpose, execution_mode: d.execution_mode, completion_criteria: d.completion_criteria }, req.user!.id);
+      const takenStepKeys = new Set((await tx.catalog2TaskStep.findMany({ where: { task_id: req.params.id as string }, select: { key: true } })).map((s) => s.key));
+      const c = await tx.catalog2TaskStep.create({ data: { step_model_id: stepModel.id, step_model_revision: stepModel.revision, task_id: req.params.id as string, key: d.key ?? autoKey("etapa", stepModel.id, takenStepKeys), name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, estimated_minutes: d.estimated_minutes ?? null, is_conditional: d.is_conditional ?? false, specialty_id: d.specialty_id ?? null } });
       await recordCatalog2ProductHistory(tx, {
         productId: version.product_id, versionId: version.id, eventType: "step_added",
         description: `Etapa "${c.name}" adicionada à tarefa "${task.name}".`, after: { key: c.key, name: c.name },
@@ -1856,6 +1900,289 @@ router.post("/tasks/:id/steps", async (req, res, next) => {
       return c;
     });
     res.status(201).json(created);
+  } catch (e) { handle(e, res, next); }
+});
+// ─── Pacotes de produtos e regras de dependência ───────────────────────────────
+// Pacote = 2+ produtos contratados juntos, cada um continua item independente. A regra diz
+// quem espera o quê (produto/tarefa/etapa/entregável/aprovação/ativo) e COMO espera.
+router.get("/dependency-options", (_req, res) => {
+  res.json({ target_kinds: DEPENDENCY_TARGET_KINDS.map((k) => ({ key: k, label: DEPENDENCY_TARGET_LABEL[k] })), behaviors: DEPENDENCY_BEHAVIORS.map((k) => ({ key: k, label: DEPENDENCY_BEHAVIOR_LABEL[k] })) });
+});
+
+const dependencyRuleSchema = z.object({
+  dependent_product_id: z.string().min(1),
+  dependent_task_key: z.string().max(60).nullish(),
+  target_kind: z.enum(DEPENDENCY_TARGET_KINDS),
+  target_product_id: z.string().nullish(),
+  target_task_key: z.string().max(60).nullish(),
+  target_step_key: z.string().max(60).nullish(),
+  target_asset_type: z.enum(ACCESS_TYPE_KEYS).nullish(),
+  behavior: z.enum(DEPENDENCY_BEHAVIORS).default("block_start"),
+  note: z.string().max(1000).nullish(),
+});
+type DependencyRuleInput = z.infer<typeof dependencyRuleSchema>;
+
+async function assertRuleValid(d: DependencyRuleInput, allowedProductIds: string[] | null) {
+  const products = new Set<string>([d.dependent_product_id, ...(d.target_product_id ? [d.target_product_id] : [])]);
+  const found = await prisma.catalog2Product.findMany({ where: { id: { in: [...products] } }, select: { id: true } });
+  if (found.length !== products.size) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (allowedProductIds) {
+    for (const id of products) if (!allowedProductIds.includes(id)) throw new Catalog2Error("Os produtos da regra precisam fazer parte do pacote.", 422);
+  }
+  if (d.target_kind !== "info_asset" && !d.target_product_id) throw new Catalog2Error("Escolha o produto que a tarefa espera.", 422);
+  if (d.target_kind === "info_asset" && !d.target_asset_type) throw new Catalog2Error("Escolha o tipo de acesso/ativo exigido.", 422);
+  if (["task", "step", "deliverable", "internal_approval", "client_approval"].includes(d.target_kind) && !d.target_task_key) throw new Catalog2Error("Informe a tarefa alvo.", 422);
+  if (d.target_kind === "step" && !d.target_step_key) throw new Catalog2Error("Informe a etapa alvo.", 422);
+  if (d.target_product_id && d.target_product_id === d.dependent_product_id && !d.target_task_key) throw new Catalog2Error("Um produto não pode depender dele mesmo.", 422);
+  // Tarefa/etapa alvo precisa existir na versão mais recente do produto alvo.
+  if (d.target_task_key && d.target_product_id) {
+    const v = await prisma.catalog2ProductVersion.findFirst({ where: { product_id: d.target_product_id }, orderBy: { version_number: "desc" }, select: { id: true } });
+    const t = v ? await prisma.catalog2Task.findFirst({ where: { version_id: v.id, key: d.target_task_key }, select: { id: true } }) : null;
+    if (!t) throw new Catalog2Error(`A tarefa "${d.target_task_key}" não existe no produto alvo.`, 422);
+    if (d.target_step_key && !(await prisma.catalog2TaskStep.findFirst({ where: { task_id: t.id, key: d.target_step_key }, select: { id: true } }))) {
+      throw new Catalog2Error(`A etapa "${d.target_step_key}" não existe na tarefa alvo.`, 422);
+    }
+  }
+}
+
+/** Dois produtos que se bloqueiam mutuamente no início nunca começariam. */
+async function assertNoStartCycle(d: DependencyRuleInput, packageId: string | null) {
+  if (d.behavior !== "block_start" || d.target_kind !== "product" || !d.target_product_id || d.target_product_id === d.dependent_product_id) return;
+  const reverse = await prisma.catalog2DependencyRule.findFirst({
+    where: { is_active: true, behavior: "block_start", target_kind: "product", package_id: packageId, dependent_product_id: d.target_product_id, target_product_id: d.dependent_product_id },
+    select: { id: true },
+  });
+  if (reverse) throw new Catalog2Error("Ciclo de dependência: o outro produto já espera este para começar.", 422, "dependency_cycle");
+}
+
+const ruleInclude = { dependent_product: { select: { id: true, internal_name: true } }, target_product: { select: { id: true, internal_name: true } } } as const;
+
+router.get("/packages", async (_req, res, next) => {
+  try {
+    const rows = await prisma.catalog2Package.findMany({
+      orderBy: { created_at: "desc" },
+      include: { items: { orderBy: { sort_order: "asc" }, include: { product: { select: { id: true, internal_name: true, sequence_number: true } } } }, rules: { orderBy: { created_at: "asc" }, include: ruleInclude } },
+    });
+    res.json({ data: rows });
+  } catch (e) { handle(e, res, next); }
+});
+
+const packageBody = z.object({ name: z.string().trim().min(2).max(191), description: z.string().max(4000).nullish(), product_ids: z.array(z.string()).min(2).max(20) });
+router.post("/packages", async (req, res, next) => {
+  try {
+    const d = packageBody.parse(req.body);
+    const ids = [...new Set(d.product_ids)];
+    if (ids.length < 2) throw new Catalog2Error("Um pacote precisa de pelo menos 2 produtos diferentes.", 422);
+    const existing = await prisma.catalog2Product.count({ where: { id: { in: ids } } });
+    if (existing !== ids.length) throw new Catalog2Error("Produto não encontrado.", 404);
+    const pkg = await prisma.catalog2Package.create({
+      data: { name: d.name, description: d.description ?? null, created_by_user_id: req.user!.id, items: { create: ids.map((id, i) => ({ catalog2_product_id: id, sort_order: i })) } },
+    });
+    await audit(req, "package_created", { package_id: pkg.id, name: pkg.name });
+    res.status(201).json({ id: pkg.id });
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/packages/:id", async (req, res, next) => {
+  try {
+    const d = packageBody.partial().extend({ is_active: z.boolean().optional() }).parse(req.body);
+    const id = req.params.id as string;
+    const pkg = await prisma.catalog2Package.findUnique({ where: { id }, include: { items: true } });
+    if (!pkg) throw new Catalog2Error("Pacote não encontrado.", 404);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2Package.update({ where: { id }, data: { ...(d.name !== undefined ? { name: d.name } : {}), ...(d.description !== undefined ? { description: d.description } : {}), ...(d.is_active !== undefined ? { is_active: d.is_active } : {}) } });
+      if (d.product_ids) {
+        const ids = [...new Set(d.product_ids)];
+        if (ids.length < 2) throw new Catalog2Error("Um pacote precisa de pelo menos 2 produtos diferentes.", 422);
+        await tx.catalog2PackageItem.deleteMany({ where: { package_id: id, catalog2_product_id: { notIn: ids } } });
+        for (const [i, pid] of ids.entries()) {
+          await tx.catalog2PackageItem.upsert({ where: { package_id_catalog2_product_id: { package_id: id, catalog2_product_id: pid } }, create: { package_id: id, catalog2_product_id: pid, sort_order: i }, update: { sort_order: i } });
+        }
+      }
+    });
+    await audit(req, "package_updated", { package_id: id });
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
+});
+router.post("/packages/:id/rules", async (req, res, next) => {
+  try {
+    const id = req.params.id as string;
+    const pkg = await prisma.catalog2Package.findUnique({ where: { id }, include: { items: true } });
+    if (!pkg) throw new Catalog2Error("Pacote não encontrado.", 404);
+    const d = dependencyRuleSchema.parse(req.body);
+    await assertRuleValid(d, pkg.items.map((i) => i.catalog2_product_id));
+    await assertNoStartCycle(d, id);
+    const r = await prisma.catalog2DependencyRule.create({
+      data: {
+        package_id: id, dependent_product_id: d.dependent_product_id, dependent_task_key: d.dependent_task_key ?? null, target_kind: d.target_kind,
+        target_product_id: d.target_product_id ?? null, target_task_key: d.target_task_key ?? null, target_step_key: d.target_step_key ?? null,
+        target_asset_type: d.target_asset_type ?? null, behavior: d.behavior, note: d.note ?? null,
+      },
+    });
+    await audit(req, "dependency_rule_created", { rule_id: r.id, package_id: id });
+    res.status(201).json({ id: r.id });
+  } catch (e) { handle(e, res, next); }
+});
+
+// Pré-requisito de PRODUTO (sem pacote): exige outro produto/tarefa/aprovação já concluído pelo mesmo cliente.
+router.get("/products/:id/prerequisites", async (req, res, next) => {
+  try {
+    const rows = await prisma.catalog2DependencyRule.findMany({ where: { package_id: null, dependent_product_id: req.params.id as string }, orderBy: { created_at: "asc" }, include: ruleInclude });
+    res.json({ data: rows });
+  } catch (e) { handle(e, res, next); }
+});
+router.post("/products/:id/prerequisites", async (req, res, next) => {
+  try {
+    const d = dependencyRuleSchema.parse({ ...req.body, dependent_product_id: req.params.id });
+    await assertRuleValid(d, null);
+    await assertNoStartCycle(d, null);
+    const r = await prisma.catalog2DependencyRule.create({
+      data: {
+        package_id: null, dependent_product_id: d.dependent_product_id, dependent_task_key: d.dependent_task_key ?? null, target_kind: d.target_kind,
+        target_product_id: d.target_product_id ?? null, target_task_key: d.target_task_key ?? null, target_step_key: d.target_step_key ?? null,
+        target_asset_type: d.target_asset_type ?? null, behavior: d.behavior, note: d.note ?? null,
+      },
+    });
+    await audit(req, "dependency_rule_created", { rule_id: r.id, product_id: d.dependent_product_id });
+    res.status(201).json({ id: r.id });
+  } catch (e) { handle(e, res, next); }
+});
+// Regras não são apagadas: desativar preserva o histórico do que já foi materializado.
+router.patch("/dependency-rules/:id/active", async (req, res, next) => {
+  try {
+    const is_active = z.object({ is_active: z.boolean() }).parse(req.body).is_active;
+    await prisma.catalog2DependencyRule.update({ where: { id: req.params.id as string }, data: { is_active } });
+    await audit(req, is_active ? "dependency_rule_activated" : "dependency_rule_deactivated", { rule_id: req.params.id as string });
+    res.json({ ok: true, is_active });
+  } catch (e) { handle(e, res, next); }
+});
+
+// ── Acessos externos exigidos pelo produto (Google Ads, Meta, Pixel…) ──────────
+// Só descreve QUAIS acessos são necessários — nunca senha/credencial.
+router.get("/access-types", (_req, res) => { res.json({ data: ACCESS_TYPES }); });
+router.put("/versions/:id/access-requirements", async (req, res, next) => {
+  try {
+    const version = await editableVersionOrThrow(req.params.id as string);
+    const d = z.object({
+      items: z.array(z.object({
+        access_type: z.enum(ACCESS_TYPE_KEYS),
+        label: z.string().max(191).nullish(),
+        is_required: z.boolean().optional(),
+        notes: z.string().max(2000).nullish(),
+      })).max(40),
+    }).parse(req.body);
+    for (const it of d.items) {
+      if (it.access_type === "other" && !it.label?.trim()) throw new Catalog2Error("Informe o nome do acesso em \"Outros\".", 422);
+    }
+    await prisma.$transaction(async (tx) => {
+      await replaceVersionAccess(tx, version.id, d.items);
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "access_requirements_updated",
+        description: `Acessos necessários do produto atualizados (${d.items.length}).`, actorUserId: req.user!.id,
+      });
+    });
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
+});
+// Adiciona à tarefa a etapa padrão "Validação e organização dos acessos".
+router.post("/tasks/:id/steps/access-validation", async (req, res, next) => {
+  try {
+    const version = await versionOfTask(req.params.id as string);
+    const model = await prisma.catalog2StepModel.findFirst({ where: { is_access_validation: true }, orderBy: { id: "asc" } });
+    if (!model) throw new Catalog2Error("O modelo padrão \"Validação e organização dos acessos\" ainda não existe neste ambiente. Ele chega junto com \"subir produtos\".", 404, "standard_step_missing");
+    if (!model.is_active) throw new Catalog2Error("O modelo padrão de acessos está inativo.", 422, "model_inactive");
+    const already = await prisma.catalog2TaskStep.count({ where: { task_id: req.params.id as string, step_model_id: model.id } });
+    if (already > 0) throw new Catalog2Error("Esta tarefa já tem a etapa de validação de acessos.", 409);
+    // Vai para o INÍCIO da tarefa: as etapas seguintes só abrem depois dela.
+    const created = await prisma.$transaction(async (tx) => {
+      await tx.catalog2TaskStep.updateMany({ where: { task_id: req.params.id as string }, data: { sort_order: { increment: 1 } } });
+      const s = await addStepFromModel(tx, req.params.id as string, model, 0);
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "step_added",
+        description: `Etapa padrão "${s.name}" (Etapa #${model.id}) adicionada no início da tarefa.`, after: { key: s.key, step_model_id: model.id },
+        actorUserId: req.user!.id,
+      });
+      return s;
+    });
+    res.status(201).json(created);
+  } catch (e) { handle(e, res, next); }
+});
+
+// "Selecionar modelo existente": cria a tarefa na versão VINCULADA ao modelo global
+// (Tarefa #ID), já com as etapas padrão do modelo.
+router.post("/versions/:id/tasks/from-model", async (req, res, next) => {
+  try {
+    const version = await editableVersionOrThrow(req.params.id as string);
+    const modelId = z.object({ model_id: z.number().int().min(1) }).parse(req.body).model_id;
+    const model = await prisma.catalog2TaskModel.findUnique({ where: { id: modelId } });
+    if (!model) throw new Catalog2Error("Modelo de tarefa não encontrado.", 404);
+    if (!model.is_active) throw new Catalog2Error("Este modelo está inativo e não pode ser usado em novos produtos.", 422, "model_inactive");
+    await syncTaskModelSteps(prisma, modelId);
+    const max = await prisma.catalog2Task.aggregate({ where: { version_id: version.id }, _max: { sort_order: true } });
+    const created = await prisma.$transaction(async (tx) => {
+      const t = await addTaskFromModel(tx, version.id, model, (max._max.sort_order ?? 0) + 1);
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "task_added",
+        description: `Tarefa "${t.name}" adicionada a partir do modelo global Tarefa #${model.id}.`, after: { key: t.key, name: t.name, task_model_id: model.id },
+        actorUserId: req.user!.id,
+      });
+      return t;
+    });
+    res.status(201).json(created);
+  } catch (e) { handle(e, res, next); }
+});
+router.post("/tasks/:id/steps/from-model", async (req, res, next) => {
+  try {
+    const version = await versionOfTask(req.params.id as string);
+    const task = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string }, select: { name: true } });
+    const modelId = z.object({ step_model_id: z.number().int().min(1) }).parse(req.body).step_model_id;
+    const model = await prisma.catalog2StepModel.findUnique({ where: { id: modelId } });
+    if (!model) throw new Catalog2Error("Modelo de etapa não encontrado.", 404);
+    if (!model.is_active) throw new Catalog2Error("Esta etapa está inativa e não pode ser usada em novos produtos.", 422, "model_inactive");
+    const max = await prisma.catalog2TaskStep.aggregate({ where: { task_id: req.params.id as string }, _max: { sort_order: true } });
+    const created = await prisma.$transaction(async (tx) => {
+      const s = await addStepFromModel(tx, req.params.id as string, model, (max._max.sort_order ?? 0) + 1);
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "step_added",
+        description: `Etapa "${s.name}" (modelo global Etapa #${model.id}) adicionada à tarefa "${task.name}".`, after: { key: s.key, name: s.name, step_model_id: model.id },
+        actorUserId: req.user!.id,
+      });
+      return s;
+    });
+    res.status(201).json(created);
+  } catch (e) { handle(e, res, next); }
+});
+// "Atualizar para a revisão atual do modelo": traz os valores vigentes do modelo global.
+router.post("/tasks/:id/sync-model", async (req, res, next) => {
+  try {
+    const version = await versionOfTask(req.params.id as string);
+    const t = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string } });
+    if (t.task_model_id == null) throw new Catalog2Error("Esta tarefa não está vinculada a um modelo global.", 422);
+    const m = await prisma.catalog2TaskModel.findUniqueOrThrow({ where: { id: t.task_model_id } });
+    const { task_model_id: _i, ...data } = taskDataFromModel(m);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2Task.update({ where: { id: t.id }, data });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "task_updated",
+        description: `Tarefa "${m.name}" atualizada para a revisão ${m.revision} do modelo global Tarefa #${m.id}.`, actorUserId: req.user!.id,
+      });
+    });
+    res.json({ ok: true, revision: m.revision });
+  } catch (e) { handle(e, res, next); }
+});
+router.post("/steps/:id/sync-model", async (req, res, next) => {
+  try {
+    const { step, version } = await versionOfStep(req.params.id as string);
+    if (step.step_model_id == null) throw new Catalog2Error("Esta etapa não está vinculada a um modelo global.", 422);
+    const m = await prisma.catalog2StepModel.findUniqueOrThrow({ where: { id: step.step_model_id } });
+    const { step_model_id: _i, ...data } = stepDataFromModel(m);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2TaskStep.update({ where: { id: step.id }, data });
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: version.id, eventType: "step_updated",
+        description: `Etapa "${m.name}" atualizada para a revisão ${m.revision} do modelo global Etapa #${m.id}.`, actorUserId: req.user!.id,
+      });
+    });
+    res.json({ ok: true, revision: m.revision });
   } catch (e) { handle(e, res, next); }
 });
 async function versionOfStep(stepId: string) {
@@ -1868,8 +2195,20 @@ router.put("/steps/:id", async (req, res, next) => {
   try {
     const { step: before, taskName, version } = await versionOfStep(req.params.id as string);
     const d = stepSchema.partial().parse(req.body);
+    const scope: "product" | "model" = req.body?.scope === "model" ? "model" : "product";
     const updated = await prisma.$transaction(async (tx) => {
-      const u = await tx.catalog2TaskStep.update({ where: { id: req.params.id as string }, data: d });
+      const stepData: Record<string, unknown> = { ...d };
+      if (scope === "model" && before.step_model_id != null) {
+        const cur = await tx.catalog2StepModel.findUniqueOrThrow({ where: { id: before.step_model_id } });
+        const patch: Record<string, unknown> = {};
+        for (const k of STEP_MODEL_FIELDS) if (k in d) patch[k] = (d as Record<string, unknown>)[k];
+        const merged = { ...cur, ...patch } as typeof cur;
+        const nm = await tx.catalog2StepModel.update({ where: { id: cur.id }, data: { ...patch, signature: stepModelSignature(merged), revision: { increment: 1 } } });
+        // no modelo global: os ajustes específicos deste produto deixam de existir (herda de novo)
+        stepData.step_model_revision = nm.revision;
+        stepData.purpose = null; stepData.execution_mode = null; stepData.completion_criteria = null;
+      }
+      const u = await tx.catalog2TaskStep.update({ where: { id: req.params.id as string }, data: stepData });
       // Um humano salvando/confirmando a etapa também confirma o esforço da tarefa (sai de "provisório").
       if (d.name !== undefined || d.estimated_minutes !== undefined || d.specialty_id !== undefined) {
         await tx.catalog2Task.updateMany({
@@ -1914,6 +2253,203 @@ router.put("/tasks/:id/steps/order", async (req, res, next) => {
     const ids = z.array(z.string()).parse(req.body?.order ?? []);
     await prisma.$transaction(ids.map((id, i) => prisma.catalog2TaskStep.update({ where: { id }, data: { sort_order: i + 1 } })));
     res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
+});
+
+// ─── Catálogo global de modelos de tarefa ("Tarefa #ID") e de etapa ("Etapa #ID") ───
+// IDs sequenciais e permanentes; modelo NUNCA é apagado (só inativado). Editar o
+// modelo global sobe `revision` e NÃO altera tarefas/etapas já cadastradas nos
+// produtos (cada versão guarda os valores vigentes).
+const modelListQuery = z.object({
+  q: z.string().trim().max(120).optional(),
+  status: z.enum(["active", "inactive", "all"]).default("active"),
+  specialty_id: z.string().optional(),
+  execution_mode: z.enum(CATALOG2_EXECUTION_MODES).optional(),
+  purpose: z.enum(STEP_PURPOSES).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(30),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+function modelIdParam(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new Catalog2Error("ID inválido.", 400);
+  return n;
+}
+// Busca por "#12", "12" (ID exato) ou por parte do nome.
+function modelSearchWhere(q: string | undefined) {
+  if (!q) return {};
+  const idMatch = /^#?\s*(\d{1,9})$/.exec(q);
+  return idMatch ? { OR: [{ id: Number(idMatch[1]) }, { name: { contains: q } }] } : { name: { contains: q } };
+}
+
+router.get("/task-models", async (req, res, next) => {
+  try {
+    const f = modelListQuery.parse(req.query);
+    const where: Prisma.Catalog2TaskModelWhereInput = {
+      ...modelSearchWhere(f.q),
+      ...(f.status === "all" ? {} : { is_active: f.status === "active" }),
+      ...(f.specialty_id ? { specialty_id: f.specialty_id } : {}),
+      ...(f.execution_mode ? { execution_mode: f.execution_mode } : {}),
+    };
+    const [total, rows] = await Promise.all([
+      prisma.catalog2TaskModel.count({ where }),
+      prisma.catalog2TaskModel.findMany({
+        where, orderBy: { id: "asc" }, take: f.limit, skip: f.offset,
+        include: { specialty: { select: { id: true, name: true } }, questionnaire: { select: { id: true, name: true } }, _count: { select: { steps: true, tasks: true } } },
+      }),
+    ]);
+    res.json({ total, data: rows.map(({ signature: _s, _count, ...m }) => ({ ...m, step_count: _count.steps, usage_count: _count.tasks })) });
+  } catch (e) { handle(e, res, next); }
+});
+
+router.get("/task-models/:id", async (req, res, next) => {
+  try {
+    const id = modelIdParam(req.params.id);
+    await syncTaskModelSteps(prisma, id);
+    const m = await prisma.catalog2TaskModel.findUnique({
+      where: { id },
+      include: {
+        specialty: { select: { id: true, name: true } },
+        questionnaire: { select: { id: true, name: true } },
+        steps: { orderBy: { sort_order: "asc" }, include: { step_model: { include: { specialty: { select: { id: true, name: true } } } } } },
+      },
+    });
+    if (!m) throw new Catalog2Error("Modelo de tarefa não encontrado.", 404);
+    const used = await prisma.catalog2Task.findMany({
+      where: { task_model_id: id }, take: 200,
+      select: { version: { select: { version_number: true, state: true, product: { select: { id: true, internal_name: true, sequence_number: true } } } } },
+    });
+    const products = new Map<string, { product_id: string; product_name: string; product_number: number | null; versions: string[] }>();
+    for (const u of used) {
+      const p = u.version.product;
+      const e = products.get(p.id) ?? { product_id: p.id, product_name: p.internal_name, product_number: p.sequence_number ?? null, versions: [] };
+      e.versions.push(`v${u.version.version_number}`);
+      products.set(p.id, e);
+    }
+    const { signature: _s, ...model } = m;
+    res.json({ ...model, used_by: [...products.values()] });
+  } catch (e) { handle(e, res, next); }
+});
+
+const taskModelBody = z.object({
+  name: z.string().trim().min(1).max(191),
+  description: z.string().max(8000).nullish(),
+  execution_mode: z.enum(CATALOG2_EXECUTION_MODES).optional(),
+  specialty_id: z.string().nullish(),
+  estimated_minutes: z.number().int().nonnegative().nullish(),
+  questionnaire_id: z.string().nullish(),
+  is_conditional: z.boolean().optional(),
+  requires_client_approval: z.boolean().optional(),
+  requires_qualification: z.boolean().optional(),
+  cycle_type: z.enum(CYCLE_TYPES).optional(),
+  repeat_rule: z.enum(REPEAT_RULES).optional(),
+  repeat_every_cycles: z.number().int().min(1).max(60).nullish(),
+  executor_continuity: z.enum(CONTINUITY_MODES).optional(),
+  asset_rule: z.enum(ASSET_RULES).optional(),
+  asset_revalidate_days: z.number().int().min(1).max(730).nullish(),
+});
+router.post("/task-models", async (req, res, next) => {
+  try {
+    const d = taskModelBody.parse(req.body);
+    const m = await createTaskModel(prisma, d, req.user!.id);
+    await audit(req, "task_model_created", { task_model_id: m.id, name: m.name });
+    res.status(201).json({ id: m.id });
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/task-models/:id", async (req, res, next) => {
+  try {
+    const id = modelIdParam(req.params.id);
+    const before = await prisma.catalog2TaskModel.findUnique({ where: { id } });
+    if (!before) throw new Catalog2Error("Modelo de tarefa não encontrado.", 404);
+    const d = taskModelBody.partial().parse(req.body);
+    const merged = { ...before, ...d };
+    const updated = await prisma.catalog2TaskModel.update({
+      where: { id },
+      data: { ...d, signature: taskModelSignature(merged), revision: { increment: 1 } },
+    });
+    await audit(req, "task_model_updated", { task_model_id: id, revision: updated.revision });
+    res.json({ id, revision: updated.revision });
+  } catch (e) { handle(e, res, next); }
+});
+router.patch("/task-models/:id/active", async (req, res, next) => {
+  try {
+    const id = modelIdParam(req.params.id);
+    const is_active = z.object({ is_active: z.boolean() }).parse(req.body).is_active;
+    await prisma.catalog2TaskModel.update({ where: { id }, data: { is_active } });
+    await audit(req, is_active ? "task_model_activated" : "task_model_inactivated", { task_model_id: id });
+    res.json({ id, is_active });
+  } catch (e) { handle(e, res, next); }
+});
+
+router.get("/step-models", async (req, res, next) => {
+  try {
+    const f = modelListQuery.parse(req.query);
+    const where: Prisma.Catalog2StepModelWhereInput = {
+      ...modelSearchWhere(f.q),
+      ...(f.status === "all" ? {} : { is_active: f.status === "active" }),
+      ...(f.specialty_id ? { specialty_id: f.specialty_id } : {}),
+      ...(f.execution_mode ? { execution_mode: f.execution_mode } : {}),
+      ...(f.purpose ? { purpose: f.purpose } : {}),
+    };
+    const [total, rows] = await Promise.all([
+      prisma.catalog2StepModel.count({ where }),
+      prisma.catalog2StepModel.findMany({
+        where, orderBy: { id: "asc" }, take: f.limit, skip: f.offset,
+        include: { specialty: { select: { id: true, name: true } }, _count: { select: { steps: true, task_models: true } } },
+      }),
+    ]);
+    res.json({ total, data: rows.map(({ signature: _s, _count, ...m }) => ({ ...m, usage_count: _count.steps, task_model_count: _count.task_models })) });
+  } catch (e) { handle(e, res, next); }
+});
+router.get("/step-models/:id", async (req, res, next) => {
+  try {
+    const id = modelIdParam(req.params.id);
+    const m = await prisma.catalog2StepModel.findUnique({
+      where: { id },
+      include: { specialty: { select: { id: true, name: true } }, task_models: { include: { task_model: { select: { id: true, name: true } } } } },
+    });
+    if (!m) throw new Catalog2Error("Modelo de etapa não encontrado.", 404);
+    const { signature: _s, ...model } = m;
+    res.json(model);
+  } catch (e) { handle(e, res, next); }
+});
+const stepModelBody = z.object({
+  name: z.string().trim().min(1).max(191),
+  description: z.string().max(8000).nullish(),
+  completion_criteria: z.string().max(4000).nullish(),
+  purpose: z.enum(STEP_PURPOSES).optional(),
+  execution_mode: z.enum(CATALOG2_EXECUTION_MODES).optional(),
+  specialty_id: z.string().nullish(),
+  estimated_minutes: z.number().int().nonnegative().nullish(),
+});
+router.post("/step-models", async (req, res, next) => {
+  try {
+    const d = stepModelBody.parse(req.body);
+    const m = await createStepModel(prisma, d, req.user!.id);
+    await audit(req, "step_model_created", { step_model_id: m.id, name: m.name });
+    res.status(201).json({ id: m.id });
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/step-models/:id", async (req, res, next) => {
+  try {
+    const id = modelIdParam(req.params.id);
+    const before = await prisma.catalog2StepModel.findUnique({ where: { id } });
+    if (!before) throw new Catalog2Error("Modelo de etapa não encontrado.", 404);
+    const d = stepModelBody.partial().parse(req.body);
+    const updated = await prisma.catalog2StepModel.update({
+      where: { id },
+      data: { ...d, signature: stepModelSignature({ ...before, ...d }), revision: { increment: 1 } },
+    });
+    await audit(req, "step_model_updated", { step_model_id: id, revision: updated.revision });
+    res.json({ id, revision: updated.revision });
+  } catch (e) { handle(e, res, next); }
+});
+router.patch("/step-models/:id/active", async (req, res, next) => {
+  try {
+    const id = modelIdParam(req.params.id);
+    const is_active = z.object({ is_active: z.boolean() }).parse(req.body).is_active;
+    await prisma.catalog2StepModel.update({ where: { id }, data: { is_active } });
+    await audit(req, is_active ? "step_model_activated" : "step_model_inactivated", { step_model_id: id });
+    res.json({ id, is_active });
   } catch (e) { handle(e, res, next); }
 });
 

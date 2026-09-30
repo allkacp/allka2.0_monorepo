@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import {
   ClipboardList,
   Loader2,

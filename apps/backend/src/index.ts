@@ -13,8 +13,11 @@ import { runTaskReleaseSchedulerOnceGuarded } from "./lib/task-release-scheduler
 import { runCommsSchedulerOnceGuarded } from "./lib/comms";
 import { runCatalog2InactivationSchedulerOnceGuarded } from "./lib/catalog2-inactivation-scheduler";
 import { runCatalog2DeliveryCycleSchedulerOnceGuarded } from "./lib/catalog2-delivery-cycle-scheduler";
+import { runDependencySchedulerOnceGuarded } from "./lib/dependency-scheduler";
 import { runCatalog2ActivationNotificationSchedulerOnceGuarded } from "./lib/catalog2-activation-notification-scheduler";
 import { getCatalog2HistoryCoverageMarker } from "./lib/catalog2-product-history";
+import { backfillCatalog2Models, shouldBackfillModelsOnBoot } from "./lib/catalog2-models";
+import { ensureStandardStepModels } from "./lib/catalog2-access";
 
 // Mascara a URL do banco: mantém apenas o caminho do arquivo, omite credenciais
 function maskDatabaseUrl(url: string): string {
@@ -177,6 +180,12 @@ async function main() {
   }, config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS).unref();
   console.log(`📦 Worker de ciclos de entrega do catálogo ativo (intervalo: ${config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS}ms).`);
 
+  // Dependências (pacotes/produtos): libera/avança tarefas e avisa o líder quando algo atrasa.
+  setInterval(() => {
+    runDependencySchedulerOnceGuarded().catch((err) => console.error("❌ Falha no worker de dependências:", err));
+  }, config.DEPENDENCY_SCHEDULER_INTERVAL_MS).unref();
+  console.log(`🔗 Worker de dependências ativo (intervalo: ${config.DEPENDENCY_SCHEDULER_INTERVAL_MS}ms).`);
+
   // Worker de aviso de ativação do catalog2 (Item 8, reunião 2026-09-14) —
   // envia (em lote) o aviso "produto disponível" pra toda a plataforma
   // quando uma transição real de status registrou a intenção — mesmo
@@ -196,6 +205,22 @@ async function main() {
   getCatalog2HistoryCoverageMarker().catch((err) =>
     console.error("❌ Falha ao aquecer o marco de cobertura do histórico do catálogo:", err),
   );
+
+  // Catálogo global de modelos ("Tarefa #ID"/"Etapa #ID"): numera o que ainda
+  // não tem vínculo (produtos cadastrados antes do catálogo global). Idempotente.
+  // Em produção só depois que o catálogo já veio do pacote de produtos (assim os
+  // IDs ficam iguais aos do ambiente local — ver shouldBackfillModelsOnBoot).
+  void (async () => {
+    if (await shouldBackfillModelsOnBoot(prisma)) {
+      const r = await backfillCatalog2Models(prisma);
+      if (r.tasksLinked || r.stepsLinked) {
+        console.log(`✅ Catálogo de modelos: ${r.taskModelsCreated} tarefa(s) e ${r.stepModelsCreated} etapa(s) numeradas (${r.tasksLinked}/${r.stepsLinked} vínculos).`);
+      }
+    }
+    // Modelo padrão "Validação e organização dos acessos": fora de produção é criado aqui;
+    // em produção chega pelo pacote de produtos (com o mesmo ID).
+    if (process.env.NODE_ENV !== "production") await ensureStandardStepModels(prisma);
+  })().catch((err) => console.error("❌ Falha ao preparar o catálogo global de modelos:", err));
 
   // Passenger/cPanel sets PORT as a socket path or port number
   // Use process.env.PORT directly to support both TCP and Unix socket

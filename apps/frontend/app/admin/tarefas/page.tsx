@@ -8,7 +8,8 @@ import React, {
   useRef,
 } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { useToast } from "@/hooks/use-toast";
 import {
   CheckSquare2,

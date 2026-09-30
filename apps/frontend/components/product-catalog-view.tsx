@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -68,7 +69,7 @@ export type CatalogMode = "page" | "panel";
 // da tela cheia do produto (/<catálogo-do-portal>/:id) a partir de onde o
 // usuário está agora. Só os 3 portais com rota de catálogo real.
 function resolveCatalogBasePath(pathname: string): string {
-  if (pathname.startsWith("/admin")) return "/admin/catalogo-produtos";
+  if (pathname.startsWith("/admin")) return "/admin/produtos";
   if (pathname.startsWith("/company")) return "/company/produtos";
   if (pathname.startsWith("/agencia")) return "/agencia/catalogo";
   if (pathname.startsWith("/agency")) return "/agency/catalogo";

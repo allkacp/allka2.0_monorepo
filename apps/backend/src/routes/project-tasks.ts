@@ -13,11 +13,19 @@ import { findUnmetCatalog2Dependency, transitionNeedsDependencyGate, CATALOG2_ST
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { recordApprovedTask } from "../lib/memory-service";
 import { assertTaskStatusTransitionAllowed, TaskStatusGuardError } from "../lib/task-release-guard";
+import { decideContinuity, ContinuityError, CONTINUITY_CHOICES } from "../lib/catalog2-continuity";
+import { isAssetValid, ASSET_RULE_LABEL } from "../lib/client-assets";
+import { ruleStatesForTask, kickDependencies, kickDependenciesForTask } from "../lib/project-dependencies";
+import { computeFlowState } from "../lib/task-flow-state";
+import { logProjectDecision } from "../lib/catalog2-cycles";
 import { reevaluateSuccessors, DependencyInUseError, TaskReleaseError } from "../lib/task-release-service";
 import { recordWalletEvent } from "../lib/wallet-service";
 import {
   iniciarEtapasDaTarefa,
   concluirEtapa,
+  garantirQualificador,
+  qualificarTarefa,
+  QualificacaoError,
   atribuirExecutorDaEtapa,
   aprovarTarefa,
   reprovarTarefa,
@@ -51,6 +59,13 @@ export const TASK_STATUSES = [
   "ENTREGUE_PELO_NOMADE",
   "PARA_QUALIFICACAO",
   "QUALIFICACAO_PENDENTE",
+  // Qualificação obrigatória (aceite interno do líder/qualificador)
+  "AGUARDANDO_QUALIFICACAO",
+  "EM_AJUSTES",
+  // Pacote/dependência: a entrega espera um item/aprovação de outro produto ou tarefa
+  "AGUARDANDO_DEPENDENCIA_PRODUTO",
+  // Tarefa dispensada por regra/decisão do líder (conta como cumprida para quem depende dela)
+  "DISPENSADA_POR_REGRA",
   "MELHORIAS_FINAIS",
   "NAO_SEGUIU_ORIENTACOES",
   // ── Novo fluxo de lançamento com revisão do líder ────────────────────────────
@@ -1902,6 +1917,7 @@ router.patch(
         }
       }
 
+      kickDependencies(task.project_id);
       res.json(resultado);
     } catch (err) {
       next(err);
@@ -2020,6 +2036,251 @@ router.patch(
         }),
       );
       res.json(resultado);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ── Situação do fluxo, histórico de decisões e dispensa por regra ─────────────
+// GET  /:id/flow       "por que está parada / o que falta" em linguagem clara
+// GET  /:id/decisions  histórico de decisões automáticas e manuais (executor mantido/trocado,
+//                      acessos validados, etapas dispensadas, dependências liberadas…)
+// POST /:id/dispense   líder/admin dispensa a tarefa por regra (só antes de começar)
+router.get("/:id/flow", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const task = await prisma.projectTask.findFirst({ where: applyScope({ id: req.params.id as string }, scopeWhere), select: { id: true, status: true, lider_responsavel_id: true } });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const flow = await computeFlowState(prisma, task.id);
+    const dispensable = ["PARA_LANCAMENTO", "EM_LANCAMENTO", "AGUARDANDO_INFORMACOES", "PENDENTE_DE_LIBERACAO", "RASCUNHO_OPERACIONAL"].includes(task.status);
+    res.json({ ...flow, can_dispense: dispensable && (isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id) });
+  } catch (err) { next(err); }
+});
+
+router.get("/:id/decisions", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const task = await prisma.projectTask.findFirst({ where: applyScope({ id: req.params.id as string }, scopeWhere), select: { id: true, project_id: true, project_product_id: true } });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const rows = await prisma.projectDecisionLog.findMany({
+      where: { project_id: task.project_id, OR: [{ project_task_id: task.id }, { project_product_id: task.project_product_id, project_task_id: null }] },
+      orderBy: { created_at: "desc" }, take: 100,
+    });
+    res.json({ data: rows.map((r) => ({ id: r.id, kind: r.kind, message: r.message, created_at: r.created_at, automatic: !r.actor_user_id })) });
+  } catch (err) { next(err); }
+});
+
+router.post("/:id/dispense", verifyToken, validate(z.object({ reason: z.string().trim().min(3).max(500) })), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const task = await prisma.projectTask.findUnique({ where: { id: req.params.id as string }, select: { id: true, title: true, status: true, project_id: true, project_product_id: true, lider_responsavel_id: true } });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    if (!(isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id)) { res.status(403).json({ error: "Somente o líder/administrador pode dispensar uma tarefa." }); return; }
+    const dispensable = ["PARA_LANCAMENTO", "EM_LANCAMENTO", "AGUARDANDO_INFORMACOES", "PENDENTE_DE_LIBERACAO", "RASCUNHO_OPERACIONAL"];
+    if (!dispensable.includes(task.status)) { res.status(422).json({ error: `Uma tarefa em "${task.status}" já começou e não pode ser dispensada.` }); return; }
+    await prisma.$transaction(async (tx) => {
+      await tx.projectTask.update({ where: { id: task.id }, data: { status: "DISPENSADA_POR_REGRA", data_conclusao: new Date() } });
+      await logProjectDecision(tx, { projectId: task.project_id, projectProductId: task.project_product_id, projectTaskId: task.id, kind: "task_dispensed", message: `"${task.title}" foi dispensada por regra: ${req.body.reason}`, actorUserId: req.user!.id });
+    });
+    kickDependencies(task.project_id);
+    res.json({ ok: true, status: "DISPENSADA_POR_REGRA" });
+  } catch (err) { next(err); }
+});
+
+// ── Dependências da tarefa (pacote, produto, entregável, aprovação, ativo) ────
+// GET /:id/dependencies  cada regra com estado claro: bloqueada | aguardando item | liberada | concluída
+router.get("/:id/dependencies", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const task = await prisma.projectTask.findFirst({
+      where: applyScope({ id: req.params.id as string }, scopeWhere),
+      select: { id: true, status: true, project_id: true },
+    });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const states = await ruleStatesForTask(prisma, task.id);
+    const targets = await prisma.projectTask.findMany({ where: { id: { in: states.map((s) => s.targetTaskId).filter((x): x is string => !!x) } }, select: { id: true, title: true, status: true } });
+    const byId = new Map(targets.map((t) => [t.id, t]));
+    res.json({
+      status: task.status,
+      applies: states.length > 0,
+      blocked: states.some((s) => !s.satisfied && (s.behavior === "block_start" || s.behavior === "block_final")),
+      rules: states.map((s) => ({ ...s, target_task: s.targetTaskId ? byId.get(s.targetTaskId) ?? null : null })),
+    });
+  } catch (err) { next(err); }
+});
+
+// ── Ativos/acessos do cliente exigidos pela tarefa ───────────────────────────
+// GET /:id/assets  quais acessos a tarefa precisa, status de cada um e se valem pela regra dela
+router.get("/:id/assets", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const task = await prisma.projectTask.findFirst({
+      where: applyScope({ id: req.params.id as string }, scopeWhere),
+      select: { id: true, lider_responsavel_id: true, catalog2_task: { select: { asset_rule: true, asset_revalidate_days: true } } },
+    });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const links = await prisma.clientAssetLink.findMany({ where: { project_task_id: task.id }, include: { asset: true }, orderBy: { created_at: "asc" } });
+    const rule = task.catalog2_task?.asset_rule ?? "first_only";
+    const staff = isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id || req.user!.role === "lider";
+    res.json({
+      applies: links.length > 0,
+      rule,
+      rule_label: ASSET_RULE_LABEL[rule as keyof typeof ASSET_RULE_LABEL] ?? rule,
+      revalidate_days: task.catalog2_task?.asset_revalidate_days ?? null,
+      can_validate: staff,
+      assets: links.map((l) => ({
+        id: l.asset.id, asset_type: l.asset.asset_type, label: l.asset.label, platform: l.asset.platform, identifier: l.asset.identifier,
+        status: l.asset.status, is_required: l.is_required, last_validated_at: l.asset.last_validated_at, scope_confirmed: l.asset.scope_confirmed,
+        expires_at: l.asset.expires_at, valid: isAssetValid(l.asset, rule, { revalidateDays: task.catalog2_task?.asset_revalidate_days }),
+      })),
+    });
+  } catch (err) { next(err); }
+});
+
+// ── Continuidade com o mesmo executor ────────────────────────────────────────
+// GET  /:id/continuity  situação (regra, decisão, executor anterior, quem pode escolher)
+// POST /:id/continuity  { choice: "keep" | "redistribute" | "manual_leader", nomade_id? }
+//   "Manter com o mesmo nômade/executor do ciclo anterior?" — cliente/agência/líder
+//   escolhem manter ou redistribuir pela fila; definir manualmente é só do líder/admin.
+
+const continuitySchema = z.object({
+  choice: z.enum(CONTINUITY_CHOICES),
+  nomade_id: z.string().optional(),
+});
+
+router.get("/:id/continuity", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const task = await prisma.projectTask.findFirst({
+      where: applyScope({ id: req.params.id as string }, scopeWhere),
+      select: {
+        id: true, status: true, executor_continuity: true, continuity_status: true, continuity_prev_task_id: true, continuity_prev_nomade_id: true,
+        continuity_decided_at: true, lider_responsavel_id: true, nomade_responsavel_id: true,
+      },
+    });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const prevNomade = task.continuity_prev_nomade_id
+      ? await prisma.nomade.findUnique({ where: { id: task.continuity_prev_nomade_id }, select: { id: true, name: true } })
+      : null;
+    const prevTask = task.continuity_prev_task_id
+      ? await prisma.projectTask.findUnique({ where: { id: task.continuity_prev_task_id }, select: { id: true, title: true, data_conclusao: true } })
+      : null;
+    const leaderOrAdmin = isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id;
+    res.json({
+      applies: !!task.executor_continuity && task.executor_continuity !== "not_allowed",
+      mode: task.executor_continuity,
+      status: task.continuity_status,
+      decided_at: task.continuity_decided_at,
+      previous_executor: prevNomade,
+      previous_task: prevTask,
+      can_choose: task.continuity_status === "pending_choice" && !task.nomade_responsavel_id,
+      can_choose_manually: leaderOrAdmin && !task.nomade_responsavel_id && !!task.continuity_status,
+      recommended: task.executor_continuity === "recommended",
+    });
+  } catch (err) { next(err); }
+});
+
+router.post("/:id/continuity", verifyToken, validate(continuitySchema), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const task = await prisma.projectTask.findFirst({
+      where: applyScope({ id: req.params.id as string }, scopeWhere),
+      select: { id: true, status: true, lider_responsavel_id: true },
+    });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const leaderOrAdmin = isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id;
+    const resultado = await prisma.$transaction((tx) =>
+      decideContinuity(tx, task.id, { choice: req.body.choice, nomadeId: req.body.nomade_id ?? null, actorUserId: req.user!.id, canManual: leaderOrAdmin }),
+    );
+    // Se a tarefa já foi liberada, dá a partida agora (mantido → direciona; redistribuir → fila).
+    if (["LIBERADA_PARA_EXECUCAO", "AGUARDANDO_NOMADE"].includes(task.status)) {
+      startTaskRotation(task.id).catch((err) => console.error("[continuity] start rotation:", err));
+    }
+    res.json(resultado);
+  } catch (err) {
+    if (err instanceof ContinuityError) { res.status(err.httpStatus).json({ error: err.message }); return; }
+    next(err);
+  }
+});
+
+// ── Qualificação obrigatória ─────────────────────────────────────────────────
+// POST  /:id/qualificacao  { decisao: "aprovar" | "reprovar" | "comentar", comentario }
+// GET   /:id/qualificacao  histórico (entrega solicitada, aprovações, ajustes, comentários)
+// Só o líder/qualificador da tarefa (ou o admin) decide. Reprovar devolve ao
+// executor (EM_AJUSTES) e NÃO conta como alteração grátis do cliente.
+
+const qualificacaoSchema = z.object({
+  decisao: z.enum(["aprovar", "reprovar", "comentar"]),
+  comentario: z.string().max(4000).optional(),
+});
+
+router.post(
+  "/:id/qualificacao",
+  verifyToken,
+  validate(qualificacaoSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const task = await prisma.projectTask.findUnique({
+        where: { id: req.params.id as string },
+        select: { id: true, requires_qualification: true, lider_responsavel_id: true },
+      });
+      if (!task) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+      const podeQualificar = isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id;
+      if (!podeQualificar) {
+        res.status(403).json({ error: "Somente o líder/qualificador desta tarefa pode qualificar a entrega." });
+        return;
+      }
+      const resultado = await prisma.$transaction((tx) =>
+        qualificarTarefa(tx, task.id, {
+          userId: req.user!.id,
+          decisao: req.body.decisao,
+          comentario: req.body.comentario,
+        }),
+      );
+      kickDependenciesForTask(task.id);
+      res.json(resultado);
+    } catch (err) {
+      if (err instanceof QualificacaoError) {
+        res.status(err.httpStatus).json({ error: err.message });
+        return;
+      }
+      next(err);
+    }
+  },
+);
+
+router.get(
+  "/:id/qualificacao",
+  verifyToken,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+      if (scopeWhere === null) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+      const task = await prisma.projectTask.findFirst({
+        where: applyScope({ id: req.params.id as string }, scopeWhere),
+        select: { id: true, requires_qualification: true, qualification_round: true, qualified_at: true, status: true, lider_responsavel_id: true },
+      });
+      if (!task) {
+        res.status(404).json({ error: "Tarefa não encontrada" });
+        return;
+      }
+      const historico = await prisma.projectTaskQualification.findMany({
+        where: { project_task_id: task.id },
+        orderBy: { created_at: "asc" },
+      });
+      res.json({ ...task, pode_qualificar: isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id, historico });
     } catch (err) {
       next(err);
     }
@@ -2239,7 +2500,13 @@ router.patch(
             console.error("[stage-engine] atribuir executor:", err),
           );
         }
+        if (resultado.enviadaParaQualificacao) {
+          garantirQualificador(resultado.tarefaId).catch((err) =>
+            console.error("[stage-engine] qualificador:", err),
+          );
+        }
 
+        kickDependenciesForTask(resultado.tarefaId);
         const etapaAtualizada = await prisma.projectTaskStage.findUnique({
           where: { id: req.params.stageId as string },
         });

@@ -6,7 +6,8 @@
 // prazo vêm SEMPRE do backend. Filtros e o produto aberto ficam na URL.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import {
   Loader2, Search, ShoppingCart, Store, X, AlertTriangle, Trash2,
 } from "lucide-react";

@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import type { DbClient } from "./project-scope";
 import { runAtomic } from "./db-atomic";
 import { assertTaskNotUsedAsPrerequisite, DependencyInUseError } from "./task-dependency-graph";
+import { ruleStatesForTask } from "./project-dependencies";
 
 // ─── Liberação automática de tarefa (bloco 4/4) ─────────────────────────────
 // Uma tarefa PENDENTE_DE_LIBERACAO só sai desse estado quando TODOS os seus
@@ -16,7 +17,7 @@ export const DRAFT_STATUS = "RASCUNHO_OPERACIONAL";
 // Status que contam como "tarefa anterior aprovada" pro gatilho de
 // dependência — CONCLUIDA é o caminho normal (stage-engine.ts, dois níveis
 // de aceite); APROVADA é o caminho de tarefa sem etapa (lider.ts).
-const TERMINAL_APPROVED_STATUSES = new Set(["CONCLUIDA", "APROVADA"]);
+const TERMINAL_APPROVED_STATUSES = new Set(["CONCLUIDA", "APROVADA", "DISPENSADA_POR_REGRA"]);
 
 export class TaskReleaseError extends Error {
   httpStatus: number;
@@ -31,6 +32,8 @@ export class TaskReleaseError extends Error {
 export interface TaskGateStatus {
   dependencies: { dependencyId: string; taskId: string; title: string; satisfied: boolean }[];
   triggers: { id: string; type: string; satisfied: boolean; scheduledAt: string | null }[];
+  /** Regras de pacote/dependência "bloquear início" (produto, entregável, aprovação, ativo…). */
+  rules: { ruleId: string; reason: string; satisfied: boolean }[];
   allSatisfied: boolean;
 }
 
@@ -54,10 +57,13 @@ export async function getTaskGateStatus(taskId: string, db: DbClient = prisma): 
     scheduledAt: t.scheduled_at ? t.scheduled_at.toISOString() : null,
   }));
 
+  const rules = (await ruleStatesForTask(db, taskId)).filter((r) => r.behavior === "block_start").map((r) => ({ ruleId: r.ruleId, reason: r.reason, satisfied: r.satisfied }));
+
   return {
     dependencies,
     triggers,
-    allSatisfied: dependencies.every((d) => d.satisfied) && triggers.every((t) => t.satisfied),
+    rules,
+    allSatisfied: dependencies.every((d) => d.satisfied) && triggers.every((t) => t.satisfied) && rules.every((r) => r.satisfied),
   };
 }
 

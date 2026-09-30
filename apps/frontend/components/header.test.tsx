@@ -284,7 +284,7 @@ describe("Header — cesta só no contexto de catálogo/loja (ata 2026-08, inter
   });
 
   it("rota de catálogo → ícone aparece mesmo com a cesta vazia", async () => {
-    renderHeader("/admin/catalogo-produtos");
+    renderHeader("/admin/produtos");
     expect(basketBtn()).toBeInTheDocument();
   });
 
@@ -294,9 +294,9 @@ describe("Header — cesta só no contexto de catálogo/loja (ata 2026-08, inter
     expect(basketBtn()).not.toBeInTheDocument();
   });
 
-  it("gestão de produtos (/admin/produtos) e combos (/admin/combos) NÃO são catálogo de compra → sem cesta", async () => {
+  it("gestão de produtos (/admin/cadastro-produtos) e combos (/admin/combos) NÃO são catálogo de compra → sem cesta", async () => {
     basketMock.totalItems = 3;
-    const { unmount } = renderHeader("/admin/produtos");
+    const { unmount } = renderHeader("/admin/cadastro-produtos");
     expect(basketBtn()).not.toBeInTheDocument();
     unmount();
     renderHeader("/admin/combos");
@@ -304,7 +304,7 @@ describe("Header — cesta só no contexto de catálogo/loja (ata 2026-08, inter
   });
 
   it("detalhe de produto dentro do catálogo pertence ao contexto → cesta aparece", async () => {
-    renderHeader("/admin/catalogo-produtos/prod-123");
+    renderHeader("/admin/produtos/prod-123");
     expect(basketBtn()).toBeInTheDocument();
   });
 

@@ -6,7 +6,8 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import {
   STANDARD_SHELL_PANEL_CLASS,

@@ -45,7 +45,7 @@ beforeEach(() => {
   });
 });
 
-function renderIcon(initialPath = "/admin/catalogo-produtos") {
+function renderIcon(initialPath = "/admin/produtos") {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <OpenScreensProvider>
@@ -113,7 +113,7 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
   });
 
   it("7. contexto do Catálogo de Produtos: sugestões específicas aparecem", async () => {
-    renderIcon("/admin/catalogo-produtos");
+    renderIcon("/admin/produtos");
     const [btn] = await openIcons();
     const user = userEvent.setup();
     await user.click(btn);
@@ -133,7 +133,7 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
   });
 
   it("8b. Cadastro de Produtos e Tarefas recebem sugestões próprias da Aura", async () => {
-    const { unmount } = renderIcon("/admin/produtos");
+    const { unmount } = renderIcon("/admin/cadastro-produtos");
     const [productsButton] = await openIcons();
     await userEvent.setup().click(productsButton);
     expect(await screen.findByText("O que falta completar neste produto?")).toBeInTheDocument();

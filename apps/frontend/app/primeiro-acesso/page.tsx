@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { Eye, EyeOff, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 

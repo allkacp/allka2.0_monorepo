@@ -74,6 +74,7 @@
  * conteúdo (unchanged) ou atualização (updated) — nunca duplica ao rodar de
  * novo.
  */
+import { ensureTaskModelFromPackage, ensureStepModelFromPackage } from "../lib/catalog2-models";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
@@ -105,6 +106,7 @@ interface ExportedPackage {
   exported_at: string;
   product_count: number;
   products: unknown[];
+  standard_step_models?: unknown[];
   images: Array<{ path: string; sha256: string; size: number; found: boolean }>;
 }
 
@@ -399,6 +401,13 @@ async function main() {
     console.log(`\n✅ Portão de produção aprovado — destino "${targetDatabaseName}" confirmado, manifesto ${readOnlyManifestHash} revisado, backup ${backupSha256} referenciado.`);
   }
 
+  // Modelos padrão do catálogo global (mesmo ID do ambiente de origem).
+  for (const sm of ((pkg as any).standard_step_models ?? []) as unknown[]) {
+    await dst.$transaction(async (tx) => {
+      await ensureStepModelFromPackage(tx, sm as any, (msg) => console.log(`     ⚠ ${msg}`));
+    });
+  }
+
   const manifest: ProductManifestLine[] = [];
   const configDivergenceSeen = new Set<string>();
 
@@ -498,6 +507,12 @@ async function main() {
         summary: v.summary,
         full_description: v.full_description,
         base_commercial_deadline_days: v.base_commercial_deadline_days,
+        accepts_one_time: (v as any).accepts_one_time ?? undefined,
+        accepts_recurring: (v as any).accepts_recurring ?? undefined,
+        has_initial_implementation: (v as any).has_initial_implementation ?? undefined,
+        implementation_rule: (v as any).implementation_rule ?? undefined,
+        implementation_blocks_operation: (v as any).implementation_blocks_operation ?? undefined,
+        sell_mode: (v as any).sell_mode ?? undefined,
         provisional_commercial_deadline_days: v.provisional_commercial_deadline_days,
         provisional_deadline_reason: v.provisional_deadline_reason,
         provisional_deadline_source: v.provisional_deadline_source,
@@ -511,6 +526,12 @@ async function main() {
         versionId = existingVersion.id;
         const changed = existingVersion.title !== v.title || existingVersion.full_description !== v.full_description || existingVersion.summary !== v.summary;
         if (changed) { await tx.catalog2ProductVersion.update({ where: { id: versionId }, data: versionData }); line.version = "updated"; }
+      }
+
+      // acessos externos exigidos pela versão (nunca guarda senha)
+      for (const a of ((v as any).access_requirements ?? []) as any[]) {
+        const exAccess = await tx.catalog2VersionAccess.findFirst({ where: { version_id: versionId, access_type: a.access_type, label: a.label } });
+        if (!exAccess) await tx.catalog2VersionAccess.create({ data: { version_id: versionId, access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes, sort_order: a.sort_order } });
       }
 
       // tarefas + etapas + questionário (por key dentro da versão)
@@ -545,6 +566,9 @@ async function main() {
           }
         }
 
+        // Catálogo global: leva o modelo da tarefa (com o MESMO ID) pro destino.
+        const taskModel = await ensureTaskModelFromPackage(tx, (t as any).task_model, dstQuestionnaireId, (m) => line.warnings.push(m));
+        const taskModelLink = taskModel ? { task_model_id: taskModel.id, task_model_revision: taskModel.revision } : {};
         const existingTask = await tx.catalog2Task.findFirst({ where: { version_id: versionId, key: t.key } });
         const taskData = {
           name: t.name,
@@ -558,6 +582,13 @@ async function main() {
           requires_review: t.requires_review,
           requires_client_approval: t.requires_client_approval,
           is_conditional: t.is_conditional,
+          requires_qualification: (t as any).requires_qualification ?? false,
+          cycle_type: (t as any).cycle_type ?? "recorrente",
+          repeat_rule: (t as any).repeat_rule ?? "all_cycles",
+          repeat_every_cycles: (t as any).repeat_every_cycles ?? null,
+          executor_continuity: (t as any).executor_continuity ?? "not_allowed",
+          asset_rule: (t as any).asset_rule ?? "first_only",
+          asset_revalidate_days: (t as any).asset_revalidate_days ?? null,
           effort_is_provisional: t.effort_is_provisional,
           effort_provisional_reason: t.effort_provisional_reason,
           effort_source: t.effort_source,
@@ -566,24 +597,28 @@ async function main() {
         };
         let taskId: string;
         if (!existingTask) {
-          const createdTask = await tx.catalog2Task.create({ data: { version_id: versionId, key: t.key, ...taskData } });
+          const createdTask = await tx.catalog2Task.create({ data: { version_id: versionId, key: t.key, ...taskData, ...taskModelLink } });
           taskId = createdTask.id;
           line.tasks.created++;
         } else {
           taskId = existingTask.id;
           const changed = existingTask.name !== t.name || existingTask.estimated_minutes !== t.estimated_minutes || existingTask.questionnaire_id !== dstQuestionnaireId;
-          if (changed) { await tx.catalog2Task.update({ where: { id: taskId }, data: taskData }); line.tasks.updated++; }
+          if (changed) { await tx.catalog2Task.update({ where: { id: taskId }, data: { ...taskData, ...taskModelLink } }); line.tasks.updated++; }
+          else if (taskModel && existingTask.task_model_id == null) { await tx.catalog2Task.update({ where: { id: taskId }, data: taskModelLink }); line.tasks.unchanged++; }
           else line.tasks.unchanged++;
         }
 
         for (const s of t.steps) {
+          const stepModel = await ensureStepModelFromPackage(tx, (s as any).step_model, (m) => line.warnings.push(m));
+          const stepModelLink = stepModel ? { step_model_id: stepModel.id, step_model_revision: stepModel.revision } : {};
           const existingStep = await tx.catalog2TaskStep.findFirst({ where: { task_id: taskId, key: s.key } });
           const stepSpec = (s as any).specialty?.key ? await tx.catalog2Specialty.findUnique({ where: { key: (s as any).specialty.key } }) : null;
-          const stepData = { name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: stepSpec?.id ?? null };
-          if (!existingStep) { await tx.catalog2TaskStep.create({ data: { task_id: taskId, key: s.key, ...stepData } }); line.steps.created++; }
+          const stepData = { name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: stepSpec?.id ?? null, purpose: (s as any).purpose ?? null, execution_mode: (s as any).execution_mode ?? null, completion_criteria: (s as any).completion_criteria ?? null, first_execution_only: (s as any).first_execution_only ?? false, skip_when_same_executor: (s as any).skip_when_same_executor ?? false };
+          if (!existingStep) { await tx.catalog2TaskStep.create({ data: { task_id: taskId, key: s.key, ...stepData, ...stepModelLink } }); line.steps.created++; }
           else {
             const changed = existingStep.name !== s.name || existingStep.estimated_minutes !== s.estimated_minutes;
-            if (changed) { await tx.catalog2TaskStep.update({ where: { id: existingStep.id }, data: stepData }); line.steps.updated++; }
+            if (changed) { await tx.catalog2TaskStep.update({ where: { id: existingStep.id }, data: { ...stepData, ...stepModelLink } }); line.steps.updated++; }
+            else if (stepModel && existingStep.step_model_id == null) { await tx.catalog2TaskStep.update({ where: { id: existingStep.id }, data: stepModelLink }); line.steps.unchanged++; }
             else line.steps.unchanged++;
           }
         }

@@ -1,11 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
-import {
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
+import { useLocation, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { ButtonLoader, PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";

@@ -90,7 +90,8 @@ import {
 import { Eye, Info } from "lucide-react";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { PaginationControls } from "@/app/admin/produtos/page";
 
@@ -105,7 +106,7 @@ import { PaginationControls } from "@/app/admin/produtos/page";
 // não deve arriscar).
 //
 // Só Admin Master (o backend reaplica em /api/admin/catalog2/* — mesma
-// origem de dados do Cadastro de Produtos, /admin/produtos). Nunca mostra
+// origem de dados do Cadastro de Produtos, /admin/cadastro-produtos). Nunca mostra
 // os 162 produtos antigos. Sem cesta/contratação (isso já existe em
 // /company|agency/catalog2) e sem qualquer ação de escrita — o Cadastro de
 // Produtos é quem edita; aqui é só leitura/conferência.
@@ -114,7 +115,7 @@ import { PaginationControls } from "@/app/admin/produtos/page";
 // tarefa/imagem) — os textos de preço/prazo vêm do próprio backend
 // (/readiness), que já não finge preço "R$ 0,00" quando não há tarefa.
 
-// Rótulo/cor de status — módulo compartilhado com /admin/produtos (reunião
+// Rótulo/cor de status — módulo compartilhado com /admin/cadastro-produtos (reunião
 // 2026-09-14, Item 2): ver apps/frontend/lib/catalog2-status.ts.
 const STATUS_LABEL: Record<string, string> = CATALOG2_STATUS_LABEL;
 const STATUS_TONE: Record<string, string> = CATALOG2_STATUS_TONE;
@@ -135,7 +136,7 @@ const PENDENCY_LABEL: Record<string, string> = {
 
 interface ReadinessProduct {
   id: string;
-  // ID numérico curto do link direto (/admin/catalogo-produtos/:n) — mesmo
+  // ID numérico curto do link direto (/admin/produtos/:n) — mesmo
   // esquema já usado por company/agency/líder (achado do usuário
   // 2026-09-23: "quando eu clico em produto, ele mostra o ID... pra
   // qualquer um").
@@ -636,7 +637,7 @@ export default function AdminCatalogoProdutosPage() {
   const openFullDetail = useCallback((p: Merged) => {
     setOpenProductId(p.id);
     setFullDetailId(p.id);
-    navigate(`/admin/catalogo-produtos/${catalogProductShortCode(p)}`, { replace: true });
+    navigate(`/admin/produtos/${catalogProductShortCode(p)}`, { replace: true });
   }, [navigate]);
   // O fixture "[TESTE LOCAL]" aparece igual a qualquer outro produto — acha do
   // usuário 2026-09-23: ele já aparece pra company/agency/líder (é o mesmo
@@ -797,7 +798,7 @@ export default function AdminCatalogoProdutosPage() {
               setFullDetailId(null);
               setOpenProductId(null);
               if (routeProductCode)
-                navigate("/admin/catalogo-produtos", { replace: true });
+                navigate("/admin/produtos", { replace: true });
             }}
             isAdminMaster={isAdminMaster}
           />
@@ -837,7 +838,7 @@ export default function AdminCatalogoProdutosPage() {
                   id="page-catalogo-produtos"
                   label="Catálogo de Produtos"
                   icon={Store}
-                  path="/admin/catalogo-produtos"
+                  path="/admin/produtos"
                 />
               </>
             }
@@ -1171,7 +1172,7 @@ export default function AdminCatalogoProdutosPage() {
                   id: `catalog2-catalogo-${openedProduct.id}`,
                   label: openedProduct.name,
                   icon: Store,
-                  path: "/admin/catalogo-produtos",
+                  path: "/admin/produtos",
                 }
               : undefined
           }

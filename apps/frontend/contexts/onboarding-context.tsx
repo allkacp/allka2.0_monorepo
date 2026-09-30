@@ -16,7 +16,8 @@
  * função, nunca uma segunda checagem que possa divergir.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { apiClient, type TourProgressDto } from "@/lib/api-client";
 import { TOURS } from "@/lib/tours/registry";
 import { isTourEligible } from "@/lib/tours/eligibility";

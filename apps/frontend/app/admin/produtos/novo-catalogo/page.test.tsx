@@ -4,21 +4,21 @@ import { MemoryRouter, Route, Routes, useSearchParams } from "react-router-dom";
 import AdminNovoCatalogoRedirectPage from "@/app/admin/produtos/novo-catalogo/page";
 
 // 2026-09 (consolidação catalog2): /admin/produtos/novo-catalogo virou um
-// redirecionamento puro pra /admin/produtos — sem tela própria.
+// redirecionamento puro pra /admin/cadastro-produtos — sem tela própria.
 
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/admin/produtos/novo-catalogo" element={<AdminNovoCatalogoRedirectPage />} />
-        <Route path="/admin/produtos" element={<div>Cadastro de Produtos (destino)</div>} />
+        <Route path="/admin/cadastro-produtos" element={<div>Cadastro de Produtos (destino)</div>} />
       </Routes>
     </MemoryRouter>,
   );
 }
 
 describe("redirecionamento de /admin/produtos/novo-catalogo", () => {
-  it("sem produto selecionado: redireciona pra /admin/produtos", async () => {
+  it("sem produto selecionado: redireciona pra /admin/cadastro-produtos", async () => {
     renderAt("/admin/produtos/novo-catalogo");
     expect(await screen.findByText("Cadastro de Produtos (destino)")).toBeInTheDocument();
   });
@@ -29,7 +29,7 @@ describe("redirecionamento de /admin/produtos/novo-catalogo", () => {
         <Routes>
           <Route path="/admin/produtos/novo-catalogo" element={<AdminNovoCatalogoRedirectPage />} />
           <Route
-            path="/admin/produtos"
+            path="/admin/cadastro-produtos"
             element={<DestinoComQuery />}
           />
         </Routes>

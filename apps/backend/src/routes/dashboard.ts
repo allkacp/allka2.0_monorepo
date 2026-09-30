@@ -55,6 +55,8 @@ router.get("/stats", verifyToken, async (req, res, next) => {
               "AGUARDANDO_NOMADE",
               "EM_EXECUCAO",
               "EM_REVISAO",
+              "AGUARDANDO_QUALIFICACAO",
+              "EM_AJUSTES",
               "EM_APROVACAO",
             ],
           },

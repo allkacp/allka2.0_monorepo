@@ -38,7 +38,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useSoundOnIncrease } from "@/hooks/use-notification-sound";
+import { useLocation } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { NotificationsPanel } from "@/components/notifications-panel";
@@ -134,11 +136,17 @@ export function Header({
   // saiu daqui de vez: agora vive em AlertsFloatingIcon, na barra vertical
   // direita, com seu próprio polling (não duplica esta chamada).
   const [bellUnreadCount, setBellUnreadCount] = useState(0);
+  // null até a 1ª leitura: o som só toca pra aviso que chega DEPOIS de abrir a página.
+  const [bellSoundCount, setBellSoundCount] = useState<number | null>(null);
+  useSoundOnIncrease("notificacao", bellSoundCount);
   useEffect(() => {
     const fetchUnread = () => {
       apiClient
         .getUnreadSystemAlertsCount({ category: "notificacao" })
-        .then((r) => setBellUnreadCount(r?.count ?? 0))
+        .then((r) => {
+          setBellUnreadCount(r?.count ?? 0);
+          setBellSoundCount(r?.count ?? 0);
+        })
         .catch(() => {});
     };
     fetchUnread();

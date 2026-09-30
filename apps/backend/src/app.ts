@@ -35,6 +35,7 @@ import levelsRouter from "./routes/levels";
 import taskTemplatesRouter from "./routes/task-templates";
 import projectProductsRouter from "./routes/project-products";
 import projectTasksRouter from "./routes/project-tasks";
+import clientAssetsRouter from "./routes/client-assets";
 import presenceRouter from "./routes/presence";
 import taskOffersRouter from "./routes/task-offers";
 import projectConnectionsRouter from "./routes/project-connections";
@@ -194,6 +195,7 @@ app.use("/api/product-bundles", productBundlesRouter);
 app.use("/api/iallka", iallkaRouter);
 // Canonical CRUD for operational execution tasks
 app.use("/api/project-tasks", projectTasksRouter);
+app.use("/api/client-assets", clientAssetsRouter);
 app.use("/api/presence", presenceRouter);
 app.use("/api/task-offers", taskOffersRouter);
 app.use("/api/project-connections", projectConnectionsRouter);

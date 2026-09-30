@@ -438,14 +438,14 @@ export function Catalog2ProductDetail({
   // (sequence_number), nunca o slug completo (achado do usuário
   // 2026-09-23: "o ID em número... não o nome completo do produto"). Admin
   // continua com o esquema p<n> de sempre (rota própria, ver
-  // catalogProductShortCode em app/admin/catalogo-produtos/page.tsx).
+  // catalogProductShortCode em app/admin/produtos/page.tsx).
   const shareCode = isClient
     ? (clientProduct?.sequence_number ?? clientProduct?.slug)
     : (product?.sequence_number ?? productId.slice(-8).toLowerCase());
   const shareProductUrl = shareBasePath && shareCode != null
     ? `${typeof window === "undefined" ? "" : window.location.origin}${shareBasePath}/${shareCode}`
     : (!isClient
-      ? (typeof window === "undefined" ? `/admin/catalogo-produtos/${shareCode}` : `${window.location.origin}/admin/catalogo-produtos/${shareCode}`)
+      ? (typeof window === "undefined" ? `/admin/produtos/${shareCode}` : `${window.location.origin}/admin/produtos/${shareCode}`)
       : null);
 
   const tasks = !isClient ? (targetVersion?.tasks ?? []) : [];

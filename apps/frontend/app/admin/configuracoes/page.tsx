@@ -1,6 +1,6 @@
 ﻿// @ts-nocheck
 import { useState, useMemo, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { apiClient } from "@/lib/api-client";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { Card } from "@/components/ui/card";

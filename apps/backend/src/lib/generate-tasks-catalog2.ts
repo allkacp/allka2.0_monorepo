@@ -5,6 +5,10 @@ import type { GerarTarefasResult } from "./generate-tasks";
 import { addMonths } from "./catalog2-checkout";
 import { getPaymentGateway } from "./payment-gateway";
 import { getNextSequenceValue, formatInvoiceNumber } from "./sequence";
+import { prepareContinuity } from "./catalog2-continuity";
+import { applyAssetGate } from "./client-assets";
+import { materializeDependencyRules } from "./project-dependencies";
+import { planTaskForCycle, resolveCycleContext, logProjectDecision, CYCLE_TYPE_LABEL, type CycleKind, type CycleType } from "./catalog2-cycles";
 
 export interface GerarTarefasCatalog2Options {
   // Obrigatórios: geração só acontece a partir de um pagamento confirmado —
@@ -22,10 +26,11 @@ const projectProductInclude = {
   catalog2_product: { select: { delivery_recurrence: true } },
   catalog2_version: {
     include: {
+      access_requirements: { orderBy: { sort_order: "asc" as const } },
       tasks: {
         orderBy: { sort_order: "asc" as const },
         include: {
-          steps: { orderBy: { sort_order: "asc" as const } },
+          steps: { orderBy: { sort_order: "asc" as const }, include: { step_model: true } },
           dependencies: { select: { depends_on_task_id: true } },
           specialty: { select: { name: true } },
           // Item 3.2 (reunião 2026-09-14, "conectar questionários à
@@ -146,6 +151,9 @@ export async function gerarTarefasCatalog2DoProjeto(
     await registerFollowUpDeliveryCycles(tx, pp, options.paymentId, options.paidAt);
   }
 
+  // Pacotes contratados juntos + regras de dependência (produto/tarefa/etapa/entregável/aprovação/ativo).
+  await materializeDependencyRules(tx, projectId, options.projectProductIds);
+
   const total_tarefas = await tx.projectTask.count({ where: { project_id: projectId } });
   const total_etapas = await tx.projectTaskStage.count({ where: { project_task: { project_id: projectId } } });
 
@@ -209,11 +217,40 @@ async function materializeTasksForProjectProduct(
   // Sem cotação de origem rastreável (não deveria acontecer no fluxo
   // normal — só robustez): assume só as tarefas fixas, nunca as
   // condicionais, para nunca cobrar/entregar algo não confirmado.
-  const tasksToGenerate = version.tasks.filter(
+  const candidateTasks = version.tasks.filter(
     (t) => !t.is_conditional || (activeTaskKeys?.has(t.key) ?? false),
   );
 
-  if (tasksToGenerate.length === 0) return { ok: false, reason: "no_tasks" };
+  if (candidateTasks.length === 0) return { ok: false, reason: "no_tasks" };
+
+  // ── Modalidade/ciclo (Pedido 2): 1º ciclo x seguintes, implementação inicial,
+  // repetição. Cada decisão de NÃO gerar fica registrada no histórico.
+  const cycle = await resolveCycleContext(tx, projectId, pp, opts.occurrenceIndex);
+  if (opts.occurrenceIndex === 0 && pp.first_contract === null) {
+    await tx.projectProduct.update({ where: { id: pp.id }, data: { first_contract: cycle.isFirstContract, contract_mode: cycle.contractMode } });
+  }
+  const cycleKindByTaskId = new Map<string, CycleKind>();
+  const tasksToGenerate: typeof candidateTasks = [];
+  for (const ct of candidateTasks) {
+    const decision = planTaskForCycle(
+      { key: ct.key, name: ct.name, cycle_type: ct.cycle_type, repeat_rule: ct.repeat_rule, repeat_every_cycles: ct.repeat_every_cycles, task_model_id: ct.task_model_id },
+      cycle,
+    );
+    if (decision.generate) {
+      tasksToGenerate.push(ct);
+      cycleKindByTaskId.set(ct.id, decision.cycleKind);
+      continue;
+    }
+    const message = `Tarefa "${ct.name}" não foi criada no ciclo ${opts.occurrenceIndex + 1}: ${decision.reason}`;
+    const kind = decision.code === "implementation_done" || decision.code === "implementation_revalidation_only" ? "implementation_skipped" : "task_dispensed";
+    const dup = await tx.projectDecisionLog.findFirst({ where: { project_product_id: pp.id, kind, message }, select: { id: true } });
+    if (!dup) await logProjectDecision(tx, { projectId, projectProductId: pp.id, kind, message, detail: { task_key: ct.key, code: decision.code, cycle_index: opts.occurrenceIndex } });
+  }
+  if (tasksToGenerate.length === 0) {
+    // Ciclo seguinte sem nenhuma tarefa recorrente nunca é erro; o 1º ciclo sem tarefa é.
+    return opts.occurrenceIndex === 0 ? { ok: false, reason: "no_tasks" } : { ok: true, generated: 0, skipped: 0, stages_generated: 0 };
+  }
+  const createdTasks: { id: string; ctId: string; cycleType: string }[] = [];
 
   // Dependências: ordena para que uma tarefa nunca venha antes de quem ela
   // depende (sort_order relativo) — ver limitação conhecida no comentário
@@ -277,6 +314,7 @@ async function materializeTasksForProjectProduct(
         project_product_id: pp.id,
         product_id: null,
         catalog2_task_id: ct.id,
+        cycle_kind: cycleKindByTaskId.get(ct.id) ?? null,
         catalog2_product_id: pp.catalog2_product_id,
         catalog2_version_id: pp.catalog2_version_id,
         code_snapshot: ct.key,
@@ -287,6 +325,9 @@ async function materializeTasksForProjectProduct(
         description: ct.description ?? ct.objective ?? null,
         status: "PARA_LANCAMENTO",
         exige_aprovacao_cliente: ct.requires_client_approval,
+        // Qualificação obrigatória (aceite interno do líder) — herdada da tarefa contratada.
+        requires_qualification: ct.requires_qualification,
+        ...(ct.requires_qualification && ct.qualifier_user_id ? { lider_responsavel_id: ct.qualifier_user_id } : {}),
         sort_order: idx * deliveryGroups.length + groupIndex,
         checklist_snapshot: null,
         steps_snapshot: null,
@@ -305,8 +346,14 @@ async function materializeTasksForProjectProduct(
       },
     });
     generated++;
+    createdTasks.push({ id: newTask.id, ctId: ct.id, cycleType: ct.cycle_type });
 
-    const steps = ct.steps;
+    // Etapas "somente na 1ª execução" nunca se repetem nos ciclos seguintes (nem no contrato
+    // seguinte do mesmo cliente, quando já rodaram).
+    const previouslyExecuted = opts.occurrenceIndex > 0 || !cycle.isFirstContract;
+    const stepsAll = ct.steps;
+    const stepsKept = previouslyExecuted ? stepsAll.filter((st) => !(st.first_execution_only || st.step_model?.first_execution_only)) : stepsAll;
+    const steps = stepsKept.length > 0 || stepsAll.length === 0 ? stepsKept : stepsAll;
     const stagesToCreate =
       steps.length > 0
         ? steps.map((step, sIdx) => ({
@@ -320,6 +367,22 @@ async function materializeTasksForProjectProduct(
             obrigatoria: true,
             depende_da_etapa_anterior: sIdx > 0,
             briefing_necessario: sIdx === 0,
+            // Finalidade/executor/critério de conclusão efetivos (ajuste do produto ou do modelo global).
+            config_snapshot: JSON.stringify({
+              step_model_id: step.step_model_id,
+              purpose: step.purpose ?? step.step_model?.purpose ?? "execucao",
+              execution_mode: step.execution_mode ?? step.step_model?.execution_mode ?? "humano",
+              completion_criteria: step.completion_criteria ?? step.step_model?.completion_criteria ?? null,
+              first_execution_only: !!(step.first_execution_only || step.step_model?.first_execution_only),
+              skip_when_same_executor: !!(step.skip_when_same_executor || step.step_model?.skip_when_same_executor),
+              // Etapa padrão de acessos: leva a lista de acessos que o produto exige (sem senha).
+              ...(step.step_model?.is_access_validation
+                ? {
+                    is_access_validation: true,
+                    access_requirements: (version.access_requirements ?? []).map((a) => ({ access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes })),
+                  }
+                : {}),
+            }),
           }))
         : [
             {
@@ -340,7 +403,47 @@ async function materializeTasksForProjectProduct(
       await tx.projectTaskStage.createMany({ data: stagesToCreate });
       stages_generated += stagesToCreate.length;
     }
+
+    // Ativos do cliente (acessos): liga a tarefa aos ativos exigidos pelo produto e, se já
+    // estão válidos pela regra da tarefa, dispensa a coleta de acessos.
+    await applyAssetGate(tx, {
+      projectId, projectProductId: pp.id, taskId: newTask.id, catalog2ProductId: pp.catalog2_product_id, catalog2TaskId: ct.id,
+      assetRule: ct.asset_rule, revalidateDays: ct.asset_revalidate_days,
+      requirements: (version.access_requirements ?? []).map((a) => ({ access_type: a.access_type, label: a.label, is_required: a.is_required })),
+    });
+
+    // Continuidade com o mesmo executor (mesmo cliente): obrigatório já nasce "mantido";
+    // permitido/recomendado aguarda a escolha. Snapshot da regra fica na tarefa.
+    await prepareContinuity(tx, { projectId, projectProductId: pp.id, newTaskId: newTask.id, catalog2ProductId: pp.catalog2_product_id, task: { key: ct.key, name: ct.name, task_model_id: ct.task_model_id, executor_continuity: ct.executor_continuity } });
     }
+  }
+
+  // ── Implementação inicial bloqueia a operação: as tarefas operacionais deste ciclo
+  // só são liberadas quando a implementação concluir (mesmo motor de dependência
+  // operacional já usado no resto da plataforma).
+  if (opts.occurrenceIndex === 0 && version.implementation_blocks_operation) {
+    const implementation = createdTasks.filter((t) => t.cycleType === "implementacao");
+    const operational = createdTasks.filter((t) => t.cycleType === "recorrente" || t.cycleType === "avulso");
+    if (implementation.length > 0 && operational.length > 0) {
+      for (const op of operational) {
+        for (const im of implementation) {
+          await tx.taskDependency.create({ data: { project_id: projectId, task_id: op.id, depends_on_task_id: im.id, created_by_user_id: "system" } });
+        }
+        await tx.projectTask.update({ where: { id: op.id }, data: { status: "PENDENTE_DE_LIBERACAO" } });
+      }
+      await logProjectDecision(tx, {
+        projectId, projectProductId: pp.id, kind: "operation_blocked",
+        message: `${operational.length} tarefa(s) operacional(is) aguardam a implementação inicial (${implementation.length} tarefa(s)) concluir.`,
+      });
+    }
+  }
+  if (generated > 0) {
+    const kinds = [...new Set(cycleKindByTaskId.values())].join(", ");
+    await logProjectDecision(tx, {
+      projectId, projectProductId: pp.id, kind: "cycle_generated",
+      message: `Ciclo ${opts.occurrenceIndex + 1} (${cycle.contractMode}) gerado: ${generated} tarefa(s) [${kinds}].`,
+      detail: { cycle_index: opts.occurrenceIndex, contract_mode: cycle.contractMode, first_contract: cycle.isFirstContract },
+    });
   }
 
   return { ok: true, generated, skipped, stages_generated };
@@ -484,6 +587,8 @@ export async function releaseCatalog2DeliveryCycle(tx: DbClient, cycleId: string
     billingCycleKey,
     occurrenceIndex: cycle.occurrence_index,
   });
+  // Dependências de pacote/produto também valem para as tarefas dos ciclos seguintes.
+  if (result.ok) await materializeDependencyRules(tx, pp.project_id, [pp.id]);
 
   await tx.catalog2ProjectDeliveryCycle.update({
     where: { id: cycle.id },

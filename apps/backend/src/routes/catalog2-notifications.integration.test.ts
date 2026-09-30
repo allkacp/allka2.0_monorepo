@@ -229,7 +229,7 @@ describe("Notificações dos produtos (Item 8/8.1, reunião 2026-09-14)", () => 
     assert.doesNotMatch(byUser.get(NOMAD.user.id)!.message, /contratação/i, "aviso informativo, nunca linguagem de contratação");
 
     assert.ok(byUser.has(MASTER_USER.user.id), "admin (Item 8.1) TAMBÉM deve ser notificado agora");
-    assert.equal(byUser.get(MASTER_USER.user.id)!.action_url, `/admin/produtos?produto=${product.id}`, "admin recebe link administrativo, nunca o catálogo do cliente");
+    assert.equal(byUser.get(MASTER_USER.user.id)!.action_url, `/admin/cadastro-produtos?produto=${product.id}`, "admin recebe link administrativo, nunca o catálogo do cliente");
 
     assert.ok(!byUser.has(DISABLED.user.id), "conta desabilitada nunca recebe");
   });
@@ -354,7 +354,7 @@ describe("Notificações dos produtos (Item 8/8.1, reunião 2026-09-14)", () => 
     await processPendingCatalog2NotificationJobs();
     const scheduledAlerts = await prisma.systemAlert.findMany({ where: { type: "catalog2.product_inactivation_scheduled", entity_id: product.id } });
     const byUser = new Map(scheduledAlerts.map((a) => [a.user_id, a]));
-    assert.equal(byUser.get(MASTER_USER.user.id)?.action_url, `/admin/produtos?produto=${product.id}`);
+    assert.equal(byUser.get(MASTER_USER.user.id)?.action_url, `/admin/cadastro-produtos?produto=${product.id}`);
     assert.equal(byUser.get(CO_A.user.id)?.action_url, "/dashboard");
 
     const cancel = await api(`/api/admin/catalog2/products/${product.id}/inactivation/cancel`, { method: "POST", token: MASTER });

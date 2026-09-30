@@ -127,7 +127,7 @@ function renderActivationNotification(
     case "view":
       return { title: "Novo produto no catálogo", message: `O produto "${publicName}" foi publicado no catálogo.`, action_url: "/catalog2" };
     case "admin":
-      return { title: "Produto ativado no catálogo", message: `O produto "${publicName}" foi ativado e está disponível no catálogo.`, action_url: `/admin/produtos?produto=${productId}` };
+      return { title: "Produto ativado no catálogo", message: `O produto "${publicName}" foi ativado e está disponível no catálogo.`, action_url: `/admin/cadastro-produtos?produto=${productId}` };
     default:
       return { title: "Novidade na plataforma", message: `Um novo produto ("${publicName}") foi disponibilizado no catálogo da Allka.`, action_url: "/dashboard" };
   }

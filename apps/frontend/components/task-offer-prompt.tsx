@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { Loader2, Clock, CheckCircle2, X, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient, ApiError } from "@/lib/api-client";

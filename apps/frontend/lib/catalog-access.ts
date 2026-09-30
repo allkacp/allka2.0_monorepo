@@ -108,7 +108,7 @@ export function getCatalogBasketStorageKey(identity: CatalogIdentity): string {
 // checkout/revisão — o fluxo "criar projeto com estes itens" abre num
 // painel sobre a própria rota do catálogo.
 const CATALOG_ROUTE_RE =
-  /^\/(?:admin\/catalogo-produtos|company\/produtos|agency\/catalogo|agencia\/catalogo|leader\/catalogo|lider\/catalogo)(?:\/[^/]+)?\/?$/;
+  /^\/(?:admin\/produtos|company\/produtos|agency\/catalogo|agencia\/catalogo|leader\/catalogo|lider\/catalogo)(?:\/[^/]+)?\/?$/;
 
 export function isCatalogRoute(pathname: string): boolean {
   return CATALOG_ROUTE_RE.test(pathname.split("?")[0].split("#")[0]);

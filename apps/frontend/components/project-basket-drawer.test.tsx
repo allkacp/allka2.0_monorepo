@@ -21,7 +21,7 @@ import { setTestViewportWidth } from "@/vitest.setup";
 // global. Ela só é renderizada nas rotas de catálogo/loja
 // (`isCatalogRoute`), mesmo quando há itens salvos. Por isso os testes de
 // comportamento interno do painel montam numa rota de catálogo real
-// (ex.: `/admin/catalogo-produtos`) e há um bloco dedicado provando que,
+// (ex.: `/admin/produtos`) e há um bloco dedicado provando que,
 // fora do catálogo, o painel não renderiza, fecha em segurança e preserva
 // os itens.
 
@@ -142,15 +142,15 @@ describe("ProjectBasketDrawer — navegação do botão de catálogo", () => {
   });
 
   it("1. cesta vazia mostra o botão 'Ir para o catálogo'", () => {
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     expect(screen.getByRole("button", { name: /ir para o catálogo/i })).toBeInTheDocument();
   });
 
-  it("2/5. Admin: clicar em 'Ir para o catálogo' navega pra /admin/catalogo-produtos e fecha a cesta", async () => {
+  it("2/5. Admin: clicar em 'Ir para o catálogo' navega pra /admin/produtos e fecha a cesta", async () => {
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     await user.click(screen.getByRole("button", { name: /ir para o catálogo/i }));
-    expect(screen.getByTestId("current-path").textContent).toBe("/admin/catalogo-produtos");
+    expect(screen.getByTestId("current-path").textContent).toBe("/admin/produtos");
     expect(setOpenSpy).toHaveBeenCalledWith(false);
   });
 
@@ -189,14 +189,14 @@ describe("ProjectBasketDrawer — navegação do botão de catálogo", () => {
   // sobrar UMA ação principal: "Criar projeto com estes itens".
   it("2. Cesta COM itens NÃO mostra 'Continuar adicionando'", () => {
     basketConfig.items = [itemFixture()];
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     expect(screen.queryByRole("button", { name: /ir para o catálogo/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /continuar adicionando/i })).not.toBeInTheDocument();
   });
 
   it("3. Cesta COM itens mostra somente 'Criar projeto com estes itens' como ação principal", () => {
     basketConfig.items = [itemFixture()];
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     expect(screen.getByRole("button", { name: /criar projeto com estes itens/i })).toBeInTheDocument();
     // "Limpar" continua existindo (ação secundária/destrutiva, não é "continuar comprando").
     expect(screen.getByRole("button", { name: /^limpar$/i })).toBeInTheDocument();
@@ -204,7 +204,7 @@ describe("ProjectBasketDrawer — navegação do botão de catálogo", () => {
 
   it("4. Itens e quantidades permanecem intactos ao abrir o resumo com itens", () => {
     basketConfig.items = [itemFixture("prod-1"), { ...itemFixture("prod-2"), quantity: 3 }];
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     // Contagem no cabeçalho soma quantidades (1 + 3 = 4), não produtos distintos.
     expect(screen.getByText(/4 produtos selecionados/i)).toBeInTheDocument();
     expect(screen.getAllByText("3")).not.toHaveLength(0); // quantidade do segundo item visível
@@ -214,24 +214,24 @@ describe("ProjectBasketDrawer — navegação do botão de catálogo", () => {
 
   it("5. Resumo da cesta não é renderizado duplicado", () => {
     basketConfig.items = [itemFixture()];
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     expect(screen.getAllByRole("button", { name: /criar projeto com estes itens/i })).toHaveLength(1);
     expect(screen.getAllByText("Produto Teste")).toHaveLength(1);
   });
 
   it("8. Fechar manualmente (X) continua funcionando, sem navegar", async () => {
     const user = userEvent.setup();
-    const { container } = renderDrawer("/admin/catalogo-produtos");
+    const { container } = renderDrawer("/admin/produtos");
     const closeButton = container.querySelector("svg.lucide-x")?.closest("button");
     expect(closeButton).toBeTruthy();
     await user.click(closeButton!);
     expect(setOpenSpy).toHaveBeenCalledWith(false);
-    expect(screen.getByTestId("current-path").textContent).toBe("/admin/catalogo-produtos");
+    expect(screen.getByTestId("current-path").textContent).toBe("/admin/produtos");
   });
 
   it("9. Navegar por qualquer outro lugar (fora da cesta) continua fechando a cesta — comportamento original preservado", async () => {
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos", <Link to="/admin/empresas">ir pra empresas</Link>);
+    renderDrawer("/admin/produtos", <Link to="/admin/empresas">ir pra empresas</Link>);
     await user.click(screen.getByRole("link", { name: /ir pra empresas/i }));
     expect(screen.getByTestId("current-path").textContent).toBe("/admin/empresas");
     expect(setOpenSpy).toHaveBeenCalledWith(false);
@@ -239,7 +239,7 @@ describe("ProjectBasketDrawer — navegação do botão de catálogo", () => {
 
   it("10. Abertura normal (com itens) continua renderizando sem quebrar", () => {
     basketConfig.items = [itemFixture()];
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     expect(screen.getByText("Produto Teste")).toBeInTheDocument();
     expect(screen.getByText(/1 produto selecionado/i)).toBeInTheDocument();
   });
@@ -247,7 +247,7 @@ describe("ProjectBasketDrawer — navegação do botão de catálogo", () => {
   it("11. Nenhum overlay/painel sobra no DOM depois de fechar (mobile)", async () => {
     setTestViewportWidth(375);
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     expect(screen.getByText("Cesta do projeto")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /ir para o catálogo/i }));
     await waitFor(() => expect(screen.queryByText("Cesta do projeto")).not.toBeInTheDocument(), {
@@ -291,7 +291,7 @@ describe("ProjectBasketDrawer — só vive no contexto de catálogo/loja", () =>
 
   it("telas administrativas/de gestão não renderizam a cesta (gestão de produtos, financeiro, perfil, projetos já criados)", () => {
     for (const path of [
-      "/admin/produtos",
+      "/admin/cadastro-produtos",
       "/admin/financeiro",
       "/admin/perfil",
       "/admin/combos",
@@ -305,7 +305,7 @@ describe("ProjectBasketDrawer — só vive no contexto de catálogo/loja", () =>
   });
 
   it("dentro do catálogo — inclusive no detalhe do produto — a cesta renderiza normalmente", () => {
-    const { unmount } = renderDrawer("/admin/catalogo-produtos");
+    const { unmount } = renderDrawer("/admin/produtos");
     expect(screen.getByText("Cesta do projeto")).toBeInTheDocument();
     unmount();
     renderDrawer("/company/produtos/prod-1");
@@ -314,7 +314,7 @@ describe("ProjectBasketDrawer — só vive no contexto de catálogo/loja", () =>
 
   it("sair do catálogo para o dashboard fecha a cesta sem apagar itens; voltar ao catálogo mostra a cesta de novo com os itens", async () => {
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos", <Link to="/admin/dashboard">sair</Link>);
+    renderDrawer("/admin/produtos", <Link to="/admin/dashboard">sair</Link>);
     expect(screen.getByText("Cesta do projeto")).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: /^sair$/i }));
     await waitFor(() => expect(screen.queryByText("Cesta do projeto")).not.toBeInTheDocument());
@@ -336,7 +336,7 @@ describe("ProjectBasketDrawer — 'Limpar' com confirmação dupla", () => {
 
   it("clicar em 'Limpar' abre a 1ª etapa e ainda não limpa nada", async () => {
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     await user.click(screen.getByRole("button", { name: /^limpar$/i }));
     expect(await screen.findByText(/Isso remove todos os itens da cesta/i)).toBeInTheDocument();
     expect(screen.getByText(/3 itens na cesta/i)).toBeInTheDocument();
@@ -345,7 +345,7 @@ describe("ProjectBasketDrawer — 'Limpar' com confirmação dupla", () => {
 
   it("cancelar mantém todos os itens", async () => {
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     await user.click(screen.getByRole("button", { name: /^limpar$/i }));
     await user.click(screen.getByRole("button", { name: /^cancelar$/i }));
     expect(clearBasketSpy).not.toHaveBeenCalled();
@@ -354,7 +354,7 @@ describe("ProjectBasketDrawer — 'Limpar' com confirmação dupla", () => {
 
   it("voltar (da 2ª pra 1ª etapa) mantém todos os itens", async () => {
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     await user.click(screen.getByRole("button", { name: /^limpar$/i }));
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
     await user.click(screen.getByRole("button", { name: /voltar/i }));
@@ -364,7 +364,7 @@ describe("ProjectBasketDrawer — 'Limpar' com confirmação dupla", () => {
 
   it("primeira confirmação ('Continuar') ainda não limpa a cesta", async () => {
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     await user.click(screen.getByRole("button", { name: /^limpar$/i }));
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
     expect(clearBasketSpy).not.toHaveBeenCalled();
@@ -373,7 +373,7 @@ describe("ProjectBasketDrawer — 'Limpar' com confirmação dupla", () => {
 
   it("confirmação final limpa a cesta — quantidade e total zeram só nesse momento", async () => {
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     await user.click(screen.getByRole("button", { name: /^limpar$/i }));
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
     await user.click(screen.getByRole("button", { name: /limpar todos os itens da cesta/i }));
@@ -385,7 +385,7 @@ describe("ProjectBasketDrawer — 'Limpar' com confirmação dupla", () => {
 
   it("abrir novamente não recupera os itens já apagados", async () => {
     const user = userEvent.setup();
-    renderDrawer("/admin/catalogo-produtos");
+    renderDrawer("/admin/produtos");
     await user.click(screen.getByRole("button", { name: /^limpar$/i }));
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
     await user.click(screen.getByRole("button", { name: /limpar todos os itens da cesta/i }));

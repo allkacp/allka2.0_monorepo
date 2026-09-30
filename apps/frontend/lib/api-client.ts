@@ -920,6 +920,32 @@ class ApiClient {
     return this.c2<{ data: any[] }>("GET", `/tasks/search?${qs.toString()}`);
   }
   importCatalog2Task(versionId: string, sourceTaskId: string) { return this.c2("POST", `/versions/${versionId}/tasks/import`, { source_task_id: sourceTaskId }); }
+  // Catálogo global de modelos ("Tarefa #ID" / "Etapa #ID")
+  getCatalog2TaskModels(params: Record<string, string | number | undefined> = {}) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return this.c2<{ total: number; data: any[] }>("GET", `/task-models?${qs.toString()}`);
+  }
+  getCatalog2TaskModel(id: number) { return this.c2<any>("GET", `/task-models/${id}`); }
+  updateCatalog2TaskModel(id: number, body: Record<string, any>) { return this.c2("PUT", `/task-models/${id}`, body); }
+  setCatalog2TaskModelActive(id: number, is_active: boolean) { return this.c2("PATCH", `/task-models/${id}/active`, { is_active }); }
+  createCatalog2TaskModel(body: Record<string, any>) { return this.c2<{ id: number }>("POST", `/task-models`, body); }
+  getCatalog2StepModels(params: Record<string, string | number | undefined> = {}) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") qs.set(k, String(v));
+    return this.c2<{ total: number; data: any[] }>("GET", `/step-models?${qs.toString()}`);
+  }
+  getCatalog2StepModel(id: number) { return this.c2<any>("GET", `/step-models/${id}`); }
+  updateCatalog2StepModel(id: number, body: Record<string, any>) { return this.c2("PUT", `/step-models/${id}`, body); }
+  setCatalog2StepModelActive(id: number, is_active: boolean) { return this.c2("PATCH", `/step-models/${id}/active`, { is_active }); }
+  createCatalog2StepModel(body: Record<string, any>) { return this.c2<{ id: number }>("POST", `/step-models`, body); }
+  addCatalog2TaskFromModel(versionId: string, modelId: number) { return this.c2("POST", `/versions/${versionId}/tasks/from-model`, { model_id: modelId }); }
+  addCatalog2StepFromModel(taskId: string, stepModelId: number) { return this.c2("POST", `/tasks/${taskId}/steps/from-model`, { step_model_id: stepModelId }); }
+  getCatalog2AccessTypes() { return this.c2<{ data: { key: string; label: string }[] }>("GET", `/access-types`); }
+  updateCatalog2AccessRequirements(versionId: string, items: { access_type: string; label?: string | null; is_required?: boolean; notes?: string | null }[]) { return this.c2("PUT", `/versions/${versionId}/access-requirements`, { items }); }
+  addCatalog2AccessValidationStep(taskId: string) { return this.c2("POST", `/tasks/${taskId}/steps/access-validation`); }
+  syncCatalog2TaskModel(taskId: string) { return this.c2("POST", `/tasks/${taskId}/sync-model`); }
+  syncCatalog2StepModel(stepId: string) { return this.c2("POST", `/steps/${stepId}/sync-model`); }
   // variações / opções / efeitos
   addCatalog2Variation(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/variations`, body); }
   updateCatalog2Variation(id: string, body: Record<string, any>) { return this.c2("PUT", `/variations/${id}`, body); }
@@ -1121,6 +1147,60 @@ class ApiClient {
   // ─── Aprovação da entrega (dois níveis) ───────────────────────────────────
   // Agência confere primeiro; o cliente depois, quando o produto exige. A
   // tarefa só encerra no último aceite — ver src/lib/stage-engine.ts.
+
+  /** Situação do fluxo, histórico de decisões e dispensa por regra. */
+  async getTaskFlow(taskId: string) {
+    return this.get<any>(`/project-tasks/${taskId}/flow`);
+  }
+  async getTaskDecisions(taskId: string) {
+    return this.get<{ data: any[] }>(`/project-tasks/${taskId}/decisions`);
+  }
+  async dispenseTask(taskId: string, reason: string) {
+    return this.post<any>(`/project-tasks/${taskId}/dispense`, { reason });
+  }
+  /** Dependências da tarefa (pacote, produto, entregável, aprovação, acesso). */
+  async getTaskDependencies(taskId: string) {
+    return this.get<any>(`/project-tasks/${taskId}/dependencies`);
+  }
+  /** Pacotes de produtos e regras de dependência (Admin Master). */
+  getCatalog2Packages() { return this.c2<{ data: any[] }>("GET", "/packages"); }
+  getCatalog2DependencyOptions() { return this.c2<any>("GET", "/dependency-options"); }
+  createCatalog2Package(body: Record<string, any>) { return this.c2<{ id: string }>("POST", "/packages", body); }
+  updateCatalog2Package(id: string, body: Record<string, any>) { return this.c2("PUT", `/packages/${id}`, body); }
+  addCatalog2PackageRule(packageId: string, body: Record<string, any>) { return this.c2("POST", `/packages/${packageId}/rules`, body); }
+  setCatalog2DependencyRuleActive(id: string, is_active: boolean) { return this.c2("PATCH", `/dependency-rules/${id}/active`, { is_active }); }
+  getCatalog2ProductPrerequisites(productId: string) { return this.c2<{ data: any[] }>("GET", `/products/${productId}/prerequisites`); }
+  addCatalog2ProductPrerequisite(productId: string, body: Record<string, any>) { return this.c2("POST", `/products/${productId}/prerequisites`, body); }
+
+  /** Ativos/acessos do cliente exigidos pela tarefa (nunca senha). */
+  async getTaskAssets(taskId: string) {
+    return this.get<any>(`/project-tasks/${taskId}/assets`);
+  }
+  async validateClientAsset(assetId: string, scopeConfirmed: string) {
+    return this.post<any>(`/client-assets/${assetId}/validate`, { scope_confirmed: scopeConfirmed });
+  }
+  async invalidateClientAsset(assetId: string, reason: string, expired?: boolean) {
+    return this.post<any>(`/client-assets/${assetId}/invalidate`, { reason, expired });
+  }
+  async reportClientAssetChange(assetId: string, note?: string) {
+    return this.post<any>(`/client-assets/${assetId}/report-change`, { note });
+  }
+
+  /** Continuidade com o mesmo executor do ciclo anterior. */
+  async getTaskContinuity(taskId: string) {
+    return this.get<any>(`/project-tasks/${taskId}/continuity`);
+  }
+  async decideTaskContinuity(taskId: string, choice: "keep" | "redistribute" | "manual_leader", nomadeId?: string) {
+    return this.post<any>(`/project-tasks/${taskId}/continuity`, { choice, nomade_id: nomadeId });
+  }
+
+  /** Qualificação obrigatória (aceite interno do líder/qualificador). */
+  async getTaskQualification(taskId: string) {
+    return this.get<any>(`/project-tasks/${taskId}/qualificacao`);
+  }
+  async qualifyTask(taskId: string, decisao: "aprovar" | "reprovar" | "comentar", comentario?: string) {
+    return this.post<any>(`/project-tasks/${taskId}/qualificacao`, { decisao, comentario });
+  }
 
   async aprovarTarefa(taskId: string, nivel?: "agencia" | "cliente") {
     return this.patch(`/project-tasks/${taskId}/aprovar`, nivel ? { nivel } : {});

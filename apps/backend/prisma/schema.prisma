@@ -263,6 +263,7 @@ model Company {
   squad_config    SquadConfig?
   coupon_usages   CouponUsage[]
   client_links    ClientLink[]
+  client_assets   ClientAsset[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -767,6 +768,7 @@ model Project {
   hallucination_reports HallucinationReport[]
   launch_sessions       LaunchSession[]
   task_dependencies     TaskDependency[]
+  decision_logs         ProjectDecisionLog[]
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -1301,6 +1303,15 @@ model ProjectProduct {
   // mesmo principio de snapshot ja usado no resto desta tabela.
   catalog2_period                         String?
   catalog2_period_months                  Int?
+  // Como este contrato foi executado: "avulso" | "mensal" | "mensal_implementacao".
+  contract_mode                           String?
+  // 1ª contratação deste produto por este cliente? (define se roda a implementação inicial)
+  first_contract                          Boolean?
+  // Motivo que reabre a implementação quando a regra é "on_revalidation"
+  // (mudança de escopo, expiração de acesso, novo ambiente/plataforma).
+  revalidation_reason                     String?
+  // Pacote em que este produto foi contratado (instância de ProjectPackage).
+  package_instance_id                     String?
   catalog2_period_discount_percent        Float?
   catalog2_period_reference_monthly_price Float?
   // Fim do periodo contratado (checkout_time + meses) — "prazo de protecao
@@ -1442,6 +1453,20 @@ model ProjectTask {
   // mesma tarefa numa única geração (ex.: "3x" do mesmo item). Sempre 0
   // nesta fase — não há hoje quantidade contratada por ProjectProduct.
   occurrence_index  Int      @default(0)
+  // O que este ciclo é: "implementacao" | "recorrencia_mensal" | "revalidacao" |
+  // "avulso" (nulo = tarefa anterior à regra de ciclos).
+  cycle_kind        String?
+
+  // ── Continuidade com o mesmo executor ────────────────────────────────────
+  // Snapshot da regra + decisão: "pending_choice" (aguarda cliente/líder) | "kept" |
+  // "redistributed" | "manual_leader". A tarefa anterior e o executor anterior ficam
+  // guardados pra dar contexto ao novo ciclo.
+  executor_continuity      String?
+  continuity_status        String?
+  continuity_prev_task_id  String?
+  continuity_prev_nomade_id String?
+  continuity_decided_by    String?
+  continuity_decided_at    DateTime?
 
   // Fotografia da divisão de entrega escolhida na contratação. Uma tarefa
   // com delivery_quantity=5 representa cinco unidades para o mesmo nômade;
@@ -1500,6 +1525,19 @@ model ProjectTask {
   // Quando falso, o aceite da agência encerra a tarefa (sem etapa de cliente).
   exige_aprovacao_cliente Boolean   @default(true)
 
+  // ── Qualificação obrigatória (aceite INTERNO do líder/qualificador) ────
+  // Vem do modelo (Catalog2Task.requires_qualification). Com ela ativa, a
+  // entrega do executor NÃO segue para agência/cliente: fica em
+  // AGUARDANDO_QUALIFICACAO até o qualificador aprovar. É a etapa ANTES da
+  // aprovação do cliente. Reprovação interna volta ao executor (EM_AJUSTES) e
+  // NÃO conta como alteração grátis do cliente. `qualified_at` é zerado a cada
+  // nova entrega/ciclo — cada rodada exige nova qualificação.
+  requires_qualification Boolean   @default(false)
+  qualification_round    Int       @default(0)
+  qualified_at           DateTime?
+  qualified_by           String?
+  qualifications         ProjectTaskQualification[]
+
   // ── Limite de alterações grátis ─────────────────────────────────────────
   // Quantas reprovações além do limite grátis (ProjectProduct.
   // alteracoes_incluidas_snapshot) já foram pagas. Ver PATCH .../reprovar
@@ -1549,6 +1587,7 @@ model ProjectTask {
   assignment_history      TaskAssignmentHistory[]
   credentials             ProjectCredential[]
   task_offers             TaskOffer[]
+  dependency_rules        ProjectDependencyRule[]
   memory_approved_records MemoryApprovedTaskRecord[]
   hallucination_reports   HallucinationReport[]
   lider_responsavel       User?                      @relation("TaskLiderResponsavel", fields: [lider_responsavel_id], references: [id])
@@ -1597,6 +1636,223 @@ model ProjectTask {
   // varrer tarefas ativas com prazo sem full scan.
   @@index([status, due_date])
   @@map("project_tasks")
+}
+
+// ─── Pacotes de produtos e regras de dependência (Pedido 2) ──────────────────
+// Um pacote agrupa 2+ produtos contratados juntos, preservando cada produto como item
+// independente. A regra de dependência diz quem espera o quê: outro produto, tarefa,
+// etapa, entregável/anexo, aprovação interna (qualificação), aprovação do cliente ou um
+// ativo/acesso validado — e COMO espera:
+//   "block_start"  bloqueia o início da tarefa dependente;
+//   "block_final"  deixa iniciar/executar mas bloqueia a execução final/publicação;
+//   "require_before_delivery" executa, mas o item/aprovação pendente segura a ENTREGA;
+//   "alert_only"   só alerta (líder), sem bloquear.
+// Com package_id nulo a regra é um pré-requisito do PRODUTO (exige outro produto já
+// concluído pelo mesmo cliente).
+
+model Catalog2Package {
+  id          String   @id @default(cuid())
+  name        String
+  description String?  @db.Text
+  is_active   Boolean  @default(true)
+  created_by_user_id String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  items Catalog2PackageItem[]
+  rules Catalog2DependencyRule[]
+
+  @@map("catalog2_packages")
+}
+
+model Catalog2PackageItem {
+  id                  String          @id @default(cuid())
+  package_id          String
+  package             Catalog2Package @relation(fields: [package_id], references: [id], onDelete: Cascade)
+  catalog2_product_id String
+  product             Catalog2Product @relation(fields: [catalog2_product_id], references: [id], onDelete: Restrict)
+  sort_order          Int             @default(0)
+
+  @@unique([package_id, catalog2_product_id])
+  @@index([catalog2_product_id])
+  @@map("catalog2_package_items")
+}
+
+model Catalog2DependencyRule {
+  id         String           @id @default(cuid())
+  package_id String?
+  package    Catalog2Package? @relation(fields: [package_id], references: [id], onDelete: Cascade)
+
+  dependent_product_id String
+  dependent_product    Catalog2Product @relation("DependencyDependentProduct", fields: [dependent_product_id], references: [id], onDelete: Cascade)
+  // Nulo = todas as tarefas do produto dependente.
+  dependent_task_key   String?
+
+  // product | task | step | deliverable | internal_approval | client_approval | info_asset
+  target_kind       String
+  target_product_id String?
+  target_product    Catalog2Product? @relation("DependencyTargetProduct", fields: [target_product_id], references: [id], onDelete: Cascade)
+  target_task_key   String?
+  target_step_key   String?
+  // info_asset: tipo do acesso (google_ads, pixel_capi…) exigido válido.
+  target_asset_type String?
+
+  behavior  String  @default("block_start")
+  note      String? @db.Text
+  is_active Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([package_id])
+  @@index([dependent_product_id])
+  @@map("catalog2_dependency_rules")
+}
+
+// Instância de um pacote contratado num projeto (produtos pagos juntos).
+model ProjectPackage {
+  id            String   @id @default(cuid())
+  project_id    String
+  package_id    String
+  name_snapshot String
+  created_at    DateTime @default(now())
+
+  @@index([project_id])
+  @@map("project_packages")
+}
+
+// Regra de dependência JÁ materializada: tarefa dependente → o que ela espera.
+model ProjectDependencyRule {
+  id                 String      @id @default(cuid())
+  project_id         String
+  project_package_id String?
+  task_id            String
+  task               ProjectTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  source_rule_id     String?
+
+  target_kind        String
+  // Onde procurar o alvo (resolvido na materialização):
+  target_task_id     String?
+  target_stage_key   String?
+  target_project_product_id String?
+  target_product_id  String?
+  target_asset_type  String?
+  // Alvo ainda não existe (produto exigido não contratado): fica bloqueando até existir.
+  target_missing     Boolean @default(false)
+
+  behavior   String  @default("block_start")
+  reason     String  @db.Text
+  alerted_at DateTime?
+  created_at DateTime @default(now())
+
+  @@index([task_id])
+  @@index([project_id])
+  @@index([target_task_id])
+  @@map("project_dependency_rules")
+}
+
+// ─── Ativos validados do cliente ───────────────────────────────────────────
+// Contas, permissões, plataformas, domínios, pixels, contas de anúncios, CRM, sites e
+// integrações que o cliente já liberou/validou — reaproveitados entre produtos e
+// ciclos (não se repete a coleta desnecessária). NUNCA guarda senha/credencial: só o
+// identificador seguro (ID da conta, domínio…) e a permissão confirmada.
+
+model ClientAsset {
+  id         String  @id @default(cuid())
+  company_id String
+  company    Company @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  // google_ads | meta_business_manager | ad_account | pixel_capi | google_analytics |
+  // google_tag_manager | crm | site_landing | other
+  asset_type String
+  platform   String?
+  label      String
+  // Identificador SEGURO (ID da conta, domínio, URL) — nunca senha.
+  identifier String?
+
+  // pendente | validado | invalido | expirado | revalidar
+  status                String    @default("pendente")
+  last_validated_at     DateTime?
+  validated_by_user_id  String?
+  // Escopo/permissão confirmada (ex.: "Administrador", "Somente leitura").
+  scope_confirmed       String?
+  expires_at            DateTime?
+  expiration_condition  String?
+  // Última vez que o cliente disse que algo mudou.
+  change_reported_at    DateTime?
+  notes                 String?   @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  links ClientAssetLink[]
+
+  @@unique([company_id, asset_type, label])
+  @@index([company_id, status])
+  @@map("client_assets")
+}
+
+// Quais produtos/tarefas dependem de cada ativo.
+model ClientAssetLink {
+  id                  String      @id @default(cuid())
+  asset_id            String
+  asset               ClientAsset @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+  project_id          String?
+  project_product_id  String?
+  project_task_id     String?
+  catalog2_product_id String?
+  catalog2_task_id    String?
+  is_required         Boolean     @default(true)
+  created_at          DateTime    @default(now())
+
+  @@unique([asset_id, project_task_id])
+  @@index([project_task_id])
+  @@index([project_product_id])
+  @@map("client_asset_links")
+}
+
+// ─── ProjectDecisionLog ───────────────────────────────────────────────────
+// Histórico de decisões AUTOMÁTICAS e manuais do fluxo de ciclos: implementação
+// pulada, tarefa dispensada por regra, executor mantido/trocado, acesso validado,
+// dependência liberada… Nada é apagado.
+
+model ProjectDecisionLog {
+  id                 String   @id @default(cuid())
+  project_id         String
+  project            Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project_product_id String?
+  project_task_id    String?
+  // cycle_generated | task_generated | task_dispensed | implementation_skipped |
+  // implementation_generated | executor_kept | executor_changed | asset_validated | ...
+  kind               String
+  message            String   @db.Text
+  detail_json        String?  @db.Text
+  actor_user_id      String?
+  created_at         DateTime @default(now())
+
+  @@index([project_id, created_at])
+  @@index([project_task_id])
+  @@index([project_product_id])
+  @@map("project_decision_logs")
+}
+
+// ─── ProjectTaskQualification ─────────────────────────────────────────────
+// Histórico da qualificação interna (uma linha por evento): a entrega chegou
+// ("solicitada"), o qualificador aprovou/reprovou/comentou. Nada é apagado.
+
+model ProjectTaskQualification {
+  id              String      @id @default(cuid())
+  project_task_id String
+  project_task    ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  round           Int         @default(1)
+  // solicitada | aprovada | reprovada | comentario
+  decision        String
+  comment         String?     @db.Text
+  actor_user_id   String?
+  created_at      DateTime    @default(now())
+
+  @@index([project_task_id, created_at])
+  @@map("project_task_qualifications")
 }
 
 // ─── ProjectTaskStage ─────────────────────────────────────────────────────
@@ -4769,8 +5025,10 @@ model Catalog2Specialty {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  tasks Catalog2Task[]
-  steps Catalog2TaskStep[] @relation("StepSpecialty")
+  tasks       Catalog2Task[]
+  steps       Catalog2TaskStep[]  @relation("StepSpecialty")
+  task_models Catalog2TaskModel[]
+  step_models Catalog2StepModel[]
 
   @@map("catalog2_specialties")
 }
@@ -4793,8 +5051,9 @@ model Catalog2Questionnaire {
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
 
-  questions Catalog2QuestionnaireQuestion[]
-  tasks     Catalog2Task[]
+  questions   Catalog2QuestionnaireQuestion[]
+  tasks       Catalog2Task[]
+  task_models Catalog2TaskModel[]
 
   @@index([name])
   @@map("catalog2_questionnaires")
@@ -4938,6 +5197,10 @@ model Catalog2Product {
   periods             Catalog2ProductPeriod[]
   // Item 7 (reunião 2026-09-14, "Histórico de alterações do produto").
   history_events      Catalog2ProductHistoryEvent[]
+  // Pacotes e regras de dependência (Pedido 2).
+  package_items       Catalog2PackageItem[]
+  dependency_rules_as_dependent Catalog2DependencyRule[] @relation("DependencyDependentProduct")
+  dependency_rules_as_target    Catalog2DependencyRule[] @relation("DependencyTargetProduct")
 
   @@index([status])
   @@index([pillar_id])
@@ -5195,6 +5458,22 @@ model Catalog2ProductVersion {
   // interno e nao vira promessa de entrega.
   base_commercial_deadline_days Int?
 
+  // ── Modalidades de contratação e ciclos (Pedido 2, 2026-09-29) ─────────────
+  // Avulso / recorrente mensal / recorrente com implementação inicial / pacote.
+  // Valem para QUALQUER produto. A versão publicada é imutável, então a regra
+  // contratada fica congelada junto com o resto da versão.
+  accepts_one_time             Boolean @default(true)
+  accepts_recurring            Boolean @default(false)
+  has_initial_implementation   Boolean @default(false)
+  // Quando a implementação inicial roda: "always" (todo contrato) | "first_only"
+  // (só na 1ª contratação daquele cliente) | "on_revalidation" (só se houver
+  // mudança de escopo, expiração de acesso ou novo ambiente/plataforma).
+  implementation_rule          String  @default("first_only")
+  // Enquanto a implementação não concluir, as tarefas operacionais ficam bloqueadas.
+  implementation_blocks_operation Boolean @default(true)
+  // "standalone" (vende sozinho) | "package_only" (só em conjunto/pacote).
+  sell_mode                    String  @default("standalone")
+
   // Reuniao 10/09 ("precificacao dos 36 produtos funcional para teste") —
   // prazo comercial PROVISORIO por produto, campo TOTALMENTE separado do
   // real acima. So e lido por computePricing em modo simulacao
@@ -5230,6 +5509,8 @@ model Catalog2ProductVersion {
   project_products ProjectProduct[]
   // Item 7 (reunião 2026-09-14, "Histórico de alterações do produto").
   history_events   Catalog2ProductHistoryEvent[]
+  // Acessos externos que o produto precisa do cliente (Google Ads, Meta, Pixel…).
+  access_requirements Catalog2VersionAccess[]
 
   @@unique([product_id, version_number])
   @@index([state])
@@ -5419,6 +5700,39 @@ model Catalog2Task {
   effort_ambiguous        Boolean @default(false)
   effort_ambiguous_reason String? @db.Text
 
+  // Vínculo com o catálogo GLOBAL de modelos de tarefa ("Tarefa #ID"). A linha
+  // continua sendo da versão (versões publicadas seguem imutáveis); o vínculo
+  // diz de qual modelo ela veio e em qual revisão do modelo. Nunca apaga o
+  // modelo: onDelete Restrict.
+  task_model_id       Int?
+  task_model          Catalog2TaskModel? @relation(fields: [task_model_id], references: [id], onDelete: Restrict)
+  task_model_revision Int?
+
+  // Qualificação obrigatória: a entrega concluída pelo executor NÃO encerra a
+  // tarefa — passa a "Aguardando qualificação" (líder/qualificador aprova,
+  // reprova pedindo ajustes ou comenta). Não é o mesmo que "revisão".
+  requires_qualification Boolean @default(false)
+  // Qualificador designado (nulo = líder da área). Modelagem já preparada pra
+  // mais de um qualificador ("any" | "all" | "minimum" + nº mínimo); nesta
+  // entrega só vale 1 líder/qualificador.
+  qualifier_user_id           String?
+  qualification_mode          String  @default("any")
+  qualification_min_approvals Int     @default(1)
+
+  // Tipo de ciclo: "implementacao" | "recorrente" | "revalidacao" | "avulso" | "sob_demanda".
+  // Regra de repetição: "first_only" | "all_cycles" | "every_n_cycles" | "on_condition" | "manual".
+  cycle_type          String @default("recorrente")
+  repeat_rule         String @default("all_cycles")
+  repeat_every_cycles Int?
+  // Continuidade com o mesmo executor do ciclo anterior (mesmo cliente):
+  // "not_allowed" | "allowed" | "recommended" | "required".
+  executor_continuity String @default("not_allowed")
+  // Revalidação dos acessos/ativos do cliente (etapa "Validação e organização dos acessos"):
+  // "always" | "first_only" | "every_x_days" | "on_executor_change" | "on_client_change" |
+  // "none_while_valid" | "light_check" (só uma verificação leve enquanto válidos).
+  asset_rule            String @default("first_only")
+  asset_revalidate_days Int?
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -5467,6 +5781,20 @@ model Catalog2TaskStep {
   specialty_id String?
   specialty    Catalog2Specialty? @relation("StepSpecialty", fields: [specialty_id], references: [id], onDelete: SetNull)
 
+  // Vínculo com o catálogo GLOBAL de modelos de etapa ("Etapa #ID").
+  step_model_id       Int?
+  step_model          Catalog2StepModel? @relation(fields: [step_model_id], references: [id], onDelete: Restrict)
+  step_model_revision Int?
+
+  // Ajustes específicos DESTE produto (nulo = herda do modelo global da etapa).
+  purpose             String?
+  execution_mode      String?
+  completion_criteria String? @db.Text
+  // Só roda na 1ª execução (nunca se repete nos ciclos seguintes) / dispensável quando o
+  // mesmo executor é mantido.
+  first_execution_only    Boolean @default(false)
+  skip_when_same_executor Boolean @default(false)
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -5475,6 +5803,133 @@ model Catalog2TaskStep {
   @@index([task_id, sort_order])
   @@index([specialty_id])
   @@map("catalog2_task_steps")
+}
+
+// ─── Catálogo global de modelos de tarefa e de etapa ────────────────────────
+// IDs numéricos sequenciais e PERMANENTES (autoincrement, nunca reutilizados —
+// modelo nunca é apagado, só inativado). Uma tarefa/etapa de um produto
+// (Catalog2Task / Catalog2TaskStep, por versão) referencia o modelo de origem;
+// a linha da versão guarda os valores vigentes na publicação, então editar o
+// modelo depois NÃO altera versões já publicadas. `revision` sobe a cada edição
+// do modelo global. `signature` só serve pra reconhecer o "mesmo" modelo em
+// cargas automáticas (importações, clones) — nunca é identidade pra usuário.
+model Catalog2TaskModel {
+  id                       Int     @id @default(autoincrement())
+  name                     String
+  description              String? @db.Text
+  // "humano" | "ia" | "hibrido" (Humano ou IA)
+  execution_mode           String  @default("humano")
+  specialty_id             String?
+  specialty                Catalog2Specialty? @relation(fields: [specialty_id], references: [id], onDelete: SetNull)
+  estimated_minutes        Int?
+  questionnaire_id         String?
+  questionnaire            Catalog2Questionnaire? @relation(fields: [questionnaire_id], references: [id], onDelete: SetNull)
+  is_conditional           Boolean @default(false)
+  requires_client_approval Boolean @default(false)
+  // Preparado pra qualificação obrigatória (fase seguinte); ainda sem fluxo.
+  requires_qualification   Boolean @default(false)
+  qualifier_user_id           String?
+  qualification_mode          String  @default("any")
+  qualification_min_approvals Int     @default(1)
+
+  // Tipo de ciclo: "implementacao" | "recorrente" | "revalidacao" | "avulso" | "sob_demanda".
+  // Regra de repetição: "first_only" | "all_cycles" | "every_n_cycles" | "on_condition" | "manual".
+  cycle_type          String @default("recorrente")
+  repeat_rule         String @default("all_cycles")
+  repeat_every_cycles Int?
+  // Continuidade com o mesmo executor do ciclo anterior (mesmo cliente):
+  // "not_allowed" | "allowed" | "recommended" | "required".
+  executor_continuity String @default("not_allowed")
+  // Revalidação dos acessos/ativos do cliente (etapa "Validação e organização dos acessos"):
+  // "always" | "first_only" | "every_x_days" | "on_executor_change" | "on_client_change" |
+  // "none_while_valid" | "light_check" (só uma verificação leve enquanto válidos).
+  asset_rule            String @default("first_only")
+  asset_revalidate_days Int?
+  is_active                Boolean @default(true)
+  revision                 Int     @default(1)
+  signature                String
+  created_by_user_id       String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  steps Catalog2TaskModelStep[]
+  tasks Catalog2Task[]
+
+  @@index([signature])
+  @@index([is_active])
+  @@index([specialty_id])
+  @@map("catalog2_task_models")
+}
+
+model Catalog2StepModel {
+  id                  Int     @id @default(autoincrement())
+  name                String
+  description         String? @db.Text
+  completion_criteria String? @db.Text
+  // "execucao" | "coleta_informacao" | "validacao" | "revisao" | "qualificacao"
+  // | "aprovacao_cliente" | "entrega"
+  purpose             String  @default("execucao")
+  execution_mode      String  @default("humano")
+  specialty_id        String?
+  specialty           Catalog2Specialty? @relation(fields: [specialty_id], references: [id], onDelete: SetNull)
+  estimated_minutes   Int?
+  is_active           Boolean @default(true)
+  // Etapa padrão "Validação e organização dos acessos": confirma que os acessos
+  // externos existem, estão corretos e permitem executar. Bloqueia as etapas
+  // seguintes da tarefa enquanto pendente. Nunca pede senha do cliente.
+  is_access_validation Boolean @default(false)
+  first_execution_only    Boolean @default(false)
+  skip_when_same_executor Boolean @default(false)
+  revision            Int     @default(1)
+  signature           String
+  created_by_user_id  String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  task_models Catalog2TaskModelStep[]
+  steps       Catalog2TaskStep[]
+
+  @@index([signature])
+  @@index([is_active])
+  @@index([specialty_id])
+  @@map("catalog2_step_models")
+}
+
+// Acessos externos exigidos por uma VERSÃO do produto (configuração por
+// produto). Só descreve QUAIS acessos são necessários — nunca guarda senha nem
+// credencial: o cliente compartilha permissões pelos convites/papéis oficiais
+// de cada ferramenta.
+model Catalog2VersionAccess {
+  id          String                 @id @default(cuid())
+  version_id  String
+  version     Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+  // google_ads | meta_business_manager | ad_account | pixel_capi | google_analytics
+  // | google_tag_manager | crm | site_landing | other
+  access_type String
+  label       String
+  is_required Boolean                @default(true)
+  notes       String?                @db.Text
+  sort_order  Int                    @default(0)
+
+  @@index([version_id, sort_order])
+  @@map("catalog2_version_accesses")
+}
+
+// Etapas padrão de um modelo de tarefa (ordenadas). Uma mesma etapa pode estar
+// em várias tarefas.
+model Catalog2TaskModelStep {
+  id            Int               @id @default(autoincrement())
+  task_model_id Int
+  task_model    Catalog2TaskModel @relation(fields: [task_model_id], references: [id], onDelete: Cascade)
+  step_model_id Int
+  step_model    Catalog2StepModel @relation(fields: [step_model_id], references: [id], onDelete: Restrict)
+  sort_order    Int               @default(0)
+
+  @@unique([task_model_id, step_model_id])
+  @@index([step_model_id])
+  @@map("catalog2_task_model_steps")
 }
 
 // Config de custo de IA por tarefa (ia/hibrido). Calculo por TOKENS +

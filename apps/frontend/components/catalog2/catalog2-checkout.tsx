@@ -7,7 +7,7 @@
 // navegador.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@/hooks/use-navigate";
 import { ArrowLeft, CheckCircle2, CreditCard, Loader2, ShieldCheck } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";

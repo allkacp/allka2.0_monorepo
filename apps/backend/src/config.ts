@@ -55,6 +55,9 @@ const baseEnvSchema = z.object({
   // intervalo do job que libera ciclos de entrega mensal vencidos. Só
   // registrado em src/index.ts (nunca nos testes).
   CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+  // Dependências entre produtos/tarefas: reavaliação periódica e aviso ao líder quando uma dependência atrasa.
+  DEPENDENCY_SCHEDULER_INTERVAL_MS: z.coerce.number().int().positive().default(300_000),
+  DEPENDENCY_DELAY_ALERT_HOURS: z.coerce.number().positive().default(48),
   // Item 8 (reunião 2026-09-14, "Notificações dos produtos") — intervalo do
   // job que envia o aviso de ativação (fan-out pra toda a plataforma) já
   // registrado como pendente junto da transição de status. Só registrado em
