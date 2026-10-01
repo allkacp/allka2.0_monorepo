@@ -24,6 +24,19 @@ function tokenFor(u: { id: string; email: string; role: string; account_type: st
   return jwt.sign({ id: u.id, email: u.email, role: u.role, account_type: u.account_type }, config.JWT_SECRET, { expiresIn: "1h" });
 }
 async function api(path: string, opts: { method?: string; token?: string; body?: unknown } = {}) {
+  // Estes cenários repetem nomes de tarefa/etapa de propósito (não testam duplicidade): confirmam a criação de forma explícita, como um chamador real teria de fazer.
+  if (opts.method === "POST" && /\/(tasks|steps)$/.test(path) && opts.body && typeof opts.body === "object" && !("duplicate_resolution" in (opts.body as object))) {
+    opts = { ...opts, body: { ...(opts.body as object), duplicate_resolution: "create_anyway", duplicate_justification: "fixture de teste: nomes repetidos entre cenários" } };
+  }
+  // Regra vigente: só publica com modalidade de compra, prazo comercial e preço calculável. Estes cenários não testam isso:
+  // preparam a versão (modalidade avulsa + prazo base) e garantem os percentuais comerciais antes de publicar.
+  const pm = /\/versions\/([^/]+)\/publish$/.exec(path);
+  if (opts.method === "POST" && pm) {
+    await prisma.catalog2ProductVersion.updateMany({ where: { id: pm[1], accepts_one_time: false }, data: { accepts_one_time: true } });
+    await prisma.catalog2ProductVersion.updateMany({ where: { id: pm[1], base_commercial_deadline_days: null }, data: { base_commercial_deadline_days: 5 } });
+    const d = { tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]) };
+    await prisma.catalog2PricingSettings.upsert({ where: { id: "default" }, create: { id: "default", ...d }, update: {} });
+  }
   const res = await fetch(`${baseUrl}${path}`, {
     method: opts.method ?? "GET",
     headers: { "content-type": "application/json", ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}) },
@@ -58,6 +71,13 @@ async function mkPricedProduct(masterId: string, opts: { withRates?: boolean } =
 }
 
 let TOKEN = "";
+
+async function addTaskWithStep(versionId: string, body: { key: string; name: string; specialty_id: string; estimated_minutes: number }) {
+  const t = await api(`/api/admin/catalog2/versions/${versionId}/tasks`, { method: "POST", token: TOKEN, body });
+  // regra vigente: toda tarefa precisa de ao menos uma etapa com especialidade e horas
+  await api(`/api/admin/catalog2/tasks/${t.json.id}/steps`, { method: "POST", token: TOKEN, body: { key: "e1", name: "Etapa", specialty_id: body.specialty_id, estimated_minutes: body.estimated_minutes } });
+  return t;
+}
 
 describe("Construtor: regras, prazos e precificação", () => {
   before(async () => {
@@ -220,7 +240,7 @@ describe("Construtor: regras, prazos e precificação", () => {
     await api(`/api/admin/catalog2/versions/${v1}`, { method: "PUT", token: TOKEN, body: { full_description: "desc completa" } });
     const spec = await prisma.catalog2Specialty.findFirstOrThrow();
     await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
-    await api(`/api/admin/catalog2/versions/${v1}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 } });
+    await addTaskWithStep(v1, { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 });
 
     const cai = `pub-${crypto.randomBytes(4).toString("hex")}`;
     const r1 = await api(`/api/admin/catalog2/versions/${v1}/publish`, { method: "POST", token: TOKEN, body: { client_action_id: cai } });
@@ -378,7 +398,7 @@ describe("Construtor: regras, prazos e precificação", () => {
       await api(`/api/admin/catalog2/versions/${v1}`, { method: "PUT", token: TOKEN, body: { full_description: "desc" } });
       const spec = await prisma.catalog2Specialty.findFirstOrThrow();
       await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
-      const task = await api(`/api/admin/catalog2/versions/${v1}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 } });
+      const task = await addTaskWithStep(v1, { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 });
       await api(`/api/admin/catalog2/versions/${v1}/publish`, { method: "POST", token: TOKEN, body: { client_action_id: `pub-q-${crypto.randomBytes(4).toString("hex")}` } });
 
       const blocked = await api(`/api/admin/catalog2/tasks/${task.json.id}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: q.json.id } });
@@ -396,7 +416,7 @@ describe("Construtor: regras, prazos e precificação", () => {
       const p = await api("/api/admin/catalog2/products", { method: "POST", token: TOKEN, body: { internal_name: `[TESTE LOCAL] Esp ${crypto.randomBytes(3).toString("hex")}` } });
       products.push(p.json.id);
       const v1 = p.json.versions[0].id;
-      const task = await api(`/api/admin/catalog2/versions/${v1}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T", specialty_id: created.json.id, estimated_minutes: 30 } });
+      const task = await addTaskWithStep(v1, { key: "t", name: "T", specialty_id: created.json.id, estimated_minutes: 30 });
       assert.equal(task.status, 201);
       const detail = await api(`/api/admin/catalog2/products/${p.json.id}`, { token: TOKEN });
       assert.equal(detail.json.versions[0].tasks[0].specialty.id, created.json.id);
@@ -452,7 +472,7 @@ describe("Construtor: regras, prazos e precificação", () => {
       await api(`/api/admin/catalog2/versions/${vDest}`, { method: "PUT", token: TOKEN, body: { full_description: "desc" } });
       const spec = await prisma.catalog2Specialty.findFirstOrThrow();
       await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
-      await api(`/api/admin/catalog2/versions/${vDest}/tasks`, { method: "POST", token: TOKEN, body: { key: "t2", name: "T2", specialty_id: spec.id, estimated_minutes: 60 } });
+      await addTaskWithStep(vDest, { key: "t2", name: "T2", specialty_id: spec.id, estimated_minutes: 60 });
       await api(`/api/admin/catalog2/versions/${vDest}/publish`, { method: "POST", token: TOKEN, body: { client_action_id: `pub-imp-${crypto.randomBytes(4).toString("hex")}` } });
 
       const blocked = await api(`/api/admin/catalog2/versions/${vDest}/tasks/import`, { method: "POST", token: TOKEN, body: { source_task_id: srcTask.json.id } });
@@ -533,7 +553,7 @@ describe("Construtor: regras, prazos e precificação", () => {
       await api(`/api/admin/catalog2/versions/${v1}`, { method: "PUT", token: TOKEN, body: { full_description: "desc" } });
       const spec = await prisma.catalog2Specialty.findFirstOrThrow();
       await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
-      const task1 = await api(`/api/admin/catalog2/versions/${v1}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 } });
+      const task1 = await addTaskWithStep(v1, { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 });
       await api(`/api/admin/catalog2/tasks/${task1.json.id}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
       await api(`/api/admin/catalog2/versions/${v1}/publish`, { method: "POST", token: TOKEN, body: { client_action_id: `pub-31-${crypto.randomBytes(4).toString("hex")}` } });
 
@@ -633,7 +653,7 @@ describe("Construtor: regras, prazos e precificação", () => {
       await api(`/api/admin/catalog2/versions/${v1}`, { method: "PUT", token: TOKEN, body: { full_description: "desc" } });
       const spec = await prisma.catalog2Specialty.findFirstOrThrow();
       await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
-      const task = await api(`/api/admin/catalog2/versions/${v1}/tasks`, { method: "POST", token: TOKEN, body: { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 } });
+      const task = await addTaskWithStep(v1, { key: "t", name: "T", specialty_id: spec.id, estimated_minutes: 60 });
       await api(`/api/admin/catalog2/tasks/${task.json.id}/questionnaire`, { method: "PUT", token: TOKEN, body: { questionnaire_id: qId } });
       await api(`/api/admin/catalog2/versions/${v1}/publish`, { method: "POST", token: TOKEN, body: { client_action_id: `pub-31b-${crypto.randomBytes(4).toString("hex")}` } });
 

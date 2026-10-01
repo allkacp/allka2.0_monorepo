@@ -19,6 +19,8 @@ export interface Catalog2DetailHeaderProps {
   productId: string;
   imagePath?: string | null;
   title: string;
+  /** Descrição curta, logo abaixo do título. */
+  subtitle?: string | null;
   categoryName?: string | null;
   optionsCount?: number;
   optionsAreProvisional?: boolean;
@@ -38,6 +40,7 @@ export function Catalog2DetailHeader({
   productId,
   imagePath,
   title,
+  subtitle,
   categoryName,
   optionsCount,
   optionsAreProvisional,
@@ -87,6 +90,7 @@ export function Catalog2DetailHeader({
               <h1 title={title} className="truncate text-lg sm:text-xl font-bold leading-tight text-white">
                 {title}
               </h1>
+              {subtitle && <p className="mt-0.5 line-clamp-2 max-w-3xl text-[11px] leading-snug text-white/80">{subtitle}</p>}
               <div className="mt-1 flex flex-wrap items-center gap-1">
                 {categoryName && (
                   <span className="inline-flex items-center text-[9px] font-semibold px-1.5 py-[2px] rounded-full bg-white/15 border border-white/25 text-white uppercase tracking-wider">

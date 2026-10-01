@@ -97,10 +97,12 @@ async function mkPublishedProduct(slug: string) {
       title: `Serviço ${slug}`, summary: "resumo", full_description: "descrição do serviço demo",
       base_commercial_deadline_days: 5,
       tasks: { create: [{ key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1,
-        steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1 }] } }] },
+        steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } }] },
     },
   });
-  await publishVersion(v.id, "system", { changeSummary: "publicação de teste" });
+  await publishVersion(v.id, "system", { activate: true, changeSummary: "publicação de teste" });
+  // estes testes vendem assinatura/período: a modalidade recorrente precisa estar habilitada na versão (regra de consistência comercial)
+  await prisma.catalog2ProductVersion.update({ where: { id: v.id }, data: { accepts_recurring: true } });
   return { product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }), versionId: v.id };
 }
 
@@ -142,6 +144,8 @@ async function configurePeriod(token: string, productId: string, period: string,
 async function setDeliveryRecurrence(token: string, productId: string, value: string | null) {
   const r = await api(`/api/admin/catalog2/products/${productId}/delivery-recurrence`, { method: "PUT", token, body: { delivery_recurrence: value } });
   assert.equal(r.status, 200, JSON.stringify(r.json));
+  // entrega mensal recorrente e assinatura mensal andam juntas (regra de consistência comercial): quem marca uma, habilita a outra
+  await prisma.catalog2ProductVersion.updateMany({ where: { product_id: productId }, data: { accepts_recurring: value === "mensal" } });
   return r.json;
 }
 
@@ -221,6 +225,8 @@ describe("Modalidades de contratação por período (Item 6, reunião 2026-09-14
   it("2. produto avulso continua preservado — cotação/configuração sem período funcionam exatamente como antes", async () => {
     const { product } = await mkPublishedProduct(`t10-${crypto.randomBytes(4).toString("hex")}`);
     await configurePeriod(MASTER, product.id, "anual", 20); // configurado, mas não pedido
+    // versão ANTIGA (anterior às regras de consistência comercial): segue vendendo avulso exatamente como antes
+    await prisma.catalog2ProductVersion.updateMany({ where: { product_id: product.id }, data: { sale_modes_enforced: false } });
 
     const cfg = await api(`/api/catalog2/products/${product.slug}/configure`, { method: "POST", token: CO_A.token, body: { variation_option_keys: [], addon_keys: [] } });
     assert.equal(cfg.status, 200);

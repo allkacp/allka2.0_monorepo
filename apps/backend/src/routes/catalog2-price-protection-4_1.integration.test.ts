@@ -104,7 +104,7 @@ async function mkPublishedProduct(slug: string) {
       base_commercial_deadline_days: 5,
       tasks: {
         create: [{ key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1,
-          steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1 }] } }],
+          steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } }],
       },
     },
   });
@@ -114,7 +114,7 @@ async function mkPublishedProduct(slug: string) {
       options: { create: [{ key: "estatico", label: "Estático", is_default: true, sort_order: 1 }, { key: "carrossel", label: "Carrossel", sort_order: 2 }] },
     },
   });
-  await publishVersion(v.id, "system", { changeSummary: "publicação de teste" });
+  await publishVersion(v.id, "system", { activate: true, changeSummary: "publicação de teste" });
   return { product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }), versionId: v.id, specialtyId: spec.id };
 }
 
@@ -129,7 +129,7 @@ async function publishCompatibleV2(productId: string, extraFixedCost: number) {
       title: "Serviço v2", summary: "resumo v2", full_description: "descrição v2",
       base_commercial_deadline_days: 5,
       tasks: { create: [{ key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1,
-        steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1 }] } }] },
+        steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } }] },
     },
   });
   const varFormato = await prisma.catalog2Variation.create({
@@ -141,7 +141,7 @@ async function publishCompatibleV2(productId: string, extraFixedCost: number) {
   });
   const carrossel = varFormato.options.find((o) => o.key === "carrossel")!;
   await prisma.catalog2OptionEffect.create({ data: { variation_option_id: carrossel.id, effect_type: "add_fixed_amount", effect_value: String(extraFixedCost), sort_order: 1 } });
-  await publishVersion(v2.id, "system", { changeSummary: "v2 — reajuste de preço" });
+  await publishVersion(v2.id, "system", { activate: true, changeSummary: "v2 — reajuste de preço" });
   return v2;
 }
 
@@ -155,7 +155,7 @@ async function publishIncompatibleV2(productId: string) {
       title: "Serviço v2 (escopo reduzido)", summary: "resumo v2", full_description: "descrição v2",
       base_commercial_deadline_days: 5,
       tasks: { create: [{ key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1,
-        steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1 }] } }] },
+        steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } }] },
     },
   });
   await prisma.catalog2Variation.create({
@@ -165,7 +165,7 @@ async function publishIncompatibleV2(productId: string) {
       options: { create: [{ key: "estatico", label: "Estático", is_default: true, sort_order: 1 }] },
     },
   });
-  await publishVersion(v2.id, "system", { changeSummary: "v2 — escopo reduzido" });
+  await publishVersion(v2.id, "system", { activate: true, changeSummary: "v2 — escopo reduzido" });
   return v2;
 }
 

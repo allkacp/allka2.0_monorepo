@@ -101,7 +101,7 @@ router.get("/products", async (req, res, next) => {
 // ── Detalhe ─────────────────────────────────────────────────────────────
 router.get("/products/:slug", async (req, res, next) => {
   try {
-    res.json(await getClientProduct(ctxOf(req), req.params.slug as string, { preview: wantsPreview(req) }));
+    res.json(await getClientProduct(ctxOf(req), req.params.slug as string, { preview: wantsPreview(req), versionId: str(req.query.version) }));
   } catch (e) {
     handle(e, res, next);
   }
@@ -110,6 +110,7 @@ router.get("/products/:slug", async (req, res, next) => {
 // ── Configurar / recalcular ─────────────────────────────────────────────
 const selectionSchema = z.object({
   variation_option_keys: z.array(z.string()).optional(),
+  variation_quantities: z.record(z.string(), z.number().int().min(0).max(100000)).optional(),
   addon_keys: z.array(z.string()).optional(),
   quantity: z.number().int().positive().max(100000).optional(),
   delivery_groups: z.array(z.number().int().positive().max(100000)).max(100000).optional(),
@@ -121,7 +122,7 @@ router.post("/products/:slug/configure", async (req, res, next) => {
     // Item 6 (reunião 2026-09-14): período opcional — string qualquer que
     // não bata com um período válido vira avulso (normalizePeriod), nunca
     // erro de validação aqui; a disponibilidade real é decidida no serviço.
-    res.json(await configureProduct(ctxOf(req), req.params.slug as string, sel, { preview: wantsPreview(req), period: (req.body as any)?.period }));
+    res.json(await configureProduct(ctxOf(req), req.params.slug as string, sel, { preview: wantsPreview(req), period: (req.body as any)?.period, versionId: str(req.query.version) }));
   } catch (e) {
     handle(e, res, next);
   }

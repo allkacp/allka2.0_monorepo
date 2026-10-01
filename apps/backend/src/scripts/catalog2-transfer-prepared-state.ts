@@ -60,7 +60,8 @@
  */
 import { ensureTaskModelFromPackage, ensureStepModelFromPackage } from "../lib/catalog2-models";
 import crypto from "node:crypto";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { opsEqual } from "../lib/catalog2-ops";
 import { assertLocalDatabase } from "../lib/assert-local-database";
 
 function arg(name: string): string | undefined {
@@ -456,6 +457,9 @@ async function main() {
           executor_continuity: (t as any).executor_continuity ?? "not_allowed",
           asset_rule: (t as any).asset_rule ?? "first_only",
           asset_revalidate_days: (t as any).asset_revalidate_days ?? null,
+          review_minutes: (t as any).review_minutes ?? null,
+          // Campos operacionais (Pedido 3) acompanham a tarefa no pacote.
+          ops: ((t as any).ops ?? Prisma.DbNull) as Prisma.InputJsonValue,
           effort_is_provisional: t.effort_is_provisional,
           effort_provisional_reason: t.effort_provisional_reason,
           effort_source: t.effort_source,
@@ -469,7 +473,7 @@ async function main() {
           line.tasks.created++;
         } else {
           taskId = existingTask.id;
-          const changed = existingTask.name !== t.name || existingTask.estimated_minutes !== t.estimated_minutes || existingTask.questionnaire_id !== dstQuestionnaireId;
+          const changed = existingTask.name !== t.name || existingTask.estimated_minutes !== t.estimated_minutes || existingTask.questionnaire_id !== dstQuestionnaireId || !opsEqual(existingTask.ops, (t as any).ops);
           if (changed) { await tx.catalog2Task.update({ where: { id: taskId }, data: { ...taskData, ...taskModelLink } }); line.tasks.updated++; }
           else if (taskModel && existingTask.task_model_id == null) { await tx.catalog2Task.update({ where: { id: taskId }, data: taskModelLink }); line.tasks.unchanged++; }
           else line.tasks.unchanged++;
@@ -480,28 +484,38 @@ async function main() {
           const stepModelLink = stepModel ? { step_model_id: stepModel.id, step_model_revision: stepModel.revision } : {};
           const existingStep = await tx.catalog2TaskStep.findFirst({ where: { task_id: taskId, key: s.key } });
           const stepSpec = s.specialty ? await tx.catalog2Specialty.findUnique({ where: { key: s.specialty.key } }) : null;
-          const stepData = { name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: stepSpec?.id ?? null, purpose: (s as any).purpose ?? null, execution_mode: (s as any).execution_mode ?? null, completion_criteria: (s as any).completion_criteria ?? null, first_execution_only: (s as any).first_execution_only ?? false, skip_when_same_executor: (s as any).skip_when_same_executor ?? false };
+          const stepData = { name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: stepSpec?.id ?? null, purpose: (s as any).purpose ?? null, execution_mode: (s as any).execution_mode ?? null, completion_criteria: (s as any).completion_criteria ?? null, first_execution_only: (s as any).first_execution_only ?? false, skip_when_same_executor: (s as any).skip_when_same_executor ?? false, ops: ((s as any).ops ?? Prisma.DbNull) as Prisma.InputJsonValue };
           if (!existingStep) { await tx.catalog2TaskStep.create({ data: { task_id: taskId, key: s.key, ...stepData, ...stepModelLink } }); line.steps.created++; }
           else {
-            const changed = existingStep.name !== s.name || existingStep.estimated_minutes !== s.estimated_minutes;
+            const changed = existingStep.name !== s.name || existingStep.estimated_minutes !== s.estimated_minutes || !opsEqual(existingStep.ops, (s as any).ops);
             if (changed) { await tx.catalog2TaskStep.update({ where: { id: existingStep.id }, data: { ...stepData, ...stepModelLink } }); line.steps.updated++; }
             else if (stepModel && existingStep.step_model_id == null) { await tx.catalog2TaskStep.update({ where: { id: existingStep.id }, data: stepModelLink }); line.steps.unchanged++; }
             else line.steps.unchanged++;
           }
+        }
+
+        // Entregáveis/anexos estruturados (Pedido 3): sincroniza por chave dentro da tarefa; nunca apaga nada no destino.
+        for (const dv of ((t as any).deliverables ?? []) as any[]) {
+          const existingDv = await tx.catalog2TaskDeliverable.findFirst({ where: { task_id: taskId, key: dv.key } });
+          const stepKey = dv.step_id ? ((t.steps as any[]).find((x: any) => x.id === dv.step_id) as any)?.key : null;
+          const dstStep = stepKey ? await tx.catalog2TaskStep.findFirst({ where: { task_id: taskId, key: stepKey }, select: { id: true } }) : null;
+          const dvData = { name: dv.name, description: dv.description, type: dv.type, responsible: dv.responsible, is_required: dv.is_required, requires_approval: dv.requires_approval, visibility: dv.visibility, sort_order: dv.sort_order, step_id: dstStep?.id ?? null };
+          if (!existingDv) await tx.catalog2TaskDeliverable.create({ data: { task_id: taskId, key: dv.key, ...dvData } });
+          else await tx.catalog2TaskDeliverable.update({ where: { id: existingDv.id }, data: dvData });
         }
       }
 
       // variações + opções + efeitos (por key dentro da versão / dentro da variação)
       for (const va of v.variations) {
         const existingVa = await tx.catalog2Variation.findFirst({ where: { version_id: versionId, key: va.key } });
-        const vaData = { name: va.name, selection_type: va.selection_type, is_required: va.is_required, sort_order: va.sort_order, notes: va.notes };
+        const vaData = { name: va.name, selection_type: va.selection_type, is_required: va.is_required, sort_order: va.sort_order, notes: va.notes, is_active: (va as any).is_active ?? true };
         let vaId: string;
         if (!existingVa) { const c = await tx.catalog2Variation.create({ data: { version_id: versionId, key: va.key, ...vaData } }); vaId = c.id; line.variations.created++; }
         else { vaId = existingVa.id; const changed = existingVa.name !== va.name; if (changed) { await tx.catalog2Variation.update({ where: { id: vaId }, data: vaData }); line.variations.updated++; } else line.variations.unchanged++; }
 
         for (const op of va.options) {
           const existingOp = await tx.catalog2VariationOption.findFirst({ where: { variation_id: vaId, key: op.key } });
-          const opData = { label: op.label, sort_order: op.sort_order, is_default: op.is_default };
+          const opData = { label: op.label, sort_order: op.sort_order, is_default: op.is_default, is_active: (op as any).is_active ?? true };
           let opId: string;
           if (!existingOp) { const c = await tx.catalog2VariationOption.create({ data: { variation_id: vaId, key: op.key, ...opData } }); opId = c.id; line.options.created++; }
           else { opId = existingOp.id; const changed = existingOp.label !== op.label; if (changed) { await tx.catalog2VariationOption.update({ where: { id: opId }, data: opData }); line.options.updated++; } else line.options.unchanged++; }

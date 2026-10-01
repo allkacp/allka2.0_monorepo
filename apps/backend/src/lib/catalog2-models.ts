@@ -7,7 +7,9 @@
 //  - Cargas automáticas (clone de versão, importações, scripts) reaproveitam o
 //    modelo "igual" (mesma assinatura) em vez de criar um novo a cada versão.
 import { createHash } from "node:crypto";
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { normalizeStepOps, normalizeTaskOps, opsEqual } from "./catalog2-ops";
+import { Prisma } from "@prisma/client";
+import type { PrismaClient } from "@prisma/client";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -50,6 +52,12 @@ export interface TaskModelFields {
   executor_continuity?: string | null;
   asset_rule?: string | null;
   asset_revalidate_days?: number | null;
+  /** Campos operacionais (objetivo, instruções…) — ver catalog2-ops.ts. */
+  ops?: unknown;
+  /** Revisão obrigatória (conferência técnica antes da qualificação/aprovação). */
+  requires_review?: boolean | null;
+  review_minutes?: number | null;
+  review_specialty_id?: string | null;
 }
 
 export interface StepModelFields {
@@ -60,6 +68,7 @@ export interface StepModelFields {
   execution_mode?: string | null;
   purpose?: string | null;
   completion_criteria?: string | null;
+  ops?: unknown;
 }
 
 export function taskModelSignature(f: TaskModelFields): string {
@@ -95,6 +104,10 @@ export async function createTaskModel(db: Db, f: TaskModelFields, userId?: strin
       executor_continuity: f.executor_continuity ?? "not_allowed",
       asset_rule: f.asset_rule ?? "first_only",
       asset_revalidate_days: f.asset_revalidate_days ?? null,
+      ops: (normalizeTaskOps(f.ops) ?? undefined) as Prisma.InputJsonValue | undefined,
+      requires_review: !!f.requires_review,
+      review_minutes: f.review_minutes ?? null,
+      review_specialty_id: f.review_specialty_id ?? null,
       signature: taskModelSignature(f),
       created_by_user_id: userId ?? null,
     },
@@ -112,10 +125,45 @@ export async function createStepModel(db: Db, f: StepModelFields, userId?: strin
       execution_mode: f.execution_mode ?? "humano",
       specialty_id: f.specialty_id ?? null,
       estimated_minutes: f.estimated_minutes ?? null,
+      ops: (normalizeStepOps(f.ops) ?? undefined) as Prisma.InputJsonValue | undefined,
       signature: stepModelSignature(f),
       created_by_user_id: userId ?? null,
     },
   });
+}
+
+// ── Nomes semelhantes (evita criar um modelo novo por descuido) ──────────────
+const foldName = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const STOPWORDS = new Set(["de", "da", "do", "das", "dos", "para", "com", "em", "no", "na", "e"]);
+const tokensOf = (s: string) => new Set(foldName(s).split(" ").filter((w) => w && !STOPWORDS.has(w)));
+
+export interface SimilarModel { id: number; name: string; label: string; is_active: boolean; similarity: number; reason: "mesmo_nome" | "nome_parecido" | "mesma_configuracao"; specialty_id: string | null; execution_mode: string }
+
+/** Modelos globais com nome igual/parecido (ou mesma configuração) a um nome que está para ser criado. */
+export async function findSimilarModels(db: Db, kind: "task" | "step", f: { name: string; specialty_id?: string | null; execution_mode?: string | null; signature?: string }): Promise<SimilarModel[]> {
+  const rows: { id: number; name: string; is_active: boolean; specialty_id: string | null; execution_mode: string; signature: string }[] =
+    kind === "task" ? await db.catalog2TaskModel.findMany({ select: { id: true, name: true, is_active: true, specialty_id: true, execution_mode: true, signature: true } })
+      : await db.catalog2StepModel.findMany({ select: { id: true, name: true, is_active: true, specialty_id: true, execution_mode: true, signature: true } });
+  const mine = foldName(f.name);
+  const myTokens = tokensOf(f.name);
+  const label = kind === "task" ? "Modelo de tarefa" : "Modelo de etapa";
+  const out: SimilarModel[] = [];
+  for (const r of rows) {
+    const theirs = foldName(r.name);
+    let similarity = 0;
+    let reason: SimilarModel["reason"] = "nome_parecido";
+    if (f.signature && r.signature === f.signature) { similarity = 1; reason = "mesma_configuracao"; }
+    else if (theirs === mine && mine) { similarity = 1; reason = "mesmo_nome"; }
+    else if (mine && theirs && (theirs.includes(mine) || mine.includes(theirs)) && Math.min(mine.length, theirs.length) >= 6) similarity = 0.85;
+    else {
+      const t = tokensOf(r.name);
+      const inter = [...myTokens].filter((w) => t.has(w)).length;
+      const union = new Set([...myTokens, ...t]).size;
+      similarity = union ? inter / union : 0;
+    }
+    if (similarity >= 0.6) out.push({ id: r.id, name: r.name, label: `${label} #${r.id}`, is_active: r.is_active, similarity: Math.round(similarity * 100) / 100, reason, specialty_id: r.specialty_id, execution_mode: r.execution_mode });
+  }
+  return out.sort((a, b) => b.similarity - a.similarity || a.id - b.id).slice(0, 8);
 }
 
 /** Reaproveita o modelo de mesma assinatura (o mais antigo) ou cria um novo. */
@@ -253,6 +301,10 @@ export function taskDataFromModel(m: TaskModelRow) {
     executor_continuity: m.executor_continuity,
     asset_rule: m.asset_rule,
     asset_revalidate_days: m.asset_revalidate_days,
+    ops: (m.ops ?? Prisma.DbNull) as Prisma.InputJsonValue,
+    requires_review: m.requires_review,
+    review_minutes: m.review_minutes,
+    review_specialty_id: m.review_specialty_id,
     task_model_id: m.id,
     task_model_revision: m.revision,
   };
@@ -270,6 +322,7 @@ export function stepDataFromModel(m: StepModelRow) {
     completion_criteria: null,
     first_execution_only: m.first_execution_only,
     skip_when_same_executor: m.skip_when_same_executor,
+    ops: (m.ops ?? Prisma.DbNull) as Prisma.InputJsonValue,
     step_model_id: m.id,
     step_model_revision: m.revision,
   };
@@ -305,6 +358,8 @@ export function taskDivergesFromModel(t: {
   name: string; description: string | null; execution_mode: string; specialty_id: string | null; estimated_minutes: number | null;
   questionnaire_id: string | null; is_conditional: boolean; requires_client_approval: boolean; requires_qualification: boolean;
   cycle_type: string; repeat_rule: string; repeat_every_cycles: number | null; executor_continuity: string; asset_rule: string; asset_revalidate_days: number | null;
+  ops?: unknown;
+  requires_review?: boolean; review_minutes?: number | null; review_specialty_id?: string | null;
 }, m: TaskModelRow): boolean {
   return !(
     eqText(t.name, m.name) && eqText(t.description, m.description) && t.execution_mode === m.execution_mode &&
@@ -312,7 +367,9 @@ export function taskDivergesFromModel(t: {
     (t.questionnaire_id ?? null) === (m.questionnaire_id ?? null) && t.is_conditional === m.is_conditional &&
     t.requires_client_approval === m.requires_client_approval && t.requires_qualification === m.requires_qualification &&
     t.cycle_type === m.cycle_type && t.repeat_rule === m.repeat_rule && (t.repeat_every_cycles ?? null) === (m.repeat_every_cycles ?? null) &&
-    t.executor_continuity === m.executor_continuity && t.asset_rule === m.asset_rule && (t.asset_revalidate_days ?? null) === (m.asset_revalidate_days ?? null)
+    t.executor_continuity === m.executor_continuity && t.asset_rule === m.asset_rule && (t.asset_revalidate_days ?? null) === (m.asset_revalidate_days ?? null) &&
+    opsEqual(normalizeTaskOps(t.ops), normalizeTaskOps(m.ops)) &&
+    (t.requires_review ?? false) === m.requires_review && (t.review_minutes ?? null) === (m.review_minutes ?? null) && (t.review_specialty_id ?? null) === (m.review_specialty_id ?? null)
   );
 }
 
@@ -320,12 +377,14 @@ export function stepDivergesFromModel(s: {
   name: string; description: string | null; estimated_minutes: number | null; specialty_id: string | null;
   purpose: string | null; execution_mode: string | null; completion_criteria: string | null;
   first_execution_only: boolean; skip_when_same_executor: boolean;
+  ops?: unknown;
 }, m: StepModelRow): boolean {
   return !(
     eqText(s.name, m.name) && eqText(s.description, m.description) && (s.estimated_minutes ?? null) === (m.estimated_minutes ?? null) &&
     (s.specialty_id ?? null) === (m.specialty_id ?? null) && (s.purpose ?? m.purpose) === m.purpose &&
     (s.execution_mode ?? m.execution_mode) === m.execution_mode && eqText(s.completion_criteria ?? m.completion_criteria, m.completion_criteria) &&
-    s.first_execution_only === m.first_execution_only && s.skip_when_same_executor === m.skip_when_same_executor
+    s.first_execution_only === m.first_execution_only && s.skip_when_same_executor === m.skip_when_same_executor &&
+    opsEqual(normalizeStepOps(s.ops), normalizeStepOps(m.ops))
   );
 }
 
@@ -337,11 +396,11 @@ export function stepDivergesFromModel(s: {
 export interface PackagedTaskModel {
   id: number; name: string; description: string | null; execution_mode: string; estimated_minutes: number | null;
   is_conditional: boolean; requires_client_approval: boolean; requires_qualification?: boolean; is_active?: boolean;
-  revision: number; specialty?: { key: string } | null;
+  revision: number; specialty?: { key: string } | null; ops?: unknown; requires_review?: boolean; review_minutes?: number | null;
 }
 export interface PackagedStepModel {
   id: number; name: string; description: string | null; completion_criteria: string | null; purpose: string;
-  execution_mode: string; estimated_minutes: number | null; is_active?: boolean; is_access_validation?: boolean; revision: number; specialty?: { key: string } | null;
+  execution_mode: string; estimated_minutes: number | null; is_active?: boolean; is_access_validation?: boolean; revision: number; specialty?: { key: string } | null; ops?: unknown;
 }
 
 export async function ensureTaskModelFromPackage(
@@ -366,6 +425,8 @@ export async function ensureTaskModelFromPackage(
       id: m.id, name: m.name, description: m.description, execution_mode: m.execution_mode, specialty_id: spec?.id ?? null,
       estimated_minutes: m.estimated_minutes, questionnaire_id: questionnaireId, is_conditional: m.is_conditional,
       requires_client_approval: m.requires_client_approval, requires_qualification: !!m.requires_qualification,
+      requires_review: !!m.requires_review, review_minutes: m.review_minutes ?? null,
+      ops: (normalizeTaskOps(m.ops) ?? undefined) as Prisma.InputJsonValue | undefined,
       is_active: m.is_active !== false, revision: m.revision, signature: taskModelSignature(fields),
     },
   });
@@ -395,6 +456,7 @@ export async function ensureStepModelFromPackage(
     data: {
       id: m.id, name: m.name, description: m.description, completion_criteria: m.completion_criteria, purpose: m.purpose,
       execution_mode: m.execution_mode, specialty_id: spec?.id ?? null, estimated_minutes: m.estimated_minutes,
+      ops: (normalizeStepOps(m.ops) ?? undefined) as Prisma.InputJsonValue | undefined,
       is_active: m.is_active !== false, is_access_validation: !!m.is_access_validation, revision: m.revision, signature: stepModelSignature(fields),
     },
   });

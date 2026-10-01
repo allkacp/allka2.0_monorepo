@@ -91,12 +91,12 @@ async function mkPublishedProduct(slug: string) {
       tasks: {
         create: [
           { key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1,
-            steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1 }] } },
+            steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } },
         ],
       },
     },
   });
-  await publishVersion(v.id, "system", { changeSummary: "publicação de teste" });
+  await publishVersion(v.id, "system", { activate: true, changeSummary: "publicação de teste" });
   return { product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }), versionId: v.id };
 }
 
@@ -148,12 +148,12 @@ async function mkPublishedProductWithQuestionnaire(slug: string) {
         create: [
           { key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1,
             questionnaire_id: questionnaire.id,
-            steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1 }] } },
+            steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } },
         ],
       },
     },
   });
-  await publishVersion(v.id, "system", { changeSummary: "publicação de teste" });
+  await publishVersion(v.id, "system", { activate: true, changeSummary: "publicação de teste" });
   return {
     product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }),
     versionId: v.id,
@@ -331,10 +331,10 @@ describe("Checkout, pedido, financeiro, tarefas e aditivos do catalog2 (bloco 6/
     const newVersion = await prisma.catalog2ProductVersion.create({
       data: {
         product_id: product.id, version_number: 2, state: "rascunho", title: "v2", summary: "v2", full_description: "descrição v2", base_commercial_deadline_days: 5,
-        tasks: { create: [{ key: "t2-nova", name: "Tarefa da v2 (não deveria aparecer no pedido antigo)", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1 }] },
+        tasks: { create: [{ key: "t2-nova", name: "Tarefa da v2 (não deveria aparecer no pedido antigo)", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1, steps: { create: [{ key: "s1", name: "Etapa", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } }] },
       },
     });
-    await publishVersion(newVersion.id, "system", { changeSummary: "v2" });
+    await publishVersion(newVersion.id, "system", { activate: true, changeSummary: "v2" });
 
     const pay = await api("/api/payments/fake-checkout", { method: "POST", token: CO_A.token, body: { project_id: projectId } });
     assert.equal(pay.status, 201, JSON.stringify(pay.json));

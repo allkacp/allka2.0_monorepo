@@ -33,6 +33,10 @@ function tokenFor(u: { id: string; email: string; role: string; account_type: st
   return jwt.sign({ id: u.id, email: u.email, role: u.role, account_type: u.account_type }, config.JWT_SECRET, { expiresIn: "1h" });
 }
 async function api(path: string, opts: { method?: string; token?: string; body?: unknown } = {}) {
+  // Estes cenários repetem nomes de tarefa/etapa de propósito (não testam duplicidade): confirmam a criação de forma explícita, como um chamador real teria de fazer.
+  if (opts.method === "POST" && /\/(tasks|steps)$/.test(path) && opts.body && typeof opts.body === "object" && !("duplicate_resolution" in (opts.body as object))) {
+    opts = { ...opts, body: { ...(opts.body as object), duplicate_resolution: "create_anyway", duplicate_justification: "fixture de teste: nomes repetidos entre cenários" } };
+  }
   const res = await fetch(`${baseUrl}${path}`, {
     method: opts.method ?? "GET",
     headers: { "content-type": "application/json", ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}) },

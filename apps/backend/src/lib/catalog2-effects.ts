@@ -44,6 +44,11 @@ export interface EffectValidationCtx {
   // "taskKey:stepKey"
   stepRefs: Set<string>;
   conditionalStepRefs: Set<string>;
+  // Chaves de opções/adicionais da versão (para conferir as referências das condições).
+  optionKeys?: Set<string>;
+  inactiveOptionKeys?: Set<string>;
+  addonKeys?: Set<string>;
+  inactiveAddonKeys?: Set<string>;
 }
 
 /** Valida um par (effect_type, effect_value). Devolve null se OK, ou a mensagem de erro. */

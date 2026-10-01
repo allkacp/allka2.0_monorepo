@@ -17,20 +17,20 @@ const ACCESS_TYPES: [string, string][] = [
   ["crm", "CRM"], ["site_landing", "Site / landing page"], ["other", "Outros"],
 ]
 
-const sel = "h-9 rounded border border-slate-300 bg-transparent px-1 text-sm dark:border-slate-700"
+const sel = "h-8 w-full min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
 
 interface ProductLite { id: string; name: string }
 
 /** Carrega as tarefas (e etapas) da última versão de um produto. */
 function useProductTasks(productId: string) {
-  const [tasks, setTasks] = useState<{ key: string; name: string; steps: { key: string; name: string }[] }[]>([])
+  const [tasks, setTasks] = useState<{ key: string; name: string; steps: { key: string; name: string }[]; deliverables: { key: string; name: string }[] }[]>([])
   useEffect(() => {
     if (!productId) { setTasks([]); return }
     let cancelled = false
     apiClient.getCatalog2Product(productId).then((p: any) => {
       if (cancelled) return
       const v = p.versions?.[0]
-      setTasks((v?.tasks ?? []).map((t: any) => ({ key: t.key, name: t.name, steps: (t.steps ?? []).map((s: any) => ({ key: s.key, name: s.name })) })))
+      setTasks((v?.tasks ?? []).map((t: any) => ({ key: t.key, name: t.name, steps: (t.steps ?? []).map((s: any) => ({ key: s.key, name: s.name })), deliverables: (t.deliverables ?? []).map((d: any) => ({ key: d.key, name: d.name })) })))
     }).catch(() => setTasks([]))
     return () => { cancelled = true }
   }, [productId])
@@ -55,6 +55,8 @@ export function DependencyRuleForm({
   const [targetStep, setTargetStep] = useState("")
   const [assetType, setAssetType] = useState("google_ads")
   const [behavior, setBehavior] = useState("block_start")
+  const [appliesTo, setAppliesTo] = useState("all")
+  const [targetDeliverable, setTargetDeliverable] = useState("")
   const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,6 +77,8 @@ export function DependencyRuleForm({
         target_task_key: needsTask ? targetTask || null : null,
         target_step_key: targetKind === "step" ? targetStep || null : null,
         target_asset_type: targetKind === "info_asset" ? assetType : null,
+        target_deliverable_key: targetKind === "deliverable" ? targetDeliverable || null : null,
+        applies_to: appliesTo,
         behavior,
         note: note.trim() || null,
       })
@@ -88,28 +92,28 @@ export function DependencyRuleForm({
 
   if (!options) return <p className="text-xs text-slate-500">Carregando opções…</p>
   return (
-    <div className="space-y-2 rounded-lg border border-dashed border-slate-300 p-3 text-sm dark:border-slate-700">
+    <div className="min-w-0 space-y-2 rounded-lg border border-dashed border-slate-300 p-2.5 text-xs dark:border-slate-700">
       <div className="flex flex-wrap items-end gap-2">
         {!dependentProductId && (
-          <label className="space-y-1 text-xs font-semibold text-slate-600">Produto que ESPERA
+          <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600">Produto que ESPERA
             <select className={`${sel} block`} value={dependent} onChange={(e) => { setDependent(e.target.value); setDependentTask("") }}>
               {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
         )}
-        <label className="space-y-1 text-xs font-semibold text-slate-600">Tarefa que espera
+        <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600">Tarefa que espera
           <select className={`${sel} block`} value={dependentTask} onChange={(e) => setDependentTask(e.target.value)}>
             <option value="">Todas as tarefas do produto</option>
             {dependentTasks.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
           </select>
         </label>
-        <label className="space-y-1 text-xs font-semibold text-slate-600">Espera por
+        <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600">Espera por
           <select className={`${sel} block`} value={targetKind} onChange={(e) => setTargetKind(e.target.value)}>
             {options.target_kinds.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
           </select>
         </label>
         {targetKind !== "info_asset" && (
-          <label className="space-y-1 text-xs font-semibold text-slate-600">Do produto
+          <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600">Do produto
             <select className={`${sel} block`} value={targetProduct} onChange={(e) => { setTargetProduct(e.target.value); setTargetTask("") }}>
               <option value="">— escolha —</option>
               {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -117,7 +121,7 @@ export function DependencyRuleForm({
           </label>
         )}
         {needsTask && (
-          <label className="space-y-1 text-xs font-semibold text-slate-600">Tarefa alvo
+          <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600">Tarefa alvo
             <select className={`${sel} block`} value={targetTask} onChange={(e) => { setTargetTask(e.target.value); setTargetStep("") }}>
               <option value="">— escolha —</option>
               {targetTasks.map((t) => <option key={t.key} value={t.key}>{t.name}</option>)}
@@ -125,21 +129,37 @@ export function DependencyRuleForm({
           </label>
         )}
         {targetKind === "step" && (
-          <label className="space-y-1 text-xs font-semibold text-slate-600">Etapa alvo
+          <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600">Etapa alvo
             <select className={`${sel} block`} value={targetStep} onChange={(e) => setTargetStep(e.target.value)}>
               <option value="">— escolha —</option>
               {(targetTasks.find((t) => t.key === targetTask)?.steps ?? []).map((s) => <option key={s.key} value={s.key}>{s.name}</option>)}
             </select>
           </label>
         )}
+        {targetKind === "deliverable" && (
+          <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600">Entregável alvo
+            <select className={`${sel} block`} value={targetDeliverable} onChange={(e) => setTargetDeliverable(e.target.value)}>
+              <option value="">Qualquer anexo da tarefa</option>
+              {(targetTasks.find((t) => t.key === targetTask)?.deliverables ?? []).map((d) => <option key={d.key} value={d.key}>{d.name}</option>)}
+            </select>
+          </label>
+        )}
         {targetKind === "info_asset" && (
-          <label className="space-y-1 text-xs font-semibold text-slate-600">Tipo de acesso
+          <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600">Tipo de acesso
             <select className={`${sel} block`} value={assetType} onChange={(e) => setAssetType(e.target.value)}>
               {ACCESS_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
           </label>
         )}
-        <label className="space-y-1 text-xs font-semibold text-slate-600">Como espera
+        <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600" title="Em que ciclo da contratação a regra vale">Vale para
+          <select className={`${sel} block`} value={appliesTo} onChange={(e) => setAppliesTo(e.target.value)}>
+            <option value="all">Todos os ciclos</option>
+            <option value="implementacao">Só a implantação</option>
+            <option value="recorrencia">Só a rotina (recorrência)</option>
+            <option value="revalidacao">Só a revalidação</option>
+          </select>
+        </label>
+        <label className="min-w-[9rem] flex-1 space-y-1 text-xs font-semibold text-slate-600">Como espera
           <select className={`${sel} block`} value={behavior} onChange={(e) => setBehavior(e.target.value)}>
             {options.behaviors.map((b) => <option key={b.key} value={b.key}>{b.label}</option>)}
           </select>

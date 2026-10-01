@@ -82,11 +82,11 @@ async function mkPublishedProduct(opts: { slug: string; withOrder?: boolean; wit
     where: { id: "default" },
     create: {
       id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10,
-      component_order_json: opts.withOrder === false ? null : JSON.stringify(["tax", "commission", "operational", "margin"]),
+      component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]),
     },
     update: {
       tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10,
-      component_order_json: opts.withOrder === false ? null : JSON.stringify(["tax", "commission", "operational", "margin"]),
+      component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]),
     },
   });
 
@@ -104,9 +104,9 @@ async function mkPublishedProduct(opts: { slug: string; withOrder?: boolean; wit
     data: {
       product_id: product.id, version_number: 1, state: "rascunho",
       title: `Serviço ${opts.slug}`, summary: "resumo", full_description: "descrição do serviço demo",
-      base_commercial_deadline_days: opts.withDeadline === false ? null : 5,
+      base_commercial_deadline_days: 5,
       tasks: {
-        create: [{ key: "t1", name: "Fazer a arte", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 120, sort_order: 1 }],
+        create: [{ key: "t1", name: "Fazer a arte", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 120, sort_order: 1, steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 120 }] } }],
       },
     },
   });
@@ -133,7 +133,10 @@ async function mkPublishedProduct(opts: { slug: string; withOrder?: boolean; wit
   }
   await prisma.catalog2Addon.create({ data: { version_id: v.id, key: "extra", name: "Legendas extra", base_cost: 30, is_active: true, sort_order: 1 } });
 
-  await publishVersion(v.id, "system", { changeSummary: "publicação de teste" });
+  await publishVersion(v.id, "system", { activate: true, changeSummary: "publicação de teste" });
+  // Regra vigente: NUNCA se publica com preço/prazo/ordem indefinidos. O cenário "produto publicado cujo cálculo ficou incompleto" é montado do jeito real: publica completo e quebra DEPOIS.
+  if (opts.withDeadline === false) await prisma.catalog2ProductVersion.update({ where: { id: v.id }, data: { base_commercial_deadline_days: null } });
+  if (opts.withOrder === false) await prisma.catalog2PricingSettings.update({ where: { id: "default" }, data: { component_order_json: null } });
   return { product, versionId: v.id };
 }
 

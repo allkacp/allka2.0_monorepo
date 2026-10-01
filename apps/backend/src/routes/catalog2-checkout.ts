@@ -13,12 +13,15 @@ import { z } from "zod";
 import { verifyToken } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { resolveClientContext } from "../lib/catalog2-client";
-import { Catalog2CheckoutError, revalidateAndFreezeQuote, attachCatalog2QuoteToProject } from "../lib/catalog2-checkout";
+import { Catalog2CheckoutError, revalidateAndFreezeQuote, attachCatalog2QuoteToProject, assertPackageOnlyRules } from "../lib/catalog2-checkout";
 import { createProjectWithSequentialCode } from "../lib/create-project";
 import { recalculateProjectValue } from "../lib/project-value";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { projectVisibleToUser } from "../lib/project-scope";
 import { recordWalletEvent } from "../lib/wallet-service";
+import { assertConnectionsForCheckout } from "../lib/connections/quote";
+import { ensureProjectConnectionRequirements } from "../lib/connections/flow";
+import { ConnectionError } from "../lib/connections/catalog";
 
 const router = Router();
 router.use(verifyToken);
@@ -62,6 +65,9 @@ router.post("/", async (req, res, next) => {
     for (const quoteId of quoteIds) {
       await revalidateAndFreezeQuote(ctx, quoteId);
     }
+    await assertPackageOnlyRules(quoteIds);
+    // Só trava quando a exigência foi configurada como "bloquear a conclusão da contratação" (padrão: contratar e bloquear só a tarefa dependente).
+    await assertConnectionsForCheckout(prisma, quoteIds);
 
     const pagadorSnapshot: "AGENCIA" | "CLIENTE" = ctx.account_kind === "agency" ? "AGENCIA" : "CLIENTE";
 
@@ -95,6 +101,7 @@ router.post("/", async (req, res, next) => {
             pagadorSnapshot,
           });
           projectProducts.push(pp);
+          if (pp.catalog2_version_id) await ensureProjectConnectionRequirements(tx, { projectId: project.id, projectProductId: pp.id, versionId: pp.catalog2_version_id, quoteId, actor: { id: ctx.user_id, role: ctx.kind } });
         }
 
         await recalculateProjectValue(tx, project.id);
@@ -166,6 +173,10 @@ router.post("/", async (req, res, next) => {
       already_processed: false,
     });
   } catch (e) {
+    if (e instanceof ConnectionError) {
+      res.status(e.httpStatus).json({ error: e.message, code: e.code, ...(e.details ? { details: e.details } : {}) });
+      return;
+    }
     if (e instanceof Catalog2CheckoutError) {
       res.status(e.httpStatus).json({ error: e.message, code: e.code });
       return;

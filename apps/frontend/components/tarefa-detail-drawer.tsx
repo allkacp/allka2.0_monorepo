@@ -43,9 +43,14 @@ import { Button } from "@/components/ui/button";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { TaskRotationPanel } from "@/components/task-rotation-panel";
 import { TaskQualificationCard } from "@/components/task-qualification-card";
+import { TaskReviewCard } from "@/components/task-review-card";
+import { TaskDeliverablesCard } from "@/components/task-deliverables-card";
+import { TaskAICard } from "@/components/task-ai-card";
+import { TaskGuideCard } from "@/components/task-guide-card";
 import { TaskContinuityCard } from "@/components/task-continuity-card";
 import { TaskAssetsCard } from "@/components/task-assets-card";
 import { TaskDependenciesCard } from "@/components/task-dependencies-card";
+import { TaskConnectionsCard } from "@/components/connections/task-connections-card";
 import { TaskFlowBadge, TaskFlowCard } from "@/components/task-flow-card";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { TaskReleaseBlockersPanel } from "@/components/task-release-blockers-panel";
@@ -253,9 +258,11 @@ const TASK_STATUS_LABELS: Record<string, string> = {
   ENTREGA_PENDENTE: "Entrega pendente",
   ENTREGA_ATRASADA: "Entrega atrasada",
   QUALIFICACAO_PENDENTE: "Qualificação pendente",
+  AGUARDANDO_REVISAO: "Aguardando revisão",
   AGUARDANDO_QUALIFICACAO: "Aguardando qualificação",
   EM_AJUSTES: "Em ajustes",
   AGUARDANDO_DEPENDENCIA_PRODUTO: "Aguardando dependência",
+  PAUSADA_DEPENDENCIA_EXTERNA: "Pausada por dependência externa",
   DISPENSADA_POR_REGRA: "Dispensada por regra",
   NAO_SEGUIU_ORIENTACOES: "Não seguiu orientações",
 };
@@ -1830,10 +1837,15 @@ export function TarefaDetailDrawer({
 
                   return (
                     <>
+                      <TaskGuideCard taskId={tarefa.id} />
                       <TaskFlowCard taskId={tarefa.id} status={tarefa.status} onChanged={() => onStatusChange?.(tarefa, tarefa.status)} />
                       <TaskDependenciesCard taskId={tarefa.id} status={tarefa.status} />
+                      <TaskConnectionsCard taskId={tarefa.id} status={tarefa.status} />
                       <TaskAssetsCard taskId={tarefa.id} status={tarefa.status} onChanged={() => onStatusChange?.(tarefa, tarefa.status)} />
                       <TaskContinuityCard taskId={tarefa.id} status={tarefa.status} onChanged={() => onStatusChange?.(tarefa, tarefa.status)} />
+                      <TaskReviewCard taskId={tarefa.id} status={tarefa.status} onChanged={() => onStatusChange?.(tarefa, tarefa.status)} />
+                      <TaskDeliverablesCard taskId={tarefa.id} status={tarefa.status} />
+                      <TaskAICard taskId={tarefa.id} status={tarefa.status} />
                       <TaskQualificationCard taskId={tarefa.id} status={tarefa.status} onChanged={() => onStatusChange?.(tarefa, "EM_APROVACAO")} />
 
                       <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">

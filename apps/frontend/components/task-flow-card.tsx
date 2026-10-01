@@ -50,6 +50,7 @@ const KIND_LABEL: Record<string, string> = {
   continuity_pending: "Aguardando escolha de continuidade",
   asset_validated: "Acesso validado",
   asset_pending: "Acesso pendente",
+  asset_change_reported: "Mudança de acesso informada",
   asset_invalidated: "Acesso inválido",
   asset_revalidation: "Revalidação de acesso",
   package_linked: "Pacote contratado",

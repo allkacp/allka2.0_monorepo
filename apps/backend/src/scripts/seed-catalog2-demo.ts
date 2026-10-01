@@ -161,7 +161,7 @@ async function main() {
   };
   await db.catalog2Condition.create({ data: { ...condData, explanation: describeCondition(condData) } });
 
-  await publishVersion(v1.id, "system", { changeSummary: "Publicação inicial da demo." });
+  await publishVersion(v1.id, "system", { activate: true, changeSummary: "Publicação inicial da demo." });
 
   await db.catalog2ProductVersion.create({
     data: { product_id: product.id, version_number: 2, state: "rascunho", title: "Peça de Comunicação (demo) — revisão", summary: "Rascunho da próxima versão." },

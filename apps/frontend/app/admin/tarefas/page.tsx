@@ -122,6 +122,7 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type TaskStatus =
+  | "PAUSADA_DEPENDENCIA_EXTERNA"
   | "PARA_LANCAMENTO"
   | "EM_LANCAMENTO"
   | "AGUARDANDO_INFORMACOES"
@@ -216,6 +217,14 @@ const STATUS_CFG: Record<
     group: string;
   }
 > = {
+  PAUSADA_DEPENDENCIA_EXTERNA: {
+    label: "Pausada por dependência externa",
+    color: "text-rose-700",
+    bg: "bg-rose-50",
+    border: "border-rose-200",
+    icon: Clock,
+    group: "pendente",
+  },
   PARA_LANCAMENTO: {
     label: "Para lan\çamento",
     color: "text-slate-600",

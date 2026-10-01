@@ -8,6 +8,7 @@
 //    lista em texto corrido — o resumo nunca fica em branco por causa da IA.
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
+import { TEXT_FIELDS, LIST_FIELDS } from "./catalog2-commercial-fields";
 import { computePricing, defaultSelection } from "./catalog2-pricing";
 import { recordAIUsage, usageFromGeminiResponse } from "./ai-usage-tracker";
 
@@ -56,6 +57,11 @@ export async function computeChangeList(cur: Snap, prev: Snap | null): Promise<s
   if (norm(cur.title) !== norm(prev.title)) out.push(`Título comercial alterado de "${prev.title}" para "${cur.title}".`);
   if (norm(cur.summary) !== norm(prev.summary)) out.push("Descrição curta alterada.");
   if (norm(cur.full_description) !== norm(prev.full_description)) out.push("Descrição completa alterada.");
+  for (const def of [...Object.values(TEXT_FIELDS), ...Object.values(LIST_FIELDS)]) {
+    const c = (cur as unknown as Record<string, unknown>)[def.column] ?? null;
+    const p = (prev as unknown as Record<string, unknown>)[def.column] ?? null;
+    if (norm(c as string | null) !== norm(p as string | null)) out.push(`${def.label} alterado(a).`);
+  }
   if ((cur.base_commercial_deadline_days ?? null) !== (prev.base_commercial_deadline_days ?? null)) {
     out.push(`Prazo comercial base alterado de ${prev.base_commercial_deadline_days ?? "sem valor"} para ${cur.base_commercial_deadline_days ?? "sem valor"} dia(s).`);
   }

@@ -84,8 +84,10 @@ async function mkProductWithDependency(slug: string) {
   });
   const t1 = await prisma.catalog2Task.create({ data: { version_id: version.id, key: "briefing", name: "Briefing", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 30, sort_order: 1 } });
   const t2 = await prisma.catalog2Task.create({ data: { version_id: version.id, key: "arte", name: "Arte final", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 2 } });
+  // regra vigente: toda tarefa precisa de ao menos uma etapa com especialidade e horas
+  for (const t of [t1, t2]) await prisma.catalog2TaskStep.create({ data: { task_id: t.id, key: "e1", name: "Etapa", sort_order: 1, specialty_id: spec.id, estimated_minutes: t === t1 ? 30 : 60 } });
   await prisma.catalog2TaskDependency.create({ data: { task_id: t2.id, depends_on_task_id: t1.id } });
-  await publishVersion(version.id, "system", { changeSummary: "pub" });
+  await publishVersion(version.id, "system", { activate: true, changeSummary: "pub" });
   return { product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }), t1, t2 };
 }
 

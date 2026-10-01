@@ -96,11 +96,11 @@ async function mkPublishedProduct(slug: string) {
       base_commercial_deadline_days: 5,
       tasks: {
         create: [{ key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1,
-          steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1 }] } }],
+          steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } }],
       },
     },
   });
-  await publishVersion(v.id, "system", { changeSummary: "publicação de teste" });
+  await publishVersion(v.id, "system", { activate: true, changeSummary: "publicação de teste" });
   return { product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }), versionId: v.id };
 }
 

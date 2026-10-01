@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { afterExecutorAssigned } from "./connections/flow";
 import { prisma } from "./prisma";
 import { onlineUserIds } from "./presence-service";
 import { recordAlertEvent } from "./alert-events";
@@ -394,7 +395,7 @@ export async function advanceRotation(taskId: string): Promise<{ action: "waitin
       });
       return true;
     });
-    if (accepted) return { action: "closed" };
+    if (accepted) { await afterExecutorAssigned(taskId); return { action: "closed" }; }
   }
   await prisma.taskOffer.updateMany({
     where: { project_task_id: taskId, status: "pendente", expires_at: { lt: now } },
@@ -582,6 +583,7 @@ export async function acceptOffer(offerId: string, sessionUserId: string): Promi
   }).then(async (r) => {
     // Fora da transação: se havia alerta de esgotamento, resolve (o problema acabou).
     await resolveExhaustedAlert(r.taskId, null, sessionUserId, "Um Nômade aceitou a oferta — tarefa atribuída.");
+    await afterExecutorAssigned(r.taskId, { id: sessionUserId });
     return r;
   });
 }
@@ -831,6 +833,7 @@ export async function assignNomadeDirectly(taskId: string, nomadeId: string, act
   });
   if (!changed) throw new RotationError("A tarefa já foi atribuída ou não existe.", 409, "task_already_assigned");
   await resolveExhaustedAlert(taskId, null, actorUserId, "Admin Master registrou uma atribuição direta.");
+  await afterExecutorAssigned(taskId, { id: actorUserId });
 }
 
 // ── Job de fundo ──────────────────────────────────────────────────────

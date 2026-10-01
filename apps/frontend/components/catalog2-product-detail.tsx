@@ -98,6 +98,7 @@ export function Catalog2ProductDetail({
   dataSource = "admin",
   canBuy = false,
   preview = false,
+  previewVersionId,
   onCartChanged,
   shareBasePath,
   cartCount,
@@ -119,6 +120,8 @@ export function Catalog2ProductDetail({
   /** dataSource="client": mostra rascunho/incompleto (Admin Master e Líder
    * já têm isso sempre no backend via always_sees_all_products). */
   preview?: boolean;
+  /** Com preview: mostra ESTA versão (ex.: o rascunho em edição) em vez da publicada. */
+  previewVersionId?: string;
   onCartChanged?: () => void;
   /** Base da URL do link direto (ex.: "/company/catalogo-produtos"). Sem
    * isso, "Copiar link" não aparece. */
@@ -201,7 +204,7 @@ export function Catalog2ProductDetail({
     setError(null);
     setNotFound(false);
     const req = isClient
-      ? apiClient.getClientCatalog2Product(productId, preview)
+      ? apiClient.getClientCatalog2Product(productId, preview, previewVersionId)
       : apiClient.getCatalog2ProductDetailPreview(productId);
     req
       .then((res: any) => {
@@ -213,6 +216,7 @@ export function Catalog2ProductDetail({
             addon_keys: res.default_selection?.addon_keys ?? [],
             quantity: res.default_selection?.quantity ?? 1,
             delivery_groups: res.default_selection?.delivery_groups ?? [res.default_selection?.quantity ?? 1],
+            variation_quantities: res.default_selection?.variation_quantities ?? {},
             answers: {},
           });
           setQuantityText(String(res.default_selection?.quantity ?? 1));
@@ -235,7 +239,7 @@ export function Catalog2ProductDetail({
     return () => {
       cancelled = true;
     };
-  }, [productId, retryToken, isClient, preview]);
+  }, [productId, retryToken, isClient, preview, previewVersionId]);
 
   // Recalcula preço/prazo reais no backend a cada mudança de seleção
   // (dataSource="client" — nunca cosmético, sempre o preço que vai pra
@@ -245,7 +249,7 @@ export function Catalog2ProductDetail({
     let cancelled = false;
     setCalculating(true);
     apiClient
-      .configureClientCatalog2(productId, sel, preview, period)
+      .configureClientCatalog2(productId, sel, preview, period, previewVersionId)
       .then((c: any) => {
         if (!cancelled) setConfig(c);
       })
@@ -256,7 +260,7 @@ export function Catalog2ProductDetail({
     return () => {
       cancelled = true;
     };
-  }, [isClient, clientProduct, sel, period, productId, preview]);
+  }, [isClient, clientProduct, sel, period, productId, preview, previewVersionId]);
 
   const product = data?.product;
   const readiness = data?.readiness;
@@ -310,6 +314,7 @@ export function Catalog2ProductDetail({
     }));
   }, [isClient, realOptions, provisional]);
 
+  const [priceSummary, setPriceSummary] = useState<{ amount: number | null; source: string; explanation: string } | null>(null);
   const hasRealOptions = realOptions.length > 0;
   const adminOptions = hasRealOptions ? realOptions : provisionalOptions;
   const selectedOption = adminOptions.find((o) => o.id === selectedOptionId || (!o.is_provisional && selectedOptionKeys.includes((o as RealOption).key))) ?? null;
@@ -327,13 +332,14 @@ export function Catalog2ProductDetail({
   useEffect(() => {
     if (isClient || !targetVersion?.id || !hasRealOptions) {
       setSelectionSimulation(null);
+      setPriceSummary(null);
       return;
     }
     let cancelled = false;
     apiClient.simulateCatalog2(targetVersion.id, {
       variation_option_keys: selectedOptionKeys, addon_keys: selectedAddonKeys, quantity: 1, answers: {},
     }).then((result: any) => {
-      if (!cancelled) setSelectionSimulation(result.pricing_simulation ?? result.pricing ?? null);
+      if (!cancelled) { setSelectionSimulation(result.pricing ?? null); setPriceSummary(result.price_summary ?? null); }
     }).catch(() => { if (!cancelled) setSelectionSimulation(null); });
     return () => { cancelled = true; };
   }, [isClient, targetVersion?.id, hasRealOptions, selectedOptionKeys, selectedAddonKeys]);
@@ -341,10 +347,12 @@ export function Catalog2ProductDetail({
   // ── Opções: CLIENT (real, achatadas por variação — mesma linha visual) ─
   const clientOptionRows = useMemo(() => {
     if (!isClient || !clientProduct) return [];
-    const rows: { key: string; variationKey: string; variationName: string; label: string; selectionType: string | null; isRequired: boolean }[] = [];
+    const rows: { key: string; variationKey: string; variationName: string; label: string; selectionType: string | null; isRequired: boolean; help: string | null }[] = [];
     for (const va of clientProduct.variations ?? []) {
+      // Variação por QUANTIDADE não lista opções: o cliente informa um número (bloco próprio abaixo).
+      if (va.selection_type === "quantity") continue;
       for (const o of va.options ?? []) {
-        rows.push({ key: o.key, variationKey: va.key, variationName: va.name, label: o.label, selectionType: va.selection_type, isRequired: va.is_required });
+        rows.push({ key: o.key, variationKey: va.key, variationName: va.name, label: o.label, selectionType: va.selection_type, isRequired: va.is_required, help: va.help_text ?? null });
       }
     }
     return rows;
@@ -418,7 +426,8 @@ export function Catalog2ProductDetail({
     }
   }
 
-  const selectedCalculatedPrice = selectionSimulation?.lines?.commercial_final_price?.amount ?? selectionSimulation?.lines?.final_price?.amount ?? null;
+  // Fonte única do preço: o servidor diz o valor, de onde ele vem (venda, cálculo com pendência ou simulação) e por quê.
+  const selectedCalculatedPrice = priceSummary?.amount ?? selectionSimulation?.lines?.commercial_final_price?.amount ?? null;
   const clientPricing = config?.pricing ?? clientProduct?.pricing;
   const clientPeriodPricing = period ? config?.period_pricing : null;
   const clientSelErrors: string[] = config?.selection_errors ?? [];
@@ -432,7 +441,8 @@ export function Catalog2ProductDetail({
     ? (clientPricing?.commercial_deadline_days ?? clientProduct?.commercial_deadline_days ?? null)
     : (selectedCalculatedDeadline ?? selectedOption?.deadline_days ?? readiness?.deadline_days ?? readiness?.pricing_simulation?.deadline_days ?? provisional?.deadline_days ?? null);
   const deadlineIsProvisional = !isClient && !readiness?.deadline_days && displayDeadline != null;
-  const modality = !isClient ? (provisional?.modality ?? null) : null;
+  // Modalidade mostrada = a REAL da versão (nunca o texto provisório da planilha).
+  const modality: string | null = isClient ? (clientProduct?.sale_label ?? null) : (targetVersion?.sale_label ?? null);
 
   // Link curto e legível — dataSource="client" usa o ID numérico
   // (sequence_number), nunca o slug completo (achado do usuário
@@ -551,6 +561,7 @@ export function Catalog2ProductDetail({
         productId={isClient ? clientProduct.id : product.id}
         imagePath={imagePath}
         title={title}
+        subtitle={isClient ? clientProduct.short_description : null}
         categoryName={categoryName}
         optionsCount={optionsCount}
         optionsAreProvisional={optionsAreProvisional}
@@ -563,7 +574,7 @@ export function Catalog2ProductDetail({
             {modality && (
               <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-[2px] rounded-full bg-white/12 border border-white/20 text-white/90">
                 <Repeat2 className="h-2.5 w-2.5" />
-                {modality} <span className="opacity-70">(provisório)</span>
+                {modality}
               </span>
             )}
             {showInternalNameBadge && (
@@ -579,7 +590,7 @@ export function Catalog2ProductDetail({
             {shareProductUrl && <CopyLinkButton url={shareProductUrl} />}
             <span className="hidden sm:block h-7 w-px bg-white/20" />
             <div className="hidden sm:block text-right">
-              <p className="text-lg font-extrabold leading-none text-white">{displayPrice != null ? fmtBRL(displayPrice) : "A definir"}</p>
+              <p className="text-lg font-extrabold leading-none text-white" title={!isClient && priceSummary ? priceSummary.explanation : undefined}>{displayPrice != null ? fmtBRL(displayPrice) : "A definir"}{!isClient && priceSummary && priceSummary.source !== "comercial" && <span className="ml-1 text-[9px] font-medium opacity-80">({priceSummary.source === "simulacao" ? "simulação" : "calculado, com pendência"})</span>}</p>
               {displayDeadline != null && <p className="mt-1 text-[10px] font-medium text-white/70">Prazo de entrega: {displayDeadline} dias</p>}
             </div>
             <div className="flex flex-col items-stretch gap-1.5">
@@ -863,6 +874,23 @@ export function Catalog2ProductDetail({
                 );
               })}
 
+              {isClient && (clientProduct.variations ?? []).filter((va: any) => va.selection_type === "quantity").map((va: any) => (
+                <div key={va.key} className="flex w-full items-center gap-3 rounded-xl border-2 border-border bg-background px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{va.name}{va.is_required && <span className="text-red-500"> *</span>}</p>
+                    {va.help_text && <p className="text-[11px] text-muted-foreground">{va.help_text}</p>}
+                  </div>
+                  <Input
+                    type="number"
+                    min={va.is_required ? 1 : 0}
+                    aria-label={`Quantidade de ${va.name}`}
+                    className="h-8 w-20 text-xs"
+                    value={sel.variation_quantities?.[va.key] ?? 0}
+                    onChange={(e) => setSel((s: any) => ({ ...s, variation_quantities: { ...(s.variation_quantities ?? {}), [va.key]: Math.max(0, Math.floor(Number(e.target.value) || 0)) } }))}
+                  />
+                </div>
+              ))}
+
               {isClient && clientOptionRows.map((o) => {
                 const isSel = sel.variation_option_keys.includes(o.key);
                 return (
@@ -876,6 +904,7 @@ export function Catalog2ProductDetail({
                     <div className="min-w-0 flex-1">
                       <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{o.variationName}{o.isRequired && <span className="text-red-500"> *</span>}</p>
                       <p className="text-xs font-bold leading-tight truncate">{o.label}</p>
+                      {o.help && <p className="truncate text-[10px] text-muted-foreground">{o.help}</p>}
                     </div>
                   </button>
                 );
@@ -924,6 +953,17 @@ export function Catalog2ProductDetail({
               {/* ── Quantidade, distribuição e período — só compra real ── */}
               {isClient && (
                 <div className="mt-4 space-y-3 border-t border-border/60 pt-3">
+                  {clientProduct.connections?.requires_connections && (
+                    <div className="space-y-1.5 rounded-xl border border-border/70 bg-background p-3" data-testid="product-connections-preview">
+                      <h2 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Conexões e acessos necessários</h2>
+                      <p className="text-xs font-medium text-emerald-700 dark:text-emerald-300">{clientProduct.connections.message}</p>
+                      <ul className="space-y-1 text-xs">
+                        {clientProduct.connections.items.map((c: any, i: number) => (
+                          <li key={i}><strong>{c.label}</strong> — {c.obligation_label.toLowerCase()}, {c.when_label.toLowerCase()}; {c.method_label.toLowerCase()} ({c.permission_level}). Afeta: {c.affected_activities.length ? c.affected_activities.join(", ") : "somente informativa"}.{c.can_do_later ? " Pode ser feita depois." : ""}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {(clientProduct.required_info ?? []).length > 0 && (
                     <div className="space-y-2 rounded-xl border border-border/70 bg-background p-3">
                       <h2 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Informações necessárias</h2>
@@ -995,15 +1035,26 @@ export function Catalog2ProductDetail({
 
                   <div className="space-y-1.5 rounded-xl border border-border/70 bg-background p-3 text-xs">
                     {!period ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Prazo · Preço comercial</span>
-                        <span className="font-bold text-sm">{displayDeadline != null ? `${displayDeadline}d` : "a definir"} · {money(clientPricing?.commercial_price, clientPricing?.currency)}</span>
-                      </div>
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Prazo · Preço comercial</span>
+                          <span className="font-bold text-sm">{clientPricing?.pricing_mode === "on_request" ? "Sob consulta" : <>{displayDeadline != null ? `${displayDeadline}d` : "a definir"} · {money(clientPricing?.commercial_price, clientPricing?.currency)}</>}</span>
+                        </div>
+                        {clientPricing?.charges?.implementation?.applicable && (
+                          <div data-testid="avulso-breakdown" className="space-y-0.5 text-muted-foreground">
+                            <div className="flex items-center justify-between"><span>· implantação inicial (uma vez)</span><span>{money(clientPricing.charges.implementation.price, clientPricing.currency)}</span></div>
+                            <div className="flex items-center justify-between"><span>· trabalho do ciclo contratado</span><span>{money((clientPricing.charges.avulso_total ?? 0) - clientPricing.charges.implementation.price, clientPricing.currency)}</span></div>
+                            <p className="text-[11px]">Compra avulsa: paga uma vez, não renova.</p>
+                          </div>
+                        )}
+                      </>
                     ) : !clientPeriodPricing?.available ? (
                       <p className="text-amber-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{(clientPeriodPricing?.quote_blockers ?? ["carregando…"]).join("; ")}</p>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">Total a pagar (antecipado)</span><span className="font-bold text-sm">{money(clientPeriodPricing.total_price, clientPeriodPricing.currency)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">{clientPeriodPricing.months > 1 ? "Total a pagar (antecipado)" : "Primeira cobrança"}</span><span className="font-bold text-sm">{money(clientPeriodPricing.total_price, clientPeriodPricing.currency)}</span></div>
+                        {(clientPeriodPricing.implementation_price ?? 0) > 0 && <div data-testid="first-charge-implementation" className="flex items-center justify-between text-muted-foreground"><span>· inclui a implantação inicial (só agora)</span><span>{money(clientPeriodPricing.implementation_price, clientPeriodPricing.currency)}</span></div>}
+                        {clientPeriodPricing.renewal_price != null && clientPeriodPricing.months === 1 && <div data-testid="renewal-price" className="flex items-center justify-between text-muted-foreground"><span>Renovações (todo mês, sem implantação)</span><span>{money(clientPeriodPricing.renewal_price, clientPeriodPricing.currency)}</span></div>}
                         <div className="flex items-center justify-between text-muted-foreground"><span>Desconto do período</span><span>{clientPeriodPricing.discount_percent}%</span></div>
                       </>
                     )}

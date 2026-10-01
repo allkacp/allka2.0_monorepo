@@ -1,0 +1,90 @@
+{
+  "admin": {
+    "id": "demo-1d9994318f57",
+    "email": "demo-1d9994318f57@example.test",
+    "role": "admin",
+    "account_type": "admin"
+  },
+  "leader": {
+    "id": "demo-554765475c13",
+    "email": "demo-554765475c13@example.test",
+    "role": "lider",
+    "account_type": "lider"
+  },
+  "client": {
+    "id": "demo-66681b25d549",
+    "email": "demo-66681b25d549@example.test",
+    "role": "company_user",
+    "account_type": "empresas"
+  },
+  "agency": {
+    "id": "demo-6aca29af856e",
+    "email": "demo-6aca29af856e@example.test",
+    "role": "agency_admin",
+    "account_type": "agencias"
+  },
+  "nomad1": {
+    "id": "demo-996597a4042d",
+    "email": "demo-996597a4042d@example.test",
+    "role": "nomad",
+    "account_type": "nomades",
+    "nomade_id": "cmupyeu8u0005gaqsuccfms9p"
+  },
+  "nomad2": {
+    "id": "demo-fb60f373df67",
+    "email": "demo-fb60f373df67@example.test",
+    "role": "nomad",
+    "account_type": "nomades",
+    "nomade_id": "cmupyeu9a0007gaqsvvksvto3"
+  },
+  "products": {
+    "T": "cmupyeuap000agaqs2wc4b03v",
+    "S": "cmupyewrp000ugaqs9omqvfl4",
+    "N": "cmupyex0z001egaqsekfjauln",
+    "R": "cmupyex8r001rgaqs2oe5h3ds",
+    "E": "cmupygfgb002qgaqsde1wj7gu"
+  },
+  "versions": {
+    "T": "cmupyeub4000egaqs17t0jqfb",
+    "S": "cmupyewrx000ygaqsep5ruhsv",
+    "N": "cmupyex16001igaqsrk5ndd4t",
+    "R": "cmupyex8y001vgaqsrxkzw395",
+    "E": "cmupygfgl002ugaqsojfam2wf"
+  },
+  "slugs": {
+    "T": "demo-5f6015",
+    "S": "demo-97313a",
+    "N": "demo-f3fed9",
+    "R": "demo-cd88eb",
+    "E": "demo-770b8c"
+  },
+  "projects": {
+    "P1": "cmupyf0we00ileeef1qajqqys",
+    "paused": "cmupyg5qw012heeef1ro9dxba",
+    "agency": "cmupygbf1015deeefyiuje2d7",
+    "exec": "cmupyfzxe00vreeefsbobydrk",
+    "exec2": "cmupyghuh017feeeflshd3ob0",
+    "site4": "cmupyftev00theeef179owteh"
+  },
+  "pcr": {
+    "P1_meta": "cmupyf10400iueeefk7w4wvvz",
+    "exec2": "cmupygi7x017ieeefoatk95kl",
+    "P1_gtm": "cmupyf0zr00iseeefl9kqi7ey",
+    "P1_ads": "cmupyf0xq00ioeeef55vh1e2q",
+    "P1_pixel": "cmupyf10g00iweeefpuy871vn",
+    "P1_ga": "cmupyf0zc00iqeeefa5wr8aqm",
+    "paused": "cmupyg5si012keeef50uk0zmm",
+    "agency": "cmupygbuy015geeefiwabp1ms"
+  },
+  "tasks": {
+    "exec2_agendamento": "cmupygjv4017yeeefz589he8x",
+    "P1_configuracao": "cmupyf2jg00jceeef5dvbiyln",
+    "P1_campanhas": "cmupyf2l600jgeeefoeh9xv93",
+    "P1_relatorio": "cmupyf2mo00jjeeef5llddon1",
+    "paused_construcao": "cmupyg6ca0134eeefo8pifp1l"
+  },
+  "connections": {
+    "ads": "cmupyf3mq00k8eeefv88rhwrc",
+    "wp_project": "cmupyfq2g00soeeefwhd2oedj"
+  }
+}

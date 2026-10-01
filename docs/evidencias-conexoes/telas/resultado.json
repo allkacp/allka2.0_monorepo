@@ -1,0 +1,462 @@
+[
+  {
+    "id": "V01-ativar-modulo",
+    "title": "Ativação do módulo no editor do produto",
+    "url": "/admin/cadastro-produtos?produto=cmupygfgb002qgaqsde1wj7gu",
+    "user": "admin",
+    "action": "Editar o produto em rascunho → Passo 2 → rolar até 'Conexões e acessos necessários' → clicar em 'Exige conexões externas'",
+    "expected": "Seção com as opções 'Não exige…'/'Exige conexões externas'; ao ativar, aparece a orientação de preferência (OAuth primeiro, senha nunca em campo comum)",
+    "observed": [
+      "ENCONTRADO: Conexões e acessos necessários",
+      "ENCONTRADO: Não exige conexões externas",
+      "ENCONTRADO: Exige conexões externas",
+      "ENCONTRADO: Prefira, nesta ordem",
+      "ENCONTRADO: OAuth/integração oficial",
+      "ENCONTRADO: Senha nunca fica em campo comum",
+      "ENCONTRADO: Adicionar conexão"
+    ],
+    "status": "aprovado",
+    "shot": "V01-ativar-modulo.png",
+    "errors": []
+  },
+  {
+    "id": "V02-cadastro-simplificado",
+    "title": "Cadastro simplificado da exigência (6 campos)",
+    "url": "/admin/cadastro-produtos?produto=cmupygfgb002qgaqsde1wj7gu",
+    "user": "admin",
+    "action": "Adicionar conexão, escolher o tipo WordPress, a tarefa dependente e salvar",
+    "expected": "Os 6 campos da visão principal (tipo, quando, obrigatoriedade, forma, permissão, dependentes) e a mensagem 'Exigência de conexão salva.'",
+    "observed": [
+      "ENCONTRADO: 1. Tipo de conexão",
+      "ENCONTRADO: 2. Quando será necessária",
+      "ENCONTRADO: 3. Obrigatoriedade",
+      "ENCONTRADO: 4. Forma de conexão",
+      "ENCONTRADO: 5. Nível de permissão",
+      "ENCONTRADO: 6. Tarefas ou etapas dependentes",
+      "ENCONTRADO: Exigência de conexão salva.",
+      "ENCONTRADO: Executar rotina"
+    ],
+    "status": "aprovado",
+    "shot": "V02-cadastro-simplificado.png",
+    "errors": []
+  },
+  {
+    "id": "V03-detalhes-avancados",
+    "title": "Detalhes avançados (área de operação)",
+    "url": "/admin/cadastro-produtos?produto=cmupygfgb002qgaqsde1wj7gu",
+    "user": "admin",
+    "action": "Abrir 'Detalhes avançados (operação)' da exigência salva",
+    "expected": "Comportamento quando pendente, escopo, modo de validação, revalidação, lembretes, escalonamento, motivo e instruções",
+    "observed": [
+      "ENCONTRADO: Comportamento quando pendente",
+      "ENCONTRADO: Escopo de uso sugerido",
+      "ENCONTRADO: Modo de validação",
+      "ENCONTRADO: Regra de revalidação",
+      "ENCONTRADO: Lembrete a cada (horas)",
+      "ENCONTRADO: Limite de lembretes",
+      "ENCONTRADO: Escalonar após",
+      "ENCONTRADO: Instruções específicas deste produto"
+    ],
+    "status": "aprovado",
+    "shot": "V03-detalhes-avancados.png",
+    "errors": []
+  },
+  {
+    "id": "V04-contratacao",
+    "title": "Contratação: conexões necessárias apresentadas no começo",
+    "url": "/company/catalogo-produtos/checkout",
+    "user": "client",
+    "action": "Gerar cotação e continuar (cesta com Gestão de Tráfego Pago)",
+    "expected": "Mensagem 'Você não precisa compartilhar suas senhas…' e cada conexão com motivo, momento, forma, permissão e atividade afetada + botões Conectar agora / Fazer depois / rascunho",
+    "observed": [
+      "ENCONTRADO: Conexões e acessos necessários",
+      "ENCONTRADO: Você não precisa compartilhar suas senhas",
+      "ENCONTRADO: Google Ads",
+      "ENCONTRADO: Por quê:",
+      "ENCONTRADO: Quando será exigida:",
+      "ENCONTRADO: Forma de conexão:",
+      "ENCONTRADO: Nível de permissão:",
+      "ENCONTRADO: Atividade afetada:",
+      "ENCONTRADO: Conectar agora",
+      "ENCONTRADO: Fazer depois",
+      "ENCONTRADO: Salvar como rascunho",
+      "ENCONTRADO: Usar uma conexão que já tenho"
+    ],
+    "status": "aprovado",
+    "shot": "V04-contratacao.png",
+    "errors": [
+      "HTTP 409 http://localhost:3001/api/presence/heartbeat"
+    ]
+  },
+  {
+    "id": "V05-rascunho",
+    "title": "Contratação: salvar como rascunho",
+    "url": "/company/catalogo-produtos/checkout",
+    "user": "client",
+    "action": "Clicar em 'Salvar como rascunho' no Google Ads",
+    "expected": "O item mostra o selo 'Salvo como rascunho' e a contratação não é bloqueada",
+    "observed": [
+      "ENCONTRADO: Salvo como rascunho",
+      "ENCONTRADO: Termos e confirmação"
+    ],
+    "status": "aprovado",
+    "shot": "V05-rascunho.png",
+    "errors": []
+  },
+  {
+    "id": "V06-fazer-depois",
+    "title": "Contratação: conexão posterior ('fazer depois') e indicar responsável",
+    "url": "/company/catalogo-produtos/checkout",
+    "user": "client",
+    "action": "Fazer depois no GA4 e indicar responsável no Tag Manager",
+    "expected": "Selos 'Fazer depois' e responsável indicado; contratação segue liberada",
+    "observed": [
+      "ENCONTRADO: Fazer depois",
+      "ENCONTRADO: Termos e confirmação"
+    ],
+    "status": "aprovado",
+    "shot": "V06-fazer-depois.png",
+    "errors": []
+  },
+  {
+    "id": "V07-conexao-imediata",
+    "title": "Conexão imediata na contratação (formulário seguro)",
+    "url": "/company/catalogo-produtos/checkout",
+    "user": "client",
+    "action": "Conectar agora no Tag Manager (convite), informar a conta e conectar",
+    "expected": "Formulário sem senha (forma mais segura primeiro, permissão, escopo de uso) e selo 'Conectar agora' após salvar",
+    "observed": [
+      "ENCONTRADO: Como você prefere conectar?",
+      "ENCONTRADO: Nível de permissão",
+      "ENCONTRADO: Onde esta conexão pode ser usada",
+      "ENCONTRADO: Somente nesta tarefa",
+      "ENCONTRADO: Em tarefas selecionadas",
+      "ENCONTRADO: Em todo este projeto",
+      "ENCONTRADO: Outro projeto sempre exige uma nova autorização"
+    ],
+    "status": "aprovado",
+    "shot": "V07-conexao-imediata.png",
+    "errors": []
+  },
+  {
+    "id": "V08-conexao-existente",
+    "title": "Seleção de conexão existente (reaproveitar)",
+    "url": "/company/catalogo-produtos/checkout",
+    "user": "client",
+    "action": "Usar uma conexão que já tenho (GA4) e escolher a conexão",
+    "expected": "O sistema oferece as conexões compatíveis e pergunta se o cliente quer reutilizar; ao escolher, o item mostra o selo com a conexão",
+    "observed": [
+      "ENCONTRADO: Conectar agora ·",
+      "ENCONTRADO: Termos e confirmação"
+    ],
+    "status": "aprovado",
+    "shot": "V08-conexao-existente.png",
+    "errors": []
+  },
+  {
+    "id": "V10-pendencias-cliente",
+    "title": "Pendências do cliente (visão do cliente)",
+    "url": "/company/conexoes",
+    "user": "client",
+    "action": "Abrir 'Conexões e acessos' no menu do cliente",
+    "expected": "Uma pendência por conexão, com projeto, atividade afetada, tempo pendente, última solicitação, responsável, impacto e botão direto",
+    "observed": [
+      "ENCONTRADO: O que você precisa fornecer",
+      "ENCONTRADO: Você não precisa compartilhar suas senhas",
+      "ENCONTRADO: Pendências (",
+      "ENCONTRADO: Google Tag Manager",
+      "ENCONTRADO: Pendente há",
+      "ENCONTRADO: última solicitação",
+      "ENCONTRADO: Responsável:",
+      "ENCONTRADO: atividade(s) bloqueada(s)",
+      "ENCONTRADO: Conectar agora"
+    ],
+    "status": "aprovado",
+    "shot": "V10-pendencias-cliente.png",
+    "errors": []
+  },
+  {
+    "id": "V11-bloqueio-tarefa",
+    "title": "Bloqueio da tarefa dependente (motivo claro)",
+    "url": "/company/conexoes",
+    "user": "client",
+    "action": "Ler o item do Tag Manager",
+    "expected": "A tarefa dependente aparece com o tipo de dependência e o motivo do bloqueio",
+    "observed": [
+      "ENCONTRADO: Configurar contas de anúncio",
+      "ENCONTRADO: Necessária para iniciar",
+      "ENCONTRADO: Aguardando conexão"
+    ],
+    "status": "aprovado",
+    "shot": "V11-bloqueio-tarefa.png",
+    "errors": []
+  },
+  {
+    "id": "V12-correcao",
+    "title": "Correção: o cliente vê o problema e a correção pedida",
+    "url": "/company/conexoes",
+    "user": "client",
+    "action": "Ler o item da Meta (precisa de correção) e abrir 'Corrigir a conexão'",
+    "expected": "Problema e correção visíveis + formulário de correção (novo identificador / novo segredo protegido)",
+    "observed": [
+      "ENCONTRADO: Precisa de correção",
+      "ENCONTRADO: Problema:",
+      "ENCONTRADO: portfólio empresarial informado",
+      "ENCONTRADO: Correção:",
+      "ENCONTRADO: Enviar correção"
+    ],
+    "status": "aprovado",
+    "shot": "V12-correcao.png",
+    "errors": []
+  },
+  {
+    "id": "V13-conectar-agora-hub",
+    "title": "Conexão imediata pelo painel de pendências",
+    "url": "/company/conexoes",
+    "user": "client",
+    "action": "Clicar 'Conectar agora' no Tag Manager, escolher convite, informar a conta e conectar",
+    "expected": "Após conectar, o item passa a 'Enviado' (aguardando validação)",
+    "observed": [
+      "ENCONTRADO: Google Tag Manager",
+      "ENCONTRADO: Enviado"
+    ],
+    "status": "aprovado",
+    "shot": "V13-conectar-agora-hub.png",
+    "errors": []
+  },
+  {
+    "id": "V14-validacao",
+    "title": "Validação pela equipe (evidência obrigatória)",
+    "url": "/admin/conexoes",
+    "user": "admin",
+    "action": "Abrir o Tag Manager, escolher 'Validar', informar a evidência e registrar",
+    "expected": "Formulário com resultado/evidência/problema/correção, botão 'Verificar automaticamente' e confirmação 'Validação registrada.'",
+    "observed": [
+      "ENCONTRADO: Validação registrada."
+    ],
+    "status": "aprovado",
+    "shot": "V14-validacao.png",
+    "errors": []
+  },
+  {
+    "id": "V15-pausa",
+    "title": "Pausa por dependência externa (visão administrativa)",
+    "url": "/admin/conexoes",
+    "user": "admin",
+    "action": "Abrir o painel do administrador com a conexão expirada",
+    "expected": "Selo 'Atividade pausada por dependência externa', conexão 'Expirado' e atividade bloqueada",
+    "observed": [
+      "ENCONTRADO: Atividade pausada por dependência externa",
+      "ENCONTRADO: Expirado",
+      "ENCONTRADO: WordPress"
+    ],
+    "status": "aprovado",
+    "shot": "V15-pausa.png",
+    "errors": []
+  },
+  {
+    "id": "V16-pausa-tarefa",
+    "title": "Pausa por dependência externa (cartão na tarefa, SLA suspenso)",
+    "url": "/admin/tarefas",
+    "user": "admin",
+    "action": "Abrir a tarefa pausada e ler o cartão 'Conexões desta tarefa'",
+    "expected": "Cartão com 'Pausada por dependência externa', responsável, início e aviso de que o prazo (SLA) está suspenso",
+    "observed": [
+      "ENCONTRADO: Conexões desta tarefa",
+      "ENCONTRADO: Pausada por dependência externa",
+      "ENCONTRADO: prazo (SLA) está suspenso"
+    ],
+    "status": "aprovado",
+    "shot": "V16-pausa-tarefa.png",
+    "errors": []
+  },
+  {
+    "id": "V17-retomada",
+    "title": "Retomada: a equipe revalida e a atividade volta",
+    "url": "/admin/conexoes",
+    "user": "admin",
+    "action": "Validar a conexão do WordPress expirada",
+    "expected": "Mensagem 'Validação registrada.' e o item deixa de estar pendente",
+    "observed": [
+      "ENCONTRADO: Validação registrada."
+    ],
+    "status": "aprovado",
+    "shot": "V17-retomada.png",
+    "errors": []
+  },
+  {
+    "id": "V18-escopo-uso",
+    "title": "Escopo de uso: onde a conexão está sendo usada e revogação",
+    "url": "/company/conexoes",
+    "user": "client",
+    "action": "Aba 'Minhas conexões' → 'Onde está sendo usada'",
+    "expected": "Lista as conexões da empresa com estado, método, 'segredo protegido em cofre' e onde cada uma é usada (projeto inteiro/tarefa)",
+    "observed": [
+      "ENCONTRADO: segredo protegido em cofre",
+      "ENCONTRADO: Revogar",
+      "ENCONTRADO: Onde está sendo usada"
+    ],
+    "status": "aprovado",
+    "shot": "V18-escopo-uso.png",
+    "errors": []
+  },
+  {
+    "id": "V19-troca-executor",
+    "title": "Troca de executor: autorizar o novo executor",
+    "url": "/admin/conexoes",
+    "user": "admin",
+    "action": "Item da automação (convite): 'Autorizar executor', escolher a tarefa e informar o executor",
+    "expected": "Painel pede a tarefa e o ID do novo executor; ao autorizar, a atividade pausada volta",
+    "observed": [
+      "ENCONTRADO: Executor autorizado."
+    ],
+    "status": "aprovado",
+    "shot": "V19-troca-executor.png",
+    "errors": []
+  },
+  {
+    "id": "V20-historico",
+    "title": "Histórico completo da conexão",
+    "url": "/admin/conexoes?x=1",
+    "user": "admin",
+    "action": "Abrir 'Detalhes e histórico' → 'Histórico' do item do Tag Manager",
+    "expected": "Linha do tempo: solicitada, validação, uso autorizado, etc., com data e responsável",
+    "observed": [
+      "ENCONTRADO: Histórico",
+      "ENCONTRADO: Solicitada"
+    ],
+    "status": "aprovado",
+    "shot": "V20-historico.png",
+    "errors": []
+  },
+  {
+    "id": "V21-visao-agencia",
+    "title": "Visão da agência",
+    "url": "/agency/conexoes",
+    "user": "agency",
+    "action": "Abrir 'Conexões e acessos' no menu da agência",
+    "expected": "Título 'O que seus clientes precisam fornecer' e a pendência do Google Ads da compra da agência",
+    "observed": [
+      "ENCONTRADO: O que seus clientes precisam fornecer",
+      "ENCONTRADO: Google Ads",
+      "ENCONTRADO: Conectar agora",
+      "ENCONTRADO: Você não precisa compartilhar suas senhas"
+    ],
+    "status": "aprovado",
+    "shot": "V21-visao-agencia.png",
+    "errors": []
+  },
+  {
+    "id": "V22-visao-nomade",
+    "title": "Visão do nômade (executor)",
+    "url": "/nomades/conexoes",
+    "user": "nomad",
+    "action": "Abrir 'Conexões e acessos' no menu do nômade",
+    "expected": "Título 'O que bloqueia o seu trabalho' e somente o que bloqueia as tarefas dele",
+    "observed": [
+      "ENCONTRADO: O que bloqueia o seu trabalho",
+      "ausente (correto): Você não precisa compartilhar suas senhas"
+    ],
+    "status": "aprovado",
+    "shot": "V22-visao-nomade.png",
+    "errors": [
+      "HTTP 409 http://localhost:3001/api/presence/heartbeat"
+    ]
+  },
+  {
+    "id": "V23-visao-lider",
+    "title": "Visão do líder",
+    "url": "/leader/conexoes",
+    "user": "leader",
+    "action": "Abrir 'Conexões e acessos' no menu do líder",
+    "expected": "Título 'Pendências da sua equipe' com as conexões das tarefas que o líder acompanha",
+    "observed": [
+      "ENCONTRADO: Pendências da sua equipe",
+      "ENCONTRADO: Pendente há"
+    ],
+    "status": "aprovado",
+    "shot": "V23-visao-lider.png",
+    "errors": []
+  },
+  {
+    "id": "V24-visao-admin",
+    "title": "Visão administrativa (completa)",
+    "url": "/admin/conexoes",
+    "user": "admin",
+    "action": "Abrir 'Conexões e acessos' no menu do administrador",
+    "expected": "Título 'Todas as pendências de conexão' com ações de validar, autorizar executor, dispensar e liberar manualmente",
+    "observed": [
+      "ENCONTRADO: Todas as pendências de conexão",
+      "ENCONTRADO: Validar",
+      "ENCONTRADO: Autorizar executor",
+      "ENCONTRADO: Dispensar",
+      "ENCONTRADO: Liberar manualmente"
+    ],
+    "status": "aprovado",
+    "shot": "V24-visao-admin.png",
+    "errors": []
+  },
+  {
+    "id": "V25-ia-orientadora",
+    "title": "IA orientadora (só orienta)",
+    "url": "/company/conexoes",
+    "user": "client",
+    "action": "Abrir 'Detalhes e histórico' do item da Meta e 'Pedir orientação'",
+    "expected": "Painel azul: orientação (simulada em QA) que explica o que falta e o próximo passo, deixando claro que não valida nem libera nada",
+    "observed": [
+      "ENCONTRADO: só orienta: não valida, não libera atividade",
+      "ENCONTRADO: O que falta:",
+      "ENCONTRADO: Como conectar:",
+      "ENCONTRADO: Próximo passo:",
+      "ENCONTRADO: Lembrete sugerido:"
+    ],
+    "status": "aprovado",
+    "shot": "V25-ia-orientadora.png",
+    "errors": []
+  },
+  {
+    "id": "V26-oauth-cancelado",
+    "title": "Retorno do OAuth cancelado",
+    "url": "/conexoes?oauth=oauth_cancelled",
+    "user": "client",
+    "action": "Voltar do provedor após cancelar a autorização",
+    "expected": "A tela volta para o painel do perfil com a mensagem de que nada foi conectado",
+    "observed": [
+      "ENCONTRADO: A autorização foi cancelada. Nada foi conectado."
+    ],
+    "status": "aprovado",
+    "shot": "V26-oauth-cancelado.png",
+    "errors": []
+  },
+  {
+    "id": "V27-produto-cliente",
+    "title": "Página do produto para o cliente mostra as conexões necessárias",
+    "url": "/company/catalogo-produtos/cmupyeuap000agaqs2wc4b03v",
+    "user": "client",
+    "action": "Abrir o produto Gestão de Tráfego Pago como cliente",
+    "expected": "Cartão 'Conexões e acessos necessários' com a mensagem sobre senhas e cada exigência",
+    "observed": [
+      "ENCONTRADO: Conexões e acessos necessários",
+      "ENCONTRADO: Você não precisa compartilhar suas senhas",
+      "ENCONTRADO: Google Ads"
+    ],
+    "status": "aprovado",
+    "shot": "V27-produto-cliente.png",
+    "errors": []
+  },
+  {
+    "id": "V28-produto-sem-conexao",
+    "title": "Produto sem conexão: nada aparece",
+    "url": "/company/catalogo-produtos/cmupyex0z001egaqsekfjauln",
+    "user": "client",
+    "action": "Abrir o produto sem conexão como cliente",
+    "expected": "Nenhum cartão de conexões na página do produto",
+    "observed": [
+      "ausente (correto): Conexões e acessos necessários",
+      "ausente (correto): CONEXÕES E ACESSOS NECESSÁRIOS"
+    ],
+    "status": "aprovado",
+    "shot": "V28-produto-sem-conexao.png",
+    "errors": []
+  }
+]

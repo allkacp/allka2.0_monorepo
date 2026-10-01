@@ -20,6 +20,7 @@ export function TaskAssetsCard({ taskId, status, onChanged }: { taskId: string; 
   const [data, setData] = useState<any>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [scope, setScope] = useState<Record<string, string>>({})
+  const [change, setChange] = useState<Record<string, { open: boolean; identifier: string; note: string }>>({})
   const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(() => {
@@ -90,14 +91,41 @@ export function TaskAssetsCard({ taskId, status, onChanged }: { taskId: string; 
                   </button>
                 </>
               )}
-              <button
-                disabled={busy === a.id}
-                onClick={() => run(a.id, () => apiClient.reportClientAssetChange(a.id), "Mudança informada — o acesso será revalidado.")}
-                className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200"
-              >
-                Informar mudança
-              </button>
+              {data.can_report && (
+                <button
+                  disabled={busy === a.id}
+                  onClick={() => setChange({ ...change, [a.id]: { open: !(change[a.id]?.open), identifier: change[a.id]?.identifier ?? "", note: change[a.id]?.note ?? "" } })}
+                  className="rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200"
+                  title="Avise se a conta, o acesso ou a permissão mudou"
+                >
+                  Informar mudança
+                </button>
+              )}
             </div>
+            {data.can_report && change[a.id]?.open && (
+              <div className="mt-2 space-y-1.5 rounded-lg bg-slate-50 p-2 dark:bg-slate-800">
+                <input
+                  value={change[a.id].identifier}
+                  onChange={(e) => setChange({ ...change, [a.id]: { ...change[a.id], identifier: e.target.value } })}
+                  placeholder="Novo identificador, se mudou (ID da conta, domínio…)"
+                  className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                />
+                <input
+                  value={change[a.id].note}
+                  onChange={(e) => setChange({ ...change, [a.id]: { ...change[a.id], note: e.target.value } })}
+                  placeholder="O que mudou? (ex.: troquei de conta, removi o acesso de vocês)"
+                  className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                />
+                <p className="text-[10px] text-slate-400">Nunca escreva senha aqui.</p>
+                <button
+                  disabled={busy === a.id || (!change[a.id].identifier.trim() && !change[a.id].note.trim())}
+                  onClick={() => run(a.id, () => apiClient.reportClientAssetChange(a.id, change[a.id].note.trim() || undefined, change[a.id].identifier.trim() || undefined), "Mudança informada — a equipe foi avisada e o acesso será revalidado.")}
+                  className="rounded bg-slate-900 px-3 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                >
+                  Enviar aviso
+                </button>
+              </div>
+            )}
           </li>
         ))}
       </ul>

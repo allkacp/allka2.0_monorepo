@@ -20,6 +20,8 @@ export class TaskStatusGuardError extends Error {
 const TERMINAL_REMOVAL_STATUSES = new Set(["CANCELADA"]);
 // Estados que só existem depois do aceite interno quando a tarefa exige qualificação.
 const QUALIFICATION_GATED_TARGETS = new Set(["EM_APROVACAO", "APROVACAO_PENDENTE_CLIENTE", "APROVADA", "CONCLUIDA"]);
+// Revisão obrigatória: vem antes da qualificação e da aprovação.
+const REVIEW_GATED_TARGETS = new Set(["AGUARDANDO_QUALIFICACAO", "EM_APROVACAO", "APROVACAO_PENDENTE_CLIENTE", "APROVADA", "CONCLUIDA"]);
 
 /**
  * 1. Uma tarefa PENDENTE_DE_LIBERACAO/RASCUNHO_OPERACIONAL só pode sair
@@ -45,6 +47,18 @@ export async function assertTaskStatusTransitionAllowed(
 
   if (TERMINAL_REMOVAL_STATUSES.has(targetStatus)) {
     await assertSafeToCancelOrArchive(task.id, db);
+  }
+
+  // Revisão obrigatória: sem o aceite do revisor na entrega atual, nenhuma edição direta de status segue o fluxo.
+  if (REVIEW_GATED_TARGETS.has(targetStatus)) {
+    const row = await db.projectTask.findUnique({ where: { id: task.id }, select: { requires_review: true, reviewed_at: true } });
+    if (row?.requires_review && !row.reviewed_at) {
+      throw new TaskStatusGuardError(
+        "Esta tarefa exige revisão: ela só segue (qualificação, aprovação ou conclusão) depois do aceite do revisor.",
+        409,
+        "review_required",
+      );
+    }
   }
 
   // Qualificação obrigatória: sem o aceite do líder/qualificador na entrega

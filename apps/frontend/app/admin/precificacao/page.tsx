@@ -216,6 +216,7 @@ function PrecificacaoPage() {
             </section>
 
             {settings && <InactivationDemo settings={settings} run={run} />}
+            <SubscriptionTerms run={run} />
           </div>
         </div>
       </div>
@@ -255,6 +256,23 @@ function SpecialtyLine({ s, onSave }: { s: any; onSave: (rate: number | null) =>
       <Button size="sm" variant="outline" disabled={!changed} onClick={() => onSave(v.trim() === "" ? null : Number(v))}>Salvar</Button>
       {s.max_hourly_rate == null && <span className="text-[11px] text-amber-600">aguardando definição</span>}
     </div>
+  );
+}
+
+function SubscriptionTerms({ run }: { run: (fn: () => Promise<any>, ok: string) => Promise<void> }) {
+  const [lead, setLead] = useState("5");
+  const [grace, setGrace] = useState("3");
+  useEffect(() => { apiClient.getCatalog2SubscriptionSettings().then((r) => { setLead(String(r.invoice_lead_days)); setGrace(String(r.grace_days)); }).catch(() => {}); }, []);
+  return (
+    <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <h2 className="text-base font-semibold">Assinaturas mensais — fatura e inadimplência</h2>
+      <p className="mb-3 text-xs text-slate-500">Vale só para assinaturas NOVAS. As já existentes guardam o prazo que tinham quando nasceram.</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-xs">Avisar a próxima fatura (dias antes do fim do mês pago)<Input aria-label="Dias de aviso da fatura" className="mt-1 w-24" type="number" min={1} value={lead} onChange={(e) => setLead(e.target.value)} /></label>
+        <label className="text-xs">Tolerância de inadimplência (dias após o vencimento)<Input aria-label="Dias de tolerância" className="mt-1 w-24" type="number" min={0} value={grace} onChange={(e) => setGrace(e.target.value)} /></label>
+        <Button size="sm" variant="outline" onClick={() => run(() => apiClient.updateCatalog2SubscriptionSettings({ invoice_lead_days: Number(lead), grace_days: Number(grace) }), "Prazos de assinatura salvos.")}>Salvar</Button>
+      </div>
+    </section>
   );
 }
 

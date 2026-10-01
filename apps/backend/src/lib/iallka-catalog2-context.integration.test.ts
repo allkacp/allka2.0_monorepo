@@ -47,22 +47,22 @@ async function mkReadyPublishedProduct(slug: string) {
     data: {
       product_id: product.id, version_number: 1, state: "rascunho",
       title: `Serviço ${slug}`, summary: "resumo", full_description: "descrição do serviço demo",
-      base_commercial_deadline_days: 5,
+      base_commercial_deadline_days: 5, accepts_one_time: true,
       tasks: {
         create: [{
           key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1,
           questionnaire_id: questionnaire.id,
-          steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1 }] },
+          steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] },
         }],
       },
     },
   });
-  await publishVersion(v.id, "system", { changeSummary: "publicação de teste" });
+  await publishVersion(v.id, "system", { activate: true, changeSummary: "publicação de teste" });
   return { product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }), versionId: v.id, specialtyId: spec.id };
 }
 async function mkIncompleteDraftProduct(slug: string) {
   const spec = await prisma.catalog2Specialty.findFirstOrThrow({ where: { key: "redator" } });
-  await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: null } });
+  await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 80 } });
   await setPricingSettings();
   const pillar = await prisma.catalog2Pillar.findFirstOrThrow({ where: { key: "redes_conteudo" } });
   const category = await prisma.catalog2Category.findFirstOrThrow({ where: { key: "design" } });
@@ -75,12 +75,14 @@ async function mkIncompleteDraftProduct(slug: string) {
     data: {
       product_id: product.id, version_number: 1, state: "rascunho",
       title: `Serviço ${slug}`, summary: "resumo", full_description: "descrição do serviço demo",
-      base_commercial_deadline_days: 5,
-      tasks: { create: [{ key: "t1", name: "Tarefa incompleta", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1 }] },
+      base_commercial_deadline_days: 5, accepts_one_time: true,
+      tasks: { create: [{ key: "t1", name: "Tarefa incompleta", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1, steps: { create: [{ key: "s1", name: "Etapa", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } }] },
     },
   });
   // publica sem estar comercialmente pronto (mesmo cenário validado nos itens anteriores).
-  await publishVersion(v.id, "system", { changeSummary: "publicação de teste (incompleto)" });
+  await publishVersion(v.id, "system", { activate: true, changeSummary: "publicação de teste (incompleto)" });
+  // Regra vigente: NUNCA se publica com preço/prazo/ordem indefinidos. O cenário "produto publicado cujo cálculo ficou incompleto" é montado do jeito real: publica completo e quebra DEPOIS.
+  await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: null } });
   return { product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }), versionId: v.id };
 }
 async function mkCompanyUser(tag: string) {

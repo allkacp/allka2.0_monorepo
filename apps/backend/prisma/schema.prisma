@@ -273,6 +273,7 @@ model Company {
   legacy_id Int? @unique
 
   @@map("companies")
+  client_connections ClientConnection[]
 }
 
 // Snapshot histórico gravado sempre que uma Company é excluída — guarda os
@@ -477,6 +478,7 @@ model Agency {
   legacy_id Int? @unique
 
   @@map("agencies")
+  client_connections ClientConnection[]
 }
 
 // ─── Nômades ─────────────────────────────────────────────────────────────────
@@ -1398,6 +1400,10 @@ model ProjectProduct {
   @@index([project_id])
   @@index([catalog2_product_id])
   @@map("project_products")
+  subscription Catalog2Subscription?
+  implementation_price_snapshot Float?
+  recurring_price_snapshot Float?
+  first_charge_snapshot Float?
 }
 
 // ─── ProjectTask — Execution task generated from a CatalogTask ───────────────
@@ -1636,6 +1642,21 @@ model ProjectTask {
   // varrer tarefas ativas com prazo sem full scan.
   @@index([status, due_date])
   @@map("project_tasks")
+  ops ProjectTaskOps?
+  requires_review Boolean @default(false)
+  review_round Int @default(0)
+  reviewed_at DateTime?
+  reviewed_by String?
+  reviewer_user_id String?
+  review_minutes Int?
+  review_specialty_id String?
+  reviews ProjectTaskReview[]
+  deliverables ProjectTaskDeliverable[]
+  ai_runs ProjectTaskAIRun[]
+  external_pause_started_at DateTime?
+  external_pause_total_minutes Int @default(0)
+  status_before_external_pause String?
+  original_due_date DateTime?
 }
 
 // ─── Pacotes de produtos e regras de dependência (Pedido 2) ──────────────────
@@ -1663,6 +1684,7 @@ model Catalog2Package {
   rules Catalog2DependencyRule[]
 
   @@map("catalog2_packages")
+  requirement_mode String @default("all")
 }
 
 model Catalog2PackageItem {
@@ -1676,6 +1698,7 @@ model Catalog2PackageItem {
   @@unique([package_id, catalog2_product_id])
   @@index([catalog2_product_id])
   @@map("catalog2_package_items")
+  is_required Boolean @default(false)
 }
 
 model Catalog2DependencyRule {
@@ -1707,6 +1730,8 @@ model Catalog2DependencyRule {
   @@index([package_id])
   @@index([dependent_product_id])
   @@map("catalog2_dependency_rules")
+  target_deliverable_key String?
+  applies_to String @default("all")
 }
 
 // Instância de um pacote contratado num projeto (produtos pagos juntos).
@@ -1749,6 +1774,13 @@ model ProjectDependencyRule {
   @@index([project_id])
   @@index([target_task_id])
   @@map("project_dependency_rules")
+  target_deliverable_key String?
+  released_manually_at DateTime?
+  released_by_user_id String?
+  release_reason String? @db.Text
+  target_connection_req_id String?
+  connection_dep_kind String?
+  dependent_stage_key String?
 }
 
 // ─── Ativos validados do cliente ───────────────────────────────────────────
@@ -1913,6 +1945,7 @@ model ProjectTaskStage {
 
   @@unique([project_task_id, source_key])
   @@map("project_task_stages")
+  deliverables ProjectTaskDeliverable[]
 }
 
 // ─── TaskBriefingAnswer ──────────────────────────────────────────────────
@@ -5079,6 +5112,13 @@ model Catalog2QuestionnaireQuestion {
   @@unique([questionnaire_id, key])
   @@index([questionnaire_id, sort_order])
   @@map("catalog2_questionnaire_questions")
+  question_type String @default("texto_longo")
+  help_text String? @db.Text
+  options_json String? @db.Text
+  default_value String? @db.Text
+  validation_json String? @db.Text
+  visibility String @default("client")
+  answer_usage String @default("both")
 }
 
 // Identidade ESTAVEL do produto — nao muda entre versoes. O conteudo
@@ -5515,6 +5555,25 @@ model Catalog2ProductVersion {
   @@unique([product_id, version_number])
   @@index([state])
   @@map("catalog2_product_versions")
+  sale_modes_enforced Boolean @default(false)
+  show_executor_name Boolean @default(false)
+  target_audience String? @db.Text
+  commercial_objective String? @db.Text
+  scope String? @db.Text
+  included_items_json String? @db.Text
+  excluded_items_json String? @db.Text
+  client_requirements_json String? @db.Text
+  deliverables_summary_json String? @db.Text
+  client_info String? @db.Text
+  internal_notes String? @db.Text
+  results_disclaimer String? @db.Text
+  change_policy String? @db.Text
+  field_visibility_json String? @db.Text
+  pricing_mode String @default("calculated")
+  manual_price Float?
+  manual_deadline_days Int?
+  requires_connections Boolean @default(false)
+  connection_requirements Catalog2ConnectionRequirement[]
 }
 
 // Historico da versao (quem criou/alterou/publicou e quando). Imutavel —
@@ -5555,6 +5614,7 @@ model Catalog2Variation {
 
   @@index([version_id, sort_order])
   @@map("catalog2_variations")
+  is_active Boolean @default(true)
 }
 
 model Catalog2VariationOption {
@@ -5574,6 +5634,7 @@ model Catalog2VariationOption {
 
   @@index([variation_id, sort_order])
   @@map("catalog2_variation_options")
+  is_active Boolean @default(true)
 }
 
 // Efeito de escolher uma OPCAO de variacao — vocabulario FECHADO, igual ao
@@ -5597,6 +5658,12 @@ model Catalog2OptionEffect {
 
   @@index([variation_option_id, sort_order])
   @@map("catalog2_option_effects")
+  charge_scope String @default("recurring")
+  charge_start_cycle Int @default(0)
+  charge_end_cycle Int?
+  charge_quantity Int?
+  source_task_key String?
+  source_step_key String?
 }
 
 // ADICIONAL = escolha OPCIONAL (add-on), diferente da variacao obrigatoria.
@@ -5630,6 +5697,12 @@ model Catalog2Addon {
 
   @@index([version_id, sort_order])
   @@map("catalog2_addons")
+  charge_scope String @default("recurring")
+  charge_start_cycle Int @default(0)
+  charge_end_cycle Int?
+  charge_quantity Int?
+  source_task_key String?
+  source_step_key String?
 }
 
 model Catalog2AddonEffect {
@@ -5646,6 +5719,12 @@ model Catalog2AddonEffect {
 
   @@index([addon_id, sort_order])
   @@map("catalog2_addon_effects")
+  charge_scope String @default("recurring")
+  charge_start_cycle Int @default(0)
+  charge_end_cycle Int?
+  charge_quantity Int?
+  source_task_key String?
+  source_step_key String?
 }
 
 // Tarefa do produto (modelo de catalogo — NAO e a execucao de uma compra).
@@ -5748,6 +5827,11 @@ model Catalog2Task {
   @@index([specialty_id])
   @@index([questionnaire_id])
   @@map("catalog2_tasks")
+  ops Json?
+  reviewer_user_id String?
+  review_minutes Int?
+  review_specialty_id String?
+  deliverables Catalog2TaskDeliverable[]
 }
 
 // Dependencia entre tarefas da MESMA versao (task depende de depends_on).
@@ -5803,6 +5887,8 @@ model Catalog2TaskStep {
   @@index([task_id, sort_order])
   @@index([specialty_id])
   @@map("catalog2_task_steps")
+  ops Json?
+  deliverables Catalog2TaskDeliverable[]
 }
 
 // ─── Catálogo global de modelos de tarefa e de etapa ────────────────────────
@@ -5860,6 +5946,10 @@ model Catalog2TaskModel {
   @@index([is_active])
   @@index([specialty_id])
   @@map("catalog2_task_models")
+  ops Json?
+  requires_review Boolean @default(false)
+  review_minutes Int?
+  review_specialty_id String?
 }
 
 model Catalog2StepModel {
@@ -5895,6 +5985,7 @@ model Catalog2StepModel {
   @@index([is_active])
   @@index([specialty_id])
   @@map("catalog2_step_models")
+  ops Json?
 }
 
 // Acessos externos exigidos por uma VERSÃO do produto (configuração por
@@ -5956,6 +6047,12 @@ model Catalog2TaskAI {
   updated_at DateTime @updatedAt
 
   @@map("catalog2_task_ai")
+  profile_id String?
+  profile Catalog2AIProfile? @relation(fields: [profile_id], references: [id], onDelete: SetNull)
+  ai_mode String @default("rascunho")
+  instructions String? @db.Text
+  prompt_version Int @default(1)
+  ai_trigger String @default("manual")
 }
 
 // CONDICAO TIPADA (bloco 3, Parte 6). Gatilho -> efeito, vocabulario FECHADO
@@ -5994,6 +6091,12 @@ model Catalog2Condition {
 
   @@index([version_id, sort_order])
   @@map("catalog2_conditions")
+  charge_scope String @default("recurring")
+  charge_start_cycle Int @default(0)
+  charge_end_cycle Int?
+  charge_quantity Int?
+  source_task_key String?
+  source_step_key String?
 }
 
 // Modulo de precificacao (ata 2026-08-26): sobre o custo acumulado das
@@ -6055,6 +6158,8 @@ model Catalog2PricingSettings {
   demo_inactivation_is_provisional       Boolean @default(true)
 
   @@map("catalog2_pricing_settings")
+  subscription_invoice_lead_days Int @default(5)
+  subscription_grace_days Int @default(3)
 }
 
 // Configuracao de simulacao PROVISORIA (reuniao 10/09, "precificacao dos 36
@@ -6383,6 +6488,10 @@ model Catalog2Quote {
   @@index([account_kind, account_id, status])
   @@index([user_id])
   @@map("catalog2_quotes")
+  implementation_price Float?
+  recurring_price Float?
+  first_charge_price Float?
+  pricing_components_json String? @db.LongText
 }
 
 // Item 4.1 (reuniao 2026-09-14, "Ajustar a protecao comercial"): registro
@@ -6539,4 +6648,579 @@ model Catalog2CartItem {
   @@unique([account_kind, account_id, user_id, config_checksum])
   @@index([account_kind, account_id, user_id])
   @@map("catalog2_cart_items")
+}
+
+// Fotografia dos campos operacionais no momento da contratação. Fica em tabela à parte de propósito: as telas que leem ProjectTask/ProjectTaskStage com `include` NUNCA trazem isto por acidente; só a rota /project-tasks/:id/operational devolve, já filtrado pela visibilidade do perfil.
+model ProjectTaskOps {
+  id              String      @id @default(cuid())
+  project_task_id String      @unique
+  project_task    ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  task_ops        Json?
+  // { [stageId]: { ...ops da etapa } }
+  stage_ops       Json?
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
+
+  @@map("project_task_ops")
+}
+
+// Rodadas de REVISÃO da entrega (Pedido 3, fase 2): conferência técnica ANTES da qualificação e da aprovação. Cada rodada registra quem decidiu, o comentário e o tempo gasto revisando.
+model ProjectTaskReview {
+  id              String      @id @default(cuid())
+  project_task_id String
+  project_task    ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  round           Int         @default(1)
+  // solicitada | aprovada | reprovada | ajustes | comentario
+  decision        String
+  comment         String?     @db.Text
+  actor_user_id   String?
+  minutes_spent   Int?
+  created_at      DateTime    @default(now())
+
+  @@index([project_task_id, round])
+  @@map("project_task_reviews")
+}
+
+// Entregáveis e anexos ESTRUTURADOS (Pedido 3, fase 3) — definição no catálogo, por tarefa (e, opcionalmente, por etapa). Cada item vira um registro por contratação (ProjectTaskDeliverable), que pode ser enviado, revisado e aprovado — e usado em dependências.
+model Catalog2TaskDeliverable {
+  id                String           @id @default(cuid())
+  task_id           String
+  task              Catalog2Task     @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  step_id           String?
+  step              Catalog2TaskStep? @relation(fields: [step_id], references: [id], onDelete: SetNull)
+  key               String
+  name              String
+  description       String?          @db.Text
+  // arquivo | link | texto | registro_sistema | outro
+  type              String           @default("arquivo")
+  // quem envia: executor | lider | agencia | cliente | sistema
+  responsible       String           @default("executor")
+  is_required       Boolean          @default(true)
+  requires_approval Boolean          @default(true)
+  // até onde o item pode ser visto: internal | leader | executor | agency | client
+  visibility        String           @default("client")
+  sort_order        Int              @default(0)
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+
+  @@unique([task_id, key])
+  @@index([step_id])
+  @@map("catalog2_task_deliverables")
+}
+
+// Entregável/anexo de UMA tarefa contratada: fotografia da definição + estado (pendente → enviado → em revisão → aprovado/reprovado).
+model ProjectTaskDeliverable {
+  id                     String            @id @default(cuid())
+  project_task_id        String
+  project_task           ProjectTask       @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  project_task_stage_id  String?
+  project_task_stage     ProjectTaskStage? @relation(fields: [project_task_stage_id], references: [id], onDelete: SetNull)
+  catalog2_deliverable_id String?
+  key                    String
+  name                   String
+  description            String?           @db.Text
+  type                   String            @default("arquivo")
+  responsible            String            @default("executor")
+  is_required            Boolean           @default(true)
+  requires_approval      Boolean           @default(true)
+  visibility             String            @default("client")
+  sort_order             Int               @default(0)
+  // pendente | enviado | em_revisao | aprovado | reprovado
+  status                 String            @default("pendente")
+  content_url            String?           @db.VarChar(1000)
+  content_text           String?           @db.Text
+  content_name           String?
+  submitted_at           DateTime?
+  submitted_by           String?
+  reviewed_at            DateTime?
+  reviewed_by            String?
+  review_comment         String?           @db.Text
+  created_at             DateTime          @default(now())
+  updated_at             DateTime          @updatedAt
+
+  @@unique([project_task_id, key])
+  @@index([project_task_id, status])
+  @@map("project_task_deliverables")
+  source String @default("humano")
+  ai_run_id String?
+  version Int @default(1)
+  versions ProjectTaskDeliverableVersion[]
+}
+
+// Assinatura mensal contínua de um produto contratado (Pedido 3, fase 4): uma fatura por mês, com estado visível.
+model Catalog2Subscription {
+  id                   String         @id @default(cuid())
+  project_product_id   String         @unique
+  project_product      ProjectProduct @relation(fields: [project_product_id], references: [id], onDelete: Restrict)
+  project_id           String
+  company_id           String?
+  // ativa | pausada | cancelada | encerrada | aguardando_renovacao | inadimplente
+  status               String         @default("ativa")
+  period_months        Int            @default(1)
+  monthly_amount       Float
+  started_at           DateTime
+  // último ciclo PAGO (0 = o primeiro, pago na contratação)
+  current_cycle_index  Int            @default(0)
+  current_period_start DateTime
+  current_period_end   DateTime
+  // quando emitir a fatura do próximo ciclo
+  next_invoice_at      DateTime?
+  paused_at            DateTime?
+  // tempo já pago que sobrava ao pausar (para devolver ao retomar)
+  paused_remaining_ms  BigInt?
+  cancel_requested_at  DateTime?
+  ended_at             DateTime?
+  status_reason        String?        @db.Text
+  pending_payment_id   String?
+  created_at           DateTime       @default(now())
+  updated_at           DateTime       @updatedAt
+
+  events Catalog2SubscriptionEvent[]
+
+  @@index([status, next_invoice_at])
+  @@index([company_id])
+  @@map("catalog2_subscriptions")
+  invoice_lead_days Int @default(5)
+  grace_days Int @default(3)
+  implementation_amount Float @default(0)
+  implementation_charged_at DateTime?
+  implementation_reason String? @db.Text
+  first_charge_json String? @db.Text
+  renewal_components_json String? @db.LongText
+}
+
+model Catalog2SubscriptionEvent {
+  id              String               @id @default(cuid())
+  subscription_id String
+  subscription    Catalog2Subscription @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+  from_status     String?
+  to_status       String
+  reason          String?              @db.Text
+  actor_user_id   String?
+  created_at      DateTime             @default(now())
+
+  @@index([subscription_id, created_at])
+  @@map("catalog2_subscription_events")
+}
+
+// Perfil de IA AUTORIZADO (Pedido 3, fase 5): só tarefas ligadas a um perfil ativo podem usar IA. Guarda modelo, custo por mil tokens e quem pode acionar.
+model Catalog2AIProfile {
+  id                      String   @id @default(cuid())
+  name                    String
+  description             String?  @db.Text
+  provider                String   @default("gemini")
+  model                   String   @default("gemini-2.5-flash")
+  unit_cost_input_per_1k  Float?
+  unit_cost_output_per_1k Float?
+  fixed_cost_per_run      Float    @default(0)
+  currency                String   @default("BRL")
+  // quem pode acionar (além da administração): lista separada por vírgula de leader, executor
+  allowed_actors          String   @default("leader,executor")
+  // instruções-base (fixas) enviadas antes das instruções da tarefa
+  base_instructions       String?  @db.Text
+  is_active               Boolean  @default(true)
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  tasks Catalog2TaskAI[]
+
+  @@map("catalog2_ai_profiles")
+  input_format String? @db.Text
+  output_format String? @db.Text
+  max_tokens_per_run Int?
+  max_runs_per_task Int?
+  on_failure String @default("forward_human")
+  fallback_human Boolean @default(true)
+  requires_human_review Boolean @default(true)
+  prompt_version Int @default(1)
+  prompt_versions Catalog2AIProfilePromptVersion[]
+  purpose String?
+  is_system Boolean @default(false)
+  knowledge_json String? @db.Text
+}
+
+// Cada execução de IA numa tarefa contratada: o que foi pedido, com que contexto/entradas, o que saiu, quanto custou e o que o humano decidiu.
+model ProjectTaskAIRun {
+  id                    String      @id @default(cuid())
+  project_task_id       String
+  project_task          ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  project_task_stage_id String?
+  // autonoma | rascunho | auxilia
+  mode                  String
+  profile_id            String?
+  profile_name          String?
+  provider              String?
+  model                 String?
+  prompt_version        Int         @default(1)
+  adapter               String      @default("gemini")
+  instructions          String?     @db.Text
+  context_text          String?     @db.LongText
+  inputs_json           String?     @db.LongText
+  output_text           String?     @db.LongText
+  prompt_tokens         Int         @default(0)
+  completion_tokens     Int         @default(0)
+  cost                  Float?
+  currency              String      @default("BRL")
+  // gerada | adotada | descartada | erro | encaminhada
+  status                String      @default("gerada")
+  error_message         String?     @db.Text
+  missing_info          String?     @db.Text
+  deliverable_id        String?
+  triggered_by_user_id  String?
+  decided_by_user_id    String?
+  decided_at            DateTime?
+  decision_note         String?     @db.Text
+  duration_ms           Int?
+  created_at            DateTime    @default(now())
+
+  @@index([project_task_id, created_at])
+  @@index([status])
+  @@map("project_task_ai_runs")
+}
+
+model Catalog2AIProfilePromptVersion {
+  id                String           @id @default(cuid())
+  profile_id        String
+  profile           Catalog2AIProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  version           Int
+  base_instructions String?          @db.Text
+  input_format      String?          @db.Text
+  output_format     String?          @db.Text
+  changed_by_user_id String?
+  created_at        DateTime         @default(now())
+
+  @@unique([profile_id, version])
+  @@map("catalog2_ai_profile_prompt_versions")
+}
+
+model ProjectTaskDeliverableVersion {
+  id              String                 @id @default(cuid())
+  deliverable_id  String
+  deliverable     ProjectTaskDeliverable @relation(fields: [deliverable_id], references: [id], onDelete: Cascade)
+  version         Int
+  status          String
+  content_url     String?                @db.VarChar(1000)
+  content_text    String?                @db.Text
+  content_name    String?
+  submitted_at    DateTime?
+  submitted_by    String?
+  reviewed_by     String?
+  review_comment  String?                @db.Text
+  replaced_at     DateTime               @default(now())
+
+  @@unique([deliverable_id, version])
+  @@map("project_task_deliverable_versions")
+}
+
+// Registro idempotente da criação de modelos globais (tarefa/etapa): quem criou, se houve duplicidade autorizada e por quê.
+model Catalog2ModelAction {
+  id                   String   @id @default(cuid())
+  client_action_id     String   @unique
+  kind                 String
+  model_id             Int
+  name_normalized      String
+  duplicate_resolution String?
+  justification        String?  @db.Text
+  similar_ids_json     String?  @db.Text
+  authorized_by_user_id String?
+  created_at           DateTime @default(now())
+
+  @@index([kind, name_normalized])
+  @@map("catalog2_model_actions")
+}
+
+// ─── Conexões e acessos necessários (módulo universal) ───────────────────────
+// Catálogo GLOBAL de tipos de conexão (Google Ads, GA4, Meta, WordPress…). Os produtos só REFERENCIAM o tipo.
+model ConnectionType {
+  id                       Int      @id @default(autoincrement())
+  key                      String   @unique
+  name                     String
+  description              String?  @db.Text
+  icon                     String?
+  provider                 String?
+  integration_key          String?
+  allowed_methods_json     String   @db.Text
+  permission_levels_json   String   @db.Text
+  supports_auto_validation Boolean  @default(false)
+  default_instructions     String?  @db.Text
+  is_active                Boolean  @default(true)
+  sort_order               Int      @default(0)
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  requirements Catalog2ConnectionRequirement[]
+  connections  ClientConnection[]
+
+  @@map("connection_types")
+}
+
+// Exigência de conexão de uma VERSÃO de produto (referencia o tipo global; instruções próprias).
+model Catalog2ConnectionRequirement {
+  id                  String                 @id @default(cuid())
+  version_id          String
+  version             Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+  connection_type_id  Int
+  connection_type     ConnectionType         @relation(fields: [connection_type_id], references: [id], onDelete: Restrict)
+  key                 String
+  label               String?
+  // during_checkout | after_checkout | before_project_start | before_task | before_step | before_completion | implementation_only | revalidation_only | on_condition
+  when_needed         String                 @default("before_task")
+  when_task_key       String?
+  when_step_key       String?
+  condition_text      String?                @db.Text
+  // required | optional | conditional
+  obligation          String                 @default("required")
+  method              String                 @default("oauth")
+  permission_level    String                 @default("read_write")
+  // allow_draft | block_dependents | block_checkout | alert_only
+  pending_behavior    String                 @default("block_dependents")
+  // ── avançado ──
+  reason              String?                @db.Text
+  instructions        String?                @db.Text
+  default_grant_scope String                 @default("project")
+  validation_mode     String                 @default("manual")
+  asset_rule          String                 @default("first_only")
+  revalidate_days     Int?
+  light_check         Boolean                @default(false)
+  reminder_interval_hours Int?
+  reminder_limit      Int?
+  escalate_after_reminders Int?
+  visible_to_client   Boolean                @default(true)
+  sort_order          Int                    @default(0)
+  created_at          DateTime               @default(now())
+  updated_at          DateTime               @updatedAt
+
+  dependencies Catalog2ConnectionDependency[]
+
+  @@unique([version_id, key])
+  @@index([version_id, sort_order])
+  @@map("catalog2_connection_requirements")
+}
+
+// Tarefa/etapa do produto que depende da conexão. kind: start | continue | conclude | info
+model Catalog2ConnectionDependency {
+  id             String                        @id @default(cuid())
+  requirement_id String
+  requirement    Catalog2ConnectionRequirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade)
+  task_key       String
+  step_key       String?
+  kind           String                        @default("start")
+  dep_key        String
+
+  @@unique([requirement_id, dep_key])
+  @@map("catalog2_connection_dependencies")
+}
+
+// Conexão da EMPRESA cliente (só metadados; o segredo vive cifrado em ConnectionSecret).
+model ClientConnection {
+  id                    String         @id @default(cuid())
+  // Dona da conexão: a EMPRESA cliente OU (projetos comprados por agência, sem empresa) a própria AGÊNCIA.
+  company_id            String?
+  company               Company?       @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  agency_id             String?
+  agency                Agency?        @relation(fields: [agency_id], references: [id], onDelete: Cascade)
+  connection_type_id    Int
+  connection_type       ConnectionType @relation(fields: [connection_type_id], references: [id], onDelete: Restrict)
+  provider              String?
+  method                String
+  label                 String
+  account_label         String?
+  external_id           String?
+  scopes_json           String?        @db.Text
+  permission_level      String?
+  // not_requested | awaiting_submission | submitted | awaiting_validation | valid | incomplete | invalid | needs_correction | expired | removed | revoked | dispensed
+  status                String         @default("awaiting_submission")
+  owner_user_id         String?
+  provided_by_user_id   String?
+  connected_by_user_id  String?
+  validated_by_user_id  String?
+  validated_by_integration String?
+  last_validated_at     DateTime?
+  next_revalidation_at  DateTime?
+  expires_at            DateTime?
+  revoked_at            DateTime?
+  revoked_by_user_id    String?
+  revoke_reason         String?        @db.Text
+  secret_ref            String?
+  last_problem          String?        @db.Text
+  correction_needed     String?        @db.Text
+  evidence              String?        @db.Text
+  created_at            DateTime       @default(now())
+  updated_at            DateTime       @updatedAt
+
+  grants      ClientConnectionGrant[]
+  validations ClientConnectionValidation[]
+
+  @@index([company_id, status])
+  @@index([company_id, connection_type_id])
+  @@index([agency_id, status])
+  @@map("client_connections")
+}
+
+// Segredo CIFRADO (AES-256-GCM). Nunca é devolvido por nenhuma API.
+model ConnectionSecret {
+  id            String    @id @default(cuid())
+  connection_id String    @unique
+  ciphertext    String    @db.Text
+  created_at    DateTime  @default(now())
+  rotated_at    DateTime?
+  revoked_at    DateTime?
+
+  @@map("connection_secrets")
+}
+
+// Autorização de USO da conexão: scope = task | selected_tasks | project. Reutilização só dentro do projeto e do escopo.
+model ClientConnectionGrant {
+  id                 String           @id @default(cuid())
+  connection_id      String
+  connection         ClientConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  project_id         String
+  scope              String
+  project_task_id    String?
+  granted_by_user_id String?
+  revoked_at         DateTime?
+  revoked_by_user_id String?
+  created_at         DateTime         @default(now())
+
+  @@index([connection_id, project_id])
+  @@index([project_id, project_task_id])
+  @@map("client_connection_grants")
+  executor_user_id String?
+  revoke_reason String? @db.Text
+}
+
+// Cada validação (automática, manual ou automática+confirmação humana) com evidência e próximos passos.
+model ClientConnectionValidation {
+  id                  String           @id @default(cuid())
+  connection_id       String
+  connection          ClientConnection @relation(fields: [connection_id], references: [id], onDelete: Cascade)
+  mode                String
+  result              String
+  actor_user_id       String?
+  actor_integration   String?
+  evidence            String?          @db.Text
+  problem             String?          @db.Text
+  correction_needed   String?          @db.Text
+  next_revalidation_at DateTime?
+  affected_tasks_json String?          @db.Text
+  created_at          DateTime         @default(now())
+
+  @@index([connection_id, created_at])
+  @@map("client_connection_validations")
+}
+
+// Exigência já MATERIALIZADA na contratação (uma por produto contratado × exigência do catálogo).
+model ProjectConnectionRequirement {
+  id                  String   @id @default(cuid())
+  project_id          String
+  project_product_id  String
+  requirement_id      String
+  connection_type_id  Int
+  label               String
+  connection_id       String?
+  // fazer agora | depois | rascunho
+  handling            String   @default("later")
+  status              String   @default("awaiting_submission")
+  responsible_user_id String?
+  responsible_name    String?
+  invited_email       String?
+  draft_json          String?  @db.Text
+  dispensed_reason    String?  @db.Text
+  last_request_at     DateTime?
+  last_reminder_at    DateTime?
+  reminder_count      Int      @default(0)
+  escalated_at        DateTime?
+  resolved_at         DateTime?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  @@unique([project_product_id, requirement_id])
+  @@index([project_id, status])
+  @@map("project_connection_requirements")
+  light_check_pending Boolean @default(false)
+  condition_active Boolean @default(true)
+}
+
+// Pausa por dependência externa de uma tarefa/etapa (SLA suspenso; não conta como atraso do nômade).
+model ProjectTaskExternalBlock {
+  id                    String    @id @default(cuid())
+  project_id            String
+  project_task_id       String
+  stage_key             String?
+  project_connection_req_id String?
+  connection_id         String?
+  reason                String    @db.Text
+  // client | agency | provider | allka
+  responsible_party     String    @default("client")
+  responsible_user_id   String?
+  detected_by           String?
+  started_at            DateTime  @default(now())
+  resolved_at           DateTime?
+  resolved_by           String?
+  reminders_sent        Int       @default(0)
+  attempts              Int       @default(0)
+  blocked_minutes       Int?
+  deadline_impact_minutes Int?
+  affects_critical_path Boolean   @default(true)
+  previous_status       String?
+  created_at            DateTime  @default(now())
+
+  @@index([project_task_id, resolved_at])
+  @@index([project_id, resolved_at])
+  @@map("project_task_external_blocks")
+}
+
+// Trilha de auditoria da conexão (criação, autorização, uso, validação, reutilização, alteração, expiração, revogação, dispensa, visualização sensível, liberação manual).
+model ConnectionEvent {
+  id              String   @id @default(cuid())
+  connection_id   String?
+  project_connection_req_id String?
+  company_id      String?
+  project_id      String?
+  project_task_id String?
+  kind            String
+  actor_user_id   String?
+  actor_role      String?
+  message         String   @db.Text
+  detail_json     String?  @db.Text
+  created_at      DateTime @default(now())
+
+  @@index([connection_id, created_at])
+  @@index([project_id, created_at])
+  @@index([project_connection_req_id])
+  @@map("connection_events")
+}
+
+// Lembretes enviados (intervalo configurável, limite e escalonamento).
+model ConnectionReminder {
+  id                        String   @id @default(cuid())
+  project_connection_req_id String
+  channel                   String   @default("alert")
+  recipient_user_id         String?
+  escalated                 Boolean  @default(false)
+  message                   String   @db.Text
+  created_at                DateTime @default(now())
+
+  @@index([project_connection_req_id, created_at])
+  @@map("connection_reminders")
+}
+
+// Escolhas do cliente ANTES do checkout (rascunho): usar conexão existente, fazer depois, responsável, convite.
+model ConnectionQuoteChoice {
+  id                  String   @id @default(cuid())
+  quote_id            String
+  requirement_id      String
+  handling            String   @default("later")
+  connection_id       String?
+  grant_scope         String?
+  responsible_user_id String?
+  responsible_name    String?
+  invited_email       String?
+  draft_json          String?  @db.Text
+  created_by_user_id  String?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  @@unique([quote_id, requirement_id])
+  @@map("connection_quote_choices")
 }

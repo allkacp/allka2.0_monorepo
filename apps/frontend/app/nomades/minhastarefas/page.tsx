@@ -21,6 +21,10 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { TaskGuideCard } from "@/components/task-guide-card";
+import { TaskDeliverablesCard } from "@/components/task-deliverables-card";
+import { TaskStatusPanel } from "@/components/task-status-panel";
+import { TaskAICard } from "@/components/task-ai-card";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -416,6 +420,8 @@ export default function MinhasTarefasPage() {
                         </div>
                       </div>
 
+                      <TaskGuideCard taskId={t.id} className="mt-3" />
+
                       {/* Etapas atribuídas a este nômade */}
                       <div className="mt-3 space-y-2">
                         {t.minhas_etapas.length === 0 ? (
@@ -610,6 +616,10 @@ export default function MinhasTarefasPage() {
                 <p className="mt-1 font-semibold text-slate-700 dark:text-slate-200">{selectedTask.minhas_etapas.length}</p>
               </div>
             </div>
+            <TaskGuideCard taskId={selectedTask.id} defaultOpen />
+            <TaskDeliverablesCard taskId={selectedTask.id} status={selectedTask.status} />
+            <TaskStatusPanel taskId={selectedTask.id} status={selectedTask.status} />
+            <TaskAICard taskId={selectedTask.id} status={selectedTask.status} />
             <div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-white">Etapas</h3>
               <div className="mt-3 space-y-2">

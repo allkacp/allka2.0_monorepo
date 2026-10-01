@@ -1,0 +1,215 @@
+{
+  "generated_at": "2026-10-01T20:07:57.582Z",
+  "baseline": "backup restaurado em base descartável",
+  "api": "ok",
+  "all_ok": true,
+  "checks": [
+    {
+      "id": "P1",
+      "description": "existem exatamente 36 produtos",
+      "ok": true,
+      "detail": 36
+    },
+    {
+      "id": "P2",
+      "description": "cada produto manteve o mesmo ID",
+      "ok": true
+    },
+    {
+      "id": "P3",
+      "description": "cada produto manteve o mesmo número sequencial e nome",
+      "ok": true
+    },
+    {
+      "id": "P4",
+      "description": "cada produto tem exatamente uma versão, e ela é a V1",
+      "ok": true
+    },
+    {
+      "id": "P5",
+      "description": "todas as V1 continuam em rascunho",
+      "ok": true
+    },
+    {
+      "id": "P6",
+      "description": "todos continuam em em_preparacao",
+      "ok": true
+    },
+    {
+      "id": "P7",
+      "description": "nenhum possui versão publicada",
+      "ok": true
+    },
+    {
+      "id": "P8",
+      "description": "nenhuma tarefa foi vinculada",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "id": "P9",
+      "description": "nenhuma etapa foi vinculada",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "id": "P10",
+      "description": "nenhum preço foi definido (modo calculado, sem preço fixo)",
+      "ok": true
+    },
+    {
+      "id": "P11",
+      "description": "nenhum prazo foi definido",
+      "ok": true
+    },
+    {
+      "id": "P12",
+      "description": "nenhuma modalidade foi habilitada (avulso/assinatura/implantação/período)",
+      "ok": true
+    },
+    {
+      "id": "P13",
+      "description": "nenhuma classificação foi preenchida (pilar, categoria, 4F)",
+      "ok": true
+    },
+    {
+      "id": "P14",
+      "description": "nenhum campo comercial estruturado preenchido",
+      "ok": true
+    },
+    {
+      "id": "P15",
+      "description": "nenhum adicional, variação, condição, cotação, dependência ou entregável de produto",
+      "ok": true
+    },
+    {
+      "id": "P16",
+      "description": "V1 idêntica ao backup (título, descrições, prazo, modalidades)",
+      "ok": true
+    },
+    {
+      "id": "P17",
+      "description": "nenhum dos 36 aparece no catálogo do cliente",
+      "ok": true,
+      "detail": {
+        "visible_entre_os_36": 0,
+        "total_no_catalogo": 0
+      }
+    },
+    {
+      "id": "P18",
+      "description": "nenhum dos 36 pode ser aberto/contratado pelo cliente (404)",
+      "ok": true,
+      "detail": {
+        "abertos": 0
+      }
+    },
+    {
+      "id": "G1",
+      "description": "107 modelos de tarefa preservados",
+      "ok": true,
+      "detail": 107
+    },
+    {
+      "id": "G2",
+      "description": "109 modelos de etapa preservados",
+      "ok": true,
+      "detail": 109
+    },
+    {
+      "id": "G3",
+      "description": "mesmos IDs de modelos de tarefa e etapa",
+      "ok": true
+    },
+    {
+      "id": "G4",
+      "description": "mesmos hashes funcionais dos modelos de tarefa",
+      "ok": true,
+      "detail": {
+        "atual": "ab6436691c253b096c171739530c01645deea3e182c092fbe189485c3fc4c42c",
+        "backup": "ab6436691c253b096c171739530c01645deea3e182c092fbe189485c3fc4c42c"
+      }
+    },
+    {
+      "id": "G5",
+      "description": "mesmos hashes funcionais dos modelos de etapa",
+      "ok": true,
+      "detail": {
+        "atual": "5f50a94f1e3d7b941f585ca1f357b4532e00b59c00725d839a2f8478df260066",
+        "backup": "5f50a94f1e3d7b941f585ca1f357b4532e00b59c00725d839a2f8478df260066"
+      }
+    },
+    {
+      "id": "G6",
+      "description": "especialidades, pilares, categorias, 4F e precificação inalterados",
+      "ok": true
+    },
+    {
+      "id": "G7",
+      "description": "questionários e perguntas inalterados (nenhum de teste a mais)",
+      "ok": true,
+      "detail": {
+        "atual": 2,
+        "backup": 2
+      }
+    },
+    {
+      "id": "G8",
+      "description": "perfis de IA definitivos continuam em zero (nenhum perfil de teste restou; só o perfil de sistema do orientador de conexões pode existir)",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "id": "G9",
+      "description": "nenhuma criação acidental de modelo (registro de criações de modelo vazio)",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "id": "C1",
+      "description": "o módulo de conexões está disponível mas DESATIVADO em todas as versões dos 36 produtos",
+      "ok": true,
+      "detail": 0
+    },
+    {
+      "id": "C2",
+      "description": "nenhum dos 36 produtos recebeu exigência de conexão (nem dependência de tarefa/etapa)",
+      "ok": true,
+      "detail": {
+        "exigencias": 0,
+        "dependencias": 0
+      }
+    },
+    {
+      "id": "C3",
+      "description": "nenhuma conexão, segredo, exigência de contratação, regra de dependência ou escolha de cotação foi criada automaticamente",
+      "ok": true,
+      "detail": {
+        "requires": 0,
+        "requirements": 0,
+        "dependencies": 0,
+        "clientConnections": 0,
+        "secrets": 0,
+        "pcr": 0,
+        "rules": 0,
+        "choices": 0,
+        "types": 21
+      }
+    },
+    {
+      "id": "C4",
+      "description": "catálogo global de tipos de conexão disponível (21 tipos iniciais)",
+      "ok": true,
+      "detail": 21
+    },
+    {
+      "id": "C5",
+      "description": "o perfil de IA de QA (orientador de conexões) existe no máximo uma vez, exige revisão humana e NÃO está vinculado a nenhuma tarefa de produto oficial",
+      "ok": true,
+      "detail": {
+        "perfis_de_sistema": 1,
+        "vinculos": 0
+      }
+    }
+  ]
+}

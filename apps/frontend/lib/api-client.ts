@@ -941,7 +941,17 @@ class ApiClient {
   createCatalog2StepModel(body: Record<string, any>) { return this.c2<{ id: number }>("POST", `/step-models`, body); }
   addCatalog2TaskFromModel(versionId: string, modelId: number) { return this.c2("POST", `/versions/${versionId}/tasks/from-model`, { model_id: modelId }); }
   addCatalog2StepFromModel(taskId: string, stepModelId: number) { return this.c2("POST", `/tasks/${taskId}/steps/from-model`, { step_model_id: stepModelId }); }
+  /** Líderes e administradores que podem ser designados como qualificador de uma tarefa. */
+  getCatalog2Qualifiers() { return this.c2<{ data: { id: string; name: string; email: string; kind: "admin" | "lider" }[] }>("GET", `/qualifiers`); }
   getCatalog2AccessTypes() { return this.c2<{ data: { key: string; label: string }[] }>("GET", `/access-types`); }
+  // ── Conexões e acessos necessários (módulo universal) ──────────────────
+  getConnectionVocabulary() { return this.c2<any>("GET", "/connection-vocabulary"); }
+  getConnectionTypes(all = false) { return this.c2<{ data: any[] }>("GET", `/connection-types${all ? "?all=1" : ""}`); }
+  getVersionConnections(versionId: string) { return this.c2<any>("GET", `/versions/${versionId}/connections`); }
+  setVersionConnectionsModule(versionId: string, requires_connections: boolean) { return this.c2<any>("PUT", `/versions/${versionId}/connections-module`, { requires_connections }); }
+  saveConnectionRequirement(versionId: string, key: string, body: Record<string, any>) { return this.c2<any>("PUT", `/versions/${versionId}/connection-requirements/by-key/${encodeURIComponent(key)}`, body); }
+  deleteConnectionRequirement(id: string) { return this.c2<any>("DELETE", `/connection-requirements/${id}`); }
+  getConnectors() { return this.c2<{ data: any[] }>("GET", "/connectors"); }
   updateCatalog2AccessRequirements(versionId: string, items: { access_type: string; label?: string | null; is_required?: boolean; notes?: string | null }[]) { return this.c2("PUT", `/versions/${versionId}/access-requirements`, { items }); }
   addCatalog2AccessValidationStep(taskId: string) { return this.c2("POST", `/tasks/${taskId}/steps/access-validation`); }
   syncCatalog2TaskModel(taskId: string) { return this.c2("POST", `/tasks/${taskId}/sync-model`); }
@@ -967,7 +977,22 @@ class ApiClient {
   deleteCatalog2Task(id: string) { return this.c2("DELETE", `/tasks/${id}`); }
   duplicateCatalog2Task(id: string) { return this.c2("POST", `/tasks/${id}/duplicate`); }
   reorderCatalog2Tasks(versionId: string, order: string[]) { return this.c2("PUT", `/versions/${versionId}/tasks/order`, { order }); }
+  getCatalog2SubscriptionSettings() { return this.c2<{ invoice_lead_days: number; grace_days: number }>("GET", "/subscription-settings"); }
+  updateCatalog2SubscriptionSettings(body: { invoice_lead_days: number; grace_days: number }) { return this.c2("PUT", "/subscription-settings", body); }
+  getCatalog2CommercialOptions() { return this.c2<{ data: { action: string; label: string; effects: string[] }[] }>("GET", "/commercial-resolution-options"); }
+  resolveCatalog2Commercial(versionId: string, action: string) { return this.c2("POST", `/versions/${versionId}/commercial-resolution`, { action }); }
+  getCatalog2AIProfiles() { return this.c2<{ data: any[] }>("GET", "/ai-profiles"); }
+  createCatalog2AIProfile(body: Record<string, any>) { return this.c2("POST", "/ai-profiles", body); }
+  updateCatalog2AIProfile(id: string, body: Record<string, any>) { return this.c2("PUT", `/ai-profiles/${id}`, body); }
+  getCatalog2AIProfile(id: string) { return this.c2("GET", `/ai-profiles/${id}`); }
+  getCatalog2AIProviders() { return this.c2("GET", "/ai-providers"); }
+  testCatalog2AIProfileConnection(id: string) { return this.c2("POST", `/ai-profiles/${id}/test-connection`, {}); }
+  testCatalog2AIProfileRun(id: string, body: Record<string, any>) { return this.c2("POST", `/ai-profiles/${id}/test-run`, body); }
+  getCatalog2AIProfileRuns(id: string) { return this.c2("GET", `/ai-profiles/${id}/runs`); }
   updateCatalog2TaskAI(taskId: string, body: Record<string, any>) { return this.c2("PUT", `/tasks/${taskId}/ai`, body); }
+  createCatalog2Deliverable(taskId: string, body: Record<string, any>) { return this.c2("POST", `/tasks/${taskId}/deliverables`, body); }
+  updateCatalog2Deliverable(id: string, body: Record<string, any>) { return this.c2("PUT", `/deliverables/${id}`, body); }
+  deleteCatalog2Deliverable(id: string) { return this.c2("DELETE", `/deliverables/${id}`); }
   addCatalog2TaskDependency(taskId: string, dependsOn: string) { return this.c2("POST", `/tasks/${taskId}/dependencies`, { depends_on_task_id: dependsOn }); }
   deleteCatalog2TaskDependency(taskId: string, depId: string) { return this.c2("DELETE", `/tasks/${taskId}/dependencies/${depId}`); }
   addCatalog2Step(taskId: string, body: Record<string, any>) { return this.c2("POST", `/tasks/${taskId}/steps`, body); }
@@ -1036,11 +1061,11 @@ class ApiClient {
     for (const [k, v] of Object.entries(params ?? {})) if (v !== undefined && v !== "") qs.set(k, String(v));
     return this.cc<{ data: any[]; total: number; page: number; page_size: number }>("GET", `/products${qs.toString() ? `?${qs}` : ""}`);
   }
-  getClientCatalog2Product(slug: string, preview?: boolean) {
-    return this.cc("GET", `/products/${encodeURIComponent(slug)}${preview ? "?preview=1" : ""}`);
+  getClientCatalog2Product(slug: string, preview?: boolean, versionId?: string) {
+    return this.cc("GET", `/products/${encodeURIComponent(slug)}${preview ? `?preview=1${versionId ? `&version=${encodeURIComponent(versionId)}` : ""}` : ""}`);
   }
-  configureClientCatalog2(slug: string, selection: Record<string, any>, preview?: boolean, period?: string | null) {
-    return this.cc("POST", `/products/${encodeURIComponent(slug)}/configure${preview ? "?preview=1" : ""}`, { ...selection, ...(period ? { period } : {}) });
+  configureClientCatalog2(slug: string, selection: Record<string, any>, preview?: boolean, period?: string | null, versionId?: string) {
+    return this.cc("POST", `/products/${encodeURIComponent(slug)}/configure${preview ? `?preview=1${versionId ? `&version=${encodeURIComponent(versionId)}` : ""}` : ""}`, { ...selection, ...(period ? { period } : {}) });
   }
   listClientCatalog2Quotes() { return this.cc<{ data: any[] }>("GET", "/quotes"); }
   createClientCatalog2Quote(product: string, selection: Record<string, any>, period?: string | null) {
@@ -1057,6 +1082,9 @@ class ApiClient {
   updateClientCatalog2CartItem(id: string, selection: Record<string, any>, period?: string | null) {
     return this.cc("PUT", `/cart/items/${id}`, { ...selection, ...(period !== undefined ? { period } : {}) });
   }
+  /** Assinaturas mensais contínuas (Pedido 3, fase 4). */
+  listSubscriptions() { return this.cc<{ data: any[] }>("GET", "/subscriptions"); }
+  subscriptionAction(id: string, action: "pause" | "resume" | "cancel" | "pay", body: Record<string, unknown> = {}) { return this.cc("POST", `/subscriptions/${id}/${action}`, body); }
   removeClientCatalog2CartItem(id: string) { return this.cc("DELETE", `/cart/items/${id}`); }
   clearClientCatalog2Cart() { return this.cc("POST", "/cart/clear"); }
 
@@ -1149,6 +1177,44 @@ class ApiClient {
   // tarefa só encerra no último aceite — ver src/lib/stage-engine.ts.
 
   /** Situação do fluxo, histórico de decisões e dispensa por regra. */
+  /** Guia operacional da tarefa contratada (instruções, entradas, critérios…), já filtrado pelo perfil de quem pede. */
+  async getTaskOperational(taskId: string) {
+    return this.get<any>(`/project-tasks/${taskId}/operational`);
+  }
+  /** Revisão obrigatória da entrega (conferência técnica antes da qualificação e da aprovação). */
+  async getTaskReview(taskId: string) {
+    return this.get<any>(`/project-tasks/${taskId}/revisao`);
+  }
+  async reviewTask(taskId: string, decisao: "aprovar" | "reprovar" | "ajustes" | "comentar", comentario?: string, minutos?: number) {
+    return this.post<any>(`/project-tasks/${taskId}/revisao`, { decisao, comentario, minutos });
+  }
+  /** Entregáveis e anexos estruturados da tarefa contratada (já filtrados pela visibilidade do perfil). */
+  async getTaskDeliverables(taskId: string) {
+    return this.get<{ data: any[] }>(`/project-tasks/${taskId}/deliverables`);
+  }
+  async submitTaskDeliverable(taskId: string, id: string, body: { content_url?: string; content_text?: string; content_name?: string }) {
+    return this.post<any>(`/project-tasks/${taskId}/deliverables/${id}/submit`, body);
+  }
+  async reviewTaskDeliverable(taskId: string, id: string, decisao: "aprovar" | "reprovar" | "em_revisao", comentario?: string) {
+    return this.post<any>(`/project-tasks/${taskId}/deliverables/${id}/review`, { decisao, comentario });
+  }
+  /** IA da tarefa (Pedido 3, fase 5): só administração, líder e executor. */
+  async getTaskAI(taskId: string) {
+    return this.get<any>(`/project-tasks/${taskId}/ai`);
+  }
+  async runTaskAI(taskId: string, body: { stage_id?: string; inputs?: Record<string, string>; note?: string } = {}) {
+    return this.post<any>(`/project-tasks/${taskId}/ai/run`, body);
+  }
+  async adoptAIRun(taskId: string, runId: string, text?: string, note?: string) {
+    return this.post<any>(`/project-tasks/${taskId}/ai/runs/${runId}/adopt`, { text, note });
+  }
+  async discardAIRun(taskId: string, runId: string, note?: string) {
+    return this.post<any>(`/project-tasks/${taskId}/ai/runs/${runId}/discard`, { note });
+  }
+  /** Custos REALIZADOS da tarefa (IA + revisão) — só administração e líder. */
+  async getTaskCosts(taskId: string) {
+    return this.get<any>(`/project-tasks/${taskId}/costs`);
+  }
   async getTaskFlow(taskId: string) {
     return this.get<any>(`/project-tasks/${taskId}/flow`);
   }
@@ -1161,6 +1227,10 @@ class ApiClient {
   /** Dependências da tarefa (pacote, produto, entregável, aprovação, acesso). */
   async getTaskDependencies(taskId: string) {
     return this.get<any>(`/project-tasks/${taskId}/dependencies`);
+  }
+  /** Libera à mão uma dependência (só líder/administração; justificativa obrigatória; fica no histórico). */
+  async releaseTaskDependency(taskId: string, ruleId: string, reason: string) {
+    return this.post<any>(`/project-tasks/${taskId}/dependencies/${ruleId}/release`, { reason });
   }
   /** Pacotes de produtos e regras de dependência (Admin Master). */
   getCatalog2Packages() { return this.c2<{ data: any[] }>("GET", "/packages"); }
@@ -1182,9 +1252,45 @@ class ApiClient {
   async invalidateClientAsset(assetId: string, reason: string, expired?: boolean) {
     return this.post<any>(`/client-assets/${assetId}/invalidate`, { reason, expired });
   }
-  async reportClientAssetChange(assetId: string, note?: string) {
-    return this.post<any>(`/client-assets/${assetId}/report-change`, { note });
+  async reportClientAssetChange(assetId: string, note?: string, identifier?: string) {
+    return this.post<any>(`/client-assets/${assetId}/report-change`, { note, identifier });
   }
+
+
+  // ── Conexões e acessos necessários (cliente, agência, executor, líder, administrador) ──
+  getConnectionTypesPublic() { return this.get<{ data: any[] }>("/connections/types"); }
+  getCompanyConnections(companyId?: string) { return this.get<{ data: any[] }>(`/connections${companyId ? `?company_id=${companyId}` : ""}`); }
+  getConnection(id: string) { return this.get<any>(`/connections/${id}`); }
+  createConnection(body: Record<string, any>) { return this.post<any>("/connections", body); }
+  updateConnection(id: string, body: Record<string, any>) { return this.patch<any>(`/connections/${id}`, body); }
+  submitConnection(id: string) { return this.post<any>(`/connections/${id}/submit`, {}); }
+  verifyConnection(id: string) { return this.post<any>(`/connections/${id}/verify`, {}); }
+  validateConnection(id: string, body: Record<string, any>) { return this.post<any>(`/connections/${id}/validate`, body); }
+  revokeConnection(id: string, reason: string) { return this.post<any>(`/connections/${id}/revoke`, { reason }); }
+  startConnectionOAuth(id: string, permission_level?: string) { return this.post<any>(`/connections/${id}/oauth/start`, { permission_level }); }
+  requestGoogleAdsLink(id: string) { return this.post<any>(`/connections/${id}/google-ads/link`, {}); }
+  grantConnection(id: string, body: Record<string, any>) { return this.post<any>(`/connections/${id}/grants`, body); }
+  revokeConnectionGrants(id: string, body: Record<string, any>) { return this.post<any>(`/connections/${id}/grants/revoke`, body); }
+  getConnectionUsage(id: string) { return this.get<any>(`/connections/${id}/usage`); }
+  getConnectionEvents(id: string) { return this.get<{ data: any[] }>(`/connections/${id}/events`); }
+  getConnectionValidations(id: string) { return this.get<{ data: any[] }>(`/connections/${id}/validations`); }
+  getProjectConnectionRequirements(projectId: string) { return this.get<any>(`/connections/projects/${projectId}/requirements`); }
+  getProjectConnectionEvents(projectId: string) { return this.get<{ data: any[] }>(`/connections/projects/${projectId}/events`); }
+  getConnectionRequirement(pcrId: string) { return this.get<any>(`/connections/requirements/${pcrId}`); }
+  linkConnectionRequirement(pcrId: string, body: Record<string, any>) { return this.post<any>(`/connections/requirements/${pcrId}/link`, body); }
+  createAndLinkConnection(pcrId: string, body: Record<string, any>) { return this.post<any>(`/connections/requirements/${pcrId}/create-and-link`, body); }
+  setConnectionHandling(pcrId: string, body: Record<string, any>) { return this.post<any>(`/connections/requirements/${pcrId}/handling`, body); }
+  dispenseConnectionRequirement(pcrId: string, reason: string) { return this.post<any>(`/connections/requirements/${pcrId}/dispense`, { reason }); }
+  activateConnectionCondition(pcrId: string) { return this.post<any>(`/connections/requirements/${pcrId}/activate-condition`, {}); }
+  confirmConnectionLightCheck(pcrId: string, note?: string) { return this.post<any>(`/connections/requirements/${pcrId}/light-check`, { note }); }
+  authorizeConnectionExecutor(pcrId: string, task_id: string, executor_user_id: string) { return this.post<any>(`/connections/requirements/${pcrId}/authorize-executor`, { task_id, executor_user_id }); }
+  releaseConnectionRule(ruleId: string, reason: string) { return this.post<any>(`/connections/rules/${ruleId}/release`, { reason }); }
+  getConnectionPending(projectId?: string) { return this.get<any>(`/connections/pending/list${projectId ? `?project_id=${projectId}` : ""}`); }
+  getConnectionGuidance(pcrId: string) { return this.get<any>(`/connections/pending/${pcrId}/guidance`); }
+  getTaskConnections(taskId: string) { return this.get<any>(`/connections/tasks/${taskId}`); }
+  getQuoteConnectionRequirements(quoteId: string) { return this.get<any>(`/connections/quotes/${quoteId}/requirements`); }
+  saveQuoteConnectionChoice(quoteId: string, requirementId: string, body: Record<string, any>) { return this.put<any>(`/connections/quotes/${quoteId}/requirements/${requirementId}`, body); }
+  runConnectionMaintenance() { return this.post<any>("/connections/maintenance/run", {}); }
 
   /** Continuidade com o mesmo executor do ciclo anterior. */
   async getTaskContinuity(taskId: string) {

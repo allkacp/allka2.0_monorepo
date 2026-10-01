@@ -22,6 +22,9 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { TaskGuideCard } from "@/components/task-guide-card";
+import { TaskDeliverablesCard } from "@/components/task-deliverables-card";
+import { TaskStatusPanel } from "@/components/task-status-panel";
 import { apiClient } from "@/lib/api-client";
 
 /**
@@ -245,6 +248,10 @@ export default function EmpresaTarefas() {
                       </div>
                     </div>
 
+                    <TaskGuideCard taskId={t.id} className="mt-3" />
+                    <TaskDeliverablesCard taskId={t.id} status={t.status} className="mt-3" />
+                    <TaskStatusPanel taskId={t.id} status={t.status} className="mt-3" />
+
                     {ajusteDe === t.id && (
                       <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                         <label className="text-xs font-medium text-slate-600">
@@ -450,11 +457,17 @@ export default function EmpresaTarefas() {
                           </td>
                           <td data-rotulo="Status" className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
-                              <Badge
-                                className={`${cfg?.bg ?? "bg-slate-100 text-slate-500"} border-0 text-xs`}
-                              >
-                                {cfg?.label ?? task.rawStatus ?? "—"}
-                              </Badge>
+                              {task.rawStatus === "PAUSADA_DEPENDENCIA_EXTERNA" ? (
+                                <Badge className="border-0 bg-rose-100 text-xs text-rose-700" title="Falta uma conexão ou acesso. Veja em Conexões e acessos.">
+                                  Aguardando uma conexão
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  className={`${cfg?.bg ?? "bg-slate-100 text-slate-500"} border-0 text-xs`}
+                                >
+                                  {cfg?.label ?? task.rawStatus ?? "—"}
+                                </Badge>
+                              )}
                               {task.aguardandoMinhaAprovacao && (
                                 <span className="text-[10px] font-semibold text-indigo-600 whitespace-nowrap">
                                   ← sua vez

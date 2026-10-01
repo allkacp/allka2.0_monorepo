@@ -101,6 +101,12 @@ const AdminCombosPage = React.lazy(() => import("@/app/admin/combos/page"));
 const AdminPacotesPage = React.lazy(() => import("@/app/admin/pacotes/page"));
 const AgencyCombosPage = React.lazy(() => import("@/app/agency/combos/page"));
 const AdminTarefasPage = React.lazy(() => import("@/app/admin/tarefas/page"));
+const ConexoesCompanyPage = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesCompanyPage })));
+const ConexoesAgencyPage = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesAgencyPage })));
+const ConexoesNomadPage = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesNomadPage })));
+const ConexoesLeaderPage = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesLeaderPage })));
+const ConexoesAdminPage = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesAdminPage })));
+const ConexoesRedirect = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesRedirect })));
 const AdminModelosTarefasPage = React.lazy(
   () => import("@/app/admin/modelos-tarefas/page"),
 );
@@ -901,6 +907,12 @@ export default function App() {
                   <Route path="/admin/combos" element={<AdminCombosPage />} />
                   <Route path="/admin/pacotes" element={<AdminPacotesPage />} />
                   <Route path="/admin/tarefas" element={<AdminTarefasPage />} />
+                  <Route path="/admin/conexoes" element={<ConexoesAdminPage />} />
+                  <Route path="/conexoes" element={<ConexoesRedirect />} />
+                  <Route path="/company/conexoes" element={<ConexoesCompanyPage />} />
+                  <Route path="/agency/conexoes" element={<ConexoesAgencyPage />} />
+                  <Route path="/nomades/conexoes" element={<ConexoesNomadPage />} />
+                  <Route path="/leader/conexoes" element={<ConexoesLeaderPage />} />
                   <Route
                     path="/admin/tarefas/:tarefaId"
                     element={<AdminTarefasPage />}

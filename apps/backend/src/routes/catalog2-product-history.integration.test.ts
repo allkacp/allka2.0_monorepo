@@ -28,6 +28,10 @@ function tokenFor(u: { id: string; email: string; role: string; account_type: st
   return jwt.sign({ id: u.id, email: u.email, role: u.role, account_type: u.account_type }, config.JWT_SECRET, { expiresIn: "1h" });
 }
 async function api(path: string, opts: { method?: string; token?: string; body?: unknown } = {}) {
+  // Estes cenários repetem nomes de tarefa/etapa de propósito (não testam duplicidade): confirmam a criação de forma explícita.
+  if (opts.method === "POST" && /\/(tasks|steps)$/.test(path) && opts.body && typeof opts.body === "object" && !("duplicate_resolution" in (opts.body as object))) {
+    opts = { ...opts, body: { ...(opts.body as object), duplicate_resolution: "create_anyway", duplicate_justification: "fixture de teste: nomes repetidos entre cenários" } };
+  }
   const res = await fetch(`${baseUrl}${path}`, {
     method: opts.method ?? "GET",
     headers: { "content-type": "application/json", ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}) },
@@ -61,7 +65,7 @@ async function mkDraftProduct(slug: string) {
     data: {
       product_id: product.id, version_number: 1, state: "rascunho",
       title: `Serviço ${slug}`, summary: "resumo", full_description: "descrição do serviço demo",
-      base_commercial_deadline_days: 5,
+      base_commercial_deadline_days: 5, accepts_one_time: true,
     },
   });
   return { product, versionId: v.id, specialtyId: spec.id };
@@ -238,9 +242,10 @@ describe("Histórico de alterações do produto (Item 7, reunião 2026-09-14)", 
 
   it("8. publicação da versão também aparece no histórico (mesclado de Catalog2VersionEvent)", async () => {
     const { product, versionId, specialtyId } = await mkDraftProduct(`c10-${crypto.randomBytes(4).toString("hex")}`);
-    await api(`/api/admin/catalog2/versions/${versionId}/tasks`, {
+    const taskRes = await api(`/api/admin/catalog2/versions/${versionId}/tasks`, {
       method: "POST", token: MASTER, body: { key: "t1", name: "Tarefa", specialty_id: specialtyId, estimated_minutes: 30 },
     });
+    await prisma.catalog2TaskStep.create({ data: { task_id: taskRes.json.id, key: "s1", name: "Etapa", sort_order: 1, specialty_id: specialtyId, estimated_minutes: 30 } });
     await prisma.catalog2PricingSettings.upsert({
       where: { id: "default" },
       create: { id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30, human_review_percent: 10, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]) },

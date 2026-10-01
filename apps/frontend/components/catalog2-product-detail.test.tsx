@@ -103,11 +103,13 @@ describe("Catalog2ProductDetail — dado real", () => {
 
   it("recalcula preço e prazo com a opção e o adicional selecionados", async () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
+    // fonte única: o servidor devolve o preço real + o resumo dizendo de onde ele vem
     api.simulateCatalog2.mockResolvedValue({
-      pricing_simulation: {
+      pricing: {
         lines: { commercial_final_price: { amount: 1234.56 } },
         deadline: { commercial_deadline_days: 5 },
       },
+      price_summary: { amount: 1234.56, source: "comercial", explanation: "Preço de venda do cenário padrão." },
     });
     render(<Catalog2ProductDetail productId="p1" onBack={() => {}} />);
 

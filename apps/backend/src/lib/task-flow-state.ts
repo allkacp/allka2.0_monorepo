@@ -11,10 +11,13 @@ export const FLOW_STATES = [
   "aguardando_inicio_ciclo",
   "aguardando_implementacao",
   "aguardando_ativo_acesso",
+  "aguardando_conexao",
+  "bloqueada_dependencia_externa",
   "aguardando_dependencia_produto",
   "aguardando_executor",
   "em_execucao",
   "entregue_pelo_executor",
+  "aguardando_revisao",
   "aguardando_qualificacao",
   "em_ajustes",
   "aguardando_aprovacao_cliente",
@@ -29,10 +32,13 @@ export const FLOW_STATE_LABEL: Record<FlowState, string> = {
   aguardando_inicio_ciclo: "Aguardando início do ciclo",
   aguardando_implementacao: "Aguardando implementação",
   aguardando_ativo_acesso: "Aguardando ativo/acesso",
+  aguardando_conexao: "Aguardando conexão",
+  bloqueada_dependencia_externa: "Bloqueada por dependência externa",
   aguardando_dependencia_produto: "Aguardando dependência de produto",
   aguardando_executor: "Aguardando executor",
   em_execucao: "Em execução",
   entregue_pelo_executor: "Entregue pelo executor",
+  aguardando_revisao: "Aguardando revisão",
   aguardando_qualificacao: "Aguardando qualificação",
   em_ajustes: "Em ajustes",
   aguardando_aprovacao_cliente: "Aguardando aprovação",
@@ -51,6 +57,23 @@ export interface TaskFlow {
 
 const DONE = ["CONCLUIDA", "APROVADA", "DISPENSADA_POR_REGRA"];
 
+/** Perfis de fora da operação (agência e cliente): só veem o que lhes diz respeito; o miolo interno (revisão, qualificação, escolha de executor) vira "em execução". */
+export function isExternalViewer(viewer?: string | null): boolean {
+  return viewer === "agency" || viewer === "client";
+}
+const INTERNAL_ONLY_STATES: FlowState[] = ["aguardando_revisao", "aguardando_qualificacao", "entregue_pelo_executor", "aguardando_executor"];
+
+/** Situação do fluxo já ajustada ao perfil de quem olha. */
+export async function computeFlowStateFor(db: Db, taskId: string, viewer?: string | null): Promise<TaskFlow | null> {
+  const flow = await computeFlowState(db, taskId);
+  if (!flow || !isExternalViewer(viewer)) return flow;
+  if (INTERNAL_ONLY_STATES.includes(flow.state)) {
+    return { state: "em_execucao", label: FLOW_STATE_LABEL.em_execucao, reason: "Nossa equipe está cuidando desta tarefa.", blockers: [] };
+  }
+  if (flow.state === "em_ajustes") return { ...flow, reason: "Estamos fazendo os ajustes pedidos.", blockers: [] };
+  return flow;
+}
+
 export async function computeFlowState(db: Db, taskId: string): Promise<TaskFlow | null> {
   const t = await db.projectTask.findUnique({
     where: { id: taskId },
@@ -65,6 +88,11 @@ export async function computeFlowState(db: Db, taskId: string): Promise<TaskFlow
   if (t.status === "CANCELADA") return make("cancelada", "Tarefa cancelada.");
   if (t.status === "DISPENSADA_POR_REGRA") return make("dispensada_por_regra", "Dispensada por regra — não precisa ser executada.");
   if (["CONCLUIDA", "APROVADA"].includes(t.status)) return make("concluida", "Entrega aprovada e tarefa encerrada.");
+  if (t.status === "PAUSADA_DEPENDENCIA_EXTERNA") {
+    const b = await db.projectTaskExternalBlock.findFirst({ where: { project_task_id: taskId, resolved_at: null }, orderBy: { started_at: "desc" } });
+    return make("bloqueada_dependencia_externa", b ? `Pausada por dependência externa: ${b.reason} O prazo está suspenso.` : "Pausada por dependência externa. O prazo está suspenso.", b ? [b.reason] : []);
+  }
+  if (t.status === "AGUARDANDO_REVISAO") return make("aguardando_revisao", "A entrega aguarda a revisão técnica (antes da qualificação e da aprovação).");
   if (t.status === "AGUARDANDO_QUALIFICACAO") return make("aguardando_qualificacao", "A entrega aguarda o aceite interno do líder/qualificador.");
   if (t.status === "EM_AJUSTES") return make("em_ajustes", "O qualificador pediu ajustes; a tarefa voltou ao executor.");
   if (t.status === "ENTREGUE_PELO_NOMADE") return make("entregue_pelo_executor", "O executor entregou; aguarda a qualificação/conferência.");
@@ -87,6 +115,7 @@ export async function computeFlowState(db: Db, taskId: string): Promise<TaskFlow
   for (const r of rules) blockers.push(r.reason);
   if (t.status === "PENDENTE_DE_LIBERACAO" || t.status === "AGUARDANDO_DEPENDENCIA_PRODUTO") {
     if (waitingImplementation) return make("aguardando_implementacao", "As tarefas operacionais só começam depois da implementação inicial.", blockers);
+    if (rules.some((r) => r.targetKind === "connection")) return make("aguardando_conexao", "Falta uma conexão ou acesso necessário para esta tarefa.", blockers);
     if (rules.some((r) => r.targetKind === "info_asset")) return make("aguardando_ativo_acesso", "Falta validar um acesso/ativo do cliente.", blockers);
     if (blockers.length > 0) return make("aguardando_dependencia_produto", blockers[0], blockers);
     return make("aguardando_dependencia_produto", "Aguardando liberação.");

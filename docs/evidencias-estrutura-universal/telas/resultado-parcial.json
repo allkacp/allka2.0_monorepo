@@ -1,0 +1,68 @@
+[
+  {
+    "id": "07-modalidades",
+    "title": "Modalidades de contratação (e modo de preço)",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → rolar até 'Modalidades de contratação'",
+    "expected": "Avulso, Assinatura mensal recorrente, Implementação inicial, seletor de modo de preço (calculado / fixo / sob consulta)",
+    "observed": [
+      "ENCONTRADO: Modalidades de contratação",
+      "ENCONTRADO: Avulso",
+      "ENCONTRADO: Assinatura mensal recorrente",
+      "ENCONTRADO: Preço:",
+      "ENCONTRADO: Sob consulta",
+      "ENCONTRADO: Salvar modalidades"
+    ],
+    "status": "aprovado",
+    "shot": "07-modalidades.png",
+    "errors": []
+  },
+  {
+    "id": "08-implantacao-inicial",
+    "title": "Implantação inicial",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → marcar 'Implementação inicial' (já marcada no produto)",
+    "expected": "Opção 'Implementação inicial' marcada e bloco 'Implementação roda' visível",
+    "observed": [
+      "ENCONTRADO: Implementação inicial",
+      "ENCONTRADO: Implementação roda:"
+    ],
+    "status": "aprovado",
+    "shot": "08-implantacao-inicial.png",
+    "errors": []
+  },
+  {
+    "id": "09-regras-implantacao",
+    "title": "Regras da implantação",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → abrir a lista 'Implementação roda'",
+    "expected": "Regras: somente na 1ª contratação, em toda contratação, só na revalidação; 'Bloqueia a rotina até concluir'",
+    "observed": [
+      "ENCONTRADO: Somente na 1ª contratação do cliente",
+      "ENCONTRADO: Em toda contratação",
+      "ENCONTRADO: Só quando houver revalidação",
+      "ENCONTRADO: Bloqueia a rotina até concluir"
+    ],
+    "status": "aprovado",
+    "shot": "09-regras-implantacao.png",
+    "errors": []
+  },
+  {
+    "id": "10-preco-fixo-e-sob-consulta",
+    "title": "Modo de preço: preço fixo e sob consulta",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → escolher 'Preço fixo informado'",
+    "expected": "Campos de preço fixo e prazo + texto 'Vale como avulso, primeira cobrança e renovação'",
+    "observed": [
+      "ENCONTRADO: Vale como avulso, primeira cobrança e renovação",
+      "ENCONTRADO: prazo"
+    ],
+    "status": "aprovado",
+    "shot": "10-preco-fixo-e-sob-consulta.png",
+    "errors": []
+  }
+]

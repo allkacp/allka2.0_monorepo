@@ -12,6 +12,7 @@ import { ArrowLeft, CheckCircle2, CreditCard, Loader2, ShieldCheck } from "lucid
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { useIallkaContext } from "@/contexts/iallka-context";
+import { ContractingConnectionsPanel } from "@/components/connections/contracting-connections-panel";
 import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
 import { cn } from "@/lib/utils";
 
@@ -197,6 +198,7 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
             <div className="flex justify-between"><span>Preço total</span><strong>{money(totalPrice, currency)}</strong></div>
             <div className="flex justify-between text-neutral-500"><span>Prazo comercial (maior item)</span><span>{maxDeadline > 0 ? `${maxDeadline} dia(s)` : "A definir"}</span></div>
           </div>
+          <ContractingConnectionsPanel quotes={quotes.map((q, i) => ({ id: q.id, product_name: cart?.items?.[i]?.name }))} />
           <h2 className="text-sm font-semibold">3. Termos e confirmação</h2>
           <label className="flex items-start gap-2 text-sm">
             <input type="checkbox" className="mt-0.5" checked={acceptedTerms} onChange={(e) => setAcceptedTerms(e.target.checked)} />
@@ -258,6 +260,9 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
               <p className="text-sm text-emerald-700">Pagamento confirmado — seu pedido virou <strong>projeto</strong> e as tarefas já foram geradas a partir da versão contratada.</p>
               <Button size="sm" variant="outline" onClick={() => navigate(projectListPath)}>
                 Ver projeto
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => navigate(`/${portal}/conexoes`)}>
+                Ver conexões do projeto
               </Button>
             </>
           )}

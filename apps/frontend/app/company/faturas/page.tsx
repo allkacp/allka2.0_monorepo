@@ -18,6 +18,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { SubscriptionsCard } from "@/components/subscriptions-card";
 
 function fmtBRL(n: number) {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -94,6 +95,8 @@ export default function EmpresaFaturas() {
         }
       />
       </div>
+
+      <SubscriptionsCard />
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

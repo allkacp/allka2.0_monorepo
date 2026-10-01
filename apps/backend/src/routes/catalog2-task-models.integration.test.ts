@@ -224,7 +224,7 @@ describe("Catálogo global de modelos de tarefa e etapa", () => {
     assert.equal(da.model.customized, true, "configuração específica deste produto");
 
     // modelo global
-    const up = await api(`/api/admin/catalog2/tasks/${t.json.id}`, { method: "PUT", token, body: { estimated_minutes: 50, scope: "model" } });
+    const up = await api(`/api/admin/catalog2/tasks/${t.json.id}`, { method: "PUT", token, body: { estimated_minutes: 50, scope: "model", confirm_model_update: true } });
     assert.equal(up.status, 200);
     model = await prisma.catalog2TaskModel.findUniqueOrThrow({ where: { id: t.json.task_model_id } });
     assert.equal(model.estimated_minutes, 50);

@@ -337,7 +337,7 @@ async function main() {
   };
   await db.catalog2Condition.create({ data: { ...condData, explanation: describeCondition(condData) } });
 
-  await publishVersion(v1.id, "system", { changeSummary: "Publicação da fixture [TESTE LOCAL] do catálogo do cliente." });
+  await publishVersion(v1.id, "system", { activate: true, changeSummary: "Publicação da fixture [TESTE LOCAL] do catálogo do cliente." });
 
   const fresh = await db.catalog2Product.findUnique({ where: { id: product.id } });
   console.log(JSON.stringify({ product_id: product.id, slug: SLUG, status: fresh?.status, published_version_id: fresh?.published_version_id }, null, 2));

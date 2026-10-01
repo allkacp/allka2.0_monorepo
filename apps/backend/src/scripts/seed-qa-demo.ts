@@ -340,6 +340,8 @@ async function main() {
         summary: "Fixture completa para validar todos os portais antes do deploy.",
         full_description: "[TESTE QA] Produto fictício, nunca um dos 36 importados — variação obrigatória, adicional, autorização de IA, 2 tarefas (a 2ª depende da 1ª, para testar o bloqueio real de dependência), preço e prazo completos.",
         base_commercial_deadline_days: 5,
+        // Regra vigente: só publica com modalidade de compra, e toda etapa com especialidade e horas.
+        accepts_one_time: true,
       },
     });
     versionId = version.id;
@@ -367,18 +369,18 @@ async function main() {
     const specialty = designer ?? (await db.catalog2Specialty.findFirstOrThrow());
     const t1 = await db.catalog2Task.create({
       data: { version_id: version.id, key: "briefing", name: "Alinhar briefing", objective: "Entender o objetivo.", sort_order: 1, execution_mode: "humano", specialty_id: specialty.id, estimated_minutes: 30,
-        steps: { create: [{ key: "coletar", name: "Coletar referências", sort_order: 1 }] } },
+        steps: { create: [{ key: "coletar", name: "Coletar referências", sort_order: 1, specialty_id: specialty.id, estimated_minutes: 30 }] } },
     });
     const t2 = await db.catalog2Task.create({
       data: { version_id: version.id, key: "entrega", name: "Produzir e entregar", objective: "Entregar o serviço.", sort_order: 2, execution_mode: "humano", specialty_id: specialty.id, estimated_minutes: 60,
-        steps: { create: [{ key: "producao", name: "Produzir", sort_order: 1 }, { key: "entrega", name: "Entregar", sort_order: 2 }] } },
+        steps: { create: [{ key: "producao", name: "Produzir", sort_order: 1, specialty_id: specialty.id, estimated_minutes: 40 }, { key: "entrega", name: "Entregar", sort_order: 2, specialty_id: specialty.id, estimated_minutes: 20 }] } },
     });
     // t2 SÓ pode começar depois de t1 concluída — é a dependência real que o
     // QA vai testar clicando em "Liberar" na tarefa 2 antes de concluir a 1.
     await db.catalog2TaskDependency.create({ data: { task_id: t2.id, depends_on_task_id: t1.id } });
 
     void formato;
-    await publishVersion(versionId, "system", { changeSummary: "[TESTE QA] publicação inicial." });
+    await publishVersion(versionId, "system", { activate: true, changeSummary: "[TESTE QA] publicação inicial." });
   } else {
     const publishedId = product.published_version_id;
     if (!publishedId) throw new Error("Fixture QA existe mas não está publicada — rode com --remove e depois sem flags para recriar do zero.");

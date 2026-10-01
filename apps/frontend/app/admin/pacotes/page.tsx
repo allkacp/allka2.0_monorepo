@@ -27,6 +27,8 @@ export default function AdminPacotesPage() {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [selected, setSelected] = useState<string[]>([])
+  const [mode, setMode] = useState<"all" | "specific" | "any">("all")
+  const [required, setRequired] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -54,8 +56,8 @@ export default function AdminPacotesPage() {
     setBusy(true)
     setError(null)
     try {
-      await apiClient.createCatalog2Package({ name: name.trim(), description: description.trim() || null, product_ids: selected })
-      setName(""); setDescription(""); setSelected([])
+      await apiClient.createCatalog2Package({ name: name.trim(), description: description.trim() || null, product_ids: selected, requirement_mode: mode, ...(mode === "specific" ? { required_product_ids: required.filter((r) => selected.includes(r)) } : {}) })
+      setName(""); setDescription(""); setSelected([]); setRequired([]); setMode("all")
       await load()
     } catch (e: any) {
       setError(e?.message ?? "Não foi possível criar o pacote.")
@@ -96,7 +98,26 @@ export default function AdminPacotesPage() {
             ))}
           </ul>
         </div>
-        <Button size="sm" disabled={busy || name.trim().length < 2 || selected.length < 2} onClick={() => void create()}><Plus className="h-4 w-4" /> Criar pacote</Button>
+        <div className="mt-2 space-y-1 text-xs">
+          <label className="font-semibold text-slate-500">Para vender um produto "só em pacote", o pedido precisa ter:
+            <select aria-label="Regra do pacote" className="ml-2 h-8 rounded border border-slate-300 bg-transparent px-2" value={mode} onChange={(e) => setMode(e.target.value as "all" | "specific" | "any")}>
+              <option value="all">Todos os itens do pacote</option>
+              <option value="specific">Itens específicos (marque abaixo)</option>
+              <option value="any">Pelo menos um outro item do pacote</option>
+            </select>
+          </label>
+          {mode === "specific" && (
+            <div className="flex flex-wrap gap-2">
+              {selected.map((id) => (
+                <label key={id} className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5">
+                  <input type="checkbox" checked={required.includes(id)} onChange={(e) => setRequired((cur) => (e.target.checked ? [...cur, id] : cur.filter((x) => x !== id)))} /> {nameOf.get(id) ?? id}
+                </label>
+              ))}
+              {selected.length === 0 && <span className="text-slate-400">Selecione os produtos do pacote primeiro.</span>}
+            </div>
+          )}
+        </div>
+        <Button size="sm" disabled={busy || name.trim().length < 2 || selected.length < 2 || (mode === "specific" && required.filter((r) => selected.includes(r)).length === 0)} onClick={() => void create()}><Plus className="h-4 w-4" /> Criar pacote</Button>
       </section>
 
       <section className="space-y-3">

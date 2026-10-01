@@ -1011,7 +1011,7 @@ router.get("/:id/dashboard", verifyToken, async (req, res, next) => {
     const tasks = proj.project_tasks;
     const totalTasks = tasks.length;
     const doneTasks = tasks.filter((t) => t.status === "CONCLUIDA").length;
-    const inProgressTasks = tasks.filter((t) => ["EM_EXECUCAO", "EM_REVISAO", "AGUARDANDO_QUALIFICACAO", "EM_AJUSTES", "EM_APROVACAO"].includes(t.status)).length;
+    const inProgressTasks = tasks.filter((t) => ["EM_EXECUCAO", "EM_REVISAO", "AGUARDANDO_REVISAO", "AGUARDANDO_QUALIFICACAO", "EM_AJUSTES", "EM_APROVACAO"].includes(t.status)).length;
     const waitingTasks = tasks.filter((t) => ["PARA_LANCAMENTO", "EM_LANCAMENTO", "LIBERADA_PARA_EXECUCAO"].includes(t.status)).length;
     const cancelledTasks = tasks.filter((t) => t.status === "CANCELADA").length;
     const completionPct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;

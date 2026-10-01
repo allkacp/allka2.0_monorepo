@@ -41,8 +41,25 @@ interface HumanCostRow {
   effort_is_provisional: boolean;
   rate_is_provisional?: boolean;
 }
+interface SplitComponent { cost: number; price: number; tasks: string[]; taxes_and_margins: PricingLine[] }
+/** Separação implantação × recorrente (mesma memória de cálculo, por componente). */
+export interface PricingSplitView {
+  implementation: SplitComponent & { applicable: boolean; rule: string; reason: string };
+  first_cycle_operation: SplitComponent;
+  recurring: SplitComponent & { every_n_tasks?: { key: string; every: number }[] };
+  revalidation: { cost: number; price: number; tasks: string[]; charged: false; note: string };
+  one_time_items: { label: string; scope: string; cost: number; price: number; task: string | null }[];
+  recurring_items: { label: string; scope: string; cost: number; price: number; start_cycle: number; end_cycle: number | null; task: string | null }[];
+  avulso_total: number | null;
+  first_charge: number | null;
+  renewal: number | null;
+  first_charge_parts: { implementation: number; one_time: number; recurring: number } | null;
+  cycle_prices: { cycle: number; price: number | null }[];
+  not_charged: { key: string; reason: string }[];
+}
 interface PricingMemory {
   currency: string;
+  split?: PricingSplitView;
   lines: {
     human_cost: PricingLine;
     ia_cost: PricingLine;
@@ -61,6 +78,10 @@ interface PricingMemory {
   quote_blockers: string[];
   pending_info: string[];
   human_cost_breakdown: HumanCostRow[];
+  // Pedido 3, fase 7: IA por perfil, revisão por tempo/percentual e demonstrativo por tarefa.
+  ia_cost_breakdown?: { task_key: string; tokens_in: number; tokens_out: number; review_rounds: number; cost: number | null; profile?: string | null; fixed_cost_per_pass?: number }[];
+  review_breakdown?: { task_key: string; task_name: string; source: "tempo" | "percentual"; minutes: number; specialty: string | null; rate: number | null; cost: number | null }[];
+  cost_statement?: { task_key: string; task_name: string; executor: string; human_cost: number | null; ia_cost: number | null; review_minutes: number; review_cost: number | null; total: number | null }[];
   is_simulation?: boolean;
   simulation?: {
     total: number;
@@ -97,6 +118,62 @@ function LineRow({ line }: { line: PricingLine }) {
       </span>
       <span className="shrink-0 font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-200">{money(line.amount)}</span>
     </div>
+  );
+}
+
+function ComponentBlock({ title, sub, c, total }: { title: string; sub: string; c: SplitComponent; total?: string }) {
+  return (
+    <div className="rounded-md border border-slate-100 p-2 dark:border-slate-800">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">{title}</span>
+        <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-100">{total ?? money(c.price)}</span>
+      </div>
+      <p className="text-[10px] text-slate-400">{sub}</p>
+      <p className="mt-0.5 text-[10px] text-slate-500">Custo {money(c.cost)} · Tarefas: {c.tasks.length ? c.tasks.join(", ") : "nenhuma"}</p>
+      {c.taxes_and_margins.length > 0 && (
+        <details className="mt-0.5">
+          <summary className="cursor-pointer text-[10px] text-violet-600">Impostos, comissão, taxa e margem deste componente</summary>
+          <div className="mt-0.5">{c.taxes_and_margins.map((l, i) => <LineRow key={i} line={l} />)}</div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+/** A cobrança em partes claras: o que se paga AGORA (implantação + 1ª mensalidade) × o que renova (só a mensalidade). */
+export function BillingSplitSection({ split }: { split: PricingSplitView }) {
+  const impl = split.implementation;
+  return (
+    <section data-testid="billing-split" className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5 dark:border-emerald-900/40 dark:bg-emerald-900/10">
+      <h4 className="text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">Como a cobrança se divide</h4>
+      <div className="mt-1 grid grid-cols-2 gap-1.5 text-[11px]">
+        <div className="rounded-md bg-white p-1.5 shadow-sm dark:bg-slate-900"><p className="text-[10px] text-slate-500">Primeira cobrança</p><p className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-100">{money(split.first_charge)}</p><p className="text-[10px] text-slate-400">implantação + 1ª mensalidade</p></div>
+        <div className="rounded-md bg-white p-1.5 shadow-sm dark:bg-slate-900"><p className="text-[10px] text-slate-500">Renovação (todo mês)</p><p className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-100">{money(split.renewal)}</p><p className="text-[10px] text-slate-400">sem a implantação</p></div>
+        <div className="col-span-2 rounded-md bg-white p-1.5 shadow-sm dark:bg-slate-900"><p className="text-[10px] text-slate-500">Compra avulsa (sem assinatura)</p><p className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-100">{money(split.avulso_total)}</p><p className="text-[10px] text-slate-400">implantação + um ciclo operacional + variações + adicionais; não renova</p></div>
+      </div>
+      {split.first_charge_parts && (
+        <p className="mt-1 text-[10px] text-slate-500">Composição da primeira cobrança: implantação {money(split.first_charge_parts.implementation)} + cobranças únicas {money(split.first_charge_parts.one_time)} + mensalidade do 1º ciclo {money(split.first_charge_parts.recurring)}.</p>
+      )}
+      <div className="mt-1.5 space-y-1.5">
+        <ComponentBlock title="Implantação inicial (uma vez)" sub={impl.applicable ? `Cobrada agora — ${impl.reason}` : `Não cobrada — ${impl.reason}`} c={impl} total={impl.applicable ? money(impl.price) : "não se aplica"} />
+        <ComponentBlock title="Ciclo recorrente (cada mensalidade)" sub={split.recurring.every_n_tasks?.length ? `Algumas tarefas só a cada N ciclos: ${split.recurring.every_n_tasks.map((t) => `${t.key} (a cada ${t.every})`).join(", ")}` : "Tarefas que se repetem em todos os ciclos"} c={split.recurring} />
+        <ComponentBlock title="Operação do 1º ciclo" sub="Tarefas geradas na contratação (inclui as de “só na 1ª vez”)" c={split.first_cycle_operation} />
+        {split.revalidation.tasks.length > 0 && (
+          <p className="rounded-md bg-white px-2 py-1 text-[10px] text-slate-500 dark:bg-slate-900">Revalidação ({split.revalidation.tasks.join(", ")}): {split.revalidation.note}</p>
+        )}
+      </div>
+      {(split.one_time_items.length > 0 || split.recurring_items.length > 0) && (
+        <div className="mt-1.5 text-[10px] text-slate-600 dark:text-slate-300">
+          {split.one_time_items.map((i, k) => <div key={`o${k}`} className="flex justify-between"><span>{i.label} <span className="text-slate-400">(cobrança única)</span></span><span className="font-mono">{money(i.price)}</span></div>)}
+          {split.recurring_items.map((i, k) => <div key={`r${k}`} className="flex justify-between"><span>{i.label} <span className="text-slate-400">({i.scope === "per_cycle" ? `ciclos ${i.start_cycle} a ${i.end_cycle ?? "sempre"}` : "em toda mensalidade"})</span></span><span className="font-mono">{money(i.price)}</span></div>)}
+        </div>
+      )}
+      <details className="mt-1">
+        <summary className="cursor-pointer text-[10px] text-violet-600">Valor de cada ciclo (0 = primeira cobrança)</summary>
+        <div className="mt-0.5 grid grid-cols-3 gap-x-2 text-[10px] text-slate-600 dark:text-slate-300">{split.cycle_prices.map((c) => <span key={c.cycle}>Ciclo {c.cycle}: <span className="font-mono">{money(c.price)}</span></span>)}</div>
+      </details>
+      {split.not_charged.length > 0 && <p className="mt-1 text-[10px] text-slate-400">Fora do preço: {split.not_charged.map((n) => `${n.key} (${n.reason})`).join("; ")}.</p>}
+    </section>
   );
 }
 
@@ -242,6 +319,66 @@ export function Catalog2PricingMemoryPopover({
                 </div>
               </section>
             )}
+
+            {(pricing.ia_cost_breakdown?.length ?? 0) > 0 && (
+              <section>
+                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">IA por tarefa</h4>
+                <div className="mt-1 space-y-1.5 border-l-2 border-slate-100 pl-2 dark:border-slate-800">
+                  {pricing.ia_cost_breakdown!.map((t) => (
+                    <div key={t.task_key} className="text-[11px] text-slate-600 dark:text-slate-300">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 truncate font-medium">{t.task_key}</span>
+                        <span className="shrink-0 font-mono font-semibold">{money(t.cost)}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {t.profile ?? "preço informado na própria tarefa"} · {t.tokens_in}/{t.tokens_out} tokens · {t.review_rounds} rodada(s) de revisão{t.fixed_cost_per_pass ? ` · ${money(t.fixed_cost_per_pass)} fixo por passada` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {(pricing.review_breakdown?.length ?? 0) > 0 && (
+              <section>
+                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Revisão humana por tarefa</h4>
+                <div className="mt-1 space-y-1.5 border-l-2 border-slate-100 pl-2 dark:border-slate-800">
+                  {pricing.review_breakdown!.map((r) => (
+                    <div key={r.task_key} className="text-[11px] text-slate-600 dark:text-slate-300">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 truncate font-medium">{r.task_key}</span>
+                        <span className="shrink-0 font-mono font-semibold">{money(r.cost)}</span>
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {r.source === "tempo" ? `${r.minutes} min · ${r.specialty ?? "sem especialidade"} · ${r.rate != null ? `${money(r.rate)}/h` : "valor/hora não definido"}` : "percentual sobre o custo humano da tarefa"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {(pricing.cost_statement?.length ?? 0) > 0 && (
+              <section>
+                <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Demonstrativo por tarefa</h4>
+                <table className="mt-1 w-full text-[10px] text-slate-600 dark:text-slate-300">
+                  <thead><tr className="text-left text-slate-400"><th className="font-medium">Tarefa</th><th className="text-right font-medium">Humano</th><th className="text-right font-medium">IA</th><th className="text-right font-medium">Revisão</th><th className="text-right font-medium">Total</th></tr></thead>
+                  <tbody>
+                    {pricing.cost_statement!.map((c) => (
+                      <tr key={c.task_key} className="border-t border-slate-100 dark:border-slate-800">
+                        <td className="max-w-[7rem] truncate py-0.5" title={`${c.task_name} (${c.executor})`}>{c.task_key}</td>
+                        <td className="text-right font-mono">{money(c.human_cost)}</td>
+                        <td className="text-right font-mono">{money(c.ia_cost)}</td>
+                        <td className="text-right font-mono">{money(c.review_cost)}{c.review_minutes > 0 ? ` (${c.review_minutes}m)` : ""}</td>
+                        <td className="text-right font-mono font-semibold">{money(c.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+            )}
+
+            {pricing.split && <BillingSplitSection split={pricing.split} />}
 
             <section>
               <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Custos agregados</h4>

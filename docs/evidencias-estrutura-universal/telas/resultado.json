@@ -1,0 +1,508 @@
+[
+  {
+    "id": "01-cabecalho",
+    "title": "Cabeçalho: status do produto, versão, rascunho/publicada, publicação e ativação",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Abrir o produto B (rascunho v1) e entrar em modo de edição",
+    "expected": "Chips: Rascunho v1 · não publicado, Produto: Em preparação, Não publicado, Não ativo, preço; botões Salvar rascunho e Publicar",
+    "observed": [
+      "ENCONTRADO: Rascunho v1",
+      "ENCONTRADO: Produto:",
+      "ENCONTRADO: Em preparação",
+      "ENCONTRADO: Não publicado",
+      "ENCONTRADO: Não ativo",
+      "ENCONTRADO: Travar edição",
+      "ENCONTRADO: Salvar rascunho",
+      "ENCONTRADO: Publicar"
+    ],
+    "status": "aprovado",
+    "shot": "01-cabecalho.png",
+    "errors": []
+  },
+  {
+    "id": "02-publicar-dialogo",
+    "title": "Diálogo de publicação (versão pronta): Publicar versão × Publicar e ativar",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Clicar em Publicar no cabeçalho",
+    "expected": "Diálogo com 'Publicar versão' (não ativa o produto) e 'Publicar e ativar'",
+    "observed": [
+      "ENCONTRADO: Publicar a v1?",
+      "ENCONTRADO: Publicar versão",
+      "ENCONTRADO: Publicar e ativar",
+      "ENCONTRADO: não muda o status do produto"
+    ],
+    "status": "aprovado",
+    "shot": "02-publicar-dialogo.png",
+    "errors": []
+  },
+  {
+    "id": "03-publicar-ativar-confirmacao",
+    "title": "Diálogo de publicação e ativação: confirmação explícita",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Publicar → Publicar e ativar (sem confirmar)",
+    "expected": "Tela de confirmação avisando da ativação e do aviso enviado; só 'Sim, publicar e ativar' ativa",
+    "observed": [
+      "ENCONTRADO: Publicar e ativar o produto?",
+      "ENCONTRADO: aviso de ativação",
+      "ENCONTRADO: Sim, publicar e ativar",
+      "ENCONTRADO: Voltar"
+    ],
+    "status": "aprovado",
+    "shot": "03-publicar-ativar-confirmacao.png",
+    "errors": []
+  },
+  {
+    "id": "04-campos-comerciais",
+    "title": "Campos comerciais estruturados",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Rolar até 'Informações comerciais'",
+    "expected": "Público-alvo, promessa, escopo, informações do cliente, avisos, política, observações internas, listas ordenáveis e seletor de visibilidade",
+    "observed": [
+      "ENCONTRADO: Informações comerciais",
+      "ENCONTRADO: Público-alvo",
+      "ENCONTRADO: Objetivo / promessa",
+      "ENCONTRADO: Escopo",
+      "ENCONTRADO: Observações internas",
+      "ENCONTRADO: Itens incluídos",
+      "ENCONTRADO: Itens não incluídos",
+      "ENCONTRADO: Cliente vê",
+      "ENCONTRADO: Só interno"
+    ],
+    "status": "aprovado",
+    "shot": "04-campos-comerciais.png",
+    "errors": []
+  },
+  {
+    "id": "05-limite-500",
+    "title": "Descrição curta com limite de 500",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Digitar 520 caracteres na descrição curta",
+    "expected": "Contador vermelho 520/500 e botão 'Salvar informações' bloqueado",
+    "observed": [
+      "ENCONTRADO: 520/500"
+    ],
+    "status": "aprovado",
+    "shot": "05-limite-500.png",
+    "errors": []
+  },
+  {
+    "id": "06-limite-4000",
+    "title": "Descrição completa com limite de 4000",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Abrir 'Descrição completa' e digitar 4100 caracteres",
+    "expected": "Contador 4100/4000 em vermelho; botão de salvar bloqueado",
+    "observed": [
+      "ENCONTRADO: 4100/4000"
+    ],
+    "status": "aprovado",
+    "shot": "06-limite-4000.png",
+    "errors": []
+  },
+  {
+    "id": "07-modalidades",
+    "title": "Modalidades de contratação (e modo de preço)",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → rolar até 'Modalidades de contratação'",
+    "expected": "Avulso, Assinatura mensal recorrente, Implementação inicial, seletor de modo de preço (calculado / fixo / sob consulta)",
+    "observed": [
+      "ENCONTRADO: Modalidades de contratação",
+      "ENCONTRADO: Avulso",
+      "ENCONTRADO: Assinatura mensal recorrente",
+      "ENCONTRADO: Preço:",
+      "ENCONTRADO: Sob consulta",
+      "ENCONTRADO: Salvar modalidades"
+    ],
+    "status": "aprovado",
+    "shot": "07-modalidades.png",
+    "errors": []
+  },
+  {
+    "id": "08-implantacao-inicial",
+    "title": "Implantação inicial",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → marcar 'Implementação inicial' (já marcada no produto)",
+    "expected": "Opção 'Implementação inicial' marcada e bloco 'Implementação roda' visível",
+    "observed": [
+      "ENCONTRADO: Implementação inicial",
+      "ENCONTRADO: Implementação roda:"
+    ],
+    "status": "aprovado",
+    "shot": "08-implantacao-inicial.png",
+    "errors": []
+  },
+  {
+    "id": "09-regras-implantacao",
+    "title": "Regras da implantação",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → abrir a lista 'Implementação roda'",
+    "expected": "Regras: somente na 1ª contratação, em toda contratação, só na revalidação; 'Bloqueia a rotina até concluir'",
+    "observed": [
+      "ENCONTRADO: Somente na 1ª contratação do cliente",
+      "ENCONTRADO: Em toda contratação",
+      "ENCONTRADO: Só quando houver revalidação",
+      "ENCONTRADO: Bloqueia a rotina até concluir"
+    ],
+    "status": "aprovado",
+    "shot": "09-regras-implantacao.png",
+    "errors": []
+  },
+  {
+    "id": "10-preco-fixo-e-sob-consulta",
+    "title": "Modo de preço: preço fixo e sob consulta",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → escolher 'Preço fixo informado'",
+    "expected": "Campos de preço fixo e prazo + texto 'Vale como avulso, primeira cobrança e renovação'",
+    "observed": [
+      "ENCONTRADO: Vale como avulso, primeira cobrança e renovação",
+      "ENCONTRADO: prazo"
+    ],
+    "status": "aprovado",
+    "shot": "10-preco-fixo-e-sob-consulta.png",
+    "errors": []
+  },
+  {
+    "id": "11-adicionais-cobranca",
+    "title": "Cobrança de adicionais (como cobrar)",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 3 → aba Adicionais",
+    "expected": "Cada adicional mostra 'Como cobrar' (única vez, mensalidade, ciclos, quantidade)",
+    "observed": [
+      "ENCONTRADO: Como cobrar:",
+      "ENCONTRADO: Em toda mensalidade",
+      "ENCONTRADO: Uma única vez",
+      "ENCONTRADO: Em ciclos específicos",
+      "ENCONTRADO: Por quantidade"
+    ],
+    "status": "aprovado",
+    "shot": "11-adicionais-cobranca.png",
+    "errors": []
+  },
+  {
+    "id": "12-variacoes-cobranca",
+    "title": "Cobrança de variações (efeitos com escopo)",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 3 → aba Variações; escolher 'Adicionar valor fixo' num novo efeito",
+    "expected": "Efeitos existentes mostram o escopo ('Em toda mensalidade', 'Uma única vez') e o novo efeito pede 'Como cobrar'",
+    "observed": [
+      "ENCONTRADO: Em toda mensalidade",
+      "ENCONTRADO: Uma única vez",
+      "ENCONTRADO: Como cobrar:"
+    ],
+    "status": "aprovado",
+    "shot": "12-variacoes-cobranca.png",
+    "errors": []
+  },
+  {
+    "id": "13-condicoes-cobranca",
+    "title": "Cobrança de condições",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → Condições; novo efeito 'Adicionar valor fixo'",
+    "expected": "Condição existente e formulário de nova condição com 'Como cobrar'",
+    "observed": [
+      "ENCONTRADO: Nova condição",
+      "ENCONTRADO: Como cobrar:"
+    ],
+    "status": "aprovado",
+    "shot": "13-condicoes-cobranca.png",
+    "errors": []
+  },
+  {
+    "id": "14-simulador",
+    "title": "Simulador: implantação, primeira cobrança, avulso, mensalidade e renovação",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 4 → rolar até 'Como a cobrança se divide'",
+    "expected": "Primeira cobrança, Renovação, Compra avulsa, Implantação inicial, Ciclo recorrente e valor de cada ciclo",
+    "observed": [
+      "ENCONTRADO: Como a cobrança se divide",
+      "ENCONTRADO: Primeira cobrança",
+      "ENCONTRADO: Renovação (todo mês)",
+      "ENCONTRADO: Compra avulsa",
+      "ENCONTRADO: Implantação inicial (uma vez)",
+      "ENCONTRADO: Ciclo recorrente (cada mensalidade)"
+    ],
+    "status": "aprovado",
+    "shot": "14-simulador.png",
+    "errors": []
+  },
+  {
+    "id": "15-tela-cliente",
+    "title": "Tela apresentada ao cliente (detalhe do produto)",
+    "url": "/company/catalogo-produtos/cmuphyegc000tuwb0chz1r6mc",
+    "user": "company",
+    "action": "Abrir o produto publicado como empresa cliente e escolher a modalidade mensal",
+    "expected": "Primeira cobrança com a implantação separada e renovação sem implantação",
+    "observed": [
+      "ENCONTRADO: Primeira cobrança",
+      "ENCONTRADO: implantação",
+      "ENCONTRADO: Renovações",
+      "ausente (correto): taxes_and_margins",
+      "ausente (correto): Observação interna: margem apertada"
+    ],
+    "status": "aprovado",
+    "shot": "15-tela-cliente.png",
+    "errors": []
+  },
+  {
+    "id": "16-modelo-tarefa-por-id",
+    "title": "Seleção de modelo de tarefa por ID",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → Adicionar tarefa → Selecionar modelo existente → buscar #1",
+    "expected": "Diálogo com busca por #ID, 'Tarefa #1', etapas, produtos que usam e revisão",
+    "observed": [
+      "ENCONTRADO: Selecionar modelo de tarefa existente",
+      "ENCONTRADO: revisão 1"
+    ],
+    "status": "aprovado",
+    "shot": "16-modelo-tarefa-por-id.png",
+    "errors": []
+  },
+  {
+    "id": "17-modelo-etapa-por-id",
+    "title": "Seleção de modelo de etapa por ID",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → tarefa → Adicionar etapa → Selecionar etapa existente → buscar #1",
+    "expected": "Diálogo com 'Etapa #1', finalidade, executor e revisão",
+    "observed": [
+      "ENCONTRADO: Selecionar etapa existente",
+      "ENCONTRADO: Etapa #1"
+    ],
+    "status": "aprovado",
+    "shot": "17-modelo-etapa-por-id.png",
+    "errors": []
+  },
+  {
+    "id": "18-aviso-modelo-semelhante",
+    "title": "Aviso de modelo semelhante (a API para a criação)",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → Criar nova tarefa com o nome de um modelo existente",
+    "expected": "Diálogo 'Já existe uma tarefa parecida' com candidato compatível e opções de usar o existente ou criar mesmo assim",
+    "observed": [
+      "ENCONTRADO: Já existe uma tarefa parecida",
+      "ENCONTRADO: Usar este",
+      "ENCONTRADO: Criar novo mesmo assim"
+    ],
+    "status": "aprovado",
+    "shot": "18-aviso-modelo-semelhante.png",
+    "errors": [
+      "HTTP 409 http://localhost:3001/api/admin/catalog2/versions/cmuphyesr002xuwb0u4ax3vum/tasks"
+    ]
+  },
+  {
+    "id": "19-duplicidade-justificativa",
+    "title": "Criar mesmo assim exige justificativa",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "No aviso, clicar em 'Criar novo mesmo assim…'",
+    "expected": "Campo de justificativa (mín. 10 caracteres) e botão bloqueado até preencher",
+    "observed": [
+      "ENCONTRADO: Confirmar criação do novo modelo"
+    ],
+    "status": "aprovado",
+    "shot": "19-duplicidade-justificativa.png",
+    "errors": [
+      "HTTP 409 http://localhost:3001/api/admin/catalog2/versions/cmuphyesr002xuwb0u4ax3vum/tasks"
+    ]
+  },
+  {
+    "id": "20-confirmar-modelo-global",
+    "title": "Confirmação para editar modelo global",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Usar o modelo #1 numa tarefa, configurar e salvar escolhendo 'Atualizar modelo global'",
+    "expected": "Pergunta 'Onde aplicar' e, depois, 'Confirmar alteração do modelo global?'",
+    "observed": [
+      "ENCONTRADO: Confirmar alteração do modelo global?",
+      "ENCONTRADO: outros produtos"
+    ],
+    "status": "aprovado",
+    "shot": "20-confirmar-modelo-global.png",
+    "errors": []
+  },
+  {
+    "id": "21-questionarios-tipos",
+    "title": "Questionários e todos os tipos de pergunta",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → tarefa 'Rotina mensal' → Editar questionário → ver os 13 tipos",
+    "expected": "Lista com um tipo por pergunta (texto, número, valor, data, sim/não, escolha, link, e-mail, telefone, arquivo, ativo)",
+    "observed": [
+      "ENCONTRADO: Tipo: Texto curto",
+      "ENCONTRADO: Tipo: Número",
+      "ENCONTRADO: Tipo: Valor em reais",
+      "ENCONTRADO: Tipo: Data",
+      "ENCONTRADO: Tipo: Sim ou não",
+      "ENCONTRADO: Tipo: Escolha uma opção",
+      "ENCONTRADO: Tipo: Escolha várias opções",
+      "ENCONTRADO: Tipo: Endereço (link)",
+      "ENCONTRADO: Tipo: E-mail",
+      "ENCONTRADO: Tipo: Telefone",
+      "ENCONTRADO: Tipo: Arquivo / anexo",
+      "ENCONTRADO: Tipo: Acesso ou ativo do cliente"
+    ],
+    "status": "aprovado",
+    "shot": "21-questionarios-tipos.png",
+    "errors": []
+  },
+  {
+    "id": "22-perfis-ia",
+    "title": "Gerenciador de perfis de IA",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 2 → tarefa de IA → 'Gerenciar perfis de IA'",
+    "expected": "Lista de perfis com provedor, modelo, versão do prompt, ativo e indicador de chave (sem mostrar a chave)",
+    "observed": [
+      "ENCONTRADO: Perfis de IA",
+      "ENCONTRADO: [VISUAL] Redator Gemini",
+      "ENCONTRADO: prompt v1",
+      "ENCONTRADO: provedor configurado",
+      "ausente (correto): dummy-visual-key"
+    ],
+    "status": "aprovado",
+    "shot": "22-perfis-ia.png",
+    "errors": []
+  },
+  {
+    "id": "23-ia-teste-conexao",
+    "title": "Teste de conexão da IA",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Abrir o perfil e clicar em 'Testar conexão'",
+    "expected": "Resultado do teste (sucesso ou falha explicada), sem exibir chave",
+    "observed": [
+      "ENCONTRADO: Testes .nada disso vira tarefa",
+      "ausente (correto): dummy-visual-key"
+    ],
+    "status": "aprovado",
+    "shot": "23-ia-teste-conexao.png",
+    "errors": []
+  },
+  {
+    "id": "24-ia-teste-execucao",
+    "title": "Teste descartável de execução da IA (exige confirmar custo)",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Perfil → texto de exemplo → marcar a confirmação de custo → Testar execução",
+    "expected": "Botão bloqueado sem a confirmação; com ela, o teste roda e informa que nada foi gravado (ou a falha explicada)",
+    "observed": [
+      "ENCONTRADO: Entendo que o teste chama a IA e pode gerar custo",
+      "ausente (correto): dummy-visual-key"
+    ],
+    "status": "aprovado",
+    "shot": "24-ia-teste-execucao.png",
+    "errors": []
+  },
+  {
+    "id": "25-dependencias",
+    "title": "Dependências da tarefa (o que bloqueia, origem, entregável esperado)",
+    "url": "/admin/tarefas/cmuphyirs00eq13c2sgbkg9h1",
+    "user": "admin",
+    "action": "Abrir a tarefa 'Publicar relatório' (aguardando liberação)",
+    "expected": "Cartão Dependências com bloqueio, origem, entregável esperado, responsável e 'atualiza sozinha'",
+    "observed": [
+      "ENCONTRADO: Dependências",
+      "ENCONTRADO: Há bloqueio",
+      "ENCONTRADO: Bloqueia o início da tarefa",
+      "ENCONTRADO: Entregável esperado",
+      "ENCONTRADO: arte-final",
+      "ENCONTRADO: Origem:",
+      "ENCONTRADO: atualiza sozinha"
+    ],
+    "status": "aprovado",
+    "shot": "25-dependencias.png",
+    "errors": []
+  },
+  {
+    "id": "26-liberacao-manual",
+    "title": "Liberação manual de dependência com justificativa",
+    "url": "/admin/tarefas/cmuphyirs00eq13c2sgbkg9h1",
+    "user": "admin",
+    "action": "Clicar em 'Liberar manualmente'",
+    "expected": "Campo de justificativa (mín. 10 caracteres) e botão 'Confirmar liberação' bloqueado até preencher",
+    "observed": [
+      "ENCONTRADO: Confirmar liberação"
+    ],
+    "status": "aprovado",
+    "shot": "26-liberacao-manual.png",
+    "errors": []
+  },
+  {
+    "id": "27-entregaveis-historico",
+    "title": "Entregáveis e histórico de versões",
+    "url": "/admin/tarefas/cmuphyin600el13c2wq2ngjuc",
+    "user": "admin",
+    "action": "Abrir a tarefa 'Rotina mensal' com um entregável substituído (v1 reprovada, v2 enviada)",
+    "expected": "Entregável 'Relatório aprovado' em versão 2 com 'Versões anteriores' e o motivo da rejeição da v1",
+    "observed": [
+      "ENCONTRADO: Entregáveis e anexos",
+      "ENCONTRADO: versão 2",
+      "ENCONTRADO: Versões anteriores (1)",
+      "ENCONTRADO: Faltou o gráfico de conversões"
+    ],
+    "status": "aprovado",
+    "shot": "27-entregaveis-historico.png",
+    "errors": []
+  },
+  {
+    "id": "28-checklist",
+    "title": "Checklist do produto (com pendências de publicação)",
+    "url": "/admin/cadastro-produtos?produto=cmupih0ad00dy4votrf7ksowr",
+    "user": "admin",
+    "action": "Abrir o produto C (rascunho vazio) e expandir o checklist",
+    "expected": "Lista de bloqueios, incluindo 'Pendências para publicar'",
+    "observed": [
+      "ENCONTRADO: Checklist do produto",
+      "ENCONTRADO: Pendências para publicar"
+    ],
+    "status": "aprovado",
+    "shot": "28-checklist.png",
+    "errors": []
+  },
+  {
+    "id": "29-publicar-bloqueado",
+    "title": "Diálogo de publicação bloqueada (preço/prazo indefinido bloqueia, sem 'publicar assim mesmo')",
+    "url": "/admin/cadastro-produtos?produto=cmupih0ad00dy4votrf7ksowr",
+    "user": "admin",
+    "action": "Produto C → Editar → Publicar",
+    "expected": "Mensagem 'Não é possível publicar ainda' listando as pendências; sem botão de forçar",
+    "observed": [
+      "ENCONTRADO: Não é possível publicar ainda",
+      "ENCONTRADO: Entendi",
+      "ausente (correto): Publicar assim mesmo"
+    ],
+    "status": "aprovado",
+    "shot": "29-publicar-bloqueado.png",
+    "errors": []
+  },
+  {
+    "id": "30-historico-versao",
+    "title": "Histórico da versão e validação para publicar",
+    "url": "/admin/cadastro-produtos?produto=cmuphyesh002tuwb07jgpc2hb",
+    "user": "admin",
+    "action": "Passo 5 → Publicação e versões",
+    "expected": "Bloco 'Validação para publicar' e 'Histórico da versão'",
+    "observed": [
+      "ENCONTRADO: Validação para publicar",
+      "ENCONTRADO: Histórico da versão"
+    ],
+    "status": "aprovado",
+    "shot": "30-historico-versao.png",
+    "errors": []
+  }
+]

@@ -148,6 +148,13 @@ describe("Ativos validados do cliente", () => {
     const stage = await prisma.projectTaskStage.findFirstOrThrow({ where: { project_task_id: c1.task.id }, orderBy: { ordem: "asc" } });
     assert.equal(stage.status, "CONCLUIDA", "todos os obrigatórios válidos → etapa de acessos concluída");
     assert.match(stage.config_snapshot ?? "", /dispensed_by/);
+    // a dispensa fica REGISTRADA com o motivo, e a etapa não some nem é apagada
+    const dispensa = await prisma.projectDecisionLog.findFirst({ where: { project_task_id: c1.task.id, kind: "task_dispensed" }, orderBy: { created_at: "desc" } });
+    assert.ok(dispensa, "registro da dispensa no histórico do projeto");
+    assert.match(dispensa!.message, /dispensada/);
+    assert.match(dispensa!.message, /Google Ads/);
+    assert.match(dispensa!.message, /regra "first_only"/);
+    assert.equal(await prisma.projectTaskStage.count({ where: { id: stage.id } }), 1, "a etapa continua existindo (não foi oculta nem apagada)");
   });
 
   it("contratação seguinte (mesmo cliente): acessos já válidos → etapa de coleta NÃO é repetida", async () => {
@@ -206,6 +213,9 @@ describe("Ativos validados do cliente", () => {
     assert.equal(await reopenAccessValidationOnExecutorChange(prisma, c.task.id), true);
     const stage = await prisma.projectTaskStage.findFirstOrThrow({ where: { project_task_id: c.task.id }, orderBy: { ordem: "asc" } });
     assert.equal(stage.status, "PENDENTE");
+    const reaberta = await prisma.projectDecisionLog.findFirst({ where: { project_task_id: c.task.id, kind: "asset_revalidation" } });
+    assert.ok(reaberta, "a reabertura por troca de executor fica registrada");
+    assert.match(reaberta!.message, /Troca de executor/);
   });
 
   it("NUNCA aceita senha ou credencial", async () => {

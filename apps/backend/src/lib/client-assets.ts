@@ -173,9 +173,11 @@ export async function reevaluateAssetGates(db: Db, companyId: string, actorUserI
       try { cfg = JSON.parse(access.config_snapshot ?? "{}"); } catch { cfg = {}; }
       await db.projectTaskStage.update({ where: { id: access.id }, data: { status: "CONCLUIDA", concluida_em: new Date(), concluida_por: actorUserId ?? "system", config_snapshot: JSON.stringify({ ...cfg, dispensed_by: "assets" }) } });
     }
+    // A dispensa fica REGISTRADA com o motivo (quais acessos e qual regra); a etapa continua no histórico, como concluída automaticamente.
     await logProjectDecision(db, {
-      projectId: task.project_id, projectProductId: task.project_product_id, projectTaskId: taskId, kind: "asset_validated",
-      message: "Acessos validados: a etapa de validação foi concluída e as etapas seguintes foram liberadas.", actorUserId,
+      projectId: task.project_id, projectProductId: task.project_product_id, projectTaskId: taskId, kind: "task_dispensed",
+      message: `Etapa de validação dos acessos dispensada: ${mine.map((l) => l.asset.label).join(", ")} estão válidos (regra "${rule}"). A etapa foi concluída automaticamente e as seguintes foram liberadas.`,
+      detail: { assets: mine.map((l) => l.asset.id), rule, stage_id: access.id }, actorUserId,
     });
     moved++;
   }
@@ -239,11 +241,44 @@ export async function reopenAccessValidationOnExecutorChange(db: Db, taskId: str
   return true;
 }
 
-export async function reportAssetChange(db: Db, assetId: string, opts: { actorUserId: string; note?: string | null }) {
-  const asset = await db.clientAsset.findUnique({ where: { id: assetId } });
+/**
+ * O cliente avisa que o acesso/ativo mudou (novo identificador, permissão removida, troca de conta…).
+ * O ativo volta para "revalidar", os contratos que dependem dele pedem revalidação, cada projeto ganha um
+ * registro no histórico e o líder responsável é avisado. Nunca aceita senha.
+ */
+export async function reportAssetChange(db: Db, assetId: string, opts: { actorUserId: string; note?: string | null; identifier?: string | null }) {
+  const asset = await db.clientAsset.findUnique({ where: { id: assetId }, include: { links: true } });
   if (!asset) throw new AssetError("Ativo não encontrado.", 404);
-  return db.clientAsset.update({
+  const newIdentifier = opts.identifier?.trim() || null;
+  const updated = await db.clientAsset.update({
     where: { id: assetId },
-    data: { change_reported_at: new Date(), status: asset.status === "validado" ? "revalidar" : asset.status, ...(opts.note ? { notes: opts.note } : {}) },
+    data: {
+      change_reported_at: new Date(), status: asset.status === "validado" ? "revalidar" : asset.status,
+      ...(opts.note ? { notes: opts.note } : {}), ...(newIdentifier ? { identifier: newIdentifier } : {}),
+    },
   });
+  const what = newIdentifier && newIdentifier !== asset.identifier ? `novo identificador informado` : "mudança informada";
+  for (const ppId of [...new Set(asset.links.map((l) => l.project_product_id).filter((x): x is string => !!x))]) {
+    await db.projectProduct.update({ where: { id: ppId }, data: { revalidation_reason: `acesso alterado pelo cliente: ${asset.label}` } });
+  }
+  const projects = [...new Set(asset.links.map((l) => l.project_id).filter((x): x is string => !!x))];
+  for (const projectId of projects) {
+    await logProjectDecision(db, { projectId, kind: "asset_change_reported", message: `${asset.label}: ${what}${opts.note ? ` (${opts.note})` : ""}. Revalidação necessária.`, actorUserId: opts.actorUserId, detail: { asset_id: assetId } });
+  }
+  // avisa o líder de cada tarefa ainda aberta que usa este ativo
+  const taskIds = asset.links.map((l) => l.project_task_id).filter((x): x is string => !!x);
+  if (taskIds.length > 0) {
+    const open = await db.projectTask.findMany({ where: { id: { in: taskIds }, status: { notIn: ["CONCLUIDA", "APROVADA", "CANCELADA", "DISPENSADA_POR_REGRA"] } }, select: { id: true, title: true, lider_responsavel_id: true } });
+    for (const t of open) {
+      try {
+        await db.systemAlert.create({
+          data: {
+            type: "ativo_alterado", title: `Acesso alterado pelo cliente: ${asset.label}`, message: `O cliente informou que "${asset.label}" mudou e a tarefa "${t.title}" usa esse acesso. Revalide antes de continuar.`,
+            severity: "warning", category: "alerta", entity_type: "project_task", entity_id: t.id, user_id: t.lider_responsavel_id ?? null, action_url: "/lider/tarefas",
+          },
+        });
+      } catch { /* aviso é acessório */ }
+    }
+  }
+  return updated;
 }

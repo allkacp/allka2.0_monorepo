@@ -1,3 +1,7 @@
+import type { Prisma } from "@prisma/client";
+import { snapshotQuestion } from "./catalog2-question-types";
+import { normalizeStepOps, normalizeTaskOps } from "./catalog2-ops";
+import { materializeTaskDeliverables } from "./task-deliverables";
 import type { DbClient } from "./project-scope";
 import { getNextTaskCode } from "./task-code";
 import { computePricing, type PricingSelection } from "./catalog2-pricing";
@@ -8,6 +12,7 @@ import { getNextSequenceValue, formatInvoiceNumber } from "./sequence";
 import { prepareContinuity } from "./catalog2-continuity";
 import { applyAssetGate } from "./client-assets";
 import { materializeDependencyRules } from "./project-dependencies";
+import { ensureSubscription } from "./catalog2-subscription-core";
 import { planTaskForCycle, resolveCycleContext, logProjectDecision, CYCLE_TYPE_LABEL, type CycleKind, type CycleType } from "./catalog2-cycles";
 
 export interface GerarTarefasCatalog2Options {
@@ -33,6 +38,7 @@ const projectProductInclude = {
           steps: { orderBy: { sort_order: "asc" as const }, include: { step_model: true } },
           dependencies: { select: { depends_on_task_id: true } },
           specialty: { select: { name: true } },
+          ai: { select: { human_review_required: true } },
           // Item 3.2 (reunião 2026-09-14, "conectar questionários à
           // execução"): questionário vinculado à tarefa da versão
           // CONTRATADA — vira a fotografia (briefing_snapshot) da
@@ -110,7 +116,7 @@ export async function gerarTarefasCatalog2DoProjeto(
 
   const project = await tx.project.findUnique({
     where: { id: projectId },
-    select: { id: true, title: true },
+    select: { id: true, title: true, company_id: true, client_id: true },
   });
   if (!project) {
     throw new Error(`Projeto não encontrado: ${projectId}`);
@@ -127,6 +133,8 @@ export async function gerarTarefasCatalog2DoProjeto(
   let stages_generated = 0;
 
   for (const pp of projectProducts) {
+    // Contrato mensal contínuo: a assinatura nasce ANTES das tarefas, para o 1º ciclo já ser tratado como recorrente.
+    await ensureSubscription(tx, pp, options.paidAt, project.company_id ?? project.client_id);
     const result = await materializeTasksForProjectProduct(tx, projectId, pp, {
       paymentId: options.paymentId,
       paidAt: options.paidAt,
@@ -299,12 +307,7 @@ async function materializeTasksForProjectProduct(
     const briefingSnapshot =
       ct.questionnaire && ct.questionnaire.questions.length > 0
         ? JSON.stringify(
-            ct.questionnaire.questions.map((q) => ({
-              question_key: q.key,
-              question_text: q.label,
-              type: "text_long",
-              required: q.is_required,
-            })),
+            ct.questionnaire.questions.map((q) => snapshotQuestion(q)),
           )
         : null;
 
@@ -326,6 +329,11 @@ async function materializeTasksForProjectProduct(
         status: "PARA_LANCAMENTO",
         exige_aprovacao_cliente: ct.requires_client_approval,
         // Qualificação obrigatória (aceite interno do líder) — herdada da tarefa contratada.
+        // Tarefa com IA (Pedido 3, fase 5): a saída da IA sempre passa por revisão humana, salvo se o cadastro desligar explicitamente.
+        requires_review: ct.requires_review || (!!ct.ai && ct.execution_mode !== "humano" && ct.ai.human_review_required !== false),
+        review_minutes: ct.review_minutes,
+        review_specialty_id: ct.review_specialty_id,
+        reviewer_user_id: ct.reviewer_user_id,
         requires_qualification: ct.requires_qualification,
         ...(ct.requires_qualification && ct.qualifier_user_id ? { lider_responsavel_id: ct.qualifier_user_id } : {}),
         sort_order: idx * deliveryGroups.length + groupIndex,
@@ -367,6 +375,8 @@ async function materializeTasksForProjectProduct(
             obrigatoria: true,
             depende_da_etapa_anterior: sIdx > 0,
             briefing_necessario: sIdx === 0,
+            // Evidência obrigatória (Pedido 3): reaproveita o bloqueio já existente de "exige anexo" — a etapa só conclui com evidência anexada.
+            exige_anexo: !!normalizeStepOps(step.ops)?.evidence_required,
             // Finalidade/executor/critério de conclusão efetivos (ajuste do produto ou do modelo global).
             config_snapshot: JSON.stringify({
               step_model_id: step.step_model_id,
@@ -402,6 +412,34 @@ async function materializeTasksForProjectProduct(
     if (stagesToCreate.length > 0) {
       await tx.projectTaskStage.createMany({ data: stagesToCreate });
       stages_generated += stagesToCreate.length;
+    }
+
+    // Entregáveis/anexos estruturados da tarefa (um registro por contratação, ligado à etapa quando o cadastro pede).
+    {
+      const stagesNow = await tx.projectTaskStage.findMany({ where: { project_task_id: newTask.id }, select: { id: true, catalog_step_ref: true } });
+      const stageIdByStepId = new Map<string, string>();
+      for (const s of stagesNow) if (s.catalog_step_ref) stageIdByStepId.set(s.catalog_step_ref, s.id);
+      await materializeTaskDeliverables(tx, { catalogTaskId: ct.id, projectTaskId: newTask.id, stageIdByStepId });
+    }
+
+    // Fotografia dos campos operacionais (instruções, entradas, critérios, evidência…), em tabela à parte:
+    // só a rota /project-tasks/:id/operational devolve, já filtrada pela visibilidade de cada perfil.
+    {
+      const stageOps: Record<string, unknown> = {};
+      for (const st of steps) {
+        const o = normalizeStepOps(st.ops);
+        if (o) stageOps[st.id] = o;
+      }
+      const taskOps = normalizeTaskOps(ct.ops) ?? (ct.objective?.trim() ? { objective: ct.objective.trim() } : null);
+      if (taskOps || Object.keys(stageOps).length > 0) {
+        await tx.projectTaskOps.create({
+          data: {
+            project_task_id: newTask.id,
+            task_ops: (taskOps ?? undefined) as Prisma.InputJsonValue | undefined,
+            stage_ops: (Object.keys(stageOps).length > 0 ? stageOps : undefined) as Prisma.InputJsonValue | undefined,
+          },
+        });
+      }
     }
 
     // Ativos do cliente (acessos): liga a tarefa aos ativos exigidos pelo produto e, se já
@@ -595,6 +633,15 @@ export async function releaseCatalog2DeliveryCycle(tx: DbClient, cycleId: string
     data: { status: result.ok ? "released" : "skipped", released_at: new Date() },
   });
   return result.ok ? "released" : "skipped";
+}
+
+/** Gera as tarefas de UM ciclo mensal de uma assinatura (chamado quando a fatura do mês é paga). */
+export async function materializeSubscriptionCycle(tx: DbClient, projectProductId: string, opts: { paymentId: string; paidAt: Date; billingCycleKey: string; occurrenceIndex: number }) {
+  const pp = await tx.projectProduct.findUnique({ where: { id: projectProductId }, include: projectProductInclude });
+  if (!pp) return { ok: false as const, reason: "no_product" };
+  const result = await materializeTasksForProjectProduct(tx, pp.project_id, pp, opts);
+  if (result.ok) await materializeDependencyRules(tx, pp.project_id, [pp.id]);
+  return result;
 }
 
 /** Ordena tarefas por dependência (topológico simples) — em caso de ciclo

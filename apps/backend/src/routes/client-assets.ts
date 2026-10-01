@@ -123,8 +123,8 @@ router.post("/:id/report-change", async (req: Request, res: Response, next: Next
     rejectSecrets(req.body);
     const a = await prisma.clientAsset.findUnique({ where: { id: req.params.id as string } });
     if (!a || !(await canSeeCompany(req, a.company_id))) { res.status(404).json({ error: "Ativo não encontrado." }); return; }
-    const d = z.object({ note: z.string().max(500).nullish() }).parse(req.body ?? {});
-    res.json(await reportAssetChange(prisma, a.id, { actorUserId: req.user!.id, note: d.note }));
+    const d = z.object({ note: z.string().max(500).nullish(), identifier: z.string().trim().max(191).nullish() }).parse(req.body ?? {});
+    res.json(await reportAssetChange(prisma, a.id, { actorUserId: req.user!.id, note: d.note, identifier: d.identifier }));
   } catch (err) { handle(err, res, next); }
 });
 

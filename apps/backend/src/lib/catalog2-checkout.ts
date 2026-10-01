@@ -78,6 +78,30 @@ export async function revalidateAndFreezeQuote(ctx: ClientContext, quoteId: stri
   }
 }
 
+/**
+ * "Vender somente em pacote" (Pedido 3, fase 4): um produto assim só entra num pedido que leve o pacote ATIVO inteiro
+ * (todos os produtos do pacote). Vale só para versões criadas depois da regra (sale_modes_enforced).
+ */
+export async function assertPackageOnlyRules(quoteIds: string[]): Promise<void> {
+  const quotes = await prisma.catalog2Quote.findMany({
+    where: { id: { in: quoteIds } },
+    select: { product_id: true, product: { select: { internal_name: true } }, version: { select: { sale_modes_enforced: true, sell_mode: true } } },
+  });
+  const inOrder = new Set(quotes.map((q) => q.product_id));
+  for (const q of quotes) {
+    if (!q.version.sale_modes_enforced || q.version.sell_mode !== "package_only") continue;
+    const packages = await prisma.catalog2Package.findMany({ where: { is_active: true, items: { some: { catalog2_product_id: q.product_id } } }, include: { items: true } });
+    const satisfied = packages.some((p) => {
+      if (p.requirement_mode === "any") return p.items.some((i) => i.catalog2_product_id !== q.product_id && inOrder.has(i.catalog2_product_id));
+      if (p.requirement_mode === "specific") return p.items.filter((i) => i.is_required).every((i) => inOrder.has(i.catalog2_product_id));
+      return p.items.every((i) => inOrder.has(i.catalog2_product_id));
+    });
+    if (!satisfied) {
+      throw new Catalog2CheckoutError(`"${q.product.internal_name}" só é vendido dentro de um pacote. Adicione ao mesmo pedido os itens que o pacote exige.`, 409, "package_only");
+    }
+  }
+}
+
 export interface AttachQuoteParams {
   projectId: string;
   quoteId: string;
@@ -143,6 +167,9 @@ export async function attachCatalog2QuoteToProject(tx: DbClient, params: AttachQ
       catalog2_period_months: quote.contract_period_months,
       catalog2_period_discount_percent: quote.contract_period_discount_percent,
       catalog2_period_reference_monthly_price: quote.contract_period_reference_monthly_price,
+      implementation_price_snapshot: quote.implementation_price,
+      recurring_price_snapshot: quote.recurring_price,
+      first_charge_snapshot: quote.first_charge_price,
       catalog2_period_ends_at: periodEndsAt,
     },
   });

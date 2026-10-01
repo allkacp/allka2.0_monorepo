@@ -205,7 +205,8 @@ describe("Completar o histórico do produto (Item 7.2, reunião 2026-09-14)", ()
 
   it("3. edição/remoção de variação e opção em versão PUBLICADA continua bloqueada — sem evento", async () => {
     const { product, versionId, specialtyId } = await mkDraftProduct(`c12-${crypto.randomBytes(4).toString("hex")}`);
-    await api(`/api/admin/catalog2/versions/${versionId}/tasks`, { method: "POST", token: MASTER, body: { key: "t1", name: "Tarefa", specialty_id: specialtyId, estimated_minutes: 30 } });
+    const task3 = await api(`/api/admin/catalog2/versions/${versionId}/tasks`, { method: "POST", token: MASTER, body: { key: "t1", name: "Tarefa", specialty_id: specialtyId, estimated_minutes: 30 } });
+    await api(`/api/admin/catalog2/tasks/${task3.json.id}/steps`, { method: "POST", token: MASTER, body: { key: "e1", name: "Etapa", specialty_id: specialtyId, estimated_minutes: 30 } }); // regra vigente: toda tarefa tem ao menos uma etapa
     const variation = await api(`/api/admin/catalog2/versions/${versionId}/variations`, { method: "POST", token: MASTER, body: { key: "cor", name: "Cor" } });
     const option = await api(`/api/admin/catalog2/variations/${variation.json.id}/options`, { method: "POST", token: MASTER, body: { key: "azul", label: "Azul" } });
 

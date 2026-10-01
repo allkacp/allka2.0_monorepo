@@ -678,7 +678,7 @@ describe("Novo catálogo — fundação", () => {
       await prisma.catalog2Task.create({ data: { version_id: v1.id, key: "t1", name: "Tarefa provisória", sort_order: 0, effort_is_provisional: true, effort_source: "provisional_fill_v1" } });
 
       await assert.rejects(
-        () => publishVersion(v1.id, master.id, { force: true }),
+        () => publishVersion(v1.id, master.id, { activate: true, force: true }),
         (e: any) => e.code === "provisional_effort_blocks_publish",
       );
     });

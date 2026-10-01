@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
-import { concluirEtapa, atribuirExecutorDaEtapa, garantirQualificador } from "../lib/stage-engine";
+import { concluirEtapa, atribuirExecutorDaEtapa, garantirQualificador, garantirRevisor } from "../lib/stage-engine";
 import { kickDependenciesForTask } from "../lib/project-dependencies";
 import { validate, parsePagination } from "../middleware/validate";
 import { writeAccessAudit } from "../lib/product-feedback-service";
@@ -465,6 +465,11 @@ router.patch("/me/etapas/:stageId/concluir", verifyToken, async (req, res, next)
     if (resultado.enviadaParaQualificacao) {
       garantirQualificador(resultado.tarefaId).catch((err) =>
         console.error("[stage-engine] qualificador:", err),
+      );
+    }
+    if (resultado.enviadaParaRevisao) {
+      garantirRevisor(resultado.tarefaId).catch((err) =>
+        console.error("[stage-engine] revisor:", err),
       );
     }
 

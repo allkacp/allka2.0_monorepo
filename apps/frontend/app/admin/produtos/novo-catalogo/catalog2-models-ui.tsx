@@ -112,6 +112,7 @@ export function ModelPickerDialog({
   const [specialty, setSpecialty] = useState("");
   const [executor, setExecutor] = useState("");
   const [purpose, setPurpose] = useState("");
+  const [cycle, setCycle] = useState("");
   const [status, setStatus] = useState<"active" | "inactive" | "all">("active");
   const [rows, setRows] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -124,13 +125,13 @@ export function ModelPickerDialog({
     let cancelled = false;
     setLoading(true);
     const t = setTimeout(() => {
-      const params = { q: q.trim() || undefined, specialty_id: specialty || undefined, execution_mode: executor || undefined, purpose: kind === "step" ? purpose || undefined : undefined, status, limit };
+      const params = { q: q.trim() || undefined, specialty_id: specialty || undefined, execution_mode: executor || undefined, purpose: kind === "step" ? purpose || undefined : undefined, cycle_type: kind === "task" ? cycle || undefined : undefined, status, limit };
       (kind === "task" ? apiClient.getCatalog2TaskModels(params) : apiClient.getCatalog2StepModels(params))
         .then((r) => { if (!cancelled) { setRows(r.data); setTotal(r.total); } })
         .finally(() => { if (!cancelled) setLoading(false); });
     }, 250);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [open, kind, q, specialty, executor, purpose, status, limit]);
+  }, [open, kind, q, specialty, executor, purpose, cycle, status, limit]);
 
   const label = kind === "task" ? "Tarefa" : "Etapa";
   return (
@@ -158,6 +159,12 @@ export function ModelPickerDialog({
                   {Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
               )}
+              {kind === "task" && (
+                <select aria-label="Tipo de ciclo" className={selectCls} value={cycle} onChange={(e) => setCycle(e.target.value)}>
+                  <option value="">Todo tipo de ciclo</option>
+                  {Object.entries(CYCLE_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              )}
               <select aria-label="Status" className={selectCls} value={status} onChange={(e) => setStatus(e.target.value as any)}>
                 <option value="active">Ativos</option>
                 <option value="inactive">Inativos</option>
@@ -177,7 +184,7 @@ export function ModelPickerDialog({
                     </div>
                     <div className="mt-0.5 text-xs text-neutral-500">
                       {EXEC_LABEL[m.execution_mode] ?? m.execution_mode} · {m.specialty?.name ?? "sem especialidade"} · {fmtMinutes(m.estimated_minutes)}
-                      {kind === "task" ? ` · ${m.step_count} etapa(s)` : ` · ${PURPOSE_LABEL[m.purpose] ?? m.purpose}`} · usado em {m.usage_count}
+                      {kind === "task" ? ` · ${CYCLE_TYPE_LABEL[m.cycle_type] ?? m.cycle_type ?? "—"} · ${m.step_count} etapa(s)` : ` · ${PURPOSE_LABEL[m.purpose] ?? m.purpose}`} · {kind === "task" && m.product_count != null ? `usado em ${m.product_count} produto(s)` : `usado em ${m.usage_count}`} · revisão {m.revision ?? 1}
                     </div>
                   </div>
                   <div className="flex shrink-0 gap-1">
@@ -197,6 +204,39 @@ export function ModelPickerDialog({
       </Dialog>
       {info != null && <TaskModelInfoDialog id={info} onClose={() => setInfo(null)} />}
     </>
+  );
+}
+
+/** Antes de criar uma tarefa/etapa nova: mostra os modelos de nome parecido e deixa usar um deles em vez de duplicar. */
+export function SimilarModelsDialog({ kind, similar, onUse, onCreateAnyway, onCancel }: { kind: "task" | "step"; similar: { id: number; name: string; label: string; is_active: boolean; similarity: number; reason: string; compatible?: boolean; match?: string[]; same_specialty?: boolean; same_execution_mode?: boolean; same_cycle?: boolean | null }[]; onUse: (id: number) => void; onCreateAnyway: (justification: string) => void; onCancel: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const [why, setWhy] = useState("");
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onCancel(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogTitle>Já existe {kind === "task" ? "uma tarefa" : "uma etapa"} parecida</DialogTitle>
+        <p className="text-sm text-neutral-600 dark:text-neutral-300">Reaproveitar o modelo existente evita duplicar cadastro. Se for mesmo algo diferente, pode criar um novo.</p>
+        <ul className="space-y-1.5">
+          {similar.map((m) => (
+            <li key={m.id} className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800">
+              <span className="min-w-0"><span className="mr-1.5 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">{m.label}</span><span className="font-medium">{m.name}</span><span className="block text-[11px] text-neutral-500">{(m.match ?? []).length ? `igual/parecido em: ${m.match!.join(", ")}` : m.reason === "mesmo_nome" ? "mesmo nome" : "nome parecido"} · {Math.round(m.similarity * 100)}% de semelhança</span><span className={`block text-[11px] ${m.compatible ? "font-semibold text-emerald-700" : "text-amber-700"}`}>{m.compatible ? "Compatível: mesma especialidade, executor e ciclo — recomendado reaproveitar" : `Diferenças: ${[m.same_specialty === false && "especialidade", m.same_execution_mode === false && "executor", m.same_cycle === false && "ciclo"].filter(Boolean).join(", ") || "—"}`}</span></span>
+              <Button size="sm" disabled={!m.is_active} onClick={() => onUse(m.id)}>Usar este</Button>
+            </li>
+          ))}
+        </ul>
+        {asking ? (
+          <div className="space-y-2">
+            <textarea aria-label="Justificativa para criar um novo modelo" rows={2} className="w-full rounded-md border border-neutral-300 p-2 text-sm dark:border-neutral-700" placeholder="Por que um modelo novo, se já existe um parecido? (mínimo de 10 caracteres — fica registrado com o seu nome)" value={why} onChange={(e) => setWhy(e.target.value)} />
+            <div className="flex justify-end gap-2"><Button variant="ghost" size="sm" onClick={() => setAsking(false)}>Voltar</Button><Button size="sm" disabled={why.trim().length < 10} onClick={() => onCreateAnyway(why.trim())}>Confirmar criação do novo modelo</Button></div>
+          </div>
+        ) : (
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={onCancel}>Cancelar</Button>
+            <Button variant="outline" size="sm" onClick={() => setAsking(true)}>Criar novo mesmo assim…</Button>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -248,6 +288,14 @@ export function TaskModelInfoDialog({ id, onClose, kind = "task" }: { id: number
               )}
               <dt className="text-neutral-500">Revisão / status</dt><dd>rev. {m.revision} · {m.is_active ? "Ativo" : "Inativo"}</dd>
             </dl>
+            {m.ops && (
+              <dl className="space-y-1.5 rounded-lg bg-neutral-50 p-2 text-xs dark:bg-neutral-900">
+                {([["objective", "Objetivo"], ["instructions", "Instruções"], ["required_inputs", "Entradas necessárias"], ["expected_output", "Saída esperada"], ["acceptance_criteria", "Critério de aceite"], ["risks_notes", "Riscos e observações"], ["evidence_hint", "Evidência"]] as const).filter(([k]) => m.ops[k]).map(([k, label]) => (
+                  <div key={k}><dt className="font-semibold text-neutral-500">{label}</dt><dd className="whitespace-pre-line">{m.ops[k]}</dd></div>
+                ))}
+                {m.ops.evidence_required && <div className="font-semibold text-amber-700">Evidência obrigatória para concluir.</div>}
+              </dl>
+            )}
             {kind === "task" && m.steps?.length > 0 && (
               <div>
                 <p className="mb-1 text-xs font-semibold text-neutral-500">Etapas padrão</p>
@@ -282,6 +330,21 @@ export function TaskModelInfoDialog({ id, onClose, kind = "task" }: { id: number
 export function ModelScopeDialog({
   open, kindLabel, modelId, onChoose, onCancel,
 }: { open: boolean; kindLabel: string; modelId: number; onChoose: (scope: "product" | "model") => void; onCancel: () => void }) {
+  const [confirmModel, setConfirmModel] = useState(false);
+  if (confirmModel) {
+    return (
+      <Dialog open={open} onOpenChange={(v) => { if (!v) { setConfirmModel(false); onCancel(); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogTitle>Confirmar alteração do modelo global?</DialogTitle>
+          <p className="text-sm text-neutral-700 dark:text-neutral-200">Você está alterando o modelo global <strong>#{modelId}</strong>. Ele é reutilizado por outros produtos: eles receberão o aviso de “modelo global atualizado” e poderão trazer a mudança nas próximas versões. Versões já publicadas não mudam.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setConfirmModel(false)}>Voltar</Button>
+            <Button size="sm" onClick={() => { setConfirmModel(false); onChoose("model"); }}>Sim, atualizar o modelo global</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel(); }}>
       <DialogContent className="max-w-lg">
@@ -292,7 +355,7 @@ export function ModelScopeDialog({
             <p className="text-sm font-semibold">Alterar somente neste produto</p>
             <p className="text-xs text-neutral-500">Cria uma configuração própria deste produto. O modelo original continua intacto.</p>
           </button>
-          <button type="button" className="w-full rounded-lg border border-neutral-300 p-3 text-left hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900" onClick={() => onChoose("model")}>
+          <button type="button" className="w-full rounded-lg border border-neutral-300 p-3 text-left hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900" onClick={() => setConfirmModel(true)}>
             <p className="text-sm font-semibold">Atualizar modelo global</p>
             <p className="text-xs text-neutral-500">Altera o modelo reutilizável (sobe a revisão). Outros produtos não mudam sozinhos: recebem o aviso "modelo global atualizado" e você decide quando trazer. Versões já publicadas nunca mudam.</p>
           </button>

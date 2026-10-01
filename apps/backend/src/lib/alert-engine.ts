@@ -100,6 +100,8 @@ export function parseRecipientRoles(raw: string): RecipientCategory[] | null {
 
 // Tarefas nestes estados nunca disparam nem mantêm alerta automático ativo.
 const TERMINAL_TASK_STATUSES = ["CONCLUIDA", "CANCELADA"];
+// Pausada por dependência externa (cliente/provedor): o SLA está suspenso, então não gera alerta de atraso.
+const SLA_SUSPENDED_STATUSES = ["PAUSADA_DEPENDENCIA_EXTERNA"];
 // Etapas concluídas encerram; BLOQUEADA significa "aguardando a etapa
 // anterior" — ainda não abriu de verdade, então não é elegível pra alerta de
 // prazo (auditado: nenhum código hoje seta BLOQUEADA em produção, mas o
@@ -650,7 +652,7 @@ async function processTasks(
   if (!dueSoonRule && !overdueRule) return;
 
   const tasks = await prisma.projectTask.findMany({
-    where: { due_date: { not: null }, status: { notIn: TERMINAL_TASK_STATUSES } },
+    where: { due_date: { not: null }, status: { notIn: [...TERMINAL_TASK_STATUSES, ...SLA_SUSPENDED_STATUSES] } },
     select: TASK_SELECT,
   });
 

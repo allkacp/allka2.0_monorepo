@@ -201,7 +201,8 @@ describe("Continuidade com o mesmo executor entre ciclos", () => {
     const info = await api(`/api/project-tasks/${t.id}/continuity`, { token: tokenFor(clientUser) });
     assert.equal(info.status, 200);
     assert.equal(info.json.can_choose, true);
-    assert.equal(info.json.previous_executor.id, n1.nomade.id);
+    assert.equal(info.json.previous_executor.name, "Especialista responsável", "cliente não vê o nome por padrão");
+    assert.equal(info.json.previous_executor.id, null);
 
     const keep = await api(`/api/project-tasks/${t.id}/continuity`, { method: "POST", token: tokenFor(clientUser), body: { choice: "keep" } });
     assert.equal(keep.status, 200);

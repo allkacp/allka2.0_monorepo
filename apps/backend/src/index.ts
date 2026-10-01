@@ -13,7 +13,10 @@ import { runTaskReleaseSchedulerOnceGuarded } from "./lib/task-release-scheduler
 import { runCommsSchedulerOnceGuarded } from "./lib/comms";
 import { runCatalog2InactivationSchedulerOnceGuarded } from "./lib/catalog2-inactivation-scheduler";
 import { runCatalog2DeliveryCycleSchedulerOnceGuarded } from "./lib/catalog2-delivery-cycle-scheduler";
+import { runSubscriptionsTickGuarded } from "./lib/catalog2-subscriptions";
+import { runAutoTriggerTickGuarded } from "./lib/task-ai";
 import { runDependencySchedulerOnceGuarded } from "./lib/dependency-scheduler";
+import { runConnectionMaintenanceOnceGuarded } from "./lib/connections/scheduler";
 import { runCatalog2ActivationNotificationSchedulerOnceGuarded } from "./lib/catalog2-activation-notification-scheduler";
 import { getCatalog2HistoryCoverageMarker } from "./lib/catalog2-product-history";
 import { backfillCatalog2Models, shouldBackfillModelsOnBoot } from "./lib/catalog2-models";
@@ -180,7 +183,21 @@ async function main() {
   }, config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS).unref();
   console.log(`📦 Worker de ciclos de entrega do catálogo ativo (intervalo: ${config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS}ms).`);
 
+  // Assinaturas mensais contínuas (Pedido 3, fase 4): emite a fatura do mês, marca inadimplência e encerra cancelamentos.
+  setInterval(() => {
+    runSubscriptionsTickGuarded().catch((err) => console.error("❌ Falha no worker de assinaturas:", err));
+  }, config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS).unref();
+  console.log("🔁 Worker de assinaturas mensais ativo.");
+
+  // IA com gatilho "automática após os pré-requisitos" (padrão do cadastro é manual: sem tarefa configurada, este worker não faz nada).
+  setInterval(() => {
+    runAutoTriggerTickGuarded().catch((err) => console.error("❌ Falha no worker de IA automática:", err));
+  }, config.DEPENDENCY_SCHEDULER_INTERVAL_MS).unref();
+
   // Dependências (pacotes/produtos): libera/avança tarefas e avisa o líder quando algo atrasa.
+  setInterval(() => {
+    runConnectionMaintenanceOnceGuarded().catch((err) => console.error("❌ Falha na manutenção de conexões:", err));
+  }, 5 * 60_000).unref();
   setInterval(() => {
     runDependencySchedulerOnceGuarded().catch((err) => console.error("❌ Falha no worker de dependências:", err));
   }, config.DEPENDENCY_SCHEDULER_INTERVAL_MS).unref();

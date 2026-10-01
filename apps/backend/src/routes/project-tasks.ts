@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { validateBriefingAnswers } from "../lib/catalog2-question-types";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
@@ -14,9 +15,13 @@ import { writeAccessAudit } from "../lib/product-feedback-service";
 import { recordApprovedTask } from "../lib/memory-service";
 import { assertTaskStatusTransitionAllowed, TaskStatusGuardError } from "../lib/task-release-guard";
 import { decideContinuity, ContinuityError, CONTINUITY_CHOICES } from "../lib/catalog2-continuity";
+import { audienceOf, canSee, type Visibility } from "../lib/catalog2-ops";
+import { listDeliverablesFor, submitDeliverable, reviewDeliverable, type DeliverableActor } from "../lib/task-deliverables";
+import { getTaskAIConfig, runTaskAI, adoptRun, discardRun, listRuns, canRunAI } from "../lib/task-ai";
+import { loadOperationalGuide } from "../lib/task-operational";
 import { isAssetValid, ASSET_RULE_LABEL } from "../lib/client-assets";
 import { ruleStatesForTask, kickDependencies, kickDependenciesForTask } from "../lib/project-dependencies";
-import { computeFlowState } from "../lib/task-flow-state";
+import { computeFlowStateFor, isExternalViewer } from "../lib/task-flow-state";
 import { logProjectDecision } from "../lib/catalog2-cycles";
 import { reevaluateSuccessors, DependencyInUseError, TaskReleaseError } from "../lib/task-release-service";
 import { recordWalletEvent } from "../lib/wallet-service";
@@ -24,6 +29,10 @@ import {
   iniciarEtapasDaTarefa,
   concluirEtapa,
   garantirQualificador,
+  garantirRevisor,
+  revisarTarefa,
+  RevisaoError,
+  revisorDaTarefa,
   qualificarTarefa,
   QualificacaoError,
   atribuirExecutorDaEtapa,
@@ -59,6 +68,8 @@ export const TASK_STATUSES = [
   "ENTREGUE_PELO_NOMADE",
   "PARA_QUALIFICACAO",
   "QUALIFICACAO_PENDENTE",
+  // Revisão obrigatória (conferência técnica, antes da qualificação e da aprovação)
+  "AGUARDANDO_REVISAO",
   // Qualificação obrigatória (aceite interno do líder/qualificador)
   "AGUARDANDO_QUALIFICACAO",
   "EM_AJUSTES",
@@ -109,6 +120,34 @@ const updateTaskSchema = z.object({
   description: z.string().optional().nullable(),
   fase: z.string().optional().nullable(),
 });
+
+/** Valida as respostas pelo tipo de cada pergunta (texto, número, moeda, data, sim/não, escolha, link, e-mail, telefone, arquivo, ativo). */
+async function rejectInvalidBriefing(
+  res: Response,
+  task: { id: string; briefing_snapshot: string | null; project_id: string },
+  answers: { question_key: string; answer?: string | null; files?: string | null; links?: string | null }[],
+  final: boolean,
+): Promise<boolean> {
+  if (!task.briefing_snapshot) return false;
+  const existing = await prisma.taskBriefingAnswer.findMany({ where: { project_task_id: task.id }, select: { question_key: true, answer: true, files: true } });
+  const errors = validateBriefingAnswers(task.briefing_snapshot, answers, { final, existing });
+  // "Acesso ou ativo do cliente": a resposta é o id de um ativo cadastrado pela EMPRESA deste projeto.
+  try {
+    const questions = JSON.parse(task.briefing_snapshot) as { question_key: string; question_type?: string }[];
+    const assetKeys = new Set(questions.filter((q) => q.question_type === "acesso_ativo").map((q) => q.question_key));
+    const toCheck = answers.filter((a) => assetKeys.has(a.question_key) && a.answer);
+    if (toCheck.length) {
+      const project = await prisma.project.findUnique({ where: { id: task.project_id }, select: { company_id: true } });
+      for (const a of toCheck) {
+        const asset = await prisma.clientAsset.findFirst({ where: { id: a.answer as string, company_id: project?.company_id ?? "" }, select: { id: true } });
+        if (!asset) errors.push({ key: a.question_key, message: "Escolha um acesso ou ativo cadastrado pela empresa." });
+      }
+    }
+  } catch { /* snapshot ilegível: não bloqueia */ }
+  if (errors.length === 0) return false;
+  res.status(422).json({ error: errors[0].message, code: "briefing_invalid", errors });
+  return true;
+}
 
 const briefingAnswerSchema = z.object({
   answers: z
@@ -1386,7 +1425,7 @@ router.put(
 
       const task = await prisma.projectTask.findFirst({
         where: applyScope({ id: req.params.id as string }, scopeWhere),
-        select: { id: true },
+        select: { id: true, briefing_snapshot: true, project_id: true },
       });
       if (!task) {
         res.status(404).json({ error: "Tarefa não encontrada" });
@@ -1394,6 +1433,7 @@ router.put(
       }
 
       const { answers } = req.body as z.infer<typeof briefingAnswerSchema>;
+      if (await rejectInvalidBriefing(res, task, answers, false)) return;
 
       const upserted = await prisma.$transaction(
         answers.map((a) =>
@@ -1474,6 +1514,7 @@ router.patch(
       }
 
       const { answers } = req.body as z.infer<typeof briefingAnswerSchema>;
+      if (await rejectInvalidBriefing(res, task, answers, true)) return;
 
       // Upsert answers + transition status atomically
       await prisma.$transaction([
@@ -2047,13 +2088,162 @@ router.patch(
 // GET  /:id/decisions  histórico de decisões automáticas e manuais (executor mantido/trocado,
 //                      acessos validados, etapas dispensadas, dependências liberadas…)
 // POST /:id/dispense   líder/admin dispensa a tarefa por regra (só antes de começar)
+// ── Entregáveis e anexos estruturados da tarefa contratada (Pedido 3, fase 3) ──
+// Quem enxerga cada item depende da visibilidade definida no cadastro; quem envia, do "responsável".
+async function resolveTaskActor(req: Request, key: string) {
+  const user = req.user!;
+  const admin = isAdminUser(user);
+  const sel = { id: true, lider_responsavel_id: true, reviewer_user_id: true, nomade_responsavel_id: true } as const;
+  let task: { id: string; lider_responsavel_id: string | null; reviewer_user_id: string | null; nomade_responsavel_id: string | null } | null = null;
+  let executor = false;
+  if (user.account_type === "nomades") {
+    const nomade = await prisma.nomade.findUnique({ where: { user_id: user.id }, select: { id: true } });
+    if (nomade) {
+      task = await prisma.projectTask.findFirst({
+        where: { AND: [{ OR: [{ id: key }, { task_code: key }] }, { OR: [{ nomade_responsavel_id: nomade.id }, { stages: { some: { nomade_id: nomade.id } } }] }] },
+        select: sel,
+      });
+      executor = !!task;
+    }
+  } else {
+    const scopeWhere = await getTaskScopeWhere(user.id, user.account_type, user.role);
+    if (scopeWhere) task = await prisma.projectTask.findFirst({ where: applyScope({ OR: [{ id: key }, { task_code: key }] }, scopeWhere), select: sel });
+    // revisor designado (pode não ser o líder da tarefa) também enxerga
+    if (!task) task = await prisma.projectTask.findFirst({ where: { AND: [{ OR: [{ id: key }, { task_code: key }] }, { reviewer_user_id: user.id }] }, select: sel });
+  }
+  if (!task) return null;
+  const actor: DeliverableActor = {
+    userId: user.id,
+    admin,
+    leader: !admin && (task.lider_responsavel_id === user.id || task.reviewer_user_id === user.id),
+    executor,
+    agency: user.account_type === "agencias",
+    client: user.account_type === "empresas",
+  };
+  return { task, viewer: audienceOf(user), actor };
+}
+
+router.get("/:id/deliverables", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = await resolveTaskActor(req, req.params.id as string);
+    if (!ctx) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    res.json({ data: await listDeliverablesFor(prisma, ctx.task.id, ctx.viewer, ctx.actor) });
+  } catch (err) { next(err); }
+});
+
+const deliverableSubmitSchema = z.object({
+  content_url: z.string().max(1000).nullish(),
+  content_text: z.string().max(20000).nullish(),
+  content_name: z.string().max(191).nullish(),
+});
+router.post("/:id/deliverables/:did/submit", verifyToken, validate(deliverableSubmitSchema), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = await resolveTaskActor(req, req.params.id as string);
+    if (!ctx) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const item = await prisma.projectTaskDeliverable.findFirst({ where: { id: req.params.did as string, project_task_id: ctx.task.id }, select: { id: true, visibility: true } });
+    if (!item || !canSee(ctx.viewer, item.visibility as Visibility)) { res.status(404).json({ error: "Entregável não encontrado." }); return; }
+    const updated = await submitDeliverable(prisma, item.id, ctx.actor, req.body);
+    kickDependenciesForTask(ctx.task.id);
+    res.json({ id: updated.id, status: updated.status });
+  } catch (err) { next(err); }
+});
+
+const deliverableReviewSchema = z.object({ decisao: z.enum(["aprovar", "reprovar", "em_revisao"]), comentario: z.string().max(4000).optional() });
+router.post("/:id/deliverables/:did/review", verifyToken, validate(deliverableReviewSchema), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = await resolveTaskActor(req, req.params.id as string);
+    if (!ctx) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const item = await prisma.projectTaskDeliverable.findFirst({ where: { id: req.params.did as string, project_task_id: ctx.task.id }, select: { id: true } });
+    if (!item) { res.status(404).json({ error: "Entregável não encontrado." }); return; }
+    const updated = await reviewDeliverable(prisma, item.id, ctx.actor, req.body.decisao, req.body.comentario);
+    kickDependenciesForTask(ctx.task.id);
+    res.json({ id: updated.id, status: updated.status });
+  } catch (err) { next(err); }
+});
+
+// ── IA na tarefa (Pedido 3, fase 5): só administração, líder e executor enxergam e acionam ──
+async function aiContext(req: Request, res: Response) {
+  const ctx = await resolveTaskActor(req, req.params.id as string);
+  if (!ctx) { res.status(404).json({ error: "Tarefa não encontrada" }); return null; }
+  if (ctx.viewer === "agency" || ctx.viewer === "client") { res.status(403).json({ error: "A IA da tarefa é interna: seu perfil não tem acesso." }); return null; }
+  return ctx;
+}
+router.get("/:id/ai", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = await aiContext(req, res);
+    if (!ctx) return;
+    const config = await getTaskAIConfig(ctx.task.id);
+    res.json({ config: config ? { mode: config.mode, trigger: config.trigger, prompt_version: config.prompt_version, profile_name: config.profile.name, active: config.profile.is_active, can_run: config.profile.is_active && canRunAI(ctx.actor, config.profile) } : null, runs: config ? await listRuns(ctx.task.id) : [] });
+  } catch (err) { next(err); }
+});
+router.post("/:id/ai/run", verifyToken, validate(z.object({ stage_id: z.string().nullish(), inputs: z.record(z.string(), z.string()).optional(), note: z.string().max(2000).optional() })), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = await aiContext(req, res);
+    if (!ctx) return;
+    const r = await runTaskAI({ taskId: ctx.task.id, actor: ctx.actor, stageId: req.body.stage_id ?? null, inputs: req.body.inputs, note: req.body.note });
+    kickDependenciesForTask(ctx.task.id);
+    res.status(201).json({ run_id: r.run.id, status: r.run.status, forwarded: r.forwarded, reason: r.forwarded ? r.reason : null, output_text: r.run.output_text, cost: r.run.cost });
+  } catch (err) { next(err); }
+});
+router.post("/:id/ai/runs/:runId/adopt", verifyToken, validate(z.object({ text: z.string().max(40000).optional(), note: z.string().max(2000).optional() })), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = await aiContext(req, res);
+    if (!ctx) return;
+    const own = await prisma.projectTaskAIRun.findFirst({ where: { id: req.params.runId as string, project_task_id: ctx.task.id }, select: { id: true } });
+    if (!own) { res.status(404).json({ error: "Execução não encontrada." }); return; }
+    const run = await adoptRun(own.id, ctx.actor, req.body);
+    kickDependenciesForTask(ctx.task.id);
+    res.json({ id: run.id, status: run.status, deliverable_id: run.deliverable_id });
+  } catch (err) { next(err); }
+});
+router.post("/:id/ai/runs/:runId/discard", verifyToken, validate(z.object({ note: z.string().max(2000).optional() })), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const ctx = await aiContext(req, res);
+    if (!ctx) return;
+    const own = await prisma.projectTaskAIRun.findFirst({ where: { id: req.params.runId as string, project_task_id: ctx.task.id }, select: { id: true } });
+    if (!own) { res.status(404).json({ error: "Execução não encontrada." }); return; }
+    const run = await discardRun(own.id, ctx.actor, req.body.note);
+    res.json({ id: run.id, status: run.status });
+  } catch (err) { next(err); }
+});
+
+// ── GET /api/project-tasks/:id/operational ───────────────────────────────────
+// Guia operacional da tarefa (objetivo, instruções, entradas, saída esperada, critério de aceite,
+// evidência…) — cada perfil só recebe o que a visibilidade do produto permite. O nômade só vê
+// tarefas em que é o responsável ou tem etapa atribuída.
+router.get("/:id/operational", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const key = req.params.id as string;
+    const viewer = audienceOf(req.user);
+    let taskId: string | null = null;
+    if (req.user!.account_type === "nomades") {
+      const nomade = await prisma.nomade.findUnique({ where: { user_id: req.user!.id }, select: { id: true } });
+      if (nomade) {
+        const t = await prisma.projectTask.findFirst({
+          where: { AND: [{ OR: [{ id: key }, { task_code: key }] }, { OR: [{ nomade_responsavel_id: nomade.id }, { stages: { some: { nomade_id: nomade.id } } }] }] },
+          select: { id: true },
+        });
+        taskId = t?.id ?? null;
+      }
+    } else {
+      const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+      if (scopeWhere) {
+        const t = await prisma.projectTask.findFirst({ where: applyScope({ OR: [{ id: key }, { task_code: key }] }, scopeWhere), select: { id: true } });
+        taskId = t?.id ?? null;
+      }
+    }
+    if (!taskId) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    res.json(await loadOperationalGuide(prisma, taskId, viewer));
+  } catch (err) { next(err); }
+});
+
 router.get("/:id/flow", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
     if (scopeWhere === null) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
     const task = await prisma.projectTask.findFirst({ where: applyScope({ id: req.params.id as string }, scopeWhere), select: { id: true, status: true, lider_responsavel_id: true } });
     if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
-    const flow = await computeFlowState(prisma, task.id);
+    const flow = await computeFlowStateFor(prisma, task.id, audienceOf(req.user!));
     const dispensable = ["PARA_LANCAMENTO", "EM_LANCAMENTO", "AGUARDANDO_INFORMACOES", "PENDENTE_DE_LIBERACAO", "RASCUNHO_OPERACIONAL"].includes(task.status);
     res.json({ ...flow, can_dispense: dispensable && (isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id) });
   } catch (err) { next(err); }
@@ -2069,7 +2259,9 @@ router.get("/:id/decisions", verifyToken, async (req: Request, res: Response, ne
       where: { project_id: task.project_id, OR: [{ project_task_id: task.id }, { project_product_id: task.project_product_id, project_task_id: null }] },
       orderBy: { created_at: "desc" }, take: 100,
     });
-    res.json({ data: rows.map((r) => ({ id: r.id, kind: r.kind, message: r.message, created_at: r.created_at, automatic: !r.actor_user_id })) });
+    const INTERNAL_KINDS = ["executor_kept", "executor_changed", "executor_manual", "continuity_pending", "dependency_delay_alert", "operation_blocked"];
+    const external = isExternalViewer(audienceOf(req.user!));
+    res.json({ data: rows.filter((r) => !external || !INTERNAL_KINDS.includes(r.kind)).map((r) => ({ id: r.id, kind: r.kind, message: r.message, created_at: r.created_at, automatic: !r.actor_user_id })) });
   } catch (err) { next(err); }
 });
 
@@ -2101,14 +2293,57 @@ router.get("/:id/dependencies", verifyToken, async (req: Request, res: Response,
     });
     if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
     const states = await ruleStatesForTask(prisma, task.id);
-    const targets = await prisma.projectTask.findMany({ where: { id: { in: states.map((s) => s.targetTaskId).filter((x): x is string => !!x) } }, select: { id: true, title: true, status: true } });
+    const ruleRows = await prisma.projectDependencyRule.findMany({ where: { task_id: task.id } });
+    const rowById = new Map(ruleRows.map((r) => [r.id, r]));
+    const targets = await prisma.projectTask.findMany({ where: { id: { in: states.map((s) => s.targetTaskId).filter((x): x is string => !!x) } }, select: { id: true, title: true, status: true, lider_responsavel_id: true, nomade_responsavel_id: true } });
     const byId = new Map(targets.map((t) => [t.id, t]));
+    const releaserIds = [...new Set([...ruleRows.map((r) => r.released_by_user_id), ...targets.map((t) => t.nomade_responsavel_id)].filter((x): x is string => !!x))];
+    const releasers = releaserIds.length ? await prisma.user.findMany({ where: { id: { in: releaserIds } }, select: { id: true, name: true } }) : [];
+    const releaserName = new Map(releasers.map((u) => [u.id, u.name]));
+    const staffView = !isExternalViewer(audienceOf(req.user!));
+    const canRelease = isAdminUser(req.user) || (await prisma.projectTask.findUnique({ where: { id: task.id }, select: { lider_responsavel_id: true } }))?.lider_responsavel_id === req.user!.id;
     res.json({
       status: task.status,
       applies: states.length > 0,
       blocked: states.some((s) => !s.satisfied && (s.behavior === "block_start" || s.behavior === "block_final")),
-      rules: states.map((s) => ({ ...s, target_task: s.targetTaskId ? byId.get(s.targetTaskId) ?? null : null })),
+      can_release: canRelease,
+      auto_update: true,
+      rules: states.map((s) => {
+        if (!staffView) return { behavior: s.behavior, satisfied: s.satisfied, reason: s.reason, targetKind: s.targetKind };
+        const row = rowById.get(s.ruleId);
+        const target = s.targetTaskId ? byId.get(s.targetTaskId) ?? null : null;
+        return {
+          ...s,
+          target_task: target ? { id: target.id, title: target.title, status: target.status } : null,
+          blocks: s.behavior === "block_start" ? "o início da tarefa" : s.behavior === "block_final" ? "a conclusão da tarefa" : s.behavior === "require_before_delivery" ? "o envio da entrega" : null,
+          origin: row?.project_package_id ? "pacote" : row?.source_rule_id ? "regra do catálogo" : "regra da tarefa",
+          expected_deliverable: row?.target_deliverable_key ?? null,
+          responsible: target?.nomade_responsavel_id ? releaserName.get(target.nomade_responsavel_id) ?? null : null,
+          released: row?.released_manually_at ? { at: row.released_manually_at, by: row.released_by_user_id ? releaserName.get(row.released_by_user_id) ?? null : null, reason: row.release_reason } : null,
+          can_release: canRelease && !s.satisfied,
+        };
+      }),
     });
+  } catch (err) { next(err); }
+});
+
+// POST /:id/dependencies/:ruleId/release  { reason }  — liberação MANUAL de uma dependência (só líder/admin; justificativa obrigatória; fica no histórico)
+router.post("/:id/dependencies/:ruleId/release", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (reason.length < 10) { res.status(422).json({ error: "Explique o motivo da liberação (mínimo de 10 caracteres).", code: "release_reason_required" }); return; }
+    const task = await prisma.projectTask.findUnique({ where: { id: req.params.id as string }, select: { id: true, title: true, project_id: true, project_product_id: true, lider_responsavel_id: true } });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    if (!(isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id)) { res.status(403).json({ error: "Somente o líder da tarefa ou a administração pode liberar uma dependência." }); return; }
+    const rule = await prisma.projectDependencyRule.findFirst({ where: { id: req.params.ruleId as string, task_id: task.id } });
+    if (!rule) { res.status(404).json({ error: "Dependência não encontrada nesta tarefa." }); return; }
+    if (rule.released_manually_at) { res.status(409).json({ error: "Esta dependência já foi liberada manualmente.", code: "already_released" }); return; }
+    await prisma.$transaction(async (tx) => {
+      await tx.projectDependencyRule.update({ where: { id: rule.id }, data: { released_manually_at: new Date(), released_by_user_id: req.user!.id, release_reason: reason } });
+      await logProjectDecision(tx, { projectId: task.project_id, projectProductId: task.project_product_id, projectTaskId: task.id, kind: "dependency_released_manually", message: `A dependência "${rule.reason}" de "${task.title}" foi liberada manualmente. Motivo: ${reason}`, actorUserId: req.user!.id });
+    });
+    kickDependencies(task.project_id);
+    res.json({ ok: true, released: true });
   } catch (err) { next(err); }
 });
 
@@ -2132,6 +2367,8 @@ router.get("/:id/assets", verifyToken, async (req: Request, res: Response, next:
       rule_label: ASSET_RULE_LABEL[rule as keyof typeof ASSET_RULE_LABEL] ?? rule,
       revalidate_days: task.catalog2_task?.asset_revalidate_days ?? null,
       can_validate: staff,
+      // quem pode avisar que algo mudou no acesso: o cliente, a agência e a equipe Allka (o executor não)
+      can_report: staff || req.user!.account_type === "empresas" || req.user!.account_type === "agencias",
       assets: links.map((l) => ({
         id: l.asset.id, asset_type: l.asset.asset_type, label: l.asset.label, platform: l.asset.platform, identifier: l.asset.identifier,
         status: l.asset.status, is_required: l.is_required, last_validated_at: l.asset.last_validated_at, scope_confirmed: l.asset.scope_confirmed,
@@ -2151,6 +2388,11 @@ const continuitySchema = z.object({
   choice: z.enum(CONTINUITY_CHOICES),
   nomade_id: z.string().optional(),
 });
+
+async function showsExecutorName(taskId: string): Promise<boolean> {
+  const t = await prisma.projectTask.findUnique({ where: { id: taskId }, select: { catalog2_task: { select: { version: { select: { show_executor_name: true } } } } } });
+  return !!t?.catalog2_task?.version?.show_executor_name;
+}
 
 router.get("/:id/continuity", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -2176,7 +2418,8 @@ router.get("/:id/continuity", verifyToken, async (req: Request, res: Response, n
       mode: task.executor_continuity,
       status: task.continuity_status,
       decided_at: task.continuity_decided_at,
-      previous_executor: prevNomade,
+      // Padrão: o cliente e a agência veem "Especialista responsável". A identificação nominal é configurável por produto/plano (versão).
+      previous_executor: prevNomade && isExternalViewer(audienceOf(req.user!)) && !(await showsExecutorName(task.id)) ? { id: null, name: "Especialista responsável" } : prevNomade,
       previous_task: prevTask,
       can_choose: task.continuity_status === "pending_choice" && !task.nomade_responsavel_id,
       can_choose_manually: leaderOrAdmin && !task.nomade_responsavel_id && !!task.continuity_status,
@@ -2214,6 +2457,94 @@ router.post("/:id/continuity", verifyToken, validate(continuitySchema), async (r
 // GET   /:id/qualificacao  histórico (entrega solicitada, aprovações, ajustes, comentários)
 // Só o líder/qualificador da tarefa (ou o admin) decide. Reprovar devolve ao
 // executor (EM_AJUSTES) e NÃO conta como alteração grátis do cliente.
+
+// ── POST/GET /api/project-tasks/:id/revisao ─────────────────────────────────
+// Revisão obrigatória (conferência técnica): vem ANTES da qualificação e da aprovação.
+// Só o revisor da tarefa (designado ou o líder responsável) ou o administrador decide.
+const revisaoSchema = z.object({
+  decisao: z.enum(["aprovar", "reprovar", "ajustes", "comentar"]),
+  comentario: z.string().max(4000).optional(),
+  minutos: z.number().int().min(0).max(10000).optional(),
+});
+
+router.post("/:id/revisao", verifyToken, validate(revisaoSchema), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const task = await prisma.projectTask.findUnique({
+      where: { id: req.params.id as string },
+      select: { id: true, reviewer_user_id: true, lider_responsavel_id: true },
+    });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    if (!(isAdminUser(req.user) || revisorDaTarefa(task) === req.user!.id)) {
+      res.status(403).json({ error: "Somente o revisor desta tarefa pode revisar a entrega." });
+      return;
+    }
+    const resultado = await prisma.$transaction((tx) =>
+      revisarTarefa(tx, task.id, { userId: req.user!.id, decisao: req.body.decisao, comentario: req.body.comentario, minutos: req.body.minutos }),
+    );
+    kickDependenciesForTask(task.id);
+    if (resultado.proximo === "qualificacao") {
+      garantirQualificador(task.id).catch((err) => console.error("[stage-engine] qualificador:", err));
+    }
+    res.json(resultado);
+  } catch (err) {
+    if (err instanceof RevisaoError) { res.status(err.httpStatus).json({ error: err.message }); return; }
+    next(err);
+  }
+});
+
+router.get("/:id/revisao", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const t = await prisma.projectTask.findUnique({
+      where: { id: req.params.id as string },
+      select: {
+        id: true, requires_review: true, review_round: true, reviewed_at: true, status: true, reviewer_user_id: true, lider_responsavel_id: true,
+        nomade_responsavel_id: true, review_minutes: true, review_specialty_id: true, stages: { select: { nomade_id: true } },
+      },
+    });
+    if (!t) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    // A revisão é interna: administração, revisor/líder da tarefa e o nômade que executou (para ver os ajustes pedidos).
+    let allowed = isAdminUser(req.user) || revisorDaTarefa(t) === req.user!.id || t.lider_responsavel_id === req.user!.id;
+    if (!allowed && req.user!.account_type === "nomades") {
+      const nomade = await prisma.nomade.findUnique({ where: { user_id: req.user!.id }, select: { id: true } });
+      allowed = !!nomade && (t.nomade_responsavel_id === nomade.id || t.stages.some((s) => s.nomade_id === nomade.id));
+    }
+    if (!allowed) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const historico = await prisma.projectTaskReview.findMany({ where: { project_task_id: t.id }, orderBy: { created_at: "asc" } });
+    const total_minutos = historico.reduce((s, h) => s + (h.minutes_spent ?? 0), 0);
+    const spec = t.review_specialty_id ? await prisma.catalog2Specialty.findUnique({ where: { id: t.review_specialty_id }, select: { id: true, name: true, max_hourly_rate: true } }) : null;
+    const custo_estimado = spec?.max_hourly_rate != null ? Math.round((total_minutos / 60) * spec.max_hourly_rate * 100) / 100 : null;
+    res.json({
+      requires_review: t.requires_review, status: t.status, review_round: t.review_round, reviewed_at: t.reviewed_at,
+      pode_revisar: isAdminUser(req.user) || revisorDaTarefa(t) === req.user!.id,
+      revisor_id: revisorDaTarefa(t), minutos_estimados: t.review_minutes, total_minutos, custo_estimado,
+      especialidade: spec ? { id: spec.id, name: spec.name } : null, historico,
+    });
+  } catch (err) { next(err); }
+});
+
+// ── Custos REALIZADOS da tarefa (Pedido 3, fase 7): IA (execuções registradas) + revisão (minutos gastos × valor/hora). Só administração e líder. ──
+router.get("/:id/costs", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const t = await prisma.projectTask.findUnique({
+      where: { id: req.params.id as string },
+      select: { id: true, requires_review: true, review_minutes: true, review_specialty_id: true, lider_responsavel_id: true, reviewer_user_id: true },
+    });
+    if (!t || !(isAdminUser(req.user) || t.lider_responsavel_id === req.user!.id || t.reviewer_user_id === req.user!.id)) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const reviews = await prisma.projectTaskReview.findMany({ where: { project_task_id: t.id }, select: { minutes_spent: true } });
+    const spent = reviews.reduce((a, r) => a + (r.minutes_spent ?? 0), 0);
+    const spec = t.review_specialty_id ? await prisma.catalog2Specialty.findUnique({ where: { id: t.review_specialty_id }, select: { name: true, max_hourly_rate: true } }) : null;
+    const reviewCost = spec?.max_hourly_rate != null ? Math.round((spent / 60) * spec.max_hourly_rate * 100) / 100 : null;
+    const runs = await prisma.projectTaskAIRun.findMany({ where: { project_task_id: t.id }, select: { status: true, prompt_tokens: true, completion_tokens: true, cost: true } });
+    const byStatus: Record<string, number> = {};
+    for (const r of runs) byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
+    const aiCost = Math.round(runs.reduce((a, r) => a + (r.cost ?? 0), 0) * 1_000_000) / 1_000_000;
+    res.json({
+      review: { planned_minutes: t.review_minutes, spent_minutes: spent, specialty: spec?.name ?? null, estimated_cost: reviewCost },
+      ai: { runs: runs.length, by_status: byStatus, tokens_in: runs.reduce((a, r) => a + r.prompt_tokens, 0), tokens_out: runs.reduce((a, r) => a + r.completion_tokens, 0), cost: aiCost },
+      total_realized: Math.round((aiCost + (reviewCost ?? 0)) * 100) / 100,
+    });
+  } catch (err) { next(err); }
+});
 
 const qualificacaoSchema = z.object({
   decisao: z.enum(["aprovar", "reprovar", "comentar"]),
@@ -2503,6 +2834,11 @@ router.patch(
         if (resultado.enviadaParaQualificacao) {
           garantirQualificador(resultado.tarefaId).catch((err) =>
             console.error("[stage-engine] qualificador:", err),
+          );
+        }
+        if (resultado.enviadaParaRevisao) {
+          garantirRevisor(resultado.tarefaId).catch((err) =>
+            console.error("[stage-engine] revisor:", err),
           );
         }
 

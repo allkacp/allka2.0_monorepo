@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
-import { concluirEtapa, atribuirExecutorDaEtapa, garantirQualificador } from "../lib/stage-engine";
+import { concluirEtapa, atribuirExecutorDaEtapa, garantirQualificador, garantirRevisor } from "../lib/stage-engine";
 import { kickDependenciesForTask } from "../lib/project-dependencies";
 import { verifyToken } from "../middleware/auth";
 import { reevaluateSuccessors } from "../lib/task-release-service";
@@ -164,7 +164,7 @@ router.get("/tasks/counts", async (req: Request, res: Response, next: NextFuncti
       prisma.projectTask.count({
         where: {
           due_date: { lt: new Date() },
-          status: { notIn: ["CONCLUIDA", "CANCELADA", "APROVADA"] },
+          status: { notIn: ["CONCLUIDA", "CANCELADA", "APROVADA", "PAUSADA_DEPENDENCIA_EXTERNA"] },
           ...categoryFilter,
         },
       }),
@@ -319,6 +319,11 @@ router.patch("/tasks/:id/stages/:stageId/approve", async (req: Request, res: Res
         console.error("[stage-engine] qualificador:", err),
       );
     }
+    if (resultado.enviadaParaRevisao) {
+      garantirRevisor(resultado.tarefaId).catch((err) =>
+        console.error("[stage-engine] revisor:", err),
+      );
+    }
 
     const task = await prisma.projectTask.findUnique({
       where: { id },
@@ -333,6 +338,7 @@ router.patch("/tasks/:id/stages/:stageId/approve", async (req: Request, res: Res
         proxima_etapa: resultado.proxima,
         enviada_para_aprovacao: resultado.enviadaParaAprovacao,
         enviada_para_qualificacao: !!resultado.enviadaParaQualificacao,
+        enviada_para_revisao: !!resultado.enviadaParaRevisao,
         tarefa_concluida: resultado.tarefaConcluida,
       },
     });

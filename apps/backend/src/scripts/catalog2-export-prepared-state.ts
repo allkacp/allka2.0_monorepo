@@ -72,7 +72,7 @@ async function main() {
           variations: { include: { options: { include: { effects: true } } } },
           addons: { include: { effects: true } },
           access_requirements: { orderBy: { sort_order: "asc" } },
-          tasks: { include: { task_model: { include: { specialty: { select: { key: true } } } }, steps: { include: { step_model: { include: { specialty: { select: { key: true } } } }, specialty: { select: { key: true } } } }, specialty: { select: { key: true, max_hourly_rate: true } }, questionnaire: { include: { questions: true } } } },
+          tasks: { include: { deliverables: true, task_model: { include: { specialty: { select: { key: true } } } }, steps: { include: { step_model: { include: { specialty: { select: { key: true } } } }, specialty: { select: { key: true } } } }, specialty: { select: { key: true, max_hourly_rate: true } }, questionnaire: { include: { questions: true } } } },
         },
       },
     },

@@ -12,6 +12,7 @@
 //   • cotação VÁLIDA exige preço comercial completo + prazo comercial completo
 //     + versão publicada + produto disponível + zero pendência obrigatória.
 
+import { clientCommercialView } from "./catalog2-commercial-fields";
 import { prisma } from "./prisma";
 import { config } from "../config";
 import { hashPayload } from "./canonical-json";
@@ -19,6 +20,7 @@ import { Catalog2Error, isNewByPublicationDate, computeInactivationState } from 
 import { computePricing, defaultSelection, type PricingResult, type PricingSelection } from "./catalog2-pricing";
 import { findEarliestCommercialChangeAfter } from "./catalog2-commercial-change-log";
 import { createCatalog2NotificationJob } from "./catalog2-notifications";
+import { connectionsPreviewForClient } from "./connections/quote";
 import {
   CATALOG2_PERIODS,
   isCatalog2Period,
@@ -213,14 +215,17 @@ export async function checkClientVisibility(product: ProductForVisibility): Prom
   if (pend.length > 0) reasons.push(`pendência obrigatória: ${pend.join(", ")}`);
 
   let commercialReady = false;
+  let onRequest = false; // "sob consulta": aparece no catálogo sem preço e sem poder contratar
   if (product.published_version_id && pend.length === 0) {
     const pricing = await computePricing(product.published_version_id, await defaultSelection(product.published_version_id));
     commercialReady = pricing.commercial_ready;
+    onRequest = pricing.pricing_mode === "on_request";
+    if (onRequest) reasons.push("produto sob consulta: não gera cotação nem contratação automática");
     // Só bloqueia VISIBILIDADE por prontidão comercial no status "Ativo" —
     // igual ao comportamento de sempre. Nos demais status visíveis, o
     // produto aparece mesmo com preço/prazo incompletos (a contratação já
     // está bloqueada pelo status de qualquer forma).
-    if (status === "disponivel" && !commercialReady) {
+    if (status === "disponivel" && !commercialReady && !onRequest) {
       reasons.push(`cálculo comercial incompleto: ${pricing.quote_blockers.join(", ")}`);
     }
   }
@@ -230,7 +235,7 @@ export async function checkClientVisibility(product: ProductForVisibility): Prom
     visibleByStatus &&
     !!product.published_version_id &&
     pend.length === 0 &&
-    (!requiresCommercialReadyForVisibility || commercialReady);
+    (!requiresCommercialReadyForVisibility || commercialReady || onRequest);
 
   let contractableExisting = visible && CATALOG2_CONTRACTABLE_STATUSES.includes(status) && commercialReady;
   if (visible && !CATALOG2_CONTRACTABLE_STATUSES.includes(status)) {
@@ -273,13 +278,41 @@ export async function checkClientVisibility(product: ProductForVisibility): Prom
 // ── Projeção segura para o cliente ─────────────────────────────────────
 
 /** Remove TUDO que é interno de um PricingResult antes de mandar ao cliente. */
+/** Só o que o cliente pode ver da separação de cobrança (nunca custo, imposto ou margem). */
+export function clientChargesView(p: PricingResult) {
+  const s = p.split;
+  return {
+    implementation: { applicable: s.implementation.applicable, price: s.implementation.applicable ? s.implementation.price : 0, reason: s.implementation.reason },
+    first_charge: s.first_charge,
+    renewal: s.renewal,
+    avulso_total: s.avulso_total,
+  };
+}
+
+/** Campos de cobrança separados gravados na cotação (implantação × recorrente × primeira cobrança) + cronograma por ciclo. */
+export function quoteChargeFields(pricing: PricingResult, periodPricing: { first_charge_price?: number | null; implementation_price?: number | null; renewal_price?: number | null; discount_percent: number; months: number } | null) {
+  const s = pricing.split;
+  const recurring = !!periodPricing;
+  return {
+    implementation_price: periodPricing ? periodPricing.implementation_price ?? 0 : s.implementation.applicable ? s.implementation.price : 0,
+    recurring_price: recurring ? periodPricing!.renewal_price ?? s.renewal : null,
+    first_charge_price: periodPricing ? periodPricing.first_charge_price ?? null : s.first_charge,
+    pricing_components_json: JSON.stringify({
+      schedule: s.schedule, first_charge_parts: s.first_charge_parts, implementation: { applicable: s.implementation.applicable, rule: s.implementation.rule, reason: s.implementation.reason },
+      discount_percent: periodPricing?.discount_percent ?? 0, months: periodPricing?.months ?? 1,
+    }),
+  };
+}
+
 export function clientPricingView(p: PricingResult) {
   return {
+    charges: clientChargesView(p),
     currency: p.currency,
     quantity: p.quantity,
     // Preço/prazo COMERCIAIS (nunca esforço, nunca custo).
     commercial_price: p.lines.commercial_final_price.amount,
-    commercial_price_label: p.lines.commercial_final_price.amount == null ? "A definir" : undefined,
+    commercial_price_label: p.pricing_mode === "on_request" ? "Sob consulta" : p.lines.commercial_final_price.amount == null ? "A definir" : undefined,
+    pricing_mode: p.pricing_mode,
     commercial_deadline_days: p.deadline.commercial_deadline_days,
     commercial_deadline_pending: p.deadline.commercial_deadline_pending,
     commercial_ready: p.commercial_ready,
@@ -289,6 +322,7 @@ export function clientPricingView(p: PricingResult) {
         w.code !== "tax_order_not_confirmed" &&
         !w.code.startsWith("specialty_") &&
         !w.code.startsWith("ia_cost") &&
+        w.code !== "review_rate_missing" &&
         w.code !== "task_without_time" &&
         // Reunião 10/09 ("precificação dos 36 produtos funcional para
         // teste"): avisos de dado PROVISÓRIO (esforço/prazo) nunca chegam
@@ -327,6 +361,10 @@ export function clientPeriodPricingView(r: PeriodPricingResult) {
     currency: r.currency,
     commercial_ready: r.commercial_ready,
     quote_blockers: r.quote_blockers,
+    // Separação financeira: o que se paga AGORA (implantação + 1ª mensalidade) × o que renova.
+    first_charge_price: r.first_charge_price ?? r.total_price,
+    implementation_price: r.implementation_price ?? 0,
+    renewal_price: r.renewal_price ?? null,
   };
 }
 
@@ -437,7 +475,7 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
     // de sempre). Pré-lançamento/pausado/esgotado aparecem mesmo com
     // preço/prazo ainda incompletos — a contratação já está bloqueada pelo
     // status de qualquer forma (ver checkClientVisibility).
-    if (!previewMode && status === "disponivel" && !pricing.commercial_ready) continue;
+    if (!previewMode && status === "disponivel" && !pricing.commercial_ready && pricing.pricing_mode !== "on_request") continue;
     const inact = computeInactivationState(p);
     // Item 5: bloqueado pra NOVA contratação desde o agendamento, mesmo
     // antes da data efetiva (a exclusão de `rows` acima já cobre o "depois").
@@ -489,7 +527,7 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
 
 // ── Detalhe ───────────────────────────────────────────────────────────
 
-export async function getClientProduct(ctx: ClientContext, slugOrId: string, opts: { preview: boolean }) {
+export async function getClientProduct(ctx: ClientContext, slugOrId: string, opts: { preview: boolean; versionId?: string }) {
   const product = await prisma.catalog2Product.findFirst({
     where: productLookupWhere(slugOrId),
     include: {
@@ -526,7 +564,10 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
     throw new Catalog2Error("Produto não encontrado.", 404);
   }
 
+  // Pré-visualização do editor: o Admin Master pode pedir uma versão específica
+  // (ex.: o rascunho em edição). Só vale em modo preview — cliente nunca escolhe versão.
   const version =
+    (previewMode && opts.versionId ? product.versions.find((v) => v.id === opts.versionId) : undefined) ??
     product.versions.find((v) => v.id === product.published_version_id) ??
     (previewMode ? product.versions.find((v) => v.state === "rascunho") ?? product.versions[0] : null);
   if (!version) throw new Catalog2Error("Produto não encontrado.", 404);
@@ -535,9 +576,10 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
   // Item 16.1: em preview, simula com dado PROVISÓRIO quando o real ainda
   // não existe — nunca autoriza cotação/contratação (ver checkClientVisibility/
   // computePricing, bloqueio incondicional em modo simulação).
-  const pricing = await computePricing(version.id, sel, { simulateProvisional: previewMode });
+  const implOpt = await implOpts(ctx.account_kind, ctx.account_id, product.id);
+  const pricing = await computePricing(version.id, sel, { simulateProvisional: previewMode, ...implOpt });
   // Item 6: só os períodos CONFIGURADOS + ATIVOS aparecem — nunca os 4 fixos.
-  const availablePeriods = await listAvailablePeriods(version.id, sel, product);
+  const availablePeriods = saleModeProblem(version, "mensal") ? [] : await listAvailablePeriods(version.id, sel, product, implOpt);
 
   return {
     id: product.id,
@@ -545,6 +587,9 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
     sequence_number: product.sequence_number,
     name: version.title || product.internal_name,
     description: version.full_description ?? version.summary ?? null,
+    short_description: version.summary ?? null,
+    // Só o que está marcado como visível ao cliente (observações internas NUNCA saem daqui).
+    commercial: clientCommercialView(version as unknown as Record<string, unknown>),
     pillar: product.pillar ? { key: product.pillar.key, name: product.pillar.name } : null,
     category: product.category ? { key: product.category.key, name: product.category.name } : null,
     four_f: product.four_f.map((l) => ({ key: l.four_f.key, name: l.four_f.name })).sort((a, b) => a.key.localeCompare(b.key)),
@@ -568,18 +613,21 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
       : null,
     inactivation_scheduled_at: vis.inactivation_scheduled_at,
     inactivation_effective_at: vis.inactivation_effective_at,
-    variations: version.variations.map((va) => ({
-      id: va.id,
-      key: va.key,
-      name: va.name,
-      is_required: va.is_required,
-      selection_type: va.selection_type,
-      notes: va.notes,
-      options: va.options.map((o) => ({ key: o.key, label: o.label, is_default: o.is_default })),
-    })),
+    variations: version.variations
+      .filter((va) => va.is_active)
+      .map((va) => ({
+        id: va.id,
+        key: va.key,
+        name: va.name,
+        is_required: va.is_required,
+        selection_type: va.selection_type,
+        notes: va.notes,
+        help_text: va.notes,
+        options: va.options.filter((o) => o.is_active).map((o) => ({ key: o.key, label: o.label, is_default: o.is_default })),
+      })),
     addons: version.addons
       .filter((a) => a.is_active)
-      .map((a) => ({ key: a.key, name: a.name, description: a.description, is_default_selected: a.is_default_selected })),
+      .map((a) => ({ key: a.key, name: a.name, description: a.description, help_text: a.description, is_default_selected: a.is_default_selected })),
     // Dado real (nunca provisório) — usado pela aba "Detalhes"/"Nômades" do
     // cliente, espelhando o "Detalhe comercial" do admin.
     included_items: version.tasks.map((t) => ({ title: t.name, description: t.description })),
@@ -589,13 +637,56 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
       .filter((w) => w.code === "extra_info_required")
       .flatMap((w) => w.message.replace(/^Informações extras exigidas:\s*/, "").split("; ")),
     default_selection: sel,
+    // Conexões e acessos necessários (módulo opcional): vazio quando o produto não exige conexões externas.
+    connections: await connectionsPreviewForClient(prisma, version.id),
     pricing: clientPricingView(pricing),
     // Item 6: modalidades de período oferecidas por ESTE produto (avulso
     // continua sempre disponível via `pricing` acima — nunca listado aqui).
     available_periods: availablePeriods.map(clientPeriodPricingView),
+    // Como este produto pode ser contratado (só informativo; quem decide é o servidor na cotação/cesta/checkout).
+    sale_label: version.sale_modes_enforced ? saleLabelOf(version) : saleLabelOf({ accepts_one_time: true, accepts_recurring: availablePeriods.length > 0 }),
+    sale_modes: {
+      one_time: !version.sale_modes_enforced || version.accepts_one_time !== false,
+      recurring: !version.sale_modes_enforced || version.accepts_recurring === true || availablePeriods.length > 0,
+      package_only: !!version.sale_modes_enforced && version.sell_mode === "package_only",
+    },
     can_configure: ctx.can_configure && vis.visible,
     can_contract: ctx.can_contract && vis.contractable,
   };
+}
+
+/**
+ * Modalidades de venda (Pedido 3, fase 4): "avulso" e "recorrente/assinatura". Só versões criadas depois desta
+ * regra (sale_modes_enforced) a respeitam; as já publicadas seguem exatamente como vendiam antes.
+ */
+/**
+ * Versões que já seguem as regras novas (sale_modes_enforced) só são vendidas com as modalidades coerentes com a entrega e os
+ * períodos. Versões antigas seguem como sempre (o painel do administrador mostra o aviso de inconsistência).
+ */
+export async function commercialProblem(productId: string, version: { sale_modes_enforced?: boolean; accepts_one_time: boolean; accepts_recurring: boolean }): Promise<string | null> {
+  if (!version.sale_modes_enforced) return null;
+  const { loadConsistency, blockersOf } = await import("./catalog2-commercial");
+  const b = blockersOf(await loadConsistency(prisma, productId, version));
+  return b.length ? "a configuração comercial deste produto está em revisão" : null;
+}
+
+function saleLabelOf(v: { accepts_one_time: boolean; accepts_recurring: boolean }): string | null {
+  if (v.accepts_one_time && v.accepts_recurring) return "Disponível avulso ou em assinatura mensal";
+  if (v.accepts_recurring) return "Assinatura mensal recorrente";
+  if (v.accepts_one_time) return "Avulso disponível";
+  return null;
+}
+
+async function implOpts(accountKind: string, accountId: string, productId: string) {
+  const { loadImplementationDone } = await import("./catalog2-cycles");
+  return { implementationDone: await loadImplementationDone(prisma, { companyId: accountKind === "company" ? accountId : null, catalog2ProductId: productId }) };
+}
+
+export function saleModeProblem(version: { sale_modes_enforced?: boolean; accepts_one_time?: boolean; accepts_recurring?: boolean }, period: unknown): string | null {
+  if (!version.sale_modes_enforced) return null;
+  if (!period && version.accepts_one_time === false) return "este produto não é vendido avulso";
+  if (period && version.accepts_recurring !== true) return "este produto não é vendido como assinatura ou contrato recorrente";
+  return null;
 }
 
 // ── Configurar (recalcular) ───────────────────────────────────────────
@@ -608,9 +699,17 @@ export function normalizeSelection(raw: unknown): PricingSelection {
   if (r.answers && typeof r.answers === "object" && !Array.isArray(r.answers)) {
     for (const [k, v] of Object.entries(r.answers as Record<string, unknown>)) answers[String(k)] = String(v ?? "");
   }
+  const variation_quantities: Record<string, number> = {};
+  if (r.variation_quantities && typeof r.variation_quantities === "object" && !Array.isArray(r.variation_quantities)) {
+    for (const [k, v] of Object.entries(r.variation_quantities as Record<string, unknown>)) {
+      const n = Math.floor(Number(v));
+      if (Number.isFinite(n) && n >= 0) variation_quantities[String(k)] = n;
+    }
+  }
   return {
     variation_option_keys: arr(r.variation_option_keys),
     addon_keys: arr(r.addon_keys),
+    ...(Object.keys(variation_quantities).length > 0 ? { variation_quantities } : {}),
     quantity: qty,
     // Cotações anteriores não possuíam essa escolha: preservam exatamente o
     // comportamento anterior, com uma única tarefa para toda a quantidade.
@@ -630,6 +729,8 @@ export function configChecksum(productId: string, versionId: string, sel: Pricin
     quantity: sel.quantity ?? 1,
     delivery_groups: sel.delivery_groups ?? [sel.quantity ?? 1],
     answers: sel.answers ?? {},
+    // Só entra quando há variação por quantidade — assim as cotações antigas mantêm o mesmo checksum.
+    ...(sel.variation_quantities && Object.keys(sel.variation_quantities).length > 0 ? { variation_quantities: Object.fromEntries(Object.entries(sel.variation_quantities).sort(([a], [b]) => a.localeCompare(b))) } : {}),
     // Item 6: a MESMA seleção com períodos diferentes (ou avulso) é uma
     // configuração DIFERENTE — nunca colide no clique-duplo/cesta.
     period,
@@ -647,7 +748,7 @@ export function normalizePeriod(raw: unknown): Catalog2Period | null {
 /** Valida que a seleção cobre toda variação obrigatória e respeita min/max. */
 export function validateSelection(
   version: {
-    variations: Array<{ key: string; name: string; is_required: boolean; selection_type: string | null; options: Array<{ key: string }> }>;
+    variations: Array<{ key: string; name: string; is_required: boolean; is_active?: boolean; selection_type: string | null; options: Array<{ key: string; is_active?: boolean }> }>;
     addons: Array<{ key: string; is_active: boolean }>;
   },
   sel: PricingSelection,
@@ -661,12 +762,20 @@ export function validateSelection(
   // próprias optKeys daquela variação) contra optKeys — tautológico, nunca
   // acusava nada; a checagem real precisa comparar contra o universo de
   // TODAS as opções da versão.
-  const allOptionKeys = new Set(version.variations.flatMap((va) => va.options.map((o) => o.key)));
+  const allOptionKeys = new Set(version.variations.filter((va) => va.is_active !== false).flatMap((va) => va.options.filter((o) => o.is_active !== false).map((o) => o.key)));
   for (const va of version.variations) {
-    const optKeys = va.options.map((o) => o.key);
+    if (va.is_active === false) continue;
+    const type = va.selection_type ?? "single";
+    if (type === "quantity") {
+      const q = sel.variation_quantities?.[va.key] ?? 0;
+      if (!Number.isInteger(q) || q < 0 || q > 100000) errs.push(`Informe uma quantidade válida para "${va.name}".`);
+      else if (va.is_required && q < 1) errs.push(`Informe a quantidade de "${va.name}" (mínimo 1).`);
+      continue;
+    }
+    const optKeys = va.options.filter((o) => o.is_active !== false).map((o) => o.key);
     const picked = optKeys.filter((k) => chosen.has(k));
     if (va.is_required && picked.length === 0) errs.push(`Escolha uma opção para "${va.name}".`);
-    if ((va.selection_type ?? "single") === "single" && picked.length > 1) errs.push(`"${va.name}" aceita apenas uma opção.`);
+    if (type === "single" && picked.length > 1) errs.push(`"${va.name}" aceita apenas uma opção.`);
   }
   for (const k of chosen) if (!allOptionKeys.has(k)) errs.push(`Opção inválida ou não existe mais: "${k}".`);
   const activeAddons = new Set(version.addons.filter((a) => a.is_active).map((a) => a.key));
@@ -684,7 +793,7 @@ export function validateSelection(
   return errs;
 }
 
-export async function configureProduct(ctx: ClientContext, productIdOrSlug: string, rawSelection: unknown, opts: { preview: boolean; period?: unknown }) {
+export async function configureProduct(ctx: ClientContext, productIdOrSlug: string, rawSelection: unknown, opts: { preview: boolean; period?: unknown; versionId?: string }) {
   const product = await prisma.catalog2Product.findFirst({
     where: productLookupWhere(productIdOrSlug),
     include: {
@@ -701,7 +810,10 @@ export async function configureProduct(ctx: ClientContext, productIdOrSlug: stri
   const vis = await checkClientVisibility(product);
   if (!vis.visible && !previewMode) throw new Catalog2Error("Produto não encontrado.", 404);
 
+  // Pré-visualização do editor: o Admin Master pode pedir uma versão específica
+  // (ex.: o rascunho em edição). Só vale em modo preview — cliente nunca escolhe versão.
   const version =
+    (previewMode && opts.versionId ? product.versions.find((v) => v.id === opts.versionId) : undefined) ??
     product.versions.find((v) => v.id === product.published_version_id) ??
     (previewMode ? product.versions.find((v) => v.state === "rascunho") ?? product.versions[0] : null);
   if (!version) throw new Catalog2Error("Produto não encontrado.", 404);
@@ -709,15 +821,17 @@ export async function configureProduct(ctx: ClientContext, productIdOrSlug: stri
   const sel = normalizeSelection(rawSelection);
   const period = normalizePeriod(opts.period);
   const selectionErrors = validateSelection(version, sel);
-  const pricing = await computePricing(version.id, sel);
+  const implOpt = await implOpts(ctx.account_kind, ctx.account_id, product.id);
+  const pricing = await computePricing(version.id, sel, implOpt);
   // Item 6: quando um período é pedido, o preço mostrado/usado pra decidir
   // "pode gerar cotação" passa a ser o do PERÍODO (total antecipado), nunca
   // o avulso — mas o avulso (`pricing` acima) continua sempre calculado e
   // devolvido como referência.
-  const periodPricing = period ? await computePeriodPricing(version.id, sel, product, period) : null;
+  const periodPricing = period ? await computePeriodPricing(version.id, sel, product, period, implOpt) : null;
   const checksum = configChecksum(product.id, version.id, sel, period);
 
-  const commercialReadyForRequest = periodPricing ? periodPricing.commercial_ready : pricing.commercial_ready;
+  const saleProblem = saleModeProblem(version, period) ?? (await commercialProblem(product.id, version));
+  const commercialReadyForRequest = (periodPricing ? periodPricing.commercial_ready : pricing.commercial_ready) && !saleProblem;
   const canQuote =
     !previewMode &&
     ctx.can_contract &&
@@ -745,6 +859,7 @@ export async function configureProduct(ctx: ClientContext, productIdOrSlug: stri
       // esgotado) — mesmo motivo exposto em getClientProduct.contract_blocked_reason.
       ...(!previewMode && vis.visible ? vis.reasons : []),
       ...selectionErrors,
+      ...(saleProblem ? [saleProblem] : []),
       ...(periodPricing ? periodPricing.quote_blockers : pricing.quote_blockers),
     ],
   };
@@ -778,7 +893,7 @@ export async function createQuote(ctx: ClientContext, productIdOrSlug: string, r
   // cotação continua proibido enquanto o status não for "Ativo" — mesmo
   // chamando a API direto (esconder/desabilitar o botão não basta). Item 5:
   // `contractable` já embute "bloqueado desde o agendamento de inativação".
-  if (!vis.contractable) throw new Catalog2Error("Produto indisponível para cotação.", 409, "not_quotable");
+  if (!vis.contractable) throw new Catalog2Error(`Produto indisponível para cotação.${vis.reasons.length ? ` ${vis.reasons.join("; ")}.` : ""}`, 409, "not_quotable");
 
   const version = product.versions.find((v) => v.id === product.published_version_id);
   if (!version || version.state !== "publicada") throw new Catalog2Error("Produto sem versão publicada.", 409, "not_published");
@@ -787,9 +902,12 @@ export async function createQuote(ctx: ClientContext, productIdOrSlug: string, r
   const period = normalizePeriod(rawPeriod);
   const selErrors = validateSelection(version, sel);
   if (selErrors.length) throw new Catalog2Error(selErrors.join(" "), 422, "invalid_selection");
+  const saleProblem = saleModeProblem(version, period) ?? (await commercialProblem(product.id, version));
+  if (saleProblem) throw new Catalog2Error(`Cotação inválida: ${saleProblem}.`, 409, "sale_mode_not_accepted");
 
-  const pricing = await computePricing(version.id, sel);
-  const periodPricing = period ? await computePeriodPricing(version.id, sel, product, period) : null;
+  const implOpt = await implOpts(ctx.account_kind, ctx.account_id, product.id);
+  const pricing = await computePricing(version.id, sel, implOpt);
+  const periodPricing = period ? await computePeriodPricing(version.id, sel, product, period, implOpt) : null;
   if (period && !periodPricing!.available) {
     throw new Catalog2Error(`Cotação inválida: ${periodPricing!.quote_blockers.join("; ")}.`, 409, "not_commercial_ready");
   }
@@ -831,6 +949,7 @@ export async function createQuote(ctx: ClientContext, productIdOrSlug: string, r
       contract_period_months: periodPricing?.months ?? null,
       contract_period_discount_percent: periodPricing?.discount_percent ?? null,
       contract_period_reference_monthly_price: periodPricing?.reference_monthly_price ?? null,
+      ...quoteChargeFields(pricing, periodPricing),
     },
   });
   return serializeQuote(created);
@@ -976,10 +1095,10 @@ export async function assessQuote(q: QuoteRow): Promise<QuoteAssessment> {
   let periodResult: PeriodPricingResult | null = null;
   if (pricingVersionId) {
     if (contractPeriod) {
-      periodResult = await computePeriodPricing(pricingVersionId, sel, product!, contractPeriod);
+      periodResult = await computePeriodPricing(pricingVersionId, sel, product!, contractPeriod, await implOpts(q.account_kind, q.account_id, q.product_id));
       pricing = periodResult.base;
     } else {
-      pricing = await computePricing(pricingVersionId, sel);
+      pricing = await computePricing(pricingVersionId, sel, await implOpts(q.account_kind, q.account_id, q.product_id));
     }
   }
   const currentReady = contractPeriod ? !!periodResult?.available : !!pricing?.commercial_ready;
@@ -1203,6 +1322,7 @@ export async function renewQuote(ctx: ClientContext, id: string) {
       contract_period_months: q.contract_period_months,
       contract_period_discount_percent: q.contract_period_discount_percent,
       contract_period_reference_monthly_price: q.contract_period_reference_monthly_price,
+      implementation_price: q.implementation_price, recurring_price: q.recurring_price, first_charge_price: q.first_charge_price, pricing_components_json: q.pricing_components_json,
     };
   } else {
     mode = "recomputed";
@@ -1256,6 +1376,7 @@ export async function renewQuote(ctx: ClientContext, id: string) {
       contract_period_months: a.periodResult?.months ?? null,
       contract_period_discount_percent: a.periodResult?.discount_percent ?? null,
       contract_period_reference_monthly_price: a.periodResult?.reference_monthly_price ?? null,
+      ...quoteChargeFields(a.pricing, a.periodResult),
     };
   }
 
@@ -1366,6 +1487,7 @@ function serializeQuote(q: {
   price_protection_anchor_source?: string | null;
   contract_period?: string | null; contract_period_months?: number | null;
   contract_period_discount_percent?: number | null; contract_period_reference_monthly_price?: number | null;
+  implementation_price?: number | null; recurring_price?: number | null; first_charge_price?: number | null;
 }) {
   const protectionEndsAt = q.price_protection_started_at
     ? new Date(q.price_protection_started_at.getTime() + PRICE_PROTECTION_DAYS * 24 * 3600 * 1000)
@@ -1395,6 +1517,9 @@ function serializeQuote(q: {
     contract_period_months: q.contract_period_months ?? null,
     contract_period_discount_percent: q.contract_period_discount_percent ?? null,
     contract_period_reference_monthly_price: q.contract_period_reference_monthly_price ?? null,
+    implementation_price: q.implementation_price ?? null,
+    recurring_price: q.recurring_price ?? null,
+    first_charge_price: q.first_charge_price ?? null,
   };
 }
 function expiryFlags(q: { valid_until: Date | null; status: string }) {
@@ -1429,8 +1554,9 @@ export async function getCart(ctx: ClientContext) {
     let pricing: PricingResult | null = null;
     let periodResult: PeriodPricingResult | null = null;
     if (current) {
-      if (period) periodResult = await computePeriodPricing(it.version_id, sel, it.product, period);
-      else pricing = await computePricing(it.version_id, sel);
+      const cartImpl = await implOpts(ctx.account_kind, ctx.account_id, it.product_id);
+      if (period) periodResult = await computePeriodPricing(it.version_id, sel, it.product, period, cartImpl);
+      else pricing = await computePricing(it.version_id, sel, cartImpl);
     }
     const view = pricing ? clientPricingView(pricing) : null;
     const periodView = periodResult ? clientPeriodPricingView(periodResult) : null;
@@ -1474,6 +1600,8 @@ export async function addToCart(ctx: ClientContext, productIdOrSlug: string, raw
   const period = normalizePeriod(rawPeriod);
   const selErrors = validateSelection(version, sel);
   if (selErrors.length) throw new Catalog2Error(selErrors.join(" "), 422, "invalid_selection");
+  const saleProblem = saleModeProblem(version, period) ?? (await commercialProblem(product.id, version));
+  if (saleProblem) throw new Catalog2Error(`Não é possível adicionar: ${saleProblem}.`, 409, "sale_mode_not_accepted");
   if (period) {
     const periodResult = await computePeriodPricing(version.id, sel, product, period);
     if (!periodResult.available) throw new Catalog2Error(`Não é possível adicionar: ${periodResult.quote_blockers.join("; ")}.`, 409, "period_not_available");
@@ -1517,6 +1645,8 @@ export async function updateCartItem(ctx: ClientContext, itemId: string, rawSele
   const period = rawPeriod === undefined ? (isCatalog2Period(item.period) ? item.period : null) : normalizePeriod(rawPeriod);
   const selErrors = validateSelection(item.version, sel);
   if (selErrors.length) throw new Catalog2Error(selErrors.join(" "), 422, "invalid_selection");
+  const saleProblem = saleModeProblem(item.version, period);
+  if (saleProblem) throw new Catalog2Error(`Não é possível atualizar: ${saleProblem}.`, 409, "sale_mode_not_accepted");
   if (period) {
     const periodResult = await computePeriodPricing(item.version_id, sel, item.product, period);
     if (!periodResult.available) throw new Catalog2Error(`Não é possível atualizar: ${periodResult.quote_blockers.join("; ")}.`, 409, "period_not_available");

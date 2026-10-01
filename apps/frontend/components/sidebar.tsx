@@ -76,6 +76,7 @@ import {
   CheckCircle,
   ArrowRight,
   LifeBuoy,
+  Plug,
 } from "lucide-react";
 
 const navigationConfig = {
@@ -111,6 +112,7 @@ const navigationConfig = {
         icon: CheckSquare,
         current: false,
       },
+      { name: "Conexões e acessos", href: "/company/conexoes", icon: Plug, current: false },
       {
         // 2026-09-25 (achado durante teste do fluxo principal): apontava pra
         // /company/produtos, a tela do catálogo ANTIGO (162 produtos legados,
@@ -168,6 +170,7 @@ const navigationConfig = {
       icon: Package,
       current: false,
     },
+    { name: "Conexões e acessos", href: "/agency/conexoes", icon: Plug, current: false },
     {
       name: "Combos",
       href: "/agency/combos",
@@ -264,6 +267,7 @@ const navigationConfig = {
       icon: History,
       current: false,
     },
+    { name: "Conexões e acessos", href: "/nomades/conexoes", icon: Plug, current: false },
     { name: "Programa", href: "/nomades/programa", icon: Star, current: false },
     { name: "Ganhos", href: "/nomades/ganhos", icon: Wallet, current: false },
     {
@@ -334,6 +338,7 @@ const navigationConfig = {
       icon: BookOpen,
       current: false,
     },
+    { name: "Conexões e acessos", href: "/leader/conexoes", icon: Plug, current: false },
     {
       name: "Clientes",
       href: "/leader/clientes",
@@ -440,6 +445,7 @@ const navigationConfig = {
           current: false,
           masterOnly: true,
         },
+        { name: "Conexões e acessos", href: "/admin/conexoes", icon: Plug, current: false },
         {
           name: "Precificação",
           href: "/admin/precificacao",

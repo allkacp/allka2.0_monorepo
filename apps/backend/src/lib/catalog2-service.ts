@@ -8,7 +8,14 @@
 //  - antes de publicar, uma bateria de validações (Parte 8 do lote);
 //  - efeitos e condições só usam vocabulário FECHADO e referências válidas.
 
+import { providerProblem } from "./catalog2-ai-providers";
+import { parseOptions, parseValidation } from "./catalog2-question-types";
+import { runCost } from "./catalog2-ai";
+import { commercialCloneData, serializeCommercialFields } from "./catalog2-commercial-fields";
 import { Prisma } from "@prisma/client";
+import { copyTaskDeliverables } from "./task-deliverables";
+import { aiCopyData, AI_EXECUTION_MODES } from "./catalog2-ai";
+import { blockersOf, commercialConsistency, loadConsistency, saleLabel, RESOLUTION_EFFECTS } from "./catalog2-commercial";
 import { prisma } from "./prisma";
 import { taskDivergesFromModel, stepDivergesFromModel } from "./catalog2-models";
 import { CATALOG2_STATUSES, CATALOG2_CLIENT_VISIBLE_STATUSES, type Catalog2Status } from "./catalog2-foundation";
@@ -19,11 +26,17 @@ import {
   validateEffect,
   type EffectValidationCtx,
 } from "./catalog2-effects";
-import { computePricing, defaultSelection } from "./catalog2-pricing";
+import { computePricing, defaultSelection, PRICING_MODES, type PricingMode } from "./catalog2-pricing";
 import { logCommercialChangeEvent } from "./catalog2-commercial-change-log";
 import { recordCatalog2ProductHistory } from "./catalog2-product-history";
 import { maybeCreateCatalog2ActivationJobOnStatusTransition, notifyValidQuoteOwnersOfCommercialChange, createCatalog2NotificationJob, type Catalog2NotificationRecipientInput } from "./catalog2-notifications";
 import type { DbClient } from "./project-scope";
+import { cloneConnections, serializeRequirement, validateConnectionConfig } from "./connections/requirements";
+
+/** Escopo de cobrança exposto pela API (adicionais, efeitos de variação e condições). */
+export function chargeOut(x: { charge_scope: string; charge_start_cycle: number; charge_end_cycle: number | null; charge_quantity: number | null; source_task_key: string | null; source_step_key: string | null }) {
+  return { charge_scope: x.charge_scope, charge_start_cycle: x.charge_start_cycle, charge_end_cycle: x.charge_end_cycle, charge_quantity: x.charge_quantity, source_task_key: x.source_task_key, source_step_key: x.source_step_key };
+}
 
 export class Catalog2Error extends Error {
   constructor(
@@ -103,6 +116,7 @@ export async function createProduct(
         version_number: 1,
         state: "rascunho",
         title: input.version_title ?? input.internal_name,
+        sale_modes_enforced: true,
         created_by_user_id: actorUserId,
       },
     });
@@ -124,7 +138,7 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
             addons: { include: { effects: true } },
             conditions: true,
             access_requirements: true,
-            tasks: { include: { steps: true, ai: true, dependencies: true } },
+            tasks: { include: { steps: true, ai: true, dependencies: true, deliverables: true } },
           },
         },
       },
@@ -143,14 +157,19 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
         title: last?.title ?? product.internal_name,
         summary: last?.summary ?? null,
         full_description: last?.full_description ?? null,
+        ...commercialCloneData(last as unknown as Record<string, unknown> | null),
         // O prazo comercial base acompanha a versão (senão a nova versão "perde" o prazo).
         base_commercial_deadline_days: last?.base_commercial_deadline_days ?? null,
+        pricing_mode: last?.pricing_mode ?? undefined,
+        manual_price: last?.manual_price ?? undefined,
+        manual_deadline_days: last?.manual_deadline_days ?? undefined,
         accepts_one_time: last?.accepts_one_time ?? undefined,
         accepts_recurring: last?.accepts_recurring ?? undefined,
         has_initial_implementation: last?.has_initial_implementation ?? undefined,
         implementation_rule: last?.implementation_rule ?? undefined,
         implementation_blocks_operation: last?.implementation_blocks_operation ?? undefined,
         sell_mode: last?.sell_mode ?? undefined,
+        sale_modes_enforced: true,
         created_by_user_id: actorUserId,
       },
     });
@@ -158,6 +177,7 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
     // Copia a ESTRUTURA da última versão para o novo rascunho (deep clone
     // por key), para o admin partir do que estava publicado.
     if (last) await cloneVersionStructure(tx, last, nv.id);
+    if (last) await cloneConnections(tx, last.id, nv.id);
     await logVersionEvent(tx, nv.id, "new_version", actorUserId, `Rascunho v${nextNumber} criado a partir da v${last?.version_number ?? "-"}.`);
     return nv;
   });
@@ -169,7 +189,7 @@ type FullVersion = Prisma.Catalog2ProductVersionGetPayload<{
     addons: { include: { effects: true } };
     conditions: true;
     access_requirements: true;
-    tasks: { include: { steps: true; ai: true; dependencies: true } };
+    tasks: { include: { steps: true; ai: true; dependencies: true; deliverables: true } };
   };
 }>;
 
@@ -191,6 +211,14 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         executor_continuity: t.executor_continuity,
         asset_rule: t.asset_rule,
         asset_revalidate_days: t.asset_revalidate_days,
+        // Qualificador designado e campos operacionais seguem para a versão nova.
+        qualifier_user_id: t.qualifier_user_id,
+        qualification_mode: t.qualification_mode,
+        qualification_min_approvals: t.qualification_min_approvals,
+        reviewer_user_id: t.reviewer_user_id,
+        review_minutes: t.review_minutes,
+        review_specialty_id: t.review_specialty_id,
+        ops: (t.ops ?? undefined) as Prisma.InputJsonValue | undefined,
         version_id: destId,
         key: t.key,
         name: t.name,
@@ -223,6 +251,7 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
           completion_criteria: s.completion_criteria,
           first_execution_only: s.first_execution_only,
           skip_when_same_executor: s.skip_when_same_executor,
+          ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined,
           task_id: nt.id,
           key: s.key,
           name: s.name,
@@ -235,21 +264,10 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
       });
       stepIdByRef.set(`${t.key}:${s.key}`, ns.id);
     }
+    await copyTaskDeliverables(db, t, nt.id);
     if (t.ai) {
       await db.catalog2TaskAI.create({
-        data: {
-          task_id: nt.id,
-          provider: t.ai.provider,
-          model: t.ai.model,
-          est_input_tokens: t.ai.est_input_tokens,
-          est_output_tokens: t.ai.est_output_tokens,
-          unit_cost_input_per_1k: t.ai.unit_cost_input_per_1k,
-          unit_cost_output_per_1k: t.ai.unit_cost_output_per_1k,
-          currency: t.ai.currency,
-          est_review_rounds: t.ai.est_review_rounds,
-          cost_note: t.ai.cost_note,
-          human_review_required: t.ai.human_review_required,
-        },
+        data: { task_id: nt.id, ...aiCopyData(t.ai) },
       });
     }
   }
@@ -272,6 +290,7 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         is_required: va.is_required,
         sort_order: va.sort_order,
         notes: va.notes,
+        is_active: va.is_active,
       },
     });
     for (const opt of va.options) {
@@ -282,7 +301,8 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
           label: opt.label,
           sort_order: opt.sort_order,
           is_default: opt.is_default,
-          effects: { create: opt.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order })) },
+          is_active: opt.is_active,
+          effects: { create: opt.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order, charge_scope: e.charge_scope, charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, charge_quantity: e.charge_quantity, source_task_key: e.source_task_key, source_step_key: e.source_step_key })) },
         },
       });
     }
@@ -298,9 +318,10 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         is_default_selected: ad.is_default_selected,
         is_active: ad.is_active,
         base_cost: ad.base_cost,
+        charge_scope: ad.charge_scope, charge_start_cycle: ad.charge_start_cycle, charge_end_cycle: ad.charge_end_cycle, charge_quantity: ad.charge_quantity, source_task_key: ad.source_task_key, source_step_key: ad.source_step_key,
         target_task_id: ad.target_task_id ? taskIdByKey.get(src.tasks.find((x) => x.id === ad.target_task_id)?.key ?? "") ?? null : null,
         target_step_id: ad.target_step_id ? stepIdByRef.get(refForStepId(src, ad.target_step_id) ?? "") ?? null : null,
-        effects: { create: ad.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order })) },
+        effects: { create: ad.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order, charge_scope: e.charge_scope, charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, charge_quantity: e.charge_quantity, source_task_key: e.source_task_key, source_step_key: e.source_step_key })) },
       },
     });
   }
@@ -320,6 +341,7 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         effect_type: c.effect_type,
         effect_value: c.effect_value,
         explanation: c.explanation,
+        charge_scope: c.charge_scope, charge_start_cycle: c.charge_start_cycle, charge_end_cycle: c.charge_end_cycle, charge_quantity: c.charge_quantity, source_task_key: c.source_task_key, source_step_key: c.source_step_key,
       },
     });
   }
@@ -343,11 +365,24 @@ export async function buildEffectCtx(versionId: string): Promise<EffectValidatio
       stepRefs.add(ref);
       if (s.is_conditional) conditionalStepRefs.add(ref);
     }
-  return { taskKeys, conditionalTaskKeys, stepRefs, conditionalStepRefs };
+  const variations = await prisma.catalog2Variation.findMany({ where: { version_id: versionId }, include: { options: true } });
+  const optionKeys = new Set<string>();
+  const inactiveOptionKeys = new Set<string>();
+  for (const va of variations)
+    for (const o of va.options) {
+      optionKeys.add(o.key);
+      if (!o.is_active || !va.is_active) inactiveOptionKeys.add(o.key);
+    }
+  const addons = await prisma.catalog2Addon.findMany({ where: { version_id: versionId }, select: { key: true, is_active: true } });
+  const addonKeys = new Set(addons.map((a) => a.key));
+  const inactiveAddonKeys = new Set(addons.filter((a) => !a.is_active).map((a) => a.key));
+  return { taskKeys, conditionalTaskKeys, stepRefs, conditionalStepRefs, optionKeys, inactiveOptionKeys, addonKeys, inactiveAddonKeys };
 }
 
 export function validateConditionShape(c: {
   trigger_source: string;
+  trigger_ref?: string | null;
+  comparison_value?: string | null;
   operator: string;
   effect_type: string;
   effect_value: string;
@@ -358,7 +393,55 @@ export function validateConditionShape(c: {
   if (!(CONDITION_OPERATORS as readonly string[]).includes(c.operator)) {
     return `Operador inválido: "${c.operator}".`;
   }
+  const refErr = validateConditionReference(c, ctx);
+  if (refErr) return refErr;
   return validateEffect(c.effect_type, c.effect_value, ctx);
+}
+
+// Referências do GATILHO: chave inexistente ou inativa nunca pode ser publicada (a condição
+// simplesmente nunca dispararia, sem ninguém perceber).
+export function validateConditionReference(c: { trigger_source: string; trigger_ref?: string | null; comparison_value?: string | null; operator: string }, ctx: EffectValidationCtx): string | null {
+  const ref = (c.trigger_ref ?? "").trim();
+  const cmp = (c.comparison_value ?? "").trim();
+  switch (c.trigger_source) {
+    case "variation_option": {
+      if (!ctx.optionKeys) return null;
+      if (c.operator === "selected" || c.operator === "not_selected") {
+        if (!ref) return "Informe a opção de variação do gatilho.";
+        if (!ctx.optionKeys.has(ref)) return `O gatilho aponta para a opção "${ref}", que não existe nesta versão.`;
+        if (ctx.inactiveOptionKeys?.has(ref)) return `O gatilho aponta para a opção "${ref}", que está inativa.`;
+        return null;
+      }
+      if (c.operator === "eq" || c.operator === "neq") {
+        if (!cmp) return "Informe a opção de variação a comparar.";
+        if (!ctx.optionKeys.has(cmp)) return `A condição compara com a opção "${cmp}", que não existe nesta versão.`;
+        return null;
+      }
+      if (c.operator === "contains") return cmp ? null : "Informe o texto a procurar na opção escolhida.";
+      return `O operador "${c.operator}" não se aplica a opções de variação.`;
+    }
+    case "addon_selected": {
+      if (!ctx.addonKeys) return null;
+      if (c.operator !== "selected" && c.operator !== "not_selected") return "Para adicionais use \"está selecionado\" ou \"não está selecionado\".";
+      if (!ref) return "Informe o adicional do gatilho.";
+      if (!ctx.addonKeys.has(ref)) return `O gatilho aponta para o adicional "${ref}", que não existe nesta versão.`;
+      if (ctx.inactiveAddonKeys?.has(ref)) return `O gatilho aponta para o adicional "${ref}", que está inativo.`;
+      return null;
+    }
+    case "quantity": {
+      if (!["eq", "neq", "gte", "lte"].includes(c.operator)) return "Para quantidade use igual, diferente, maior ou igual, ou menor ou igual.";
+      if (!cmp || !Number.isFinite(Number(cmp))) return "Informe um número para comparar com a quantidade.";
+      return null;
+    }
+    case "client_answer":
+    case "contract_attribute": {
+      if (!ref) return "Informe a chave da resposta/atributo do gatilho.";
+      if (!["selected", "not_selected"].includes(c.operator) && !cmp && c.operator !== "contains") return "Informe o valor de comparação.";
+      return null;
+    }
+    default:
+      return null;
+  }
 }
 
 // ── Publicação ─────────────────────────────────────────────────────────
@@ -368,8 +451,9 @@ export interface PublishValidation {
   // Metadados para a interface levar o administrador ao campo exato. O
   // texto continua por compatibilidade, mas a UI não precisa mais adivinhar
   // qual parte de uma tarefa está pendente pelo texto da mensagem.
-  issue_details: Array<{ message: string; target: string; task_ids?: string[] }>;
+  issue_details: Array<{ message: string; target: string; task_ids?: string[]; code?: string }>;
   pricing_pending: boolean;
+  pricing_mode?: PricingMode;
   // Só pendências estritamente comerciais (preço/prazo) podem ser
   // publicadas como "situação comercial pendente". Campos estruturais,
   // classificações, tarefas e regras inválidas nunca podem ser ignorados.
@@ -406,6 +490,19 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
   // Toda tarefa precisa de ao menos uma ETAPA: é a etapa que carrega especialidade,
   // horas e o pagamento do nômade (ou o custo interno).
   for (const t of v.tasks) {
+    // IA (Pedido 3, fase 5): tarefa feita por IA (ou humano+IA) precisa de um perfil de IA ativo e autorizado.
+    if (AI_EXECUTION_MODES.includes(t.execution_mode)) {
+      const prof = t.ai?.profile_id ? await prisma.catalog2AIProfile.findUnique({ where: { id: t.ai.profile_id }, select: { is_active: true } }) : null;
+      if (!prof?.is_active) issues.push(`A tarefa "${t.name}" usa IA e precisa de um perfil de IA ativo e autorizado.`);
+      else {
+        const full = await prisma.catalog2AIProfile.findUniqueOrThrow({ where: { id: t.ai!.profile_id! } });
+        const prov = providerProblem(full.provider, full.model);
+        if (prov) issues.push(`A tarefa "${t.name}": ${prov}`);
+        if (!(t.ai!.instructions?.trim() || full.base_instructions?.trim())) issues.push(`A tarefa "${t.name}" usa IA e precisa de instruções (na tarefa ou no perfil).`);
+        if (full.requires_human_review && !t.ai!.human_review_required) issues.push(`A tarefa "${t.name}": o perfil de IA "${full.name}" exige revisão humana, mas a tarefa não a configura.`);
+        if (runCost(full, 1000, 1000) === null) issues.push(`A tarefa "${t.name}": o custo da IA não pode ser calculado (defina o custo por 1.000 tokens ou um custo fixo no perfil "${full.name}").`);
+      }
+    }
     if (t.steps.length === 0) issues.push(`A tarefa "${t.name}" precisa de ao menos uma etapa.`);
     for (const st of t.steps) {
       if (!(st.estimated_minutes && st.estimated_minutes > 0) || !(st.specialty_id ?? t.specialty_id)) {
@@ -428,7 +525,9 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
     if (err) issues.push(`Condição "${c.name}": ${err}`);
   }
   for (const va of v.variations) {
-    if (va.is_required && va.options.length === 0) issues.push(`A variação "${va.name}" é obrigatória mas não tem opções.`);
+    const activeOptions = va.options.filter((o) => o.is_active);
+    if (va.is_active && va.is_required && activeOptions.length === 0) issues.push(`A variação "${va.name}" é obrigatória mas não tem opções ativas.`);
+    if (va.is_active && (va.selection_type ?? "single") === "quantity" && activeOptions.length === 0) issues.push(`A variação por quantidade "${va.name}" precisa de ao menos uma opção ativa (ela guarda o efeito por unidade).`);
     for (const opt of va.options)
       for (const e of opt.effects) {
         const err = validateEffect(e.effect_type, e.effect_value, ctx);
@@ -441,29 +540,97 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
       if (err) issues.push(`Adicional "${ad.name}": ${err}`);
     }
 
+  // Integridade estrutural (universal): ciclos de dependência, modelo global inativo e cobrança apontando para tarefa inexistente.
+  {
+    const taskIds = v.tasks.map((t) => t.id);
+    const deps = taskIds.length ? await prisma.catalog2TaskDependency.findMany({ where: { task_id: { in: taskIds } } }) : [];
+    const nameById = new Map(v.tasks.map((t) => [t.id, t.name]));
+    const graph = new Map<string, string[]>();
+    for (const d of deps) graph.set(d.task_id, [...(graph.get(d.task_id) ?? []), d.depends_on_task_id]);
+    const state = new Map<string, number>();
+    const reported = new Set<string>();
+    const visit = (n: string, path: string[]) => {
+      if (state.get(n) === 2) return;
+      if (state.get(n) === 1) { const key = [...path.slice(path.indexOf(n))].sort().join(","); if (!reported.has(key)) { reported.add(key); issues.push(`Dependência circular entre tarefas: ${[...path.slice(path.indexOf(n)), n].map((x) => `"${nameById.get(x) ?? x}"`).join(" → ")}.`); } return; }
+      state.set(n, 1);
+      for (const m of graph.get(n) ?? []) visit(m, [...path, n]);
+      state.set(n, 2);
+    };
+    for (const t of v.tasks) visit(t.id, []);
+    for (const d of deps) if (d.task_id === d.depends_on_task_id) issues.push(`A tarefa "${nameById.get(d.task_id)}" depende de si mesma.`);
+    const modelIds = [...new Set(v.tasks.map((t) => t.task_model_id).filter((x): x is number => x != null))];
+    if (modelIds.length) {
+      const inactive = await prisma.catalog2TaskModel.findMany({ where: { id: { in: modelIds }, is_active: false }, select: { id: true } });
+      const inactiveIds = new Set(inactive.map((m) => m.id));
+      for (const t of v.tasks) if (t.task_model_id != null && inactiveIds.has(t.task_model_id)) issues.push(`A tarefa "${t.name}" usa o modelo Tarefa #${t.task_model_id}, que está inativo — troque por um modelo ativo.`);
+    }
+    const stepModelIds = [...new Set(v.tasks.flatMap((t) => t.steps.map((s) => s.step_model_id)).filter((x): x is number => x != null))];
+    if (stepModelIds.length) {
+      const inactive = await prisma.catalog2StepModel.findMany({ where: { id: { in: stepModelIds }, is_active: false }, select: { id: true } });
+      const inactiveIds = new Set(inactive.map((m) => m.id));
+      for (const t of v.tasks) for (const s of t.steps) if (s.step_model_id != null && inactiveIds.has(s.step_model_id)) issues.push(`A etapa "${s.name}" da tarefa "${t.name}" usa o modelo Etapa #${s.step_model_id}, que está inativo — troque por um modelo ativo.`);
+    }
+    const taskKeys = new Set(v.tasks.map((t) => t.key));
+    const chargeRefs: { label: string; key: string | null }[] = [
+      ...v.addons.map((a) => ({ label: `Adicional "${a.name}"`, key: a.source_task_key })),
+      ...v.addons.flatMap((a) => a.effects.map((e) => ({ label: `Adicional "${a.name}"`, key: e.source_task_key }))),
+      ...v.variations.flatMap((va) => va.options.flatMap((o) => o.effects.map((e) => ({ label: `Opção "${va.name} / ${o.label}"`, key: e.source_task_key })))),
+      ...v.conditions.map((c) => ({ label: `Condição "${c.name}"`, key: c.source_task_key })),
+    ];
+    for (const r of chargeRefs) if (r.key && !taskKeys.has(r.key)) issues.push(`${r.label}: a cobrança aponta para a tarefa "${r.key}", que não existe nesta versão.`);
+  }
+
   // Referências quebradas: tarefa condicional nunca incluída por nenhum efeito.
   const includedTaskKeys = new Set<string>();
   for (const c of v.conditions) if (c.effect_type === "add_task") includedTaskKeys.add(c.effect_value);
   for (const va of v.variations) for (const o of va.options) for (const e of o.effects) if (e.effect_type === "add_task") includedTaskKeys.add(e.effect_value);
   for (const ad of v.addons) for (const e of ad.effects) if (e.effect_type === "add_task") includedTaskKeys.add(e.effect_value);
+  // Modalidades de compra x entrega recorrente x períodos precisam contar a mesma história.
+  for (const c of blockersOf(await loadConsistency(prisma, v.product_id, v))) issues.push(c.message);
   for (const t of v.tasks) if (t.is_conditional && !includedTaskKeys.has(t.key)) issues.push(`A tarefa condicional "${t.name}" nunca é incluída por nenhum efeito.`);
+
+  // Conexões e acessos necessários (módulo opcional: desativado = nenhuma pendência).
+  for (const m of await validateConnectionConfig(prisma, versionId)) issues.push(m);
 
   // Tudo que veio antes daqui é estrutural. A opção de publicar com
   // pendência comercial nunca pode mascarar uma dessas falhas.
   const hasStructuralIssues = issues.length > 0;
 
-  // Prazo e preço calculáveis (ou pendência comercial explícita).
-  let pricingPending = true;
-  try {
-    const sel = await defaultSelection(versionId);
-    const pricing = await computePricing(versionId, sel);
-    pricingPending = pricing.pricing_pending;
-    if (pricing.estimated_deadline_days == null) issues.push("O prazo não é calculável — nenhuma tarefa tem duração estimada.");
-  } catch {
-    issues.push("Não foi possível calcular o preço/prazo desta versão.");
+  // Preço e prazo: NUNCA se publica com custo, preço ou prazo indefinido em produto contratável.
+  // Única exceção explícita: pricing_mode "on_request" (sob consulta — sem preço público e sem cotação automática).
+  const mode = (PRICING_MODES as readonly string[]).includes(v.pricing_mode) ? (v.pricing_mode as PricingMode) : "calculated";
+  const pricingIssues: { code: string; message: string }[] = [];
+  let pricingPending = false;
+  if (mode === "on_request") {
+    // sob consulta: publica sem preço público; não gera cotação nem contratação (garantido em computePricing/client).
+  } else if (mode === "manual_fixed") {
+    if (!(v.manual_price != null && v.manual_price > 0)) pricingIssues.push({ code: "manual_price_missing", message: "Modo preço fixo: informe o preço." });
+    if (!(v.manual_deadline_days != null && v.manual_deadline_days >= 1)) pricingIssues.push({ code: "manual_deadline_missing", message: "Modo preço fixo: informe o prazo em dias." });
+    if (!v.accepts_one_time && !v.accepts_recurring) pricingIssues.push({ code: "no_modality", message: "Nenhuma modalidade de compra está habilitada." });
+  } else {
+    try {
+      const sel = await defaultSelection(versionId);
+      const pricing = await computePricing(versionId, sel);
+      pricingPending = pricing.pricing_pending;
+      for (const p of pricing.pending_info) pricingIssues.push({ code: "pricing_pending", message: `Custo/preço indefinido: falta ${p}.` });
+      if (pricing.lines.human_cost.amount == null && !pricing.pending_info.length) pricingIssues.push({ code: "human_cost_undefined", message: "Custo humano indeterminado." });
+      if (pricing.lines.ia_cost.amount == null && !pricing.pending_info.length) pricingIssues.push({ code: "ia_cost_undefined", message: "Custo de IA indeterminado." });
+      if (pricing.lines.commercial_final_price.amount == null && !pricing.pending_info.length) pricingIssues.push({ code: "price_not_calculable", message: "O preço comercial não é calculável." });
+      if (pricing.deadline.commercial_deadline_days == null) pricingIssues.push({ code: "deadline_undefined", message: "Prazo comercial indefinido: informe o prazo comercial base da versão." });
+      if (pricing.estimated_deadline_days == null) pricingIssues.push({ code: "deadline_not_calculable", message: "O prazo não é calculável — nenhuma tarefa tem duração estimada." });
+      if (v.accepts_one_time && pricing.split.avulso_total == null) pricingIssues.push({ code: "modality_without_price", message: "A modalidade avulsa está habilitada, mas não tem preço calculável." });
+      if (v.accepts_recurring && (pricing.split.first_charge == null || pricing.split.renewal == null)) pricingIssues.push({ code: "modality_without_price", message: "A assinatura mensal está habilitada, mas a primeira cobrança ou a renovação não tem preço calculável." });
+      const dup = new Set<string>();
+      for (const w of pricing.quote_blockers) if (!/simula/i.test(w) && !dup.has(w)) { dup.add(w); if (!pricingIssues.some((i) => i.message.toLowerCase().includes(w.toLowerCase().slice(0, 12)))) pricingIssues.push({ code: "quote_blocker", message: `Bloqueador comercial: ${w}.` }); }
+    } catch {
+      pricingIssues.push({ code: "pricing_error", message: "Não foi possível calcular o preço/prazo desta versão." });
+    }
   }
+  for (const p of pricingIssues) issues.push(p.message);
+  const codeByMessage = new Map(pricingIssues.map((p) => [p.message, p.code]));
 
   const issue_details = issues.map((message) => {
+    if (message.startsWith("Conexões:")) return { message, target: "connections" };
     if (message.includes("título comercial")) return { message, target: "title" };
     if (message.includes("descrição completa")) return { message, target: "full_description" };
     if (message.includes("um pilar")) return { message, target: "pillar" };
@@ -477,9 +644,11 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
     if (message.includes("nenhuma tarefa tem duração estimada")) {
       return { message, target: "task_duration", task_ids: v.tasks.filter((t) => t.estimated_minutes == null).map((t) => t.id) };
     }
+    if (message.startsWith("Dependência circular") || message.includes("depende de si mesma")) return { message, target: "task_create" };
+    if (message.includes("que está inativo")) return { message, target: "task_create" };
     if (message.startsWith("Condição")) return { message, target: "conditions" };
     if (message.startsWith("Opção") || message.startsWith("Adicional") || message.startsWith("A variação")) return { message, target: "options" };
-    return { message, target: "pricing" };
+    return { message, target: "pricing", code: codeByMessage.get(message) ?? "pricing" };
   });
 
   return {
@@ -487,7 +656,9 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
     issues,
     issue_details,
     pricing_pending: pricingPending,
-    force_allowed: !hasStructuralIssues && !hasProvisionalEffort && pricingPending,
+    // `force` NÃO ignora mais preço ou prazo indefinido em produto contratável (use pricing_mode "on_request" para "sob consulta").
+    force_allowed: false,
+    pricing_mode: mode,
     has_provisional_effort: hasProvisionalEffort,
   };
 }
@@ -495,7 +666,8 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
 export async function publishVersion(
   versionId: string,
   actorUserId: string,
-  opts: { clientActionId?: string; changeSummary?: string; force?: boolean } = {},
+  /** `activate`: só "Publicar e ativar" muda o produto de em_preparacao para disponivel. Publicar sozinho NUNCA ativa. */
+  opts: { clientActionId?: string; changeSummary?: string; force?: boolean; activate?: boolean } = {},
 ) {
   // Idempotência: se já existe uma versão publicada com este clientActionId,
   // devolve-a (retry / clique duplo não publica de novo).
@@ -516,11 +688,11 @@ export async function publishVersion(
       "provisional_effort_blocks_publish",
     );
   }
-  if (!validation.ok && !opts.force) {
-    throw new Catalog2Error("A versão tem pendências e não pode ser publicada.", 422, "validation_failed");
-  }
-  if (!validation.ok && opts.force && !validation.force_allowed) {
-    throw new Catalog2Error("A publicação forçada só é permitida quando restam exclusivamente pendências comerciais de preço ou prazo.", 422, "validation_force_not_allowed");
+  if (!validation.ok) {
+    // Erro estruturado: cada pendência volta com texto, destino na tela e código. `force` não ignora nenhuma delas.
+    const err = new Catalog2Error(`A versão tem ${validation.issues.length} pendência(s) e não pode ser publicada.`, 422, opts.force ? "validation_force_not_allowed" : "validation_failed");
+    (err as Catalog2Error & { details?: unknown }).details = { issues: validation.issues, issue_details: validation.issue_details, pricing_mode: validation.pricing_mode };
+    throw err;
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -533,6 +705,7 @@ export async function publishVersion(
       where: { id: versionId },
       data: {
         state: "publicada",
+        sale_modes_enforced: true,
         published_at: now,
         published_by_user_id: actorUserId,
         publish_client_action_id: opts.clientActionId ?? null,
@@ -542,7 +715,7 @@ export async function publishVersion(
     });
     const product = await tx.catalog2Product.findUnique({ where: { id: version.product_id } });
     const beforeStatus = product?.status ?? "em_preparacao";
-    const afterStatus = beforeStatus === "em_preparacao" ? "disponivel" : beforeStatus;
+    const afterStatus = opts.activate && beforeStatus === "em_preparacao" ? "disponivel" : beforeStatus;
     await tx.catalog2Product.update({
       where: { id: version.product_id },
       data: {
@@ -559,6 +732,19 @@ export async function publishVersion(
       productId: version.product_id, beforeStatus, afterStatus, publishedVersionId: published.id,
     });
     await logVersionEvent(tx, published.id, "published", actorUserId, opts.changeSummary ?? "Versão publicada.");
+    // Histórico: PUBLICAÇÃO e ATIVAÇÃO são eventos diferentes (publicar não ativa).
+    await recordCatalog2ProductHistory(tx, {
+      productId: version.product_id, versionId: published.id, eventType: "version_published",
+      description: `Versão v${published.version_number} publicada${afterStatus === beforeStatus ? " (o status do produto não mudou)" : ""}.`,
+      after: { version_number: published.version_number, product_status: afterStatus }, actorUserId: actorUserId === "system" ? null : actorUserId, actorKind: actorUserId === "system" ? "system" : "user",
+    });
+    if (afterStatus !== beforeStatus) {
+      await recordCatalog2ProductHistory(tx, {
+        productId: version.product_id, versionId: published.id, eventType: "status_changed",
+        description: `Produto ativado ao publicar (de "${beforeStatus}" para "${afterStatus}"), com confirmação explícita.`,
+        before: { status: beforeStatus }, after: { status: afterStatus }, actorUserId: actorUserId === "system" ? null : actorUserId, actorKind: actorUserId === "system" ? "system" : "user",
+      });
+    }
     // Item 4.1 (reunião 2026-09-14, "Ajustar a proteção comercial"): só
     // conta como ALTERAÇÃO COMERCIAL (e portanto pode ancorar a proteção de
     // 30 dias de cotações já geradas) quando esta publicação SUBSTITUI uma
@@ -986,9 +1172,10 @@ export async function getProductDetail(productId: string) {
           addons: { orderBy: { sort_order: "asc" }, include: { effects: { orderBy: { sort_order: "asc" } } } },
           conditions: { orderBy: { sort_order: "asc" } },
           access_requirements: { orderBy: { sort_order: "asc" } },
+          connection_requirements: { orderBy: { sort_order: "asc" }, include: { connection_type: true, dependencies: { orderBy: { dep_key: "asc" } } } },
           tasks: {
             orderBy: { sort_order: "asc" },
-            include: { steps: { orderBy: { sort_order: "asc" }, include: { step_model: true } }, task_model: true, specialty: true, ai: true, dependencies: true, questionnaire: { include: { questions: { orderBy: { sort_order: "asc" } } } } },
+            include: { deliverables: { orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] }, steps: { orderBy: { sort_order: "asc" }, include: { step_model: true } }, task_model: true, specialty: true, ai: true, dependencies: true, questionnaire: { include: { questions: { orderBy: { sort_order: "asc" } } } } },
           },
         },
       },
@@ -996,13 +1183,17 @@ export async function getProductDetail(productId: string) {
   });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
   const publishedVersion = product.versions.find((v) => v.id === product.published_version_id) ?? null;
+  const periodRows = await prisma.catalog2ProductPeriod.findMany({ where: { product_id: product.id }, select: { period: true, is_active: true } });
 
   return {
     id: product.id,
+    delivery_recurrence: product.delivery_recurrence,
     slug: product.slug,
     sequence_number: product.sequence_number,
     internal_name: product.internal_name,
     status: product.status,
+    // Cabeçalho: status do produto, versão, publicação e ativação são coisas DIFERENTES (Publicado ≠ Ativo; Em preparação ≠ Rascunho).
+    header: (() => { const latest = product.versions[0] ?? null; return { product_status: product.status, current_version_number: latest?.version_number ?? null, current_version_state: latest?.state ?? null, published: !!publishedVersion, published_version_number: publishedVersion?.version_number ?? null, published_at: publishedVersion?.published_at ?? null, activated: product.status === "disponivel", awaiting_activation: !!publishedVersion && product.status === "em_preparacao" }; })(),
     origin: product.origin,
     archived_at: product.archived_at,
     updated_at: product.updated_at,
@@ -1019,6 +1210,7 @@ export async function getProductDetail(productId: string) {
       title: v.title,
       summary: v.summary,
       full_description: v.full_description,
+      ...serializeCommercialFields(v as unknown as Record<string, unknown>),
       change_summary: v.change_summary,
       base_commercial_deadline_days: v.base_commercial_deadline_days ?? null,
       accepts_one_time: v.accepts_one_time,
@@ -1027,11 +1219,21 @@ export async function getProductDetail(productId: string) {
       implementation_rule: v.implementation_rule,
       implementation_blocks_operation: v.implementation_blocks_operation,
       sell_mode: v.sell_mode,
+      pricing_mode: v.pricing_mode,
+      manual_price: v.manual_price,
+      manual_deadline_days: v.manual_deadline_days,
+      show_executor_name: v.show_executor_name,
+      sale_modes_enforced: v.sale_modes_enforced,
+      // Diagnóstico interno (nunca vai ao cliente): o que está em conflito entre modalidade, entrega recorrente e períodos.
+      sale_label: saleLabel(v),
+      commercial_consistency: commercialConsistency({ version: v, product: { delivery_recurrence: product.delivery_recurrence }, periods: periodRows }),
       published_at: v.published_at,
       updated_at: v.updated_at,
       is_published_current: v.id === product.published_version_id,
       history: v.events.map((e) => ({ event_type: e.event_type, actor_user_id: e.actor_user_id, note: e.note, at: e.created_at })),
       access_requirements: v.access_requirements.map((a) => ({ id: a.id, access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes })),
+      requires_connections: v.requires_connections,
+      connection_requirements: v.connection_requirements.map(serializeRequirement),
       variations: v.variations.map((va) => ({
         id: va.id,
         key: va.key,
@@ -1040,13 +1242,15 @@ export async function getProductDetail(productId: string) {
         selection_type: va.selection_type,
         sort_order: va.sort_order,
         notes: va.notes,
+        is_active: va.is_active,
         options: va.options.map((o) => ({
           id: o.id,
           key: o.key,
           label: o.label,
           sort_order: o.sort_order,
           is_default: o.is_default,
-          effects: o.effects.map((e) => ({ id: e.id, effect_type: e.effect_type, effect_value: e.effect_value })),
+          is_active: o.is_active,
+          effects: o.effects.map((e) => ({ id: e.id, effect_type: e.effect_type, effect_value: e.effect_value, ...chargeOut(e) })),
         })),
       })),
       addons: v.addons.map((a) => ({
@@ -1058,9 +1262,10 @@ export async function getProductDetail(productId: string) {
         is_default_selected: a.is_default_selected,
         is_active: a.is_active,
         base_cost: a.base_cost,
+        ...chargeOut(a),
         target_task_id: a.target_task_id,
         target_step_id: a.target_step_id,
-        effects: a.effects.map((e) => ({ id: e.id, effect_type: e.effect_type, effect_value: e.effect_value })),
+        effects: a.effects.map((e) => ({ id: e.id, effect_type: e.effect_type, effect_value: e.effect_value, ...chargeOut(e) })),
       })),
       conditions: v.conditions.map((c) => ({
         id: c.id,
@@ -1074,6 +1279,7 @@ export async function getProductDetail(productId: string) {
         comparison_value: c.comparison_value,
         effect_type: c.effect_type,
         effect_value: c.effect_value,
+        ...chargeOut(c),
         explanation: c.explanation || describeCondition(c),
       })),
       tasks: v.tasks.map((t) => ({
@@ -1089,6 +1295,12 @@ export async function getProductDetail(productId: string) {
         executor_continuity: t.executor_continuity,
         asset_rule: t.asset_rule,
         asset_revalidate_days: t.asset_revalidate_days,
+        qualifier_user_id: t.qualifier_user_id,
+        reviewer_user_id: t.reviewer_user_id,
+        review_minutes: t.review_minutes,
+        review_specialty_id: t.review_specialty_id,
+        deliverables: t.deliverables.map((d) => ({ id: d.id, key: d.key, name: d.name, description: d.description, type: d.type, responsible: d.responsible, is_required: d.is_required, requires_approval: d.requires_approval, visibility: d.visibility, step_id: d.step_id, sort_order: d.sort_order })),
+        ops: t.ops ?? null,
         // "Modelo global" x "Configuração específica deste produto" (+ modelo mudou depois?)
         model: t.task_model
           ? {
@@ -1119,7 +1331,8 @@ export async function getProductDetail(productId: string) {
               id: t.questionnaire.id,
               name: t.questionnaire.name,
               description: t.questionnaire.description,
-              questions: t.questionnaire.questions.map((q) => ({ id: q.id, key: q.key, label: q.label, is_required: q.is_required, sort_order: q.sort_order })),
+              // Configuração COMPLETA da pergunta (tipo, ajuda, opções, padrão, validação, visibilidade, uso): sem isto a tela reabre tudo como texto longo e regrava errado.
+              questions: t.questionnaire.questions.map((q) => ({ id: q.id, key: q.key, label: q.label, is_required: q.is_required, sort_order: q.sort_order, question_type: q.question_type, help_text: q.help_text, options: parseOptions(q.options_json), default_value: q.default_value, validation: parseValidation(q.validation_json), visibility: q.visibility, answer_usage: q.answer_usage })),
             }
           : null,
         depends_on: t.dependencies.map((d) => d.depends_on_task_id),
@@ -1134,6 +1347,11 @@ export async function getProductDetail(productId: string) {
               currency: t.ai.currency,
               est_review_rounds: t.ai.est_review_rounds,
               human_review_required: t.ai.human_review_required,
+              profile_id: t.ai.profile_id,
+              ai_mode: t.ai.ai_mode,
+              ai_trigger: t.ai.ai_trigger,
+              instructions: t.ai.instructions,
+              prompt_version: t.ai.prompt_version,
             }
           : null,
         steps: t.steps.map((s) => ({
@@ -1154,6 +1372,7 @@ export async function getProductDetail(productId: string) {
           is_access_validation: s.step_model?.is_access_validation ?? false,
           first_execution_only: s.first_execution_only,
           skip_when_same_executor: s.skip_when_same_executor,
+          ops: s.ops ?? null,
           model: s.step_model
             ? {
                 id: s.step_model.id, revision: s.step_model.revision, is_active: s.step_model.is_active,

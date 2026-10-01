@@ -99,10 +99,10 @@ async function mkPublishedProduct(slug: string) {
       title: `Serviço ${slug}`, summary: "resumo", full_description: "descrição do serviço demo",
       base_commercial_deadline_days: 5,
       tasks: { create: [{ key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1,
-        steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1 }] } }] },
+        steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } }] },
     },
   });
-  await publishVersion(v.id, "system", { changeSummary: "publicação de teste" });
+  await publishVersion(v.id, "system", { activate: true, changeSummary: "publicação de teste" });
   return { product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }), versionId: v.id };
 }
 
@@ -133,6 +133,11 @@ async function purgeProduct(id: string) {
 async function setDeliveryRecurrence(token: string, productId: string, value: string | null) {
   const r = await api(`/api/admin/catalog2/products/${productId}/delivery-recurrence`, { method: "PUT", token, body: { delivery_recurrence: value } });
   assert.equal(r.status, 200, JSON.stringify(r.json));
+  // entrega mensal recorrente e assinatura mensal andam juntas (regra de consistência comercial): quem marca uma, habilita a outra
+  await prisma.catalog2ProductVersion.updateMany({ where: { product_id: productId }, data: { accepts_recurring: value === "mensal" } });
+  if (value === "mensal") {
+    await prisma.catalog2ProductPeriod.upsert({ where: { product_id_period: { product_id: productId, period: "mensal" } }, create: { product_id: productId, period: "mensal", months: 1, discount_percent: 0, is_active: true }, update: {} });
+  }
   return r.json;
 }
 async function configurePeriod(token: string, productId: string, period: string, discount: number) {
@@ -329,7 +334,7 @@ describe("Ciclos de entrega mensal (Item 6.1, reunião 2026-09-14)", () => {
 
     const q = await api("/api/catalog2/quotes", { method: "POST", token: CO_A.token, body: { product: product.id, selection: { variation_option_keys: [], addon_keys: [] }, period: "trimestral" } });
     assert.equal(q.status, 409);
-    assert.match(q.json.error, /frequência de entrega recorrente/);
+    assert.match(q.json.error, /frequência de entrega recorrente|não é vendido como assinatura/);
 
     // define a recorrência — agora sim disponível.
     await setDeliveryRecurrence(MASTER, product.id, "mensal");

@@ -183,15 +183,32 @@ export async function resolveCycleContext(
     }
   }
 
+  // Assinatura mensal contínua: cada mês é um ciclo recorrente, mesmo o contrato sendo de "1 mês".
+  const subscribed = !!(await tx.catalog2Subscription.findUnique({ where: { project_product_id: pp.id }, select: { id: true } }));
   return {
     cycleIndex,
-    contractMode: deriveContractMode({ periodMonths: pp.catalog2_period_months, deliveryRecurrence: pp.catalog2_product?.delivery_recurrence ?? null, hasImplementation }),
+    contractMode: deriveContractMode({ periodMonths: subscribed ? Math.max(2, pp.catalog2_period_months ?? 0) : pp.catalog2_period_months, deliveryRecurrence: pp.catalog2_product?.delivery_recurrence ?? null, hasImplementation }),
     hasImplementation,
     implementationRule: pp.catalog2_version?.implementation_rule ?? "first_only",
     isFirstContract,
     completedImplementation: completed,
     revalidationReason: pp.revalidation_reason ?? null,
   };
+}
+
+/** Implantações que a empresa JÁ concluiu para este produto (decide se a implantação é cobrada de novo). */
+export async function loadImplementationDone(db: Db, p: { companyId: string | null; catalog2ProductId: string }) {
+  const out = { modelIds: new Set<number>(), keys: new Set<string>() };
+  if (!p.companyId) return out;
+  const rows = await db.projectTask.findMany({
+    where: { catalog2_product_id: p.catalog2ProductId, status: { in: DONE_STATUSES }, catalog2_task: { cycle_type: "implementacao" }, project: { company_id: p.companyId } },
+    select: { catalog2_task: { select: { task_model_id: true, key: true } } },
+  });
+  for (const r of rows) {
+    if (r.catalog2_task?.task_model_id != null) out.modelIds.add(r.catalog2_task.task_model_id);
+    if (r.catalog2_task?.key) out.keys.add(r.catalog2_task.key);
+  }
+  return out;
 }
 
 export async function logProjectDecision(

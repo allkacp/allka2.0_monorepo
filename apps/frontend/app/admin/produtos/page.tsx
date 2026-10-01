@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { useNavigate } from "@/hooks/use-navigate";
+import { useNavigate, isModifierClick } from "@/hooks/use-navigate";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -21,6 +21,7 @@ import {
   MoreVertical,
   Package,
   Pencil,
+  PlayCircle,
   Plus,
   Search,
   Filter,
@@ -199,6 +200,15 @@ function openReadinessItems(rp: any): { key: string; level: string; note: string
     .map(([key, v]: any) => ({ key, level: v.level, note: v.note }));
 }
 
+// Uma só ação por produto: "Continuar configuração" enquanto houver rascunho,
+// pendência ou nenhuma versão publicada; "Editar produto" quando já está completo.
+function needsConfiguration(p: any, rp: any): boolean {
+  return !!p.has_draft || !p.published_version_number || openReadinessItems(rp).length > 0;
+}
+function configActionLabel(p: any, rp: any): string {
+  return needsConfiguration(p, rp) ? "Continuar configuração" : "Editar produto";
+}
+
 function ReadinessPendingBadge({ rp }: { rp: any }) {
   if (!rp?.items) {
     return <span className="whitespace-nowrap text-[11px] text-muted-foreground">…</span>;
@@ -260,6 +270,11 @@ export default function AdminProdutosPage() {
 
   const openProduct = useCallback(
     (id: string | null) => {
+      // Ctrl/Cmd + clique: abre o editor em outra aba (deep link ?produto=<id>).
+      if (id && isModifierClick()) {
+        window.open(`/admin/cadastro-produtos?produto=${encodeURIComponent(id)}`, "_blank", "noopener");
+        return;
+      }
       setOpenProductId(id);
       if (!id) navigate({ pathname: "/admin/cadastro-produtos", search: "" }, { replace: true });
     },
@@ -298,6 +313,11 @@ export default function AdminProdutosPage() {
 
   const viewProduct = useCallback(
     (id: string | null) => {
+      // Ctrl/Cmd + clique: abre o detalhe em outra aba (deep link ?ver=<id>).
+      if (id && isModifierClick()) {
+        window.open(`/admin/cadastro-produtos?ver=${encodeURIComponent(id)}`, "_blank", "noopener");
+        return;
+      }
       setViewProductId(id);
       setSearchParams(
         (prev) => {
@@ -1464,37 +1484,19 @@ export default function AdminProdutosPage() {
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <button
-                                        onClick={() => viewProduct(p.id)}
-                                        aria-label="Ver detalhe completo"
-                                        className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-slate-800 hover:text-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
-                                      >
-                                        <Eye className="h-3.5 w-3.5" />
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="text-xs font-medium">
-                                      Ver detalhe completo
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                                <TooltipProvider delayDuration={400}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
                                         onClick={() => openProduct(p.id)}
-                                        aria-label={
-                                          p.has_draft
-                                            ? "Continuar configuração"
-                                            : "Abrir/editar produto"
-                                        }
+                                        aria-label={configActionLabel(p, rp)}
                                         className="flex h-[26px] w-[26px] items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-[#6E2C96] shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500"
                                       >
-                                        <Pencil className="h-3.5 w-3.5" />
+                                        {needsConfiguration(p, rp) ? (
+                                          <PlayCircle className="h-3.5 w-3.5" />
+                                        ) : (
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        )}
                                       </button>
                                     </TooltipTrigger>
                                     <TooltipContent className="text-xs font-medium">
-                                      {p.has_draft
-                                        ? "Continuar configuração"
-                                        : "Abrir/editar produto"}
+                                      {configActionLabel(p, rp)}
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
@@ -1612,39 +1614,20 @@ export default function AdminProdutosPage() {
                                 <TooltipTrigger asChild>
                                   <Button
                                     size="sm"
-                                    variant="outline"
-                                    className="h-8 w-9 rounded-lg border-slate-200 bg-slate-50 px-0 text-slate-700 shadow-sm hover:bg-slate-100"
-                                    onClick={() => viewProduct(p.id)}
-                                    aria-label="Ver detalhe completo"
-                                  >
-                                    <Eye className="h-3.5 w-3.5" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="text-xs font-medium">
-                                  Ver detalhe completo
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider delayDuration={400}>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
                                     className="h-8 flex-1 rounded-lg bg-linear-to-r from-[#4a2cff] via-[#7b2cdb] to-[#d92293] text-xs font-semibold shadow-[0_6px_16px_rgba(123,44,219,0.25)] hover:from-[#3b22d9] hover:to-[#bd177e]"
                                     onClick={() => openProduct(p.id)}
-                                    aria-label={
-                                      p.has_draft
-                                        ? "Continuar configuração"
-                                        : "Abrir/editar produto"
-                                    }
+                                    aria-label={configActionLabel(p, rp)}
                                   >
-                                    <Pencil className="h-3.5 w-3.5" /> Abrir
+                                    {needsConfiguration(p, rp) ? (
+                                      <PlayCircle className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    )}{" "}
+                                    {needsConfiguration(p, rp) ? "Continuar configuração" : "Editar produto"}
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent className="text-xs font-medium">
-                                  {p.has_draft
-                                    ? "Continuar configuração"
-                                    : "Abrir/editar produto"}
+                                  {configActionLabel(p, rp)}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>

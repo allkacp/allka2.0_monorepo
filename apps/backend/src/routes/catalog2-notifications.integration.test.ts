@@ -118,7 +118,7 @@ async function mkDraftFixture(slug: string, specialtyKey = "designer") {
       product_id: product.id, version_number: 1, state: "rascunho",
       title: `Serviço ${slug}`, summary: "resumo", full_description: "descrição do serviço demo",
       base_commercial_deadline_days: 5,
-      tasks: { create: [{ key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1 }] },
+      tasks: { create: [{ key: "t1", name: "Tarefa fixa", execution_mode: "humano", specialty_id: spec.id, estimated_minutes: 60, sort_order: 1, steps: { create: [{ key: "s1", name: "Etapa única", sort_order: 1, specialty_id: spec.id, estimated_minutes: 60 }] } }] },
     },
   });
   return { product, versionId: v.id, specialtyId: spec.id };
@@ -128,7 +128,7 @@ async function mkReadyPublishedProduct(slug: string, specialtyKey = "designer") 
   await prisma.catalog2Specialty.update({ where: { id: spec.id }, data: { max_hourly_rate: 100 } });
   await setPricingSettings();
   const { product, versionId } = await mkDraftFixture(slug, specialtyKey);
-  await publishVersion(versionId, "system", { changeSummary: "publicação de teste" });
+  await publishVersion(versionId, "system", { activate: true, changeSummary: "publicação de teste" });
   return { product: await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } }), versionId, specialtyId: spec.id };
 }
 async function createQuoteViaApi(token: string, productId: string, quantity = 1) {
@@ -236,9 +236,14 @@ describe("Notificações dos produtos (Item 8/8.1, reunião 2026-09-14)", () => 
 
   it("2. produto ativo incompleto que se torna pronto DEPOIS (sem nova mudança de status) gera o aviso correto, uma única vez", async () => {
     const { product, versionId, specialtyId } = await mkDraftFixture(`c14-${crypto.randomBytes(4).toString("hex")}`, "redator");
-    await prisma.catalog2Specialty.update({ where: { id: specialtyId }, data: { max_hourly_rate: null } });
+    await prisma.catalog2Specialty.update({ where: { id: specialtyId }, data: { max_hourly_rate: 120 } });
     await setPricingSettings();
+    // Regra vigente: não se publica com preço indefinido. O produto "ativo e incompleto" nasce do jeito real: publica completo
+    // (sem ativar), o valor/hora some, e SÓ ENTÃO o produto é ativado pelo status (quando o cálculo está incompleto).
     await publishVersion(versionId, "system", { changeSummary: "publicação de teste (incompleto)" });
+    await prisma.catalog2Specialty.update({ where: { id: specialtyId }, data: { max_hourly_rate: null } });
+    const ativ = await api(`/api/admin/catalog2/products/${product.id}/status`, { method: "PATCH", token: MASTER, body: { status: "disponivel" } });
+    assert.equal(ativ.status, 200, JSON.stringify(ativ.json));
 
     const reloaded = await prisma.catalog2Product.findUniqueOrThrow({ where: { id: product.id } });
     assert.equal(reloaded.status, "disponivel");

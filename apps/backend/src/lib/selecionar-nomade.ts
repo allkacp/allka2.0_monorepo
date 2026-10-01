@@ -12,6 +12,7 @@
 //   5b. Not found → update task: status = AGUARDANDO_NOMADE + create SystemAlert.
 //   6. Always write TaskAssignmentHistory.
 
+import { afterExecutorAssigned } from "./connections/flow";
 import { prisma } from "./prisma";
 import { nestedAlertEventCreate } from "./alert-events";
 
@@ -208,6 +209,7 @@ export async function selecionarNomadeParaTarefa(
       },
     });
 
+    await afterExecutorAssigned(taskId);
     return {
       status: "atribuido",
       nomade_id: best.id,

@@ -10,7 +10,7 @@
 // fica disponível — nenhum percentual padrão, nenhum desconto global.
 
 import { prisma } from "./prisma";
-import { computePricing, type PricingResult, type PricingSelection } from "./catalog2-pricing";
+import { computePricing, type PricingOptions, type PricingResult, type PricingSelection } from "./catalog2-pricing";
 
 export const CATALOG2_PERIODS = ["mensal", "trimestral", "semestral", "anual"] as const;
 export type Catalog2Period = (typeof CATALOG2_PERIODS)[number];
@@ -75,6 +75,10 @@ export interface PeriodPricingResult {
   commercial_ready: boolean;
   quote_blockers: string[];
   base: PricingResult;
+  /** Separação financeira (Pedido 3): o que se paga AGORA × o que renova. */
+  first_charge_price?: number | null;
+  implementation_price?: number | null;
+  renewal_price?: number | null;
 }
 
 async function loadPeriodConfig(productId: string, period: Catalog2Period) {
@@ -101,8 +105,9 @@ export async function computePeriodPricing(
   sel: PricingSelection,
   product: { id: string; delivery_recurrence: string | null },
   period: Catalog2Period,
+  pricingOpts: PricingOptions = {},
 ): Promise<PeriodPricingResult> {
-  const base = await computePricing(versionId, sel);
+  const base = await computePricing(versionId, sel, pricingOpts);
   const months = CATALOG2_PERIOD_MONTHS[period];
   const cfg = await loadPeriodConfig(product.id, period);
   const configured = !!cfg && cfg.is_active;
@@ -151,13 +156,19 @@ export async function computePeriodPricing(
     };
   }
 
-  const referenceMonthly = base.lines.commercial_final_price.amount as number;
-  const total = round2(referenceMonthly * months * (1 - cfg!.discount_percent / 100));
+  // Implantação e cobranças únicas NÃO entram no "preço mensal": pagam-se uma vez, na primeira cobrança.
+  // O desconto do período incide só sobre a parte recorrente.
+  const parts = base.split.first_charge_parts!;
+  const renewal = base.split.renewal as number;
+  const factor = 1 - cfg!.discount_percent / 100;
+  const referenceMonthly = renewal;
+  const total = round2(parts.implementation + parts.one_time + parts.recurring * factor + (months - 1) * renewal * factor);
   return {
     period, months, available: true, discount_percent: cfg!.discount_percent,
     reference_monthly_price: referenceMonthly, total_price: total, monthly_equivalent_price: round2(total / months),
     commercial_deadline_days: base.deadline.commercial_deadline_days, currency: base.currency,
     commercial_ready: true, quote_blockers: [], base,
+    first_charge_price: total, implementation_price: base.split.implementation.applicable ? base.split.implementation.price : 0, renewal_price: round2(renewal * factor),
   };
 }
 
@@ -170,13 +181,14 @@ export async function listAvailablePeriods(
   versionId: string,
   sel: PricingSelection,
   product: { id: string; delivery_recurrence: string | null },
+  pricingOpts: PricingOptions = {},
 ): Promise<PeriodPricingResult[]> {
   if (!hasRecurringMonthlyDelivery(product)) return [];
   const cfgs = await prisma.catalog2ProductPeriod.findMany({ where: { product_id: product.id, is_active: true, period: { in: contractablePeriodsNow() } } });
   const out: PeriodPricingResult[] = [];
   for (const cfg of cfgs) {
     if (!isCatalog2Period(cfg.period)) continue;
-    out.push(await computePeriodPricing(versionId, sel, product, cfg.period));
+    out.push(await computePeriodPricing(versionId, sel, product, cfg.period, pricingOpts));
   }
   return out.sort((a, b) => CATALOG2_PERIODS.indexOf(a.period) - CATALOG2_PERIODS.indexOf(b.period));
 }

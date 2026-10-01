@@ -9,6 +9,7 @@
 //        continuidade" não se repetem; nova qualificação a cada ciclo (a tarefa é nova).
 // Não  → fila normal (especialidade, disponibilidade, qualificação…), com o histórico
 //        necessário no briefing; validações obrigatórias de troca de executor rodam.
+import { afterExecutorAssigned } from "./connections/flow";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { logProjectDecision } from "./catalog2-cycles";
 import { reopenAccessValidationOnExecutorChange } from "./client-assets";
@@ -265,6 +266,7 @@ export async function decideContinuity(
       data: { ...decided, continuity_status: "redistributed", auto_nomad_dispatch_enabled: true, ...(handoff ? { observations: [t.observations, handoff].filter(Boolean).join("\n\n") } : {}) },
     });
     await reopenAccessValidationOnExecutorChange(db, t.id);
+    await afterExecutorAssigned(t.id, { id: opts.actorUserId });
     await log("executor_changed", `Escolhido distribuir "${t.title}" pela fila inteligente (histórico do ciclo anterior incluído no briefing).`);
     return { status: "redistributed" };
   }
