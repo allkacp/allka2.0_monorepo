@@ -99,6 +99,7 @@ const AdminPrecificacaoPage = React.lazy(
 );
 const AdminCombosPage = React.lazy(() => import("@/app/admin/combos/page"));
 const AdminPacotesPage = React.lazy(() => import("@/app/admin/pacotes/page"));
+const AdminCommercialRequestsPage = React.lazy(() => import("@/app/admin/pedidos-comerciais/page"));
 const AgencyCombosPage = React.lazy(() => import("@/app/agency/combos/page"));
 const AdminTarefasPage = React.lazy(() => import("@/app/admin/tarefas/page"));
 const ConexoesCompanyPage = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesCompanyPage })));
@@ -906,6 +907,7 @@ export default function App() {
                   />
                   <Route path="/admin/combos" element={<AdminCombosPage />} />
                   <Route path="/admin/pacotes" element={<AdminPacotesPage />} />
+                  <Route path="/admin/pedidos-comerciais" element={<AdminCommercialRequestsPage />} />
                   <Route path="/admin/tarefas" element={<AdminTarefasPage />} />
                   <Route path="/admin/conexoes" element={<ConexoesAdminPage />} />
                   <Route path="/conexoes" element={<ConexoesRedirect />} />

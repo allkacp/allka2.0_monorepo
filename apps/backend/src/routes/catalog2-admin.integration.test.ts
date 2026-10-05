@@ -519,7 +519,9 @@ describe("Novo catálogo — fundação", () => {
       // 6. confirma que a rota devolve o MESMO resultado de computePricing
       // chamado diretamente (mesma seleção) — nunca reformulado no backend.
       const direct = await computePricing(v1.id, await defaultSelection(v1.id));
-      assert.deepEqual(r.json.pricing, JSON.parse(JSON.stringify(direct)));
+      // a data/hora do cálculo (memória de cálculo, 2026-10-02) é o único campo que muda a cada chamada
+      const noStamp = (x: any) => { const c = JSON.parse(JSON.stringify(x)); if (c.rule) delete c.rule.calculated_at; return c; };
+      assert.deepEqual(noStamp(r.json.pricing), noStamp(direct));
     });
 
     it("2. produto bloqueado por tarefa sem especialidade/horas definidas: 'Preço ainda não calculável' com o bloqueador exato", async () => {

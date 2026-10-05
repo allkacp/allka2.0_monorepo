@@ -51,7 +51,6 @@ import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
-import { ProvisionalBadge } from "@/components/provisional-badge";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   STANDARD_SHELL_TABLE_CARD_CLASS,
@@ -125,16 +124,16 @@ const PENDENCY_LABEL: Record<string, string> = {
 const PRODUCT_COLUMNS = [
   { key: "number", label: "ID", width: 64, min: 40, align: "center" },
   { key: "image", label: "Img", width: 58, min: 42, align: "left" },
-  { key: "product", label: "Produto", width: 310, min: 90, align: "left" },
-  { key: "category", label: "Categoria", width: 145, min: 70, align: "left" },
-  { key: "tasks", label: "Tarefas", width: 150, min: 70, align: "left" },
-  { key: "price", label: "Preço", width: 145, min: 70, align: "right" },
+  { key: "product", label: "Produto", width: 370, min: 180, align: "left" },
+  { key: "category", label: "Categoria", width: 103, min: 82, align: "left" },
+  { key: "tasks", label: "Tarefas", width: 100, min: 78, align: "left" },
+  { key: "price", label: "Preço", width: 120, min: 112, align: "left" },
   {
     key: "pendencies",
     label: "Pendências",
-    width: 130,
-    min: 70,
-    align: "left",
+    width: 96,
+    min: 90,
+    align: "center",
   },
   { key: "status", label: "Status", width: 125, min: 65, align: "left" },
   { key: "actions", label: "Ações", width: 110, min: 64, align: "center" },
@@ -209,34 +208,36 @@ function configActionLabel(p: any, rp: any): string {
   return needsConfiguration(p, rp) ? "Continuar configuração" : "Editar produto";
 }
 
-function ReadinessPendingBadge({ rp }: { rp: any }) {
-  if (!rp?.items) {
-    return <span className="whitespace-nowrap text-[11px] text-muted-foreground">…</span>;
-  }
+function pendencyTone(count: number) {
+  if (count === 0) return { icon: "text-emerald-600", badge: "bg-emerald-100 text-emerald-800", label: "Tudo certo" };
+  if (count === 1) return { icon: "text-sky-600", badge: "bg-sky-100 text-sky-800", label: "1 pendência" };
+  if (count <= 3) return { icon: "text-amber-600", badge: "bg-amber-100 text-amber-800", label: `${count} pendências` };
+  if (count <= 5) return { icon: "text-orange-600", badge: "bg-orange-100 text-orange-800", label: `${count} pendências` };
+  if (count <= 10) return { icon: "text-red-600", badge: "bg-red-100 text-red-800", label: `${count} pendências` };
+  return { icon: "animate-pulse text-rose-950 dark:text-rose-300", badge: "animate-pulse bg-rose-950 text-white dark:bg-rose-700", label: `${count} pendências críticas` };
+}
+
+function PendingDetailsTooltip({ items, provisionalReasons = [] }: { items: { key: string; level: string; note: string }[]; provisionalReasons?: string[] }) {
+  return <TooltipContent side="left" className="max-w-sm space-y-2 p-3">
+    {items.length > 0 && <><p className="text-xs font-bold">{items.length} pendência{items.length === 1 ? "" : "s"} para revisar</p><ul className="space-y-1.5">{items.map((it) => <li key={it.key} className="border-l-2 border-amber-400 pl-2 text-xs leading-snug"><strong>{it.level === "bloqueador" ? "Bloqueio" : "Pendente"} · {READINESS_ITEM_LABEL[it.key] ?? it.key}</strong><br />{it.note}</li>)}</ul></>}
+    {provisionalReasons.length > 0 && <div className={items.length ? "border-t border-white/20 pt-2" : ""}><p className="text-xs font-bold">Dados provisórios</p>{provisionalReasons.map((reason) => <p key={reason} className="mt-1 text-xs leading-snug">{reason}</p>)}<p className="mt-1 text-[11px] opacity-80">Revise antes de publicar.</p></div>}
+    {items.length === 0 && provisionalReasons.length === 0 && <p className="text-xs font-semibold">Sem pendências.</p>}
+  </TooltipContent>;
+}
+
+function ProductHealthIcon({ rp, provisionalReasons = [] }: { rp: any; provisionalReasons?: string[] }) {
   const items = openReadinessItems(rp);
-  if (items.length === 0) {
-    return <span className="whitespace-nowrap text-[11px] text-muted-foreground">Sem pendências</span>;
-  }
-  return (
-    <TooltipProvider delayDuration={100}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span>
-            <Badge className="whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
-              {items.length} pendência(s)
-            </Badge>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="left" className="max-w-sm space-y-1">
-          {items.map((it) => (
-            <p key={it.key} className="text-xs">
-              <strong>{it.level === "bloqueador" ? "Bloqueio" : "Pendente"} · {READINESS_ITEM_LABEL[it.key] ?? it.key}:</strong> {it.note}
-            </p>
-          ))}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
+  if (!rp?.items && provisionalReasons.length === 0) return null;
+  const tone = pendencyTone(items.length);
+  const provisionalOnly = items.length === 0 && provisionalReasons.length > 0;
+  return <TooltipProvider delayDuration={120}><Tooltip><TooltipTrigger asChild><span className={`inline-flex shrink-0 ${provisionalOnly ? "text-amber-600" : tone.icon}`} aria-label={provisionalOnly ? "Dados provisórios" : tone.label}>{provisionalOnly ? <AlertTriangle className="h-4 w-4" /> : items.length === 0 ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}</span></TooltipTrigger><PendingDetailsTooltip items={items} provisionalReasons={provisionalReasons} /></Tooltip></TooltipProvider>;
+}
+
+function ReadinessPendingBadge({ rp }: { rp: any }) {
+  if (!rp?.items) return <span className="text-[11px] text-muted-foreground">…</span>;
+  const items = openReadinessItems(rp);
+  const tone = pendencyTone(items.length);
+  return <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><span className="inline-flex cursor-help">{items.length === 0 ? <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-label="Sem pendências" /> : <Badge className={`min-w-7 justify-center rounded-full border-0 px-2 py-1 text-xs font-bold ${tone.badge}`}>{items.length}</Badge>}</span></TooltipTrigger><PendingDetailsTooltip items={items} /></Tooltip></TooltipProvider>;
 }
 
 export default function AdminProdutosPage() {
@@ -391,6 +392,32 @@ export default function AdminProdutosPage() {
         if (Number.isFinite(width))
           defaults[column.key] = Math.max(column.min, width);
       }
+      // Ajuste único do padrão já salvo no navegador: acompanha a revisão
+      // visual solicitada sem obrigar o usuário a apagar preferências.
+      if (saved.columnLayoutVersion !== 5 && saved.widths) {
+        const priorVersion = Number(saved.columnLayoutVersion ?? 0);
+        if (priorVersion < 2) {
+          defaults.product = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "product")!.min, defaults.product + 20);
+          defaults.tasks = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "tasks")!.min, defaults.tasks - 15);
+          defaults.price = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "price")!.min, defaults.price - 5);
+        }
+        if (priorVersion < 3) {
+          defaults.tasks = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "tasks")!.min, defaults.tasks - 20);
+          defaults.price = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "price")!.min, defaults.price - 5);
+        }
+        if (priorVersion < 4) {
+          defaults.product = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "product")!.min, defaults.product + 30);
+          defaults.category = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "category")!.min, defaults.category - 10);
+          defaults.tasks = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "tasks")!.min, defaults.tasks - 10);
+          defaults.price = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "price")!.min, defaults.price - 10);
+        }
+        if (priorVersion < 5) {
+          defaults.product = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "product")!.min, defaults.product + 10);
+          defaults.category = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "category")!.min, defaults.category - 5);
+          defaults.tasks = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "tasks")!.min, defaults.tasks - 5);
+          defaults.price = Math.max(PRODUCT_COLUMNS.find((c) => c.key === "price")!.min, defaults.price - 5);
+        }
+      }
     } catch {
       // Mantém as larguras padrão quando a preferência estiver inválida.
     }
@@ -432,6 +459,7 @@ export default function AdminProdutosPage() {
       JSON.stringify({
         visible: [...visibleProductColumns],
         widths: productColumnWidths,
+        columnLayoutVersion: 5,
         sort,
         pageSize,
       }),
@@ -571,11 +599,14 @@ export default function AdminProdutosPage() {
   // sozinho para a última página válida, sem precisar de F5.
   useEffect(() => {
     if (!list) return;
-    const validTotalPages = Math.max(1, Math.ceil(list.total / list.page_size));
+    // A quantidade escolhida na barra é a fonte de verdade. Isso evita que
+    // uma resposta antiga do servidor (com `page_size` padrão) esconda a
+    // paginação mesmo quando a pessoa selecionou, por exemplo, 10 por página.
+    const validTotalPages = Math.max(1, Math.ceil(list.total / pageSize));
     if (list.data.length === 0 && list.total > 0 && page > validTotalPages) {
       setPage(validTotalPages);
     }
-  }, [list, page]);
+  }, [list, page, pageSize]);
 
   async function rowAction(fn: () => Promise<any>, ok: string) {
     setMsg(null);
@@ -662,7 +693,7 @@ export default function AdminProdutosPage() {
   }
 
   const totalPages = list
-    ? Math.max(1, Math.ceil(list.total / list.page_size))
+    ? Math.max(1, Math.ceil(list.total / pageSize))
     : 1;
   const commitPageJump = () => {
     const target = Number(pageJumpValue);
@@ -765,7 +796,7 @@ export default function AdminProdutosPage() {
       className={`${STANDARD_SHELL_PANEL_CLASS} !border-[#c3c8e6] !bg-[#d6daf0] dark:!border-violet-900/60 dark:!bg-violet-950/40`}
     >
       <div className="relative flex h-full min-h-[70vh] flex-col">
-        <div className="shrink-0 -mb-[11px]">
+        <div className="shrink-0 -mb-[11px] bg-[#d6daf0] dark:bg-violet-950/40">
           <StandardPageBanner
             icon={Package}
             title="Cadastro de Produtos"
@@ -824,11 +855,8 @@ export default function AdminProdutosPage() {
           />
         </div>
 
-        <div
-          className="flex-1 min-h-0 overflow-y-auto"
-          data-tour-id="catalog2-admin-header"
-        >
-          <div className="space-y-[5px]">
+        <div className="flex-1 min-h-0" data-tour-id="catalog2-admin-header">
+          <div className="flex h-full min-h-0 flex-col gap-[5px]">
             {/* Uma única faixa: os números são os próprios filtros, sem repetir
                 os mesmos estados em um segundo painel. */}
             <div className="mb-1 hidden overflow-hidden rounded-xl border border-slate-200/70 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
@@ -900,19 +928,28 @@ export default function AdminProdutosPage() {
               </div>
             </div>
 
-            <div className={`mt-[5px] ${STANDARD_SHELL_TABLE_CARD_CLASS}`}>
+            <div className={`flex min-h-0 flex-1 flex-col ${STANDARD_SHELL_TABLE_CARD_CLASS}`}>
               {/* Row 1 — busca + filtros + ordenar */}
-              <div className="flex flex-wrap items-center gap-2 border-b border-slate-200/70 bg-slate-50/60 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-900/30 xl:flex-nowrap">
-                <div className="relative min-w-[150px] flex-1 xl:w-[190px] xl:flex-none">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <Input
-                    placeholder="Buscar por nome ou slug"
-                    aria-label="Buscar produtos"
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    className="h-9 w-full rounded-lg border-slate-200 bg-white pl-9 text-sm dark:border-slate-700 dark:bg-slate-800"
-                  />
-                </div>
+              <div className="relative z-20 flex min-h-[58px] shrink-0 flex-nowrap items-center gap-1.5 overflow-hidden border-b border-slate-200/70 bg-[#f8f9fe] px-3 py-1.5 shadow-sm [&>*]:-translate-y-px dark:border-slate-700/60 dark:bg-slate-900">
+                <TooltipProvider delayDuration={350}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="relative min-w-[160px] flex-1">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <Input
+                          placeholder="Pesquisar produtos"
+                          aria-label="Pesquisar produtos"
+                          value={q}
+                          onChange={(e) => setQ(e.target.value)}
+                          className="h-9 w-full rounded-lg border-slate-200 bg-white pl-9 text-sm dark:border-slate-700 dark:bg-slate-800"
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs text-xs">
+                      Pesquise pelo nome ou pelo código interno do produto.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <div className="flex shrink-0 items-center overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
                   {quickTabs.map((tab) => (
                     <TooltipProvider key={tab.key} delayDuration={300}>
@@ -922,7 +959,7 @@ export default function AdminProdutosPage() {
                             type="button"
                             onClick={tab.onClick}
                             aria-label={tab.label}
-                            className={`relative flex h-9 w-[58px] shrink-0 items-center justify-center gap-1 border-r border-slate-100 px-1 text-[11px] font-semibold transition-colors last:border-r-0 dark:border-slate-700 ${QUICK_TAB_TONE[tab.key as keyof typeof QUICK_TAB_TONE][tab.active ? "on" : "off"]}`}
+                            className={`relative flex h-9 w-[48px] shrink-0 items-center justify-center gap-1 border-r border-slate-100 px-1 text-[11px] font-semibold transition-colors last:border-r-0 dark:border-slate-700 ${QUICK_TAB_TONE[tab.key as keyof typeof QUICK_TAB_TONE][tab.active ? "on" : "off"]}`}
                           >
                             <tab.icon className="h-3.5 w-3.5" />
                             <span
@@ -1023,16 +1060,17 @@ export default function AdminProdutosPage() {
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-                <span className="hidden w-[72px] shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-slate-400 lg:inline-block">
+                <span title="Quantidade total de produtos" className="flex h-9 shrink-0 items-center whitespace-nowrap text-xs tabular-nums text-slate-400">
                   {list
-                    ? `${list.total} ${list.total === 1 ? "item" : "itens"}`
+                    ? `${list.total}`
                     : ""}
                 </span>
                 <ProductViewModeToggle
                   value={gridMode}
                   onChange={setGridMode}
+                  compact
                 />
-                <div className="ml-auto hidden shrink-0 items-center gap-1.5 border-l border-slate-200 pl-2 xl:flex dark:border-slate-700">
+                <div className="ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1.5 border-l border-slate-200 pl-2 dark:border-slate-700">
                   <ItemsPerPageSelect
                     compact
                     value={pageSize.toString()}
@@ -1041,7 +1079,9 @@ export default function AdminProdutosPage() {
                       setPage(1);
                     }}
                   />
-                  <div className="flex min-w-[150px] shrink-0 items-center justify-end">
+                  <span className="whitespace-nowrap text-[11px] font-medium text-slate-500 dark:text-slate-400">pág.</span>
+                  <div className="flex shrink-0 items-center gap-1 border-l border-slate-200 pl-1.5 dark:border-slate-700">
+                    <span aria-label={`Página ${page} de ${totalPages}`} className="whitespace-nowrap text-[11px] text-slate-500 dark:text-slate-400"><strong className="text-slate-700 dark:text-slate-200">{page}</strong> de <strong className="text-slate-700 dark:text-slate-200">{totalPages}</strong></span>
                     {totalPages > 1 && (
                       <PaginationControls
                         compact
@@ -1051,7 +1091,7 @@ export default function AdminProdutosPage() {
                       />
                     )}
                   </div>
-                  <div className="flex items-center gap-1 border-l border-slate-200 pl-2 dark:border-slate-700">
+                  <div className="flex items-center gap-1 border-l border-slate-200 pl-1.5 dark:border-slate-700">
                     <input
                       type="number"
                       min={1}
@@ -1061,7 +1101,7 @@ export default function AdminProdutosPage() {
                       onKeyDown={(event) => {
                         if (event.key === "Enter") commitPageJump();
                       }}
-                      placeholder="Pág."
+                      placeholder="Ir"
                       aria-label="Ir para a página"
                       className="h-7 w-11 rounded-lg border border-slate-200 bg-white text-center text-xs text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-[#8a1477]/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
                     />
@@ -1078,7 +1118,7 @@ export default function AdminProdutosPage() {
               </div>
 
               {showCategoryFilters && (
-                <div className="flex flex-wrap gap-2 border-b border-slate-200/70 p-3 dark:border-slate-700/60">
+                <div className="relative z-20 shrink-0 flex flex-wrap gap-2 border-b border-slate-200/70 bg-white p-3 dark:border-slate-700/60 dark:bg-slate-900">
                   <label className="sr-only" htmlFor="f-status">
                     Status
                   </label>
@@ -1189,25 +1229,8 @@ export default function AdminProdutosPage() {
                 </div>
               )}
 
-              {/* Row — paginação (espelhada no rodapé) */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/70 bg-white px-3 py-2 xl:hidden dark:border-slate-700/60 dark:bg-slate-900/30">
-                <ItemsPerPageSelect
-                  value={pageSize.toString()}
-                  onValueChange={(value) => {
-                    setPageSize(Number(value));
-                    setPage(1);
-                  }}
-                  variant="bottom"
-                />
-                {totalPages > 1 && (
-                  <PaginationControls
-                    page={page}
-                    totalPages={totalPages}
-                    onChange={setPage}
-                  />
-                )}
-              </div>
-
+              {/* Somente esta área rola: controles e cabeçalho da tabela ficam visíveis. */}
+              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
               {msg && (
                 <p className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400">
                   {msg}
@@ -1248,18 +1271,10 @@ export default function AdminProdutosPage() {
                   </p>
                 </div>
               ) : gridMode === "list" ? (
-                <div className="allka-table-scroll-body overflow-auto">
+                <div className="allka-table-scroll-body min-w-full">
                   <table
                     className="tabela-cartao w-full table-fixed text-xs"
-                    style={{
-                      minWidth: PRODUCT_COLUMNS.filter((column) =>
-                        visibleProductColumns.has(column.key),
-                      ).reduce(
-                        (total, column) =>
-                          total + productColumnWidths[column.key],
-                        0,
-                      ),
-                    }}
+                    style={{ width: "100%" }}
                   >
                     <colgroup>
                       {PRODUCT_COLUMNS.map((column) => (
@@ -1274,7 +1289,7 @@ export default function AdminProdutosPage() {
                         />
                       ))}
                     </colgroup>
-                    <thead>
+                    <thead className="sticky top-0 z-10 shadow-[0_2px_5px_rgba(15,23,42,0.10)]">
                       <tr className="border-b border-[#c3c8e6] bg-[#d0d5ee] dark:border-slate-700/60 dark:bg-slate-900/30">
                         {PRODUCT_COLUMNS.map((column) => (
                           <th
@@ -1297,7 +1312,7 @@ export default function AdminProdutosPage() {
                                     type="button"
                                     onClick={() => setSort(active && !desc ? `${base}_desc` : base)}
                                     title={`Ordenar por ${column.label}`}
-                                    className={`group flex w-full items-center gap-1 truncate uppercase transition-colors hover:text-violet-700 dark:hover:text-violet-300 ${column.align === "right" ? "justify-end" : column.align === "center" ? "justify-center" : "justify-start"} ${active ? "text-violet-700 dark:text-violet-300" : ""}`}
+                                    className={`group flex w-full items-center gap-1 truncate uppercase transition-colors hover:text-violet-700 dark:hover:text-violet-300 ${column.align === "center" ? "justify-center" : "justify-start"} ${active ? "text-violet-700 dark:text-violet-300" : ""}`}
                                   >
                                     <span className="truncate">{column.label}</span>
                                     {active ? (
@@ -1358,6 +1373,11 @@ export default function AdminProdutosPage() {
                                 is_provisional: true as const,
                               }
                             : provisionalPrice(p.id);
+                        const provisionalReasons = [
+                          ...(realTaskCount == null || realTaskCount === 0 ? [taskProv.label] : []),
+                          ...(realPrice == null && simulatedPrice == null ? [priceProv.label] : []),
+                          ...(rp?.functional_for_test ? ["Especialidade e tempo provisórios para teste."] : []),
+                        ];
                         return (
                           <tr
                             key={p.id}
@@ -1383,9 +1403,10 @@ export default function AdminProdutosPage() {
                               />
                             </td>
                             <td className="px-2 py-1">
-                              <div className="min-w-0">
+                              <div className="flex min-w-0 items-center gap-1.5">
+                                <ProductHealthIcon rp={rp} provisionalReasons={provisionalReasons} />
                                 <button
-                                  className="block w-full truncate whitespace-nowrap text-left text-[13px] font-semibold leading-tight hover:underline"
+                                  className="block min-w-0 flex-1 truncate whitespace-nowrap text-left text-[13px] font-semibold leading-tight hover:underline"
                                   onClick={() => viewProduct(p.id)}
                                   title={p.internal_name}
                                 >
@@ -1409,23 +1430,14 @@ export default function AdminProdutosPage() {
                                     <span className="text-slate-400">
                                       {taskProv.value} tarefa(s)
                                     </span>
-                                    <ProvisionalBadge
-                                      label={
-                                        taskProv.label +
-                                        " Pendência real de tarefas continua registrada."
-                                      }
-                                    />
                                   </>
-                                )}
-                                {rp?.functional_for_test && (
-                                  <ProvisionalBadge label="Especialidade e tempo provisórios para teste — funcional para teste, pendente de revisão. Nunca usado para aprovar preço comercial ou publicação." />
                                 )}
                               </div>
                             </td>
-                            <td className="px-2 py-1 text-right">
+                            <td className="px-2 py-1 text-left">
                               {realPrice != null ? (
-                                <div className="flex items-center justify-end gap-1">
-                                  <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
+                                <div className="flex items-center justify-start gap-1">
+                                  <span className="shrink-0 whitespace-nowrap text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
                                     R$ {realPrice.toFixed(2)}
                                   </span>
                                   <Catalog2PricingMemoryPopover
@@ -1434,27 +1446,20 @@ export default function AdminProdutosPage() {
                                   />
                                 </div>
                               ) : simulatedPrice != null ? (
-                                <div className="flex items-center justify-end gap-1">
-                                  <span className="text-[13px] font-semibold text-violet-600 dark:text-violet-300">
+                                <div className="flex items-center justify-start gap-1">
+                                  <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold text-violet-600 dark:text-violet-300">
                                     R$ {simulatedPrice.toFixed(2)}
                                   </span>
-                                  <ProvisionalBadge label="Preço final simulado para teste. Não autoriza publicação, cotação ou contratação." />
                                   <Catalog2PricingMemoryPopover
                                     productId={p.id}
                                     isAdminMaster={isAdminMaster}
                                   />
                                 </div>
                               ) : (
-                                <div className="flex items-center justify-end gap-1">
-                                  <span className="text-[13px] font-semibold text-slate-400">
+                                <div className="flex items-center justify-start gap-1">
+                                  <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold text-slate-400">
                                     R$ {priceProv.value.toFixed(2)}
                                   </span>
-                                  <ProvisionalBadge
-                                    label={
-                                      priceProv.label +
-                                      " Não é comercialmente válido — nunca usado em cotação, checkout ou publicação."
-                                    }
-                                  />
                                   <Catalog2PricingMemoryPopover
                                     productId={p.id}
                                     isAdminMaster={isAdminMaster}
@@ -1463,7 +1468,7 @@ export default function AdminProdutosPage() {
                                 </div>
                               )}
                             </td>
-                            <td className="px-2 py-1">
+                            <td className="px-2 py-1 text-center">
                               <ReadinessPendingBadge rp={rp} />
                             </td>
                             <td className="px-2 py-1">
@@ -1645,20 +1650,7 @@ export default function AdminProdutosPage() {
                 </div>
               )}
 
-              {list && list.data.length > 0 && (
-                <div className="flex items-center justify-between gap-3 border-t border-slate-200/70 px-4 py-2.5 dark:border-slate-700/60">
-                  <span className="text-xs text-slate-500 dark:text-slate-400">
-                    {list.total} produto{list.total === 1 ? "" : "s"}
-                  </span>
-                  {totalPages > 1 && (
-                    <PaginationControls
-                      page={page}
-                      totalPages={totalPages}
-                      onChange={setPage}
-                    />
-                  )}
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
@@ -1846,7 +1838,7 @@ export function PaginationControls({
   onChange: (p: number) => void;
   compact?: boolean;
 }) {
-  const box = compact ? "h-7 w-7" : "h-9 w-9";
+  const box = compact ? "h-6 w-6" : "h-9 w-9";
   const pages = getPageNumbers(page, totalPages);
   return (
     <div className="flex flex-shrink-0 items-center gap-1">

@@ -32,10 +32,11 @@ import { recordCatalog2ProductHistory } from "./catalog2-product-history";
 import { maybeCreateCatalog2ActivationJobOnStatusTransition, notifyValidQuoteOwnersOfCommercialChange, createCatalog2NotificationJob, type Catalog2NotificationRecipientInput } from "./catalog2-notifications";
 import type { DbClient } from "./project-scope";
 import { cloneConnections, serializeRequirement, validateConnectionConfig } from "./connections/requirements";
+import { validateUniversalV2 } from "./catalog2-universal-validate";
 
 /** Escopo de cobrança exposto pela API (adicionais, efeitos de variação e condições). */
-export function chargeOut(x: { charge_scope: string; charge_start_cycle: number; charge_end_cycle: number | null; charge_quantity: number | null; source_task_key: string | null; source_step_key: string | null }) {
-  return { charge_scope: x.charge_scope, charge_start_cycle: x.charge_start_cycle, charge_end_cycle: x.charge_end_cycle, charge_quantity: x.charge_quantity, source_task_key: x.source_task_key, source_step_key: x.source_step_key };
+export function chargeOut(x: { charge_scope: string; charge_start_cycle: number; charge_end_cycle: number | null; charge_quantity: number | null; source_task_key: string | null; source_step_key: string | null; effort_scale_by_quantity?: boolean }) {
+  return { charge_scope: x.charge_scope, charge_start_cycle: x.charge_start_cycle, charge_end_cycle: x.charge_end_cycle, charge_quantity: x.charge_quantity, source_task_key: x.source_task_key, source_step_key: x.source_step_key, effort_scale_by_quantity: !!x.effort_scale_by_quantity };
 }
 
 export class Catalog2Error extends Error {
@@ -58,7 +59,7 @@ export function assertVersionEditable(version: { state: string }): void {
   }
 }
 
-function slugify(input: string): string {
+export function slugify(input: string): string {
   return input
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
@@ -78,6 +79,44 @@ async function logVersionEvent(
   await db.catalog2VersionEvent.create({
     data: { version_id: versionId, event_type: eventType, actor_user_id: actorUserId, note: note ?? null },
   });
+}
+
+/**
+ * Nome interno EDITÁVEL (rota oficial): só administrador (guarda do router), com histórico antes/depois, autor e data.
+ * Não mexe no título comercial. O slug só muda com confirmação explícita (ele é o endereço do produto e a identidade nos pacotes de transferência).
+ */
+export async function renameProductInternalName(
+  productId: string,
+  input: { internal_name: string; slug?: string | null; confirm_slug_change?: boolean },
+  actorUserId: string,
+) {
+  const name = input.internal_name.trim();
+  if (!name || name.length > 200) throw new Catalog2Error("Informe o nome interno (até 200 caracteres).", 422, "invalid_internal_name");
+  const product = await prisma.catalog2Product.findUnique({ where: { id: productId } });
+  if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (await prisma.catalog2Product.findFirst({ where: { internal_name: name, id: { not: productId } }, select: { id: true } })) {
+    throw new Catalog2Error("Já existe outro produto com este nome interno.", 409, "duplicate_internal_name");
+  }
+  let newSlug: string | null = null;
+  if (input.slug != null && input.slug !== product.slug) {
+    if (!input.confirm_slug_change) {
+      throw new Catalog2Error("Alterar o slug muda o endereço do produto e a identidade nos pacotes de transferência. Confirme enviando confirm_slug_change=true.", 422, "slug_change_not_confirmed");
+    }
+    newSlug = slugify(input.slug);
+    if (!newSlug) throw new Catalog2Error("Slug inválido.", 422, "invalid_slug");
+    if (await prisma.catalog2Product.findFirst({ where: { slug: newSlug, id: { not: productId } }, select: { id: true } })) throw new Catalog2Error("Já existe outro produto com este slug.", 409, "duplicate_slug");
+  }
+  if (name === product.internal_name && !newSlug) return { changed: false, internal_name: product.internal_name, slug: product.slug };
+  await prisma.$transaction(async (tx) => {
+    await tx.catalog2Product.update({ where: { id: productId }, data: { internal_name: name, ...(newSlug ? { slug: newSlug } : {}) } });
+    await recordCatalog2ProductHistory(tx, {
+      productId, eventType: "internal_name_updated",
+      description: `Nome interno alterado de "${product.internal_name}" para "${name}"${newSlug ? ` (slug de "${product.slug}" para "${newSlug}")` : ""}.`,
+      before: { internal_name: product.internal_name, slug: product.slug }, after: { internal_name: name, slug: newSlug ?? product.slug },
+      actorUserId,
+    });
+  });
+  return { changed: true, internal_name: name, slug: newSlug ?? product.slug };
 }
 
 export async function createProduct(
@@ -135,9 +174,11 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
           take: 1,
           include: {
             variations: { include: { options: { include: { effects: true } } } },
-            addons: { include: { effects: true } },
+            addons: { include: { effects: true, choices: true } },
             conditions: true,
             access_requirements: true,
+            approval_gates: true,
+            sla_rules: true,
             tasks: { include: { steps: true, ai: true, dependencies: true, deliverables: true } },
           },
         },
@@ -186,9 +227,11 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
 type FullVersion = Prisma.Catalog2ProductVersionGetPayload<{
   include: {
     variations: { include: { options: { include: { effects: true } } } };
-    addons: { include: { effects: true } };
+    addons: { include: { effects: true; choices: true } };
     conditions: true;
     access_requirements: true;
+    approval_gates: true;
+    sla_rules: true;
     tasks: { include: { steps: true; ai: true; dependencies: true; deliverables: true } };
   };
 }>;
@@ -215,6 +258,13 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         qualifier_user_id: t.qualifier_user_id,
         qualification_mode: t.qualification_mode,
         qualification_min_approvals: t.qualification_min_approvals,
+        qualification_cost_mode: t.qualification_cost_mode,
+        qualification_specialty_id: t.qualification_specialty_id,
+        qualification_hourly_rate: t.qualification_hourly_rate,
+        qualification_minutes: t.qualification_minutes,
+        qualification_percent: t.qualification_percent,
+        qualification_fixed_amount: t.qualification_fixed_amount,
+        qualifier_kind: t.qualifier_kind,
         reviewer_user_id: t.reviewer_user_id,
         review_minutes: t.review_minutes,
         review_specialty_id: t.review_specialty_id,
@@ -302,7 +352,9 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
           sort_order: opt.sort_order,
           is_default: opt.is_default,
           is_active: opt.is_active,
-          effects: { create: opt.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order, charge_scope: e.charge_scope, charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, charge_quantity: e.charge_quantity, source_task_key: e.source_task_key, source_step_key: e.source_step_key })) },
+          availability: opt.availability,
+          availability_note: opt.availability_note,
+          effects: { create: opt.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order, charge_scope: e.charge_scope, charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, charge_quantity: e.charge_quantity, source_task_key: e.source_task_key, source_step_key: e.source_step_key, effort_scale_by_quantity: e.effort_scale_by_quantity })) },
         },
       });
     }
@@ -318,10 +370,13 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         is_default_selected: ad.is_default_selected,
         is_active: ad.is_active,
         base_cost: ad.base_cost,
+        addon_type: ad.addon_type, qty_min: ad.qty_min, qty_max: ad.qty_max, qty_step: ad.qty_step, unit_label: ad.unit_label, unit_base_cost: ad.unit_base_cost,
+        unit_minutes: ad.unit_minutes, unit_deadline_days: ad.unit_deadline_days, auto_quote_limit: ad.auto_quote_limit,
+        choices: { create: ad.choices.map((c) => ({ key: c.key, label: c.label, sort_order: c.sort_order, is_default: c.is_default, is_active: c.is_active, base_cost: c.base_cost, minutes: c.minutes, deadline_days: c.deadline_days, qty_from: c.qty_from, qty_to: c.qty_to, requires_quote: c.requires_quote })) },
         charge_scope: ad.charge_scope, charge_start_cycle: ad.charge_start_cycle, charge_end_cycle: ad.charge_end_cycle, charge_quantity: ad.charge_quantity, source_task_key: ad.source_task_key, source_step_key: ad.source_step_key,
         target_task_id: ad.target_task_id ? taskIdByKey.get(src.tasks.find((x) => x.id === ad.target_task_id)?.key ?? "") ?? null : null,
         target_step_id: ad.target_step_id ? stepIdByRef.get(refForStepId(src, ad.target_step_id) ?? "") ?? null : null,
-        effects: { create: ad.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order, charge_scope: e.charge_scope, charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, charge_quantity: e.charge_quantity, source_task_key: e.source_task_key, source_step_key: e.source_step_key })) },
+        effects: { create: ad.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order, charge_scope: e.charge_scope, charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, charge_quantity: e.charge_quantity, source_task_key: e.source_task_key, source_step_key: e.source_step_key, effort_scale_by_quantity: e.effort_scale_by_quantity })) },
       },
     });
   }
@@ -342,8 +397,16 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         effect_value: c.effect_value,
         explanation: c.explanation,
         charge_scope: c.charge_scope, charge_start_cycle: c.charge_start_cycle, charge_end_cycle: c.charge_end_cycle, charge_quantity: c.charge_quantity, source_task_key: c.source_task_key, source_step_key: c.source_step_key,
+        effort_scale_by_quantity: c.effort_scale_by_quantity,
       },
     });
+  }
+  // Portões de aprovação e regras de prazo/SLA (estrutura universal v2) seguem para a versão nova.
+  for (const g of src.approval_gates) {
+    await db.catalog2ApprovalGate.create({ data: { version_id: destId, key: g.key, name: g.name, description: g.description, anchor_task_key: g.anchor_task_key, anchor_step_key: g.anchor_step_key, position: g.position, approver_kind: g.approver_kind, group_key: g.group_key, sequence_no: g.sequence_no, group_mode: g.group_mode, rejection_return_step_key: g.rejection_return_step_key, requires_comment: g.requires_comment, is_required: g.is_required, is_active: g.is_active, sort_order: g.sort_order } });
+  }
+  for (const r of src.sla_rules) {
+    await db.catalog2SlaRule.create({ data: { version_id: destId, key: r.key, name: r.name, scope_kind: r.scope_kind, target_key: r.target_key, modality: r.modality, amount: r.amount, unit: r.unit, anchor: r.anchor, description: r.description, is_active: r.is_active, sort_order: r.sort_order } });
   }
 }
 
@@ -591,6 +654,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
 
   // Conexões e acessos necessários (módulo opcional: desativado = nenhuma pendência).
   for (const m of await validateConnectionConfig(prisma, versionId)) issues.push(m);
+  for (const m of await validateUniversalV2(prisma, versionId)) issues.push(m);
 
   // Tudo que veio antes daqui é estrutural. A opção de publicar com
   // pendência comercial nunca pode mascarar uma dessas falhas.
@@ -1169,10 +1233,12 @@ export async function getProductDetail(productId: string) {
         include: {
           events: { orderBy: { created_at: "asc" } },
           variations: { orderBy: { sort_order: "asc" }, include: { options: { orderBy: { sort_order: "asc" }, include: { effects: { orderBy: { sort_order: "asc" } } } } } },
-          addons: { orderBy: { sort_order: "asc" }, include: { effects: { orderBy: { sort_order: "asc" } } } },
+          addons: { orderBy: { sort_order: "asc" }, include: { effects: { orderBy: { sort_order: "asc" } }, choices: { orderBy: { sort_order: "asc" } } } },
           conditions: { orderBy: { sort_order: "asc" } },
           access_requirements: { orderBy: { sort_order: "asc" } },
-          connection_requirements: { orderBy: { sort_order: "asc" }, include: { connection_type: true, dependencies: { orderBy: { dep_key: "asc" } } } },
+          approval_gates: { orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] },
+          sla_rules: { orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] },
+          connection_requirements: { orderBy: { sort_order: "asc" }, include: { connection_type: true, dependencies: { orderBy: { dep_key: "asc" } }, triggers: { orderBy: { sort_order: "asc" } } } },
           tasks: {
             orderBy: { sort_order: "asc" },
             include: { deliverables: { orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] }, steps: { orderBy: { sort_order: "asc" }, include: { step_model: true } }, task_model: true, specialty: true, ai: true, dependencies: true, questionnaire: { include: { questions: { orderBy: { sort_order: "asc" } } } } },
@@ -1234,6 +1300,17 @@ export async function getProductDetail(productId: string) {
       access_requirements: v.access_requirements.map((a) => ({ id: a.id, access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes })),
       requires_connections: v.requires_connections,
       connection_requirements: v.connection_requirements.map(serializeRequirement),
+      approval_gates: v.approval_gates.map((g) => ({ id: g.id, key: g.key, name: g.name, description: g.description, anchor_task_key: g.anchor_task_key, anchor_step_key: g.anchor_step_key, position: g.position, approver_kind: g.approver_kind, group_key: g.group_key, sequence_no: g.sequence_no, group_mode: g.group_mode, rejection_return_step_key: g.rejection_return_step_key, requires_comment: g.requires_comment, is_required: g.is_required, is_active: g.is_active, sort_order: g.sort_order })),
+      sla_rules: v.sla_rules.map((r) => ({ id: r.id, key: r.key, name: r.name, scope_kind: r.scope_kind, target_key: r.target_key, modality: r.modality, amount: r.amount, unit: r.unit, anchor: r.anchor, description: r.description, is_active: r.is_active, sort_order: r.sort_order })),
+      // Contagem clara: o que é BASE (sempre existe) x CONDICIONAL (só entra quando o cenário liga). Total possível = base + condicionais.
+      counts: {
+        tasks_base: v.tasks.filter((t) => !t.is_conditional).length,
+        tasks_conditional: v.tasks.filter((t) => t.is_conditional).length,
+        tasks_total: v.tasks.length,
+        steps_base: v.tasks.reduce((a, t) => a + t.steps.filter((s) => !s.is_conditional).length, 0),
+        steps_conditional: v.tasks.reduce((a, t) => a + t.steps.filter((s) => s.is_conditional).length, 0),
+        steps_total: v.tasks.reduce((a, t) => a + t.steps.length, 0),
+      },
       variations: v.variations.map((va) => ({
         id: va.id,
         key: va.key,
@@ -1250,6 +1327,8 @@ export async function getProductDetail(productId: string) {
           sort_order: o.sort_order,
           is_default: o.is_default,
           is_active: o.is_active,
+          availability: o.availability,
+          availability_note: o.availability_note,
           effects: o.effects.map((e) => ({ id: e.id, effect_type: e.effect_type, effect_value: e.effect_value, ...chargeOut(e) })),
         })),
       })),
@@ -1262,6 +1341,9 @@ export async function getProductDetail(productId: string) {
         is_default_selected: a.is_default_selected,
         is_active: a.is_active,
         base_cost: a.base_cost,
+        addon_type: a.addon_type, qty_min: a.qty_min, qty_max: a.qty_max, qty_step: a.qty_step, unit_label: a.unit_label, unit_base_cost: a.unit_base_cost,
+        unit_minutes: a.unit_minutes, unit_deadline_days: a.unit_deadline_days, auto_quote_limit: a.auto_quote_limit,
+        choices: a.choices.map((c) => ({ id: c.id, key: c.key, label: c.label, sort_order: c.sort_order, is_default: c.is_default, is_active: c.is_active, base_cost: c.base_cost, minutes: c.minutes, deadline_days: c.deadline_days, qty_from: c.qty_from, qty_to: c.qty_to, requires_quote: c.requires_quote })),
         ...chargeOut(a),
         target_task_id: a.target_task_id,
         target_step_id: a.target_step_id,
@@ -1296,6 +1378,13 @@ export async function getProductDetail(productId: string) {
         asset_rule: t.asset_rule,
         asset_revalidate_days: t.asset_revalidate_days,
         qualifier_user_id: t.qualifier_user_id,
+        qualification_cost_mode: t.qualification_cost_mode,
+        qualification_specialty_id: t.qualification_specialty_id,
+        qualification_hourly_rate: t.qualification_hourly_rate,
+        qualification_minutes: t.qualification_minutes,
+        qualification_percent: t.qualification_percent,
+        qualification_fixed_amount: t.qualification_fixed_amount,
+        qualifier_kind: t.qualifier_kind,
         reviewer_user_id: t.reviewer_user_id,
         review_minutes: t.review_minutes,
         review_specialty_id: t.review_specialty_id,
@@ -1346,6 +1435,7 @@ export async function getProductDetail(productId: string) {
               unit_cost_output_per_1k: t.ai.unit_cost_output_per_1k,
               currency: t.ai.currency,
               est_review_rounds: t.ai.est_review_rounds,
+              est_runs: t.ai.est_runs,
               human_review_required: t.ai.human_review_required,
               profile_id: t.ai.profile_id,
               ai_mode: t.ai.ai_mode,

@@ -56,6 +56,7 @@ import {
   cancelScheduledInactivation,
   buildEffectCtx,
   createProduct,
+  renameProductInternalName,
   getProductDetail,
   newDraftVersion,
   publishVersion,
@@ -71,6 +72,11 @@ import { recalculateProjectValue } from "../lib/project-value";
 import { aiCopyData, AI_MODES, AI_ACTORS, AI_TRIGGERS } from "../lib/catalog2-ai";
 import { applyResolution, RESOLUTION_ACTIONS, RESOLUTION_EFFECTS, type ResolutionAction } from "../lib/catalog2-commercial";
 import { priceSummary } from "../lib/catalog2-price-summary";
+import { OPTION_AVAILABILITY } from "../lib/catalog2-availability";
+import { ADDON_TYPES, type AddonType } from "../lib/catalog2-addon-types";
+import { validateEffortEffect } from "../lib/catalog2-effort";
+import { GATE_POSITIONS, APPROVER_KINDS, GROUP_MODES, GATE_POSITION_LABEL, APPROVER_KIND_LABEL, validateGateInput } from "../lib/approval-gates";
+import { SLA_SCOPES, SLA_UNITS, SLA_ANCHORS, SLA_MODALITIES, SLA_SCOPE_LABEL, SLA_UNIT_LABEL, SLA_ANCHOR_LABEL, SLA_PAUSE_REASONS, validateSlaRuleInput } from "../lib/sla";
 import {
   ASSET_RULES_CONN, CONNECTION_METHODS, CONNECTION_METHOD_LABEL, CONNECTION_STATES, CONNECTION_STATE_LABEL, ConnectionError, DEPENDENCY_KINDS, DEPENDENCY_KIND_LABEL, GRANT_SCOPES, GRANT_SCOPE_LABEL,
   OBLIGATIONS, OBLIGATION_LABEL, PENDING_BEHAVIORS, PENDING_BEHAVIOR_LABEL, VALIDATION_MODES, WHEN_NEEDED, WHEN_NEEDED_LABEL, ensureConnectionTypes, serializeConnectionType,
@@ -937,8 +943,7 @@ router.get("/products", async (req, res, next) => {
       const all = await prisma.catalog2Product.findMany({ where, include: READINESS_INCLUDE });
       const priced = await Promise.all(all.map(async (prod) => {
         const r = await computeProductReadiness(prod);
-        const prov = await prisma.catalog2ProvisionalPreview.findUnique({ where: { product_id: prod.id }, select: { price_amount: true } });
-        return { id: prod.id, price: (r.price_amount ?? r.pricing_simulation?.price_amount ?? prov?.price_amount ?? null) as number | null };
+        return { id: prod.id, price: (r.price_amount ?? r.pricing_simulation?.price_amount ?? null) as number | null };
       }));
       const dir = sortParam === "price" ? 1 : -1;
       priced.sort((a, b) => (a.price == null && b.price == null ? 0 : a.price == null ? 1 : b.price == null ? -1 : (a.price - b.price) * dir));
@@ -1052,6 +1057,16 @@ router.post("/products", async (req, res, next) => {
     const p = await createProduct(d, req.user!.id);
     await audit(req, "product_created", { id: p.id, internal_name: p.internal_name });
     res.status(201).json(await getProductDetail(p.id));
+  } catch (e) { handle(e, res, next); }
+});
+
+// Nome interno EDITÁVEL (2026-10-02): rota oficial, só administrador, com histórico antes/depois. Não altera título comercial nem slug (sem confirmação).
+router.patch("/products/:id/internal-name", async (req, res, next) => {
+  try {
+    const d = z.object({ internal_name: z.string().min(1).max(200), slug: z.string().max(90).nullish(), confirm_slug_change: z.boolean().optional() }).parse(req.body);
+    const r = await renameProductInternalName(req.params.id as string, d, req.user!.id);
+    if (r.changed) await audit(req, "product_internal_name_updated", { id: req.params.id, internal_name: r.internal_name });
+    res.json({ ok: true, ...r });
   } catch (e) { handle(e, res, next); }
 });
 
@@ -1537,7 +1552,7 @@ router.delete("/variations/:id", async (req, res, next) => {
     res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
-const optionSchema = z.object({ key: z.string().min(1).max(60), label: z.string().min(1).max(160), sort_order: z.number().int().optional(), is_default: z.boolean().optional(), is_active: z.boolean().optional() });
+const optionSchema = z.object({ key: z.string().min(1).max(60), label: z.string().min(1).max(160), sort_order: z.number().int().optional(), is_default: z.boolean().optional(), is_active: z.boolean().optional(), availability: z.enum(OPTION_AVAILABILITY).optional(), availability_note: z.string().max(1000).nullish(), media_url: z.string().max(1_500_000).nullish(), icon_key: z.string().max(60).nullish() });
 router.post("/variations/:id/options", async (req, res, next) => {
   try {
     const { variation, version } = await versionOfVariation(req.params.id as string);
@@ -1577,6 +1592,7 @@ router.put("/options/:id", async (req, res, next) => {
       if (d.sort_order !== undefined && d.sort_order !== o.sort_order) changed.push(`ordem de ${o.sort_order} para ${d.sort_order}`);
       if (d.is_default !== undefined && d.is_default !== o.is_default) changed.push(d.is_default ? "passou a ser padrão" : "deixou de ser padrão");
       if (d.is_active !== undefined && d.is_active !== o.is_active) changed.push(d.is_active ? "ativada" : "desativada");
+      if (d.availability !== undefined && d.availability !== o.availability) changed.push(`disponibilidade de "${o.availability}" para "${d.availability}"`);
       if (changed.length > 0) {
         await recordCatalog2ProductHistory(tx, {
           productId: version.product_id, versionId: version.id, eventType: "option_updated",
@@ -1618,6 +1634,8 @@ const chargeShape = {
   charge_quantity: z.number().int().min(1).max(100000).nullish(),
   source_task_key: z.string().max(60).nullish(),
   source_step_key: z.string().max(60).nullish(),
+  /** Esforço/efeito multiplicado pela quantidade (adicional por unidade, variação por quantidade ou quantidade do pedido). */
+  effort_scale_by_quantity: z.boolean().optional(),
 };
 async function assertChargeMeta(versionId: string, d: { charge_scope?: string; charge_start_cycle?: number; charge_end_cycle?: number | null; source_task_key?: string | null }) {
   if (d.charge_end_cycle != null && d.charge_end_cycle < (d.charge_start_cycle ?? 0)) throw new Catalog2Error("O fim da cobrança não pode ser antes do início.", 422, "invalid_charge_window");
@@ -1644,7 +1662,7 @@ router.post("/options/:id/effects", async (req, res, next) => {
     const d = effectSchema.parse(req.body);
     await assertChargeMeta(version.id, d);
     const ctx = await buildEffectCtx(version.id);
-    const err = validateEffect(d.effect_type, d.effect_value, ctx);
+    const err = validateEffect(d.effect_type, d.effect_value, ctx) ?? validateEffortEffect(d.effect_type, d.effect_value, d, ctx);
     if (err) throw new Catalog2Error(err, 422, "invalid_effect");
     const created = await prisma.$transaction(async (tx) => {
       const c = await tx.catalog2OptionEffect.create({ data: { variation_option_id: req.params.id as string, ...d, sort_order: d.sort_order ?? 99 } });
@@ -1694,16 +1712,33 @@ const addonSchema = z.object({
   key: z.string().min(1).max(60), name: z.string().min(1).max(160), description: z.string().max(4000).nullish(),
   sort_order: z.number().int().optional(), is_default_selected: z.boolean().optional(), is_active: z.boolean().optional(),
   base_cost: z.number().nonnegative().nullish(), target_task_id: z.string().nullish(), target_step_id: z.string().nullish(),
+  media_url: z.string().max(1_500_000).nullish(), icon_key: z.string().max(60).nullish(),
+  // Tipos universais de adicional (padrão "checkbox" = comportamento histórico).
+  addon_type: z.enum(ADDON_TYPES).optional(),
+  qty_min: z.number().int().min(0).max(100000).nullish(), qty_max: z.number().int().min(1).max(100000).nullish(), qty_step: z.number().int().min(1).max(100000).nullish(),
+  unit_label: z.string().max(60).nullish(), unit_base_cost: z.number().nonnegative().nullish(), unit_minutes: z.number().int().min(0).max(1000000).nullish(),
+  unit_deadline_days: z.number().nonnegative().max(3650).nullish(), auto_quote_limit: z.number().int().min(1).max(100000).nullish(),
   ...chargeShape,
 });
+/** Coerência do adicional tipado (limites, unidade, alvo do esforço). Lança erro claro em português. */
+function assertAddonConfig(a: { addon_type?: string | null; qty_min?: number | null; qty_max?: number | null; qty_step?: number | null; unit_minutes?: number | null; source_task_key?: string | null }) {
+  const type = (a.addon_type ?? "checkbox") as AddonType;
+  if (type === "quantity") {
+    const min = a.qty_min ?? 1;
+    if (min < 1) throw new Catalog2Error("A quantidade mínima de um adicional por quantidade é 1 ou mais.", 422, "invalid_addon_config");
+    if (a.qty_max != null && a.qty_max < min) throw new Catalog2Error("A quantidade máxima não pode ser menor que a mínima.", 422, "invalid_addon_config");
+  }
+  if ((a.unit_minutes ?? 0) > 0 && !a.source_task_key) throw new Catalog2Error("Minutos por unidade exigem a tarefa (ou etapa) que recebe o esforço.", 422, "invalid_addon_config");
+}
 router.post("/versions/:id/addons", async (req, res, next) => {
   try {
     const version = await editableVersionOrThrow(req.params.id as string);
     const d = addonSchema.parse(req.body);
     await assertAddonTargets(version.id, d.target_task_id, d.target_step_id);
     await assertChargeMeta(version.id, d);
+    assertAddonConfig(d);
     const created = await prisma.$transaction(async (tx) => {
-      const c = await tx.catalog2Addon.create({ data: { version_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, is_default_selected: d.is_default_selected ?? false, is_active: d.is_active ?? true, base_cost: d.base_cost ?? null, target_task_id: d.target_task_id ?? null, target_step_id: d.target_step_id ?? null, ...(d.charge_scope ? { charge_scope: d.charge_scope } : {}), charge_start_cycle: d.charge_start_cycle ?? 0, charge_end_cycle: d.charge_end_cycle ?? null, charge_quantity: d.charge_quantity ?? null, source_task_key: d.source_task_key ?? null, source_step_key: d.source_step_key ?? null } });
+      const c = await tx.catalog2Addon.create({ data: { addon_type: d.addon_type ?? "checkbox", qty_min: d.qty_min ?? null, qty_max: d.qty_max ?? null, qty_step: d.qty_step ?? null, unit_label: d.unit_label ?? null, unit_base_cost: d.unit_base_cost ?? null, unit_minutes: d.unit_minutes ?? null, unit_deadline_days: d.unit_deadline_days ?? null, auto_quote_limit: d.auto_quote_limit ?? null, version_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, is_default_selected: d.is_default_selected ?? false, is_active: d.is_active ?? true, base_cost: d.base_cost ?? null, target_task_id: d.target_task_id ?? null, target_step_id: d.target_step_id ?? null, ...(d.charge_scope ? { charge_scope: d.charge_scope } : {}), charge_start_cycle: d.charge_start_cycle ?? 0, charge_end_cycle: d.charge_end_cycle ?? null, charge_quantity: d.charge_quantity ?? null, source_task_key: d.source_task_key ?? null, source_step_key: d.source_step_key ?? null } });
       await recordCatalog2ProductHistory(tx, {
         productId: version.product_id, versionId: version.id, eventType: "addon_added",
         description: `Adicional "${c.name}" adicionado.`, after: { key: c.key, name: c.name },
@@ -1727,6 +1762,7 @@ router.put("/addons/:id", async (req, res, next) => {
     const before = await versionOfAddon(req.params.id as string);
     const d = addonSchema.partial().parse(req.body);
     await assertChargeMeta(before.version_id, { ...before, ...d });
+    assertAddonConfig({ ...before, ...d });
     if ("target_task_id" in d || "target_step_id" in d) {
       await assertAddonTargets(before.version_id, "target_task_id" in d ? d.target_task_id : before.target_task_id, "target_step_id" in d ? d.target_step_id : before.target_step_id);
     }
@@ -1771,7 +1807,8 @@ router.post("/addons/:id/effects", async (req, res, next) => {
     const addon = await versionOfAddon(req.params.id as string);
     const d = effectSchema.parse(req.body);
     await assertChargeMeta(addon.version_id, d);
-    const err = validateEffect(d.effect_type, d.effect_value, await buildEffectCtx(addon.version_id));
+    const effectCtx = await buildEffectCtx(addon.version_id);
+    const err = validateEffect(d.effect_type, d.effect_value, effectCtx) ?? validateEffortEffect(d.effect_type, d.effect_value, d, effectCtx);
     if (err) throw new Catalog2Error(err, 422, "invalid_effect");
     const created = await prisma.$transaction(async (tx) => {
       const c = await tx.catalog2AddonEffect.create({ data: { addon_id: req.params.id as string, ...d, sort_order: d.sort_order ?? 99 } });
@@ -1802,6 +1839,185 @@ router.delete("/addon-effects/:id", async (req, res, next) => {
     });
     res.json({ ok: true });
   } catch (err) { handle(err, res, next); }
+});
+
+// ── Portões de aprovação do fluxo (2026-10-02) ───────────────────────────────────────────
+router.get("/approval-gate-options", (_req, res) => {
+  res.json({
+    positions: GATE_POSITIONS.map((k) => ({ key: k, label: GATE_POSITION_LABEL[k] })),
+    approvers: APPROVER_KINDS.map((k) => ({ key: k, label: APPROVER_KIND_LABEL[k] })),
+    group_modes: GROUP_MODES.map((k) => ({ key: k, label: k === "sequence" ? "Em sequência (um depois do outro)" : "Em paralelo (todos ao mesmo tempo)" })),
+  });
+});
+const gateSchema = z.object({
+  key: z.string().min(1).max(60).regex(/^[a-z0-9_\-]+$/, "Use letras minúsculas, números, _ ou -").optional(), name: z.string().min(1).max(160), description: z.string().max(4000).nullish(),
+  anchor_task_key: z.string().min(1).max(60), anchor_step_key: z.string().max(60).nullish(),
+  position: z.enum(GATE_POSITIONS).optional(), approver_kind: z.enum(APPROVER_KINDS).optional(),
+  group_key: z.string().max(60).nullish(), sequence_no: z.number().int().min(0).max(1000).optional(), group_mode: z.enum(GROUP_MODES).optional(),
+  rejection_return_step_key: z.string().max(60).nullish(), requires_comment: z.boolean().optional(), is_required: z.boolean().optional(), is_active: z.boolean().optional(), sort_order: z.number().int().optional(),
+});
+router.post("/versions/:id/approval-gates", async (req, res, next) => {
+  try {
+    const version = await editableVersionOrThrow(req.params.id as string);
+    const d = gateSchema.parse(req.body);
+    const err = await validateGateInput(prisma, version.id, d);
+    if (err) throw new Catalog2Error(err, 422, "invalid_gate");
+    const key = d.key ?? `portao_${Date.now().toString(36)}`;
+    if (await prisma.catalog2ApprovalGate.findUnique({ where: { version_id_key: { version_id: version.id, key } }, select: { id: true } })) throw new Catalog2Error(`Já existe um portão com a chave "${key}" nesta versão.`, 422, "duplicate_gate_key");
+    const count = await prisma.catalog2ApprovalGate.count({ where: { version_id: version.id } });
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2ApprovalGate.create({ data: { version_id: version.id, key, name: d.name, description: d.description ?? null, anchor_task_key: d.anchor_task_key, anchor_step_key: d.anchor_step_key ?? null, position: d.position ?? "before_step", approver_kind: d.approver_kind ?? "client", group_key: d.group_key ?? null, sequence_no: d.sequence_no ?? 0, group_mode: d.group_mode ?? "sequence", rejection_return_step_key: d.rejection_return_step_key ?? null, requires_comment: d.requires_comment ?? false, is_required: d.is_required ?? true, is_active: d.is_active ?? true, sort_order: d.sort_order ?? count + 1 } });
+      await recordCatalog2ProductHistory(tx, { productId: version.product_id, versionId: version.id, eventType: "approval_gate_added", description: `Portão de aprovação "${c.name}" adicionado.`, after: { key: c.key, position: c.position, approver_kind: c.approver_kind }, actorUserId: req.user!.id });
+      return c;
+    });
+    res.status(201).json(created);
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/approval-gates/:id", async (req, res, next) => {
+  try {
+    const cur = await prisma.catalog2ApprovalGate.findUnique({ where: { id: req.params.id as string } });
+    if (!cur) throw new Catalog2Error("Portão não encontrado.", 404);
+    const version = await editableVersionOrThrow(cur.version_id);
+    const d = gateSchema.partial().parse(req.body);
+    const merged = { ...cur, ...d, description: d.description !== undefined ? d.description : cur.description };
+    const err = await validateGateInput(prisma, version.id, merged);
+    if (err) throw new Catalog2Error(err, 422, "invalid_gate");
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2ApprovalGate.update({ where: { id: cur.id }, data: d });
+      await recordCatalog2ProductHistory(tx, { productId: version.product_id, versionId: version.id, eventType: "approval_gate_updated", description: `Portão de aprovação "${u.name}" atualizado.`, actorUserId: req.user!.id });
+      return u;
+    });
+    res.json(updated);
+  } catch (e) { handle(e, res, next); }
+});
+router.delete("/approval-gates/:id", async (req, res, next) => {
+  try {
+    const cur = await prisma.catalog2ApprovalGate.findUnique({ where: { id: req.params.id as string } });
+    if (!cur) throw new Catalog2Error("Portão não encontrado.", 404);
+    const version = await editableVersionOrThrow(cur.version_id);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2ApprovalGate.delete({ where: { id: cur.id } });
+      await recordCatalog2ProductHistory(tx, { productId: version.product_id, versionId: version.id, eventType: "approval_gate_removed", description: `Portão de aprovação "${cur.name}" removido.`, before: { key: cur.key }, actorUserId: req.user!.id });
+    });
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
+});
+
+// ── Prazos e SLA estruturados (2026-10-02) ───────────────────────────────────────────────
+router.get("/sla-options", (_req, res) => {
+  res.json({
+    scopes: SLA_SCOPES.map((k) => ({ key: k, label: SLA_SCOPE_LABEL[k] })),
+    units: SLA_UNITS.map((k) => ({ key: k, label: SLA_UNIT_LABEL[k] })),
+    anchors: SLA_ANCHORS.map((k) => ({ key: k, label: SLA_ANCHOR_LABEL[k] })),
+    modalities: SLA_MODALITIES.map((k) => ({ key: k, label: k === "any" ? "Qualquer modalidade" : k === "avulso" ? "Avulso" : "Mensal recorrente" })),
+    pause_reasons: Object.entries(SLA_PAUSE_REASONS).map(([key, label]) => ({ key, label })),
+  });
+});
+const slaSchema = z.object({
+  key: z.string().min(1).max(60).regex(/^[a-z0-9_\-]+$/, "Use letras minúsculas, números, _ ou -").optional(), name: z.string().min(1).max(160),
+  scope_kind: z.enum(SLA_SCOPES), target_key: z.string().max(120).nullish(), modality: z.enum(SLA_MODALITIES).optional(),
+  amount: z.number().positive().max(100000), unit: z.enum(SLA_UNITS).optional(), anchor: z.enum(SLA_ANCHORS).optional(),
+  description: z.string().max(4000).nullish(), is_active: z.boolean().optional(), sort_order: z.number().int().optional(),
+});
+router.post("/versions/:id/sla-rules", async (req, res, next) => {
+  try {
+    const version = await editableVersionOrThrow(req.params.id as string);
+    const d = slaSchema.parse(req.body);
+    const err = await validateSlaRuleInput(prisma, version.id, d);
+    if (err) throw new Catalog2Error(err, 422, "invalid_sla_rule");
+    const key = d.key ?? `prazo_${Date.now().toString(36)}`;
+    if (await prisma.catalog2SlaRule.findUnique({ where: { version_id_key: { version_id: version.id, key } }, select: { id: true } })) throw new Catalog2Error(`Já existe uma regra de prazo com a chave "${key}" nesta versão.`, 422, "duplicate_sla_key");
+    const count = await prisma.catalog2SlaRule.count({ where: { version_id: version.id } });
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2SlaRule.create({ data: { version_id: version.id, key, name: d.name, scope_kind: d.scope_kind, target_key: d.target_key ?? null, modality: d.modality ?? "any", amount: d.amount, unit: d.unit ?? "business_days", anchor: d.anchor ?? "prerequisites_valid", description: d.description ?? null, is_active: d.is_active ?? true, sort_order: d.sort_order ?? count + 1 } });
+      await recordCatalog2ProductHistory(tx, { productId: version.product_id, versionId: version.id, eventType: "sla_rule_added", description: `Prazo "${c.name}" adicionado (${c.amount} ${SLA_UNIT_LABEL[c.unit as keyof typeof SLA_UNIT_LABEL] ?? c.unit}).`, after: { key: c.key, scope_kind: c.scope_kind, amount: c.amount, unit: c.unit }, actorUserId: req.user!.id });
+      return c;
+    });
+    res.status(201).json(created);
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/sla-rules/:id", async (req, res, next) => {
+  try {
+    const cur = await prisma.catalog2SlaRule.findUnique({ where: { id: req.params.id as string } });
+    if (!cur) throw new Catalog2Error("Regra de prazo não encontrada.", 404);
+    const version = await editableVersionOrThrow(cur.version_id);
+    const d = slaSchema.partial().parse(req.body);
+    const merged = { ...cur, ...d, description: d.description !== undefined ? d.description : cur.description };
+    const err = await validateSlaRuleInput(prisma, version.id, merged);
+    if (err) throw new Catalog2Error(err, 422, "invalid_sla_rule");
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2SlaRule.update({ where: { id: cur.id }, data: d });
+      await recordCatalog2ProductHistory(tx, { productId: version.product_id, versionId: version.id, eventType: "sla_rule_updated", description: `Prazo "${u.name}" atualizado.`, actorUserId: req.user!.id });
+      return u;
+    });
+    res.json(updated);
+  } catch (e) { handle(e, res, next); }
+});
+router.delete("/sla-rules/:id", async (req, res, next) => {
+  try {
+    const cur = await prisma.catalog2SlaRule.findUnique({ where: { id: req.params.id as string } });
+    if (!cur) throw new Catalog2Error("Regra de prazo não encontrada.", 404);
+    const version = await editableVersionOrThrow(cur.version_id);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2SlaRule.delete({ where: { id: cur.id } });
+      await recordCatalog2ProductHistory(tx, { productId: version.product_id, versionId: version.id, eventType: "sla_rule_removed", description: `Prazo "${cur.name}" removido.`, before: { key: cur.key }, actorUserId: req.user!.id });
+    });
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
+});
+
+// ── Escolhas de adicionais (seleção única/múltipla e faixas de quantidade) ──────────────
+const addonChoiceSchema = z.object({
+  key: z.string().min(1).max(60), label: z.string().min(1).max(160), sort_order: z.number().int().optional(),
+  is_default: z.boolean().optional(), is_active: z.boolean().optional(),
+  base_cost: z.number().nonnegative().nullish(), minutes: z.number().int().min(0).max(1000000).nullish(), deadline_days: z.number().nonnegative().max(3650).nullish(),
+  qty_from: z.number().int().min(1).max(100000).nullish(), qty_to: z.number().int().min(1).max(100000).nullish(), requires_quote: z.boolean().optional(),
+});
+function assertChoice(addonType: string, d: { qty_from?: number | null; qty_to?: number | null }) {
+  if (d.qty_from != null && d.qty_to != null && d.qty_to < d.qty_from) throw new Catalog2Error("O fim da faixa não pode ser menor que o início.", 422, "invalid_addon_choice");
+  if (addonType === "range" && d.qty_from == null && d.qty_to == null) throw new Catalog2Error("Uma faixa de quantidade precisa de início e/ou fim.", 422, "invalid_addon_choice");
+}
+router.post("/addons/:id/choices", async (req, res, next) => {
+  try {
+    const addon = await versionOfAddon(req.params.id as string);
+    const d = addonChoiceSchema.parse(req.body);
+    assertChoice(addon.addon_type, d);
+    if (await prisma.catalog2AddonChoice.findFirst({ where: { addon_id: addon.id, key: d.key }, select: { id: true } })) throw new Catalog2Error(`Já existe uma escolha com a chave "${d.key}" neste adicional.`, 422, "duplicate_choice_key");
+    const created = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2AddonChoice.create({ data: { addon_id: addon.id, key: d.key, label: d.label, sort_order: d.sort_order ?? 99, is_default: d.is_default ?? false, is_active: d.is_active ?? true, base_cost: d.base_cost ?? null, minutes: d.minutes ?? null, deadline_days: d.deadline_days ?? null, qty_from: d.qty_from ?? null, qty_to: d.qty_to ?? null, requires_quote: d.requires_quote ?? false } });
+      await recordCatalog2ProductHistory(tx, { productId: addon.version.product_id, versionId: addon.version.id, eventType: "addon_choice_added", description: `Escolha "${c.label}" adicionada ao adicional "${addon.name}".`, after: { key: c.key, label: c.label }, actorUserId: req.user!.id });
+      return c;
+    });
+    res.status(201).json(created);
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/addon-choices/:id", async (req, res, next) => {
+  try {
+    const cur = await prisma.catalog2AddonChoice.findUnique({ where: { id: req.params.id as string } });
+    if (!cur) throw new Catalog2Error("Escolha não encontrada.", 404);
+    const addon = await versionOfAddon(cur.addon_id);
+    const d = addonChoiceSchema.partial().parse(req.body);
+    assertChoice(addon.addon_type, { ...cur, ...d });
+    if (d.key !== undefined && d.key !== cur.key && (await prisma.catalog2AddonChoice.findFirst({ where: { addon_id: addon.id, key: d.key, id: { not: cur.id } }, select: { id: true } }))) throw new Catalog2Error(`Já existe uma escolha com a chave "${d.key}" neste adicional.`, 422, "duplicate_choice_key");
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.catalog2AddonChoice.update({ where: { id: cur.id }, data: d });
+      await recordCatalog2ProductHistory(tx, { productId: addon.version.product_id, versionId: addon.version.id, eventType: "addon_choice_updated", description: `Escolha "${u.label}" do adicional "${addon.name}" atualizada.`, actorUserId: req.user!.id });
+      return u;
+    });
+    res.json(updated);
+  } catch (e) { handle(e, res, next); }
+});
+router.delete("/addon-choices/:id", async (req, res, next) => {
+  try {
+    const cur = await prisma.catalog2AddonChoice.findUnique({ where: { id: req.params.id as string } });
+    if (!cur) throw new Catalog2Error("Escolha não encontrada.", 404);
+    const addon = await versionOfAddon(cur.addon_id);
+    await prisma.$transaction(async (tx) => {
+      await tx.catalog2AddonChoice.delete({ where: { id: cur.id } });
+      await recordCatalog2ProductHistory(tx, { productId: addon.version.product_id, versionId: addon.version.id, eventType: "addon_choice_removed", description: `Escolha "${cur.label}" removida do adicional "${addon.name}".`, before: { key: cur.key, label: cur.label }, actorUserId: req.user!.id });
+    });
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
 });
 
 // ── Tarefas e etapas ───────────────────────────────────────────────
@@ -1865,6 +2081,14 @@ const taskSchema = z.object({
   reviewer_user_id: z.string().nullish(),
   review_minutes: z.number().int().min(0).max(10000).nullish(),
   review_specialty_id: z.string().nullish(),
+  // Qualificação configurável (2026-10-02). Padrão "inherit" = percentual global de sempre.
+  qualification_cost_mode: z.enum(["inherit", "percent", "hourly_time", "fixed", "time_and_percent"]).optional(),
+  qualification_specialty_id: z.string().nullish(),
+  qualification_hourly_rate: z.number().nonnegative().max(100000).nullish(),
+  qualification_minutes: z.number().int().min(0).max(100000).nullish(),
+  qualification_percent: z.number().min(0).max(1000).nullish(),
+  qualification_fixed_amount: z.number().nonnegative().max(100000000).nullish(),
+  qualifier_kind: z.enum(["area_leader", "designated_leader", "nomad"]).optional(),
 });
 const taskOpsValue = (v: unknown) => { const n = normalizeTaskOps(v); return n ? (n as Prisma.InputJsonValue) : Prisma.DbNull; };
 /** Campos de proteção contra duplicidade que qualquer criação de modelo global aceita. */
@@ -1896,7 +2120,7 @@ async function assertModelUpdateConfirmed(kind: "task" | "step", modelId: number
 }
 const stepOpsValue = (v: unknown) => { const n = normalizeStepOps(v); return n ? (n as Prisma.InputJsonValue) : Prisma.DbNull; };
 // Campos do modelo global de tarefa que uma edição "no modelo" pode levar junto.
-const TASK_MODEL_FIELDS = ["name", "description", "execution_mode", "specialty_id", "estimated_minutes", "is_conditional", "requires_client_approval", "requires_qualification", "cycle_type", "repeat_rule", "repeat_every_cycles", "executor_continuity", "asset_rule", "asset_revalidate_days", "ops", "requires_review", "review_minutes", "review_specialty_id"] as const;
+const TASK_MODEL_FIELDS = ["name", "description", "execution_mode", "specialty_id", "estimated_minutes", "is_conditional", "requires_client_approval", "requires_qualification", "cycle_type", "repeat_rule", "repeat_every_cycles", "executor_continuity", "asset_rule", "asset_revalidate_days", "ops", "requires_review", "review_minutes", "review_specialty_id", "qualification_cost_mode", "qualification_specialty_id", "qualification_hourly_rate", "qualification_minutes", "qualification_percent", "qualification_fixed_amount", "qualifier_kind"] as const;
 router.post("/versions/:id/tasks", async (req, res, next) => {
   try {
     const version = await editableVersionOrThrow(req.params.id as string);
@@ -1904,7 +2128,7 @@ router.post("/versions/:id/tasks", async (req, res, next) => {
     const gin = guardInput(req, d.key ?? null);
     let replayedTask: unknown = null;
     const created = await prisma.$transaction(async (tx) => {
-      const g = await createModelGuarded(tx, "task", { name: d.name, description: d.description, execution_mode: d.execution_mode, specialty_id: d.specialty_id, estimated_minutes: d.estimated_minutes, is_conditional: d.is_conditional, requires_client_approval: d.requires_client_approval, requires_qualification: d.requires_qualification, cycle_type: d.cycle_type, repeat_rule: d.repeat_rule, repeat_every_cycles: d.repeat_every_cycles, executor_continuity: d.executor_continuity, asset_rule: d.asset_rule, asset_revalidate_days: d.asset_revalidate_days, ops: d.ops, requires_review: d.requires_review, review_minutes: d.review_minutes, review_specialty_id: d.review_specialty_id }, gin);
+      const g = await createModelGuarded(tx, "task", { name: d.name, description: d.description, execution_mode: d.execution_mode, specialty_id: d.specialty_id, estimated_minutes: d.estimated_minutes, is_conditional: d.is_conditional, requires_client_approval: d.requires_client_approval, requires_qualification: d.requires_qualification, cycle_type: d.cycle_type, repeat_rule: d.repeat_rule, repeat_every_cycles: d.repeat_every_cycles, executor_continuity: d.executor_continuity, asset_rule: d.asset_rule, asset_revalidate_days: d.asset_revalidate_days, ops: d.ops, requires_review: d.requires_review, review_minutes: d.review_minutes, review_specialty_id: d.review_specialty_id, qualification_cost_mode: d.qualification_cost_mode, qualification_specialty_id: d.qualification_specialty_id, qualification_hourly_rate: d.qualification_hourly_rate, qualification_minutes: d.qualification_minutes, qualification_percent: d.qualification_percent, qualification_fixed_amount: d.qualification_fixed_amount, qualifier_kind: d.qualifier_kind }, gin);
       if (g.replayed) {
         const prev = await tx.catalog2Task.findFirst({ where: { version_id: req.params.id as string, task_model_id: g.model.id }, orderBy: { created_at: "desc" } });
         if (prev) { replayedTask = prev; return prev; }
@@ -1919,7 +2143,7 @@ router.post("/versions/:id/tasks", async (req, res, next) => {
         return t;
       }
       const takenKeys = new Set((await tx.catalog2Task.findMany({ where: { version_id: req.params.id as string }, select: { key: true } })).map((t) => t.key));
-      const c = await tx.catalog2Task.create({ data: { task_model_id: model.id, task_model_revision: model.revision, requires_qualification: d.requires_qualification ?? false, cycle_type: d.cycle_type ?? "recorrente", repeat_rule: d.repeat_rule ?? "all_cycles", repeat_every_cycles: d.repeat_every_cycles ?? null, executor_continuity: d.executor_continuity ?? "not_allowed", asset_rule: d.asset_rule ?? "first_only", asset_revalidate_days: d.asset_revalidate_days ?? null, qualifier_user_id: d.qualifier_user_id ?? null, reviewer_user_id: d.reviewer_user_id ?? null, review_minutes: d.review_minutes ?? null, review_specialty_id: d.review_specialty_id ?? null, ops: taskOpsValue(d.ops), version_id: req.params.id as string, key: d.key ?? autoKey("tarefa", model.id, takenKeys), name: d.name, description: d.description ?? null, objective: d.objective ?? null, sort_order: d.sort_order ?? 99, specialty_id: d.specialty_id ?? null, execution_mode: d.execution_mode ?? "humano", estimated_minutes: d.estimated_minutes ?? null, requires_review: d.requires_review ?? false, requires_client_approval: d.requires_client_approval ?? false, is_conditional: d.is_conditional ?? false } });
+      const c = await tx.catalog2Task.create({ data: { task_model_id: model.id, task_model_revision: model.revision, requires_qualification: d.requires_qualification ?? false, cycle_type: d.cycle_type ?? "recorrente", repeat_rule: d.repeat_rule ?? "all_cycles", repeat_every_cycles: d.repeat_every_cycles ?? null, executor_continuity: d.executor_continuity ?? "not_allowed", asset_rule: d.asset_rule ?? "first_only", asset_revalidate_days: d.asset_revalidate_days ?? null, qualifier_user_id: d.qualifier_user_id ?? null, qualification_cost_mode: d.qualification_cost_mode ?? "inherit", qualification_specialty_id: d.qualification_specialty_id ?? null, qualification_hourly_rate: d.qualification_hourly_rate ?? null, qualification_minutes: d.qualification_minutes ?? null, qualification_percent: d.qualification_percent ?? null, qualification_fixed_amount: d.qualification_fixed_amount ?? null, qualifier_kind: d.qualifier_kind ?? "area_leader", reviewer_user_id: d.reviewer_user_id ?? null, review_minutes: d.review_minutes ?? null, review_specialty_id: d.review_specialty_id ?? null, ops: taskOpsValue(d.ops), version_id: req.params.id as string, key: d.key ?? autoKey("tarefa", model.id, takenKeys), name: d.name, description: d.description ?? null, objective: d.objective ?? null, sort_order: d.sort_order ?? 99, specialty_id: d.specialty_id ?? null, execution_mode: d.execution_mode ?? "humano", estimated_minutes: d.estimated_minutes ?? null, requires_review: d.requires_review ?? false, requires_client_approval: d.requires_client_approval ?? false, is_conditional: d.is_conditional ?? false } });
       await recordCatalog2ProductHistory(tx, {
         productId: version.product_id, versionId: version.id, eventType: "task_added",
         description: `Tarefa "${c.name}" adicionada.`, after: { key: c.key, name: c.name },
@@ -2064,7 +2288,7 @@ router.post("/tasks/:id/duplicate", async (req, res, next) => {
       const t = await tx.catalog2Task.create({
         data: {
           task_model_id: dupModel.id, task_model_revision: dupModel.revision, requires_qualification: src.requires_qualification, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
-          qualifier_user_id: src.qualifier_user_id, qualification_mode: src.qualification_mode, qualification_min_approvals: src.qualification_min_approvals,
+          qualifier_user_id: src.qualifier_user_id, qualification_mode: src.qualification_mode, qualification_min_approvals: src.qualification_min_approvals, qualification_cost_mode: src.qualification_cost_mode, qualification_specialty_id: src.qualification_specialty_id, qualification_hourly_rate: src.qualification_hourly_rate, qualification_minutes: src.qualification_minutes, qualification_percent: src.qualification_percent, qualification_fixed_amount: src.qualification_fixed_amount, qualifier_kind: src.qualifier_kind,
           reviewer_user_id: src.reviewer_user_id, review_minutes: src.review_minutes, review_specialty_id: src.review_specialty_id,
           ops: (src.ops ?? undefined) as Prisma.InputJsonValue | undefined,
           version_id: src.version_id, key: `${src.key}-copia-${Date.now().toString(36)}`, name: `${src.name} (cópia)`,
@@ -2108,7 +2332,7 @@ router.post("/versions/:id/tasks/import", async (req, res, next) => {
       const t = await tx.catalog2Task.create({
         data: {
           task_model_id: src.task_model_id, task_model_revision: src.task_model_revision, requires_qualification: src.requires_qualification, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
-          qualifier_user_id: src.qualifier_user_id, qualification_mode: src.qualification_mode, qualification_min_approvals: src.qualification_min_approvals,
+          qualifier_user_id: src.qualifier_user_id, qualification_mode: src.qualification_mode, qualification_min_approvals: src.qualification_min_approvals, qualification_cost_mode: src.qualification_cost_mode, qualification_specialty_id: src.qualification_specialty_id, qualification_hourly_rate: src.qualification_hourly_rate, qualification_minutes: src.qualification_minutes, qualification_percent: src.qualification_percent, qualification_fixed_amount: src.qualification_fixed_amount, qualifier_kind: src.qualifier_kind,
           reviewer_user_id: src.reviewer_user_id, review_minutes: src.review_minutes, review_specialty_id: src.review_specialty_id,
           ops: (src.ops ?? undefined) as Prisma.InputJsonValue | undefined,
           version_id: destVersionId, key, name: src.name,
@@ -2223,6 +2447,18 @@ const dependencyRuleSchema = z.object({
   applies_to: z.enum(["all", "implementacao", "recorrencia", "revalidacao"]).default("all"),
   behavior: z.enum(DEPENDENCY_BEHAVIORS).default("block_start"),
   note: z.string().max(1000).nullish(),
+  // Vínculo universal entre produtos (2026-10-02). Padrões = comportamento anterior.
+  /** always (padrão) | when_bought_together: a regra só existe quando o produto-alvo faz parte do mesmo pedido/projeto (não obriga a compra do outro). */
+  condition_mode: z.enum(["always", "when_bought_together"]).default("always"),
+  /** Só ESTA etapa do produto dependente espera o alvo; o resto da tarefa continua. */
+  dependent_step_key: z.string().max(60).nullish(),
+  /** start (padrão): a etapa não começa · conclude: a etapa não conclui. */
+  stage_gate: z.enum(["start", "conclude"]).nullish(),
+  /** Pode começar a preparar; só a entrega/execução final espera. */
+  allow_partial_start: z.boolean().default(false),
+  /** O entregável aprovado do alvo vira ENTRADA da tarefa dependente (link/anexo, versão, aprovação). */
+  provides_input: z.boolean().default(false),
+  input_label: z.string().max(160).nullish(),
 });
 type DependencyRuleInput = z.infer<typeof dependencyRuleSchema>;
 
@@ -2240,6 +2476,18 @@ async function assertRuleValid(d: DependencyRuleInput, allowedProductIds: string
   if (d.target_product_id && d.target_product_id === d.dependent_product_id && !d.target_task_key) throw new Catalog2Error("Um produto não pode depender dele mesmo.", 422);
   if (d.target_product_id && d.target_product_id === d.dependent_product_id && d.dependent_task_key && d.dependent_task_key === d.target_task_key) throw new Catalog2Error("Uma tarefa não pode esperar por ela mesma.", 422, "self_dependency");
   if (d.target_deliverable_key && d.target_kind !== "deliverable") throw new Catalog2Error("O entregável específico só vale quando a regra espera um entregável.", 422);
+  if (d.condition_mode === "when_bought_together") {
+    if (!d.target_product_id) throw new Catalog2Error("Informe o produto vinculado (pelo ID real) que precisa ser comprado junto.", 422, "linked_product_required");
+    if (d.target_product_id === d.dependent_product_id) throw new Catalog2Error("Um produto não é \"comprado junto\" dele mesmo.", 422, "invalid_link");
+  }
+  if (d.dependent_step_key) {
+    if (!d.dependent_task_key) throw new Catalog2Error("Informe a tarefa da etapa que vai esperar.", 422, "dependent_task_required");
+    const dv = await prisma.catalog2ProductVersion.findFirst({ where: { product_id: d.dependent_product_id }, orderBy: { version_number: "desc" }, select: { id: true } });
+    const dt = dv ? await prisma.catalog2Task.findFirst({ where: { version_id: dv.id, key: d.dependent_task_key }, include: { steps: { select: { key: true } } } }) : null;
+    if (!dt) throw new Catalog2Error(`A tarefa "${d.dependent_task_key}" não existe no produto dependente.`, 422, "dependent_task_not_found");
+    if (!dt.steps.some((s) => s.key === d.dependent_step_key)) throw new Catalog2Error(`A etapa "${d.dependent_step_key}" não existe na tarefa "${d.dependent_task_key}".`, 422, "dependent_step_not_found");
+  }
+  if (d.provides_input && !["product_deliverables", "deliverable"].includes(d.target_kind)) throw new Catalog2Error("Só um entregável (ou os entregáveis de um produto) pode virar entrada da tarefa.", 422, "invalid_input_link");
   // Tarefa/etapa alvo precisa existir na versão mais recente do produto alvo.
   if (d.target_task_key && d.target_product_id) {
     const v = await prisma.catalog2ProductVersion.findFirst({ where: { product_id: d.target_product_id }, orderBy: { version_number: "desc" }, select: { id: true } });
@@ -2346,7 +2594,7 @@ router.post("/packages/:id/rules", async (req, res, next) => {
       data: {
         package_id: id, dependent_product_id: d.dependent_product_id, dependent_task_key: d.dependent_task_key ?? null, target_kind: d.target_kind,
         target_product_id: d.target_product_id ?? null, target_task_key: d.target_task_key ?? null, target_step_key: d.target_step_key ?? null,
-        target_asset_type: d.target_asset_type ?? null, target_deliverable_key: d.target_deliverable_key ?? null, applies_to: d.applies_to, behavior: d.behavior, note: d.note ?? null,
+        target_asset_type: d.target_asset_type ?? null, target_deliverable_key: d.target_deliverable_key ?? null, applies_to: d.applies_to, behavior: d.behavior, note: d.note ?? null, condition_mode: d.condition_mode, dependent_step_key: d.dependent_step_key ?? null, stage_gate: d.stage_gate ?? null, allow_partial_start: d.allow_partial_start, provides_input: d.provides_input, input_label: d.input_label ?? null,
       },
     });
     await audit(req, "dependency_rule_created", { rule_id: r.id, package_id: id });
@@ -2370,7 +2618,7 @@ router.post("/products/:id/prerequisites", async (req, res, next) => {
       data: {
         package_id: null, dependent_product_id: d.dependent_product_id, dependent_task_key: d.dependent_task_key ?? null, target_kind: d.target_kind,
         target_product_id: d.target_product_id ?? null, target_task_key: d.target_task_key ?? null, target_step_key: d.target_step_key ?? null,
-        target_asset_type: d.target_asset_type ?? null, target_deliverable_key: d.target_deliverable_key ?? null, applies_to: d.applies_to, behavior: d.behavior, note: d.note ?? null,
+        target_asset_type: d.target_asset_type ?? null, target_deliverable_key: d.target_deliverable_key ?? null, applies_to: d.applies_to, behavior: d.behavior, note: d.note ?? null, condition_mode: d.condition_mode, dependent_step_key: d.dependent_step_key ?? null, stage_gate: d.stage_gate ?? null, allow_partial_start: d.allow_partial_start, provides_input: d.provides_input, input_label: d.input_label ?? null,
       },
     });
     await audit(req, "dependency_rule_created", { rule_id: r.id, product_id: d.dependent_product_id });
@@ -2853,7 +3101,7 @@ router.put("/tasks/:id/ai", async (req, res, next) => {
       est_input_tokens: z.number().int().nonnegative().nullish(), est_output_tokens: z.number().int().nonnegative().nullish(),
       unit_cost_input_per_1k: z.number().nonnegative().nullish(), unit_cost_output_per_1k: z.number().nonnegative().nullish(),
       currency: z.string().length(3).optional(), est_review_rounds: z.number().int().nonnegative().nullish(),
-      cost_note: z.string().max(2000).nullish(), human_review_required: z.boolean().optional(),
+      cost_note: z.string().max(2000).nullish(), human_review_required: z.boolean().optional(), est_runs: z.number().int().min(0).max(10_000_000).nullish(),
       profile_id: z.string().min(1).nullish(), ai_mode: z.enum(AI_MODES).optional(), ai_trigger: z.enum(AI_TRIGGERS).optional(), instructions: z.string().max(20000).nullish(),
     }).parse(req.body);
     if (d.profile_id) {
@@ -2881,6 +3129,8 @@ const aiProfileSchema = z.object({
   allowed_actors: z.array(z.enum(AI_ACTORS)).optional(), base_instructions: z.string().max(20000).nullish(), is_active: z.boolean().optional(),
   input_format: z.string().max(4000).nullish(), output_format: z.string().max(4000).nullish(),
   max_tokens_per_run: z.number().int().min(1).max(2_000_000).nullish(), max_runs_per_task: z.number().int().min(1).max(1000).nullish(),
+  // Custo de IA (2026-10-02): unidade de tokens do preço informado, execuções previstas e limite de revisões.
+  unit_tokens: z.number().int().min(1).max(100_000_000).optional(), expected_runs: z.number().int().min(0).max(10_000_000).nullish(), review_limit: z.number().int().min(0).max(100).nullish(),
   on_failure: z.enum(ON_FAILURE_ACTIONS).optional(), fallback_human: z.boolean().optional(), requires_human_review: z.boolean().optional(),
 });
 const aiProfileData = (d: z.infer<typeof aiProfileSchema>) => ({ ...d, allowed_actors: d.allowed_actors ? d.allowed_actors.join(",") : undefined });
@@ -2889,8 +3139,19 @@ function assertAIProfileProvider(provider: string | null | undefined, model: str
   if (!p) throw new Catalog2Error(`O provedor "${provider}" não é conhecido pela plataforma.`, 422, "ai_provider_unknown");
   if (model && !p.models.includes(model)) throw new Catalog2Error(`O modelo "${model}" não está disponível no provedor ${p.label}.`, 422, "ai_model_unavailable");
 }
-function aiProfileView<T extends { id: string; provider: string; model: string }>(p: T) {
-  return { ...p, provider_configured: providerConfigured(p.provider) };
+const AI_PROFILE_STATUS_LABEL: Record<string, string> = {
+  inactive_no_credentials: "Inativo — provedor sem credenciais",
+  inactive: "Inativo",
+  provider_not_configured: "Provedor não configurado",
+  cost_not_defined: "Custo de IA ainda não definido",
+  configured: "Configurado",
+};
+function aiProfileView<T extends { id: string; provider: string; model: string; is_active?: boolean; unit_cost_input_per_1k?: number | null; unit_cost_output_per_1k?: number | null; fixed_cost_per_run?: number | null }>(p: T) {
+  const configured = providerConfigured(p.provider);
+  const costDefined = (p.unit_cost_input_per_1k != null && p.unit_cost_output_per_1k != null) || (p.fixed_cost_per_run ?? 0) > 0;
+  // Estado explícito: nunca confundir "IA desativada", "sem credencial", "custo indefinido" e "configurada".
+  const status = p.is_active === false ? (configured ? "inactive" : "inactive_no_credentials") : !configured ? "provider_not_configured" : !costDefined ? "cost_not_defined" : "configured";
+  return { ...p, provider_configured: configured, cost_defined: costDefined, status, status_label: AI_PROFILE_STATUS_LABEL[status] };
 }
 router.get("/ai-providers", (_req, res) => {
   res.json({ data: AI_PROVIDERS.map((p) => ({ key: p.key, label: p.label, models: p.models, configured: providerConfigured(p.key) })), on_failure: ON_FAILURE_ACTIONS.map((k) => ({ key: k, label: ON_FAILURE_LABEL[k] })) });
@@ -3009,7 +3270,8 @@ router.post("/versions/:id/conditions", async (req, res, next) => {
     await editableVersionOrThrow(req.params.id as string);
     const d = conditionSchema.parse(req.body);
     await assertChargeMeta(req.params.id as string, d);
-    const err = validateConditionShape(d, await buildEffectCtx(req.params.id as string));
+    const condCtx = await buildEffectCtx(req.params.id as string);
+    const err = validateConditionShape(d, condCtx) ?? validateEffortEffect(d.effect_type, d.effect_value, d, condCtx);
     if (err) throw new Catalog2Error(err, 422, "invalid_condition");
     const explanation = describeCondition(d);
     res.status(201).json(await prisma.catalog2Condition.create({ data: { version_id: req.params.id as string, ...d, description: d.description ?? null, trigger_ref: d.trigger_ref ?? null, comparison_value: d.comparison_value ?? null, is_active: d.is_active ?? true, sort_order: d.sort_order ?? 99, explanation } }));
@@ -3027,7 +3289,8 @@ router.put("/conditions/:id", async (req, res, next) => {
     const d = conditionSchema.partial().parse(req.body);
     const merged = { ...cur, ...d };
     await assertChargeMeta(v.id, merged);
-    const err = validateConditionShape(merged, await buildEffectCtx(v.id));
+    const condCtx = await buildEffectCtx(v.id);
+    const err = validateConditionShape(merged, condCtx) ?? validateEffortEffect(merged.effect_type, merged.effect_value, merged, condCtx);
     if (err) throw new Catalog2Error(err, 422, "invalid_condition");
     const updated = await prisma.catalog2Condition.update({ where: { id: req.params.id as string }, data: { ...d, explanation: describeCondition(merged) } });
     res.json(updated);
@@ -3041,11 +3304,59 @@ router.delete("/conditions/:id", async (req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 
+// ── Solicitações comerciais (orçamento personalizado / análise / contratação assistida) ──
+router.get("/commercial-requests", async (req, res, next) => {
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const product_id = typeof req.query.product_id === "string" ? req.query.product_id : undefined;
+    const requested_by_user_id = typeof req.query.requested_by_user_id === "string" ? req.query.requested_by_user_id : undefined;
+    const assigned_to_user_id = typeof req.query.assigned_to_user_id === "string" ? req.query.assigned_to_user_id : undefined;
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const rows = await prisma.catalog2CommercialRequest.findMany({
+      where: {
+        ...(status ? { status } : {}), ...(product_id ? { product_id } : {}),
+        ...(requested_by_user_id ? { requested_by_user_id } : {}), ...(assigned_to_user_id ? { assigned_to_user_id } : {}),
+        ...(search ? { OR: [{ client_note: { contains: search } }, { response_note: { contains: search } }, { internal_note: { contains: search } }] } : {}),
+      }, orderBy: { created_at: "desc" }, take: 200,
+    });
+    const products = await prisma.catalog2Product.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.product_id))] } }, select: { id: true, sequence_number: true, internal_name: true } });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    res.json({ data: rows.map((r) => ({ ...r, selection: safeJson(r.selection_json, null), reasons: safeJson(r.reasons_json, []), pricing: safeJson(r.pricing_snapshot_json, null), history: safeJson(r.history_json, []), product: byId.get(r.product_id) ?? null })) });
+  } catch (e) { handle(e, res, next); }
+});
+router.patch("/commercial-requests/:id", async (req, res, next) => {
+  try {
+    const d = z.object({
+      status: z.enum(["novo", "em_analise", "aguardando_cliente", "proposta_preparada", "proposta_enviada", "aprovado", "recusado", "cancelado", "expirado", "aberta", "respondida", "convertida"]).optional(),
+      response_note: z.string().max(4000).nullish(), internal_note: z.string().max(4000).nullish(),
+      assigned_to_user_id: z.string().max(191).nullish(), proposed_price: z.number().min(0).max(1e12).nullish(),
+      proposed_deadline_days: z.number().min(0).max(100000).nullish(), proposal_valid_until: z.string().datetime().nullish(),
+      client_response_note: z.string().max(4000).nullish(), converted_project_id: z.string().max(191).nullish(),
+    }).parse(req.body);
+    const cur = await prisma.catalog2CommercialRequest.findUnique({ where: { id: req.params.id as string } });
+    if (!cur) throw new Catalog2Error("Solicitação não encontrada.", 404);
+    const beforeHistory = safeJson<Array<Record<string, unknown>>>(cur.history_json, []);
+    const entry = { at: new Date().toISOString(), by_user_id: req.user!.id, status_before: cur.status, status_after: d.status ?? cur.status, changes: Object.keys(d) };
+    const row = await prisma.catalog2CommercialRequest.update({ where: { id: cur.id }, data: {
+      ...(d.status ? { status: d.status } : {}), ...(d.response_note !== undefined ? { response_note: d.response_note } : {}),
+      ...(d.internal_note !== undefined ? { internal_note: d.internal_note } : {}), ...(d.assigned_to_user_id !== undefined ? { assigned_to_user_id: d.assigned_to_user_id } : {}),
+      ...(d.proposed_price !== undefined ? { proposed_price: d.proposed_price } : {}), ...(d.proposed_deadline_days !== undefined ? { proposed_deadline_days: d.proposed_deadline_days } : {}),
+      ...(d.proposal_valid_until !== undefined ? { proposal_valid_until: d.proposal_valid_until ? new Date(d.proposal_valid_until) : null } : {}),
+      ...(d.client_response_note !== undefined ? { client_response_note: d.client_response_note } : {}), ...(d.converted_project_id !== undefined ? { converted_project_id: d.converted_project_id } : {}),
+      history_json: JSON.stringify([...beforeHistory, entry]), handled_by_user_id: req.user!.id, handled_at: new Date(),
+    } });
+    await audit(req, "commercial_request_updated", { id: cur.id, status: d.status ?? cur.status, fields: Object.keys(d) });
+    res.json(row);
+  } catch (e) { handle(e, res, next); }
+});
+
 // ── Simulador e Pré-visualização (mesmo cálculo do backend) ─────────
 const selectionSchema = z.object({
   variation_option_keys: z.array(z.string()).optional(),
   variation_quantities: z.record(z.string(), z.number().int().min(0).max(100000)).optional(),
   addon_keys: z.array(z.string()).optional(),
+  // Adicionais tipados: quantidade inteira, valor informado ou escolhas (seleção única/múltipla/faixa).
+  addon_selections: z.record(z.string(), z.object({ quantity: z.number().int().min(0).max(100000).optional(), value: z.number().max(1e12).optional(), choice_keys: z.array(z.string().max(60)).max(50).optional() })).optional(),
   quantity: z.number().int().positive().max(100000).optional(),
   answers: z.record(z.string()).optional(),
 });
@@ -3055,9 +3366,8 @@ router.post("/versions/:id/simulate", async (req, res, next) => {
     const pricing = await computePricing(req.params.id as string, sel);
     // A simulação provisória usa o mesmo conjunto de escolhas, mas permanece
     // separada do preço comercial e nunca torna o produto contratável.
-    const pricing_simulation = await computePricing(req.params.id as string, sel, { simulateProvisional: true });
-    // Fonte ÚNICA do preço mostrado: o servidor diz qual valor é e de onde vem.
-    res.json({ selection: sel, pricing, pricing_simulation, price_summary: priceSummary(pricing, pricing_simulation) });
+    // FONTE ÚNICA: o mesmo cálculo (regra real versionada). "pricing_simulation" é mantido só por compatibilidade e é o MESMO resultado.
+    res.json({ selection: sel, pricing, pricing_simulation: pricing, price_summary: priceSummary(pricing), selection_issues: pricing.selection_issues, quote_requirements: pricing.quote_requirements });
   } catch (e) { handle(e, res, next); }
 });
 
@@ -3422,6 +3732,12 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
   const has = (k: string) => pend.includes(k);
   const taskCount = targetVersion?._count.tasks ?? 0;
   const stepCount = (targetVersion?.tasks ?? []).reduce((a, t) => a + t._count.steps, 0);
+  // Base (sempre existe) x condicional (só entra quando o cenário liga): nunca misturar na apresentação.
+  const taskGroups = targetVersion ? await prisma.catalog2Task.groupBy({ by: ["is_conditional"], where: { version_id: targetVersion.id }, _count: { _all: true } }) : [];
+  const stepGroups = targetVersion ? await prisma.catalog2TaskStep.groupBy({ by: ["is_conditional"], where: { task: { version_id: targetVersion.id } }, _count: { _all: true } }) : [];
+  const countOf = (g: Array<{ is_conditional: boolean; _count: { _all: number } }>, cond: boolean) => g.find((x) => x.is_conditional === cond)?._count._all ?? 0;
+  /** "6 tarefas-base + 2 condicionais (8 possíveis; só as ativadas pelo cenário entram na execução)" — nunca tudo misturado como se executasse sempre. */
+  const countNote = (what: string, base: number, cond: number, total: number) => (cond > 0 ? `${base} ${what}(s)-base + ${cond} condicional(is) — ${total} possíveis; só as ativadas pelo cenário entram na execução e no preço.` : `${total} ${what}(s).`);
   // Calculado AO VIVO a partir das tarefas reais — nunca lido de um
   // registro histórico de pendência (bug corrigido reunião 10/09: um
   // produto com human_edited_at ficava fora da contagem mesmo com tarefas
@@ -3450,17 +3766,11 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
         : "real_reviewed";
 
   let pricing: Awaited<ReturnType<typeof computePricing>> | null = null;
-  let pricingSimulation: Awaited<ReturnType<typeof computePricing>> | null = null;
   if (targetVersion) {
     try {
       pricing = await computePricing(targetVersion.id, await defaultSelection(targetVersion.id));
     } catch {
       pricing = null;
-    }
-    try {
-      pricingSimulation = await computePricing(targetVersion.id, await defaultSelection(targetVersion.id), { simulateProvisional: true });
-    } catch {
-      pricingSimulation = null;
     }
   }
   const hasActiveTasks = (pricing?.active_task_keys.length ?? taskCount) > 0;
@@ -3490,14 +3800,14 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
       ? { level: "pronto", note: `${targetVersion?._count.addons} adicional(is).` }
       : { level: "opcional", note: "Sem adicionais (permitido)." },
     tarefas: taskCount > 0
-      ? { level: "pronto", note: `${taskCount} tarefa(s).` }
+      ? { level: "pronto", note: countNote("tarefa", countOf(taskGroups, false), countOf(taskGroups, true), taskCount) }
       : { level: "pendente", note: "Nenhuma tarefa — não vira operação sem tarefas (bloco 6)." },
     // Toda tarefa precisa de ao menos uma etapa (a etapa carrega especialidade, horas e o pagamento).
     etapas: (() => {
       const noSteps = (targetVersion?.tasks ?? []).filter((t: any) => t._count.steps === 0).map((t: any) => t.name);
       if (taskCount === 0) return { level: "opcional" as ReadinessLevel, note: "Etapas dependem de tarefas cadastradas." };
       if (noSteps.length > 0) return { level: "bloqueador" as ReadinessLevel, note: `${noSteps.length} tarefa(s) sem etapa: ${noSteps.join(", ")}.` };
-      return { level: "pronto" as ReadinessLevel, note: `${stepCount} etapa(s).` };
+      return { level: "pronto" as ReadinessLevel, note: countNote("etapa", countOf(stepGroups, false), countOf(stepGroups, true), stepCount) };
     })(),
     // Reunião 10/09 ("tarefas e etapas dos 36 produtos reais"): as tarefas
     // vieram do texto "Etapas Executáveis por IA" da fonte original — real,
@@ -3592,6 +3902,10 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
       !!pricing?.commercial_ready,
     task_count: taskCount,
     step_count: stepCount,
+    task_count_base: countOf(taskGroups, false),
+    task_count_conditional: countOf(taskGroups, true),
+    step_count_base: countOf(stepGroups, false),
+    step_count_conditional: countOf(stepGroups, true),
     has_active_tasks: hasActiveTasks,
     // Regra 9/10 (reunião 10/09, "36 produtos funcionalmente completos
     // para teste"): distingue ausente × provisório × real revisado, e
@@ -3607,11 +3921,14 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
     // Resultado administrativo da mesma fórmula, com entradas provisórias
     // segregadas. Nunca substitui price_amount/deadline_days reais e nunca
     // autoriza publicação, cotação ou contratação.
-    pricing_simulation: pricingSimulation?.simulation_provenance.commercial_config === "provisional"
+    // FONTE ÚNICA: mesma regra real. Enquanto houver pendência, o valor é só ILUSTRATIVO (nunca de outra configuração).
+    pricing_simulation: pricing && !pricing.commercial_ready && pricing.simulation.total != null
       ? {
-          is_provisional: true,
-          price_amount: pricingSimulation.simulation.total,
-          deadline_days: pricingSimulation.deadline.commercial_deadline_days,
+          is_provisional: false,
+          is_illustrative: true,
+          rule_version: pricing.rule?.version ?? null,
+          price_amount: pricing.price_status === "final" || pricing.price_status === "pending" ? pricing.simulation.total : null,
+          deadline_days: pricing.deadline.commercial_deadline_days,
           commercial_ready: false,
           authorizes_publish: false,
           authorizes_quote: false,
@@ -3702,8 +4019,7 @@ router.get("/products/:id/pricing-memory", async (req, res, next) => {
     // provisório por produto). NUNCA autoriza nada (commercial_ready
     // sempre false no resultado); só para o Admin Master ver a memória
     // completa fechando matematicamente antes dos dados reais existirem.
-    const pricing_simulation = await computePricing(targetVersion.id, sel, { simulateProvisional: true });
-    res.json({ version_id: targetVersion.id, version_state: targetVersion.state, pricing, pricing_simulation });
+    res.json({ version_id: targetVersion.id, version_state: targetVersion.state, pricing, pricing_simulation: pricing });
   } catch (e) { handle(e, res, next); }
 });
 
@@ -3951,6 +4267,9 @@ const connRequirementSchema = z.object({
   asset_rule: z.enum(ASSET_RULES_CONN).optional(), revalidate_days: z.number().int().min(1).max(3650).nullish(), light_check: z.boolean().optional(),
   reminder_interval_hours: z.number().int().min(1).max(8760).nullish(), reminder_limit: z.number().int().min(1).max(50).nullish(), escalate_after_reminders: z.number().int().min(1).max(50).nullish(),
   visible_to_client: z.boolean().optional(), dependents: z.array(connDependentSchema).max(60).optional(),
+  // Ativação por gatilhos (2026-10-02).
+  activation_mode: z.enum(["manual", "any_trigger", "all_triggers"]).optional(),
+  triggers: z.array(z.object({ kind: z.string().min(1).max(40), ref_key: z.string().max(120).nullish(), ref_value: z.string().max(200).nullish(), operator: z.string().max(20).nullish() })).max(40).optional(),
 });
 router.get("/connection-vocabulary", (_req, res) => {
   res.json({

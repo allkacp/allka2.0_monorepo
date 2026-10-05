@@ -8,6 +8,7 @@ import {
 } from "./catalog";
 import { grantConnection, grantCovers, logConnection, clientUsersOfProject, ownerMatches, ownerOfProject, ownerWhere, revokeGrants, type Actor } from "./core";
 import { safeText } from "./secrets";
+import { buildTriggerContext, describeTrigger, evaluateActivation, type TriggerContext } from "./triggers";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -37,15 +38,32 @@ async function reqDef(db: Db, id: string) {
 export async function ensureProjectConnectionRequirements(db: Db, p: { projectId: string; projectProductId: string; versionId: string; quoteId?: string | null; actor?: Actor | null }): Promise<PcrRow[]> {
   const version = await db.catalog2ProductVersion.findUnique({ where: { id: p.versionId }, select: { requires_connections: true } });
   if (!version?.requires_connections) return [];
-  const reqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: p.versionId }, include: { connection_type: true }, orderBy: { sort_order: "asc" } });
+  const reqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: p.versionId }, include: { connection_type: true, triggers: true }, orderBy: { sort_order: "asc" } });
   const owner = await ownerOfProject(db, p.projectId);
+  // Ativação por gatilhos (variação, opção, adicional, tarefa, etapa, resposta, produto vinculado). Contexto montado só se algum gatilho existir.
+  let tctx: TriggerContext | null = null;
+  const triggered = async (r: (typeof reqs)[number]): Promise<boolean | null> => {
+    if (r.activation_mode === "manual" || r.triggers.length === 0) return null;
+    tctx ??= await buildTriggerContext(db, { projectId: p.projectId, versionId: p.versionId, quoteId: p.quoteId ?? null });
+    return evaluateActivation(r.activation_mode, r.triggers, tctx);
+  };
   const companyId = owner.company_id ?? null;
   const out: PcrRow[] = [];
   for (const r of reqs) {
     const existing = await db.projectConnectionRequirement.findUnique({ where: { project_product_id_requirement_id: { project_product_id: p.projectProductId, requirement_id: r.id } } });
-    if (existing) { out.push(existing); continue; }
+    if (existing) {
+      // Gatilho que passou a ocorrer depois da contratação (ex.: produto vinculado contratado agora): ativa a exigência.
+      if (!existing.condition_active && (await triggered(r)) === true) {
+        const upd = await db.projectConnectionRequirement.update({ where: { id: existing.id }, data: { condition_active: true, status: existing.connection_id ? "awaiting_validation" : "awaiting_submission", last_request_at: new Date() } });
+        await logConnection(db, { kind: "requested", message: `Conexão "${existing.label}" ativada pelos gatilhos: ${r.triggers.map(describeTrigger).join("; ")}.`, pcrId: existing.id, connectionId: existing.connection_id, companyId: owner.company_id ?? null, projectId: p.projectId, actor: p.actor ?? null });
+        out.push(upd); continue;
+      }
+      out.push(existing); continue;
+    }
     const choice = p.quoteId ? await db.connectionQuoteChoice.findUnique({ where: { quote_id_requirement_id: { quote_id: p.quoteId, requirement_id: r.id } } }) : null;
-    const conditionActive = r.obligation !== "conditional";
+    const byTrigger = await triggered(r);
+    // Com gatilhos: a exigência só vale quando eles ocorrem (obrigatória + gatilho = "obrigatória quando aplicável").
+    const conditionActive = byTrigger !== null ? byTrigger : r.obligation !== "conditional";
     let connectionId: string | null = null;
     if (choice?.connection_id) {
       const c = await db.clientConnection.findUnique({ where: { id: choice.connection_id }, select: { id: true, company_id: true, agency_id: true, status: true, connection_type_id: true } });
@@ -70,7 +88,7 @@ export async function ensureProjectConnectionRequirements(db: Db, p: { projectId
         draft_json: choice?.draft_json ?? (choice?.grant_scope ? JSON.stringify({ grant_scope: choice.grant_scope }) : null), last_request_at: conditionActive ? new Date() : null,
       },
     });
-    await logConnection(db, { kind: reusedAuto ? "reused" : "requested", message: reusedAuto ? `"${pcr.label}": conexão já autorizada neste projeto foi reaproveitada.` : `Conexão "${pcr.label}" solicitada na contratação.`, pcrId: pcr.id, connectionId, companyId, projectId: p.projectId, actor: p.actor ?? null });
+    await logConnection(db, { kind: reusedAuto ? "reused" : "requested", message: reusedAuto ? `"${pcr.label}": conexão já autorizada neste projeto foi reaproveitada.` : byTrigger === false ? `Conexão "${pcr.label}" não é necessária neste cenário (gatilhos não ocorreram).` : byTrigger === true ? `Conexão "${pcr.label}" solicitada: gatilho ativo (${r.triggers.map(describeTrigger).join("; ")}).` : `Conexão "${pcr.label}" solicitada na contratação.`, pcrId: pcr.id, connectionId, companyId, projectId: p.projectId, actor: p.actor ?? null });
     // projeto inteiro já pode ser autorizado agora; tarefas específicas esperam as tarefas existirem (materializeConnectionRules)
     if (choice?.connection_id && connectionId && (choice.grant_scope ?? r.default_grant_scope) === "project") {
       await grantConnection(db, p.actor ?? { id: choice.created_by_user_id }, { connection_id: connectionId, project_id: p.projectId, scope: "project" });
@@ -263,6 +281,8 @@ export async function pauseTask(db: Db, taskId: string, p: { pcrId: string | nul
       data: { status: PAUSED_STATUS, status_before_external_pause: previous, external_pause_started_at: new Date(), original_due_date: task.original_due_date ?? task.due_date },
     });
   }
+  // SLA estruturado: a parte dependente pausa (acesso não liberado ou conexão vencida/insuficiente).
+  try { await (await import("../sla")).pauseTaskClocks(db, taskId, { reason: pcr && ["expired", "revoked", "incomplete", "invalid", "needs_correction"].includes(pcr.status) ? "conexao_vencida_insuficiente" : "acesso_nao_liberado", reasonText: safeText(p.reason), party: p.party ?? "client", userId: pcr?.responsible_user_id ?? null, stageKey: p.stageKey ?? null }); } catch { /* SLA é acessório */ }
   await logProjectDecision(db, { projectId: task.project_id, projectProductId: task.project_product_id, projectTaskId: taskId, kind: "task_paused_external", message: `"${task.title}" pausada por dependência externa: ${safeText(p.reason)} O prazo (SLA) foi suspenso e o atraso não conta para o executor.`, detail: { block_id: block.id, requirement: p.pcrId } });
   await logConnection(db, { kind: "paused", message: `"${task.title}" pausada por dependência externa: ${safeText(p.reason)}`, pcrId: p.pcrId, connectionId: pcr?.connection_id ?? null, projectId: task.project_id, taskId, actor: { id: null, integration: "system", role: "system" } });
   await notify(db, [pcr?.responsible_user_id, ...(await clientUsersOfProject(db, task.project_id)), task.lider_responsavel_id, task.nomade_responsavel_id], { type: "conexao_pausa", title: "Atividade pausada: conexão necessária", message: `"${task.title}" foi pausada porque falta resolver: ${p.reason}`, entityType: "project_task", entityId: taskId });
@@ -290,6 +310,7 @@ export async function resumeTask(db: Db, taskId: string, actor: Actor | null): P
     const proj = await db.project.findUnique({ where: { id: task.project_id }, select: { end_date: true } });
     if (proj?.end_date) await db.project.update({ where: { id: task.project_id }, data: { end_date: new Date(proj.end_date.getTime() + minutes * 60_000) } });
   }
+  try { await (await import("../sla")).resumeTaskClocks(db, taskId, actor?.id ?? null); } catch { /* SLA é acessório */ }
   const msg = `"${task.title}" retomada após ${minutes} min de bloqueio externo.${critical ? " O prazo foi recalculado (caminho obrigatório); o prazo original foi preservado." : " Fora do caminho obrigatório: o prazo geral não mudou."}`;
   await logProjectDecision(db, { projectId: task.project_id, projectProductId: task.project_product_id, projectTaskId: taskId, kind: "task_resumed_external", message: msg, detail: { minutes, critical, original_due_date: task.original_due_date, new_due_date: newDue } });
   await logConnection(db, { kind: "resumed", message: msg, projectId: task.project_id, taskId, actor: actor ?? { id: null, integration: "system", role: "system" }, detail: { minutes, critical } });

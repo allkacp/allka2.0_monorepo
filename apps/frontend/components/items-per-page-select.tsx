@@ -37,7 +37,7 @@ export function ItemsPerPageSelect({
               </span>
             )}
             <Select value={value} onValueChange={onValueChange}>
-              <SelectTrigger className={`${compact ? "h-8 w-[3.6rem] px-2" : "h-9 w-[4.5rem] px-3"} rounded-lg border-0 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus:ring-0 focus:ring-offset-0 btn-brand`}>
+              <SelectTrigger className={`${compact ? "h-8 w-[4.75rem] px-2.5" : "h-9 w-[4.5rem] px-3"} rounded-lg border-0 text-xs font-semibold text-white transition-opacity hover:opacity-90 focus:ring-0 focus:ring-offset-0 btn-brand`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

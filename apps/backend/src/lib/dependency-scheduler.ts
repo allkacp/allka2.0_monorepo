@@ -20,6 +20,10 @@ export async function runDependencySchedulerOnce(now: Date = new Date()): Promis
     take: 200,
   });
   for (const w of waiting) await reevaluateProjectDependencies(prisma, w.project_id);
+  // Relógios de SLA ainda abertos: mantém âncoras/conclusões em dia (produtos sem regras de prazo não têm relógios).
+  const slaProjects = await prisma.projectSlaClock.findMany({ where: { status: { not: "concluido" } }, select: { project_id: true }, distinct: ["project_id"], take: 200 });
+  const { syncSlaClocks } = await import("./sla");
+  for (const p of slaProjects) await syncSlaClocks(prisma, p.project_id);
 
   const delayMs = config.DEPENDENCY_DELAY_ALERT_HOURS * 3_600_000;
   const rules = await prisma.projectDependencyRule.findMany({

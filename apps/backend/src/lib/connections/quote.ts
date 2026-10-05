@@ -4,6 +4,7 @@ import { ConnectionError, CONNECTION_STATE_LABEL, DEPENDENCY_KIND_LABEL, GRANT_S
 import { findReusableConnections, ownerMatches, type Owner } from "./core";
 import { assertNoSecretInPlainFields, safeText } from "./secrets";
 import { CONNECTION_METHOD_LABEL } from "./catalog";
+import { buildTriggerContextFromSelection, describeTrigger, evaluateActivation, type TriggerContext } from "./triggers";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -14,7 +15,20 @@ export const quoteOwner = (q: { account_kind: string; account_id: string }): Own
 export async function quoteRequirementsView(db: Db, quote: { id: string; version_id: string; account_kind: string; account_id: string }) {
   const version = await db.catalog2ProductVersion.findUnique({ where: { id: quote.version_id }, select: { requires_connections: true } });
   if (!version?.requires_connections) return { requires_connections: false, message: null, data: [] };
-  const reqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: quote.version_id, visible_to_client: true }, include: { connection_type: true, dependencies: true }, orderBy: { sort_order: "asc" } });
+  const allReqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: quote.version_id, visible_to_client: true }, include: { connection_type: true, dependencies: true, triggers: true }, orderBy: { sort_order: "asc" } })
+  // Exigências ativadas por gatilho aparecem só quando a seleção da cotação as aciona. Na vitrine (sem seleção) aparecem todas, com a regra de ativação.
+  const isPreview = quote.id === "preview";
+  let tctx: TriggerContext | null = null;
+  const reqs = [];
+  for (const r of allReqs) {
+    if (r.activation_mode === "manual" || r.triggers.length === 0 || isPreview) { reqs.push(r); continue; }
+    if (!tctx) {
+      const q = await db.catalog2Quote.findUnique({ where: { id: quote.id }, select: { selection_json: true } });
+      let sel = {}; try { sel = q?.selection_json ? JSON.parse(q.selection_json) : {}; } catch { sel = {}; }
+      tctx = await buildTriggerContextFromSelection(db, quote.version_id, sel, []);
+    }
+    if (evaluateActivation(r.activation_mode, r.triggers, tctx)) reqs.push(r);
+  };
   const tasks = await db.catalog2Task.findMany({ where: { version_id: quote.version_id }, select: { key: true, name: true } });
   const taskName = new Map(tasks.map((t) => [t.key, t.name]));
   const choices = await db.connectionQuoteChoice.findMany({ where: { quote_id: quote.id } });
@@ -23,7 +37,8 @@ export async function quoteRequirementsView(db: Db, quote: { id: string; version
   for (const r of reqs) {
     const choice = choices.find((c) => c.requirement_id === r.id) ?? null;
     data.push({
-      requirement_id: r.id, key: r.key, label: r.label || r.connection_type.name, connection_type: { id: r.connection_type.id, key: r.connection_type.key, name: r.connection_type.name, icon: r.connection_type.icon },
+      requirement_id: r.id, key: r.key, label: r.label || r.connection_type.name,
+      activation: r.activation_mode === "manual" || r.triggers.length === 0 ? null : { mode: r.activation_mode, when: r.triggers.map(describeTrigger) }, connection_type: { id: r.connection_type.id, key: r.connection_type.key, name: r.connection_type.name, icon: r.connection_type.icon },
       reason: r.reason, when_needed: r.when_needed, when_label: WHEN_NEEDED_LABEL[r.when_needed as keyof typeof WHEN_NEEDED_LABEL], obligation: r.obligation, obligation_label: OBLIGATION_LABEL[r.obligation as keyof typeof OBLIGATION_LABEL],
       method: r.method, method_label: CONNECTION_METHOD_LABEL[r.method as keyof typeof CONNECTION_METHOD_LABEL], permission_level: r.permission_level,
       affected_activities: r.dependencies.map((d) => ({ task_key: d.task_key, task_name: taskName.get(d.task_key) ?? d.task_key, step_key: d.step_key, kind: d.kind, kind_label: DEPENDENCY_KIND_LABEL[d.kind as keyof typeof DEPENDENCY_KIND_LABEL] })),

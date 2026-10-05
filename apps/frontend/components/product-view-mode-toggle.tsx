@@ -129,9 +129,11 @@ const MODES: {
 export function ProductViewModeToggle({
   value,
   onChange,
+  compact = false,
 }: {
   value: ProductViewMode;
   onChange: (m: ProductViewMode) => void;
+  compact?: boolean;
 }) {
   const orderedModes = [
     ...MODES.filter(({ value }) => value === "list"),
@@ -139,7 +141,7 @@ export function ProductViewModeToggle({
   ];
   return (
     <div
-      className="flex h-9 items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800"
+      className={`flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-800 ${compact ? "h-8" : "h-9"}`}
       role="group"
       aria-label="Modo de visualização"
     >
@@ -153,7 +155,7 @@ export function ProductViewModeToggle({
             aria-label={label}
             aria-pressed={active}
             onClick={() => onChange(v)}
-            className={`flex h-8 w-8 items-center justify-center rounded-md transition-all ${
+            className={`flex items-center justify-center rounded-md transition-all ${compact ? "h-7 w-6" : "h-8 w-8"} ${
               active
                 ? "bg-gradient-to-r from-[#101b4c] via-[#4b1c83] to-[#bf087f] text-white shadow-sm"
                 : "text-slate-500 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700"

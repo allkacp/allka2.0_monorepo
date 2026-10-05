@@ -27,6 +27,8 @@ import {
   updateCartItem,
   removeCartItem,
   clearCart,
+  createCommercialRequest,
+  listCommercialRequests,
 } from "../lib/catalog2-client";
 import { prisma } from "../lib/prisma";
 
@@ -112,6 +114,8 @@ const selectionSchema = z.object({
   variation_option_keys: z.array(z.string()).optional(),
   variation_quantities: z.record(z.string(), z.number().int().min(0).max(100000)).optional(),
   addon_keys: z.array(z.string()).optional(),
+  // Adicionais tipados: quantidade inteira, valor informado ou escolhas (seleção única/múltipla/faixa).
+  addon_selections: z.record(z.string(), z.object({ quantity: z.number().int().min(0).max(100000).optional(), value: z.number().max(1e12).optional(), choice_keys: z.array(z.string().max(60)).max(50).optional() })).optional(),
   quantity: z.number().int().positive().max(100000).optional(),
   delivery_groups: z.array(z.number().int().positive().max(100000)).max(100000).optional(),
   answers: z.record(z.string()).optional(),
@@ -123,6 +127,23 @@ router.post("/products/:slug/configure", async (req, res, next) => {
     // não bata com um período válido vira avulso (normalizePeriod), nunca
     // erro de validação aqui; a disponibilidade real é decidida no serviço.
     res.json(await configureProduct(ctxOf(req), req.params.slug as string, sel, { preview: wantsPreview(req), period: (req.body as any)?.period, versionId: str(req.query.version) }));
+  } catch (e) {
+    handle(e, res, next);
+  }
+});
+
+// ── Solicitação comercial (orçamento personalizado / análise / contratação assistida) ──
+router.get("/commercial-requests", async (req, res, next) => {
+  try {
+    res.json({ data: await listCommercialRequests(ctxOf(req)) });
+  } catch (e) {
+    handle(e, res, next);
+  }
+});
+router.post("/commercial-requests", async (req, res, next) => {
+  try {
+    const body = z.object({ product: z.string().min(1), selection: selectionSchema, period: z.string().optional(), note: z.string().max(2000).optional() }).parse(req.body);
+    res.status(201).json(await createCommercialRequest(ctxOf(req), body.product, body.selection, body.period, body.note));
   } catch (e) {
     handle(e, res, next);
   }

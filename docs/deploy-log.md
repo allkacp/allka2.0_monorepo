@@ -102,3 +102,9 @@ Release/secret/artefatos temporários apagados ao final, como sempre.
 - Catálogo global de 21 tipos de conexão semeado e perfil de IA de QA (sistema, sem vínculo com produto) criado na base local. Módulo desativado nos 36 produtos.
 - Evidências: docs/evidencias-conexoes/ (backup, demonstrações 15/15, validação visual 27/27, matriz, regressão, integridade APROVADA). Base descartável allka_conn_demo removida.
 - Nada enviado a QA/homologação/produção.
+
+## 2026-10-02 — Estrutura universal v2 do cadastro de produtos (local, nada publicado)
+- Migração aditiva 20261002120000_universal_product_v2 aplicada só na base local (rollback.sql incluso). Tudo opcional e com padrão seguro; produtos antigos não mudam.
+- Funções: fonte única de preço (regra versionada), efeito de esforço, disponibilidade de opção (orçamento personalizado), tipos de adicional, gatilhos de conexão, portões de aprovação, prazos/SLA, vínculo entre produtos, edição do nome interno, qualificação configurável, perfil de IA com estados de custo.
+- Produto ID 1 configurado com as funções novas (continua Em preparação, V1 rascunho, invisível ao cliente). Nada enviado a QA/produção.
+- Pendente de deploy: migração + backend + frontend; pacotes de transferência (export/import) ainda não carregam as estruturas novas.

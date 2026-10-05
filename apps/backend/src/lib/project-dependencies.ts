@@ -15,7 +15,7 @@ import { isAssetValid } from "./client-assets";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
-export const DEPENDENCY_TARGET_KINDS = ["product", "task", "step", "deliverable", "internal_approval", "client_approval", "info_asset"] as const;
+export const DEPENDENCY_TARGET_KINDS = ["product", "task", "step", "deliverable", "internal_approval", "client_approval", "info_asset", "product_deliverables"] as const;
 export type DependencyTargetKind = (typeof DEPENDENCY_TARGET_KINDS)[number];
 export const DEPENDENCY_TARGET_LABEL: Record<DependencyTargetKind, string> = {
   product: "Outro produto (concluído)",
@@ -25,14 +25,16 @@ export const DEPENDENCY_TARGET_LABEL: Record<DependencyTargetKind, string> = {
   internal_approval: "Aprovação interna (qualificação)",
   client_approval: "Aprovação do cliente",
   info_asset: "Informação/ativo validado (acesso)",
+  product_deliverables: "Entregáveis aprovados de outro produto (resolvido pelo ID real)",
 };
-export const DEPENDENCY_BEHAVIORS = ["block_start", "block_final", "require_before_delivery", "alert_only"] as const;
+export const DEPENDENCY_BEHAVIORS = ["block_start", "block_final", "require_before_delivery", "alert_only", "block_stage"] as const;
 export type DependencyBehavior = (typeof DEPENDENCY_BEHAVIORS)[number];
 export const DEPENDENCY_BEHAVIOR_LABEL: Record<DependencyBehavior, string> = {
   block_start: "Bloquear o início até a conclusão",
   block_final: "Pode iniciar, mas bloqueia a execução final/publicação",
   require_before_delivery: "Pode executar, mas exige o item/aprovação antes da entrega",
   alert_only: "Somente alertar (não bloqueia)",
+  block_stage: "Bloquear só a etapa indicada (o resto da tarefa continua)",
 };
 
 export class DependencyBlockedError extends Error {
@@ -104,6 +106,15 @@ export async function evaluateRule(db: Db, rule: RuleRow): Promise<RuleState> {
       }
       const n = rule.target_task_id ? await db.taskAttachment.count({ where: { project_task_id: rule.target_task_id } }) : 0;
       return n > 0 ? ok(rule.reason) : waiting(rule.reason);
+    }
+    case "product_deliverables": {
+      // Entregáveis aprovados do OUTRO produto (mesmo projeto): precisam existir e estar aprovados; sem entregáveis estruturados, vale a tarefa concluída.
+      if (!rule.target_project_product_id) return waiting(rule.reason);
+      const tasks = await db.projectTask.findMany({ where: { project_product_id: rule.target_project_product_id, occurrence_index: 0, status: { not: "CANCELADA" } }, select: { id: true, status: true } });
+      if (tasks.length === 0) return waiting(`${rule.reason} — o produto vinculado ainda não gerou tarefas.`);
+      const dels = await db.projectTaskDeliverable.findMany({ where: { project_task_id: { in: tasks.map((t) => t.id) }, is_required: true }, select: { status: true } });
+      if (dels.length > 0) return dels.every((d) => d.status === "aprovado") ? ok(rule.reason) : waiting(`${rule.reason} — entregável do produto vinculado ainda não aprovado.`);
+      return tasks.every((t) => DONE.includes(t.status)) ? ok(rule.reason) : waiting(`${rule.reason} — o produto vinculado ainda não foi entregue.`);
     }
     case "internal_approval": {
       const t = rule.target_task_id ? await db.projectTask.findUnique({ where: { id: rule.target_task_id }, select: { qualified_at: true, aprovado_agencia_em: true, status: true } }) : null;
@@ -208,6 +219,12 @@ export async function materializeDependencyRules(db: Db, projectId: string, proj
   // Conexões e acessos necessários (módulo universal): só age em versões com o módulo ativado.
   const { materializeConnectionRules } = await import("./connections/flow");
   const c = await materializeConnectionRules(db, projectId, projectProductIds);
+  // Estrutura universal v2: portões de aprovação, relógios de SLA e entradas vindas de outros produtos (só agem se o produto os configurou).
+  const { materializeApprovalGates } = await import("./approval-gates");
+  await materializeApprovalGates(db, projectId, projectProductIds);
+  const sla = await import("./sla");
+  await sla.materializeSlaClocks(db, projectId, projectProductIds);
+  await sla.syncSlaClocks(db, projectId);
   return { ...r, rulesCreated: r.rulesCreated + c.rulesCreated };
 }
 
@@ -225,6 +242,9 @@ async function materializeDependencyRulesCore(db: Db, projectId: string, project
     select: { id: true, catalog2_product_id: true, package_instance_id: true },
   });
   if (pps.length === 0) return result;
+  // Todos os produtos do projeto (para regras "somente se comprados juntos", inclusive quando o outro produto é contratado depois).
+  const allPps = await db.projectProduct.findMany({ where: { project_id: projectId, catalog2_product_id: { not: null } }, select: { id: true, catalog2_product_id: true, package_instance_id: true } });
+  const projectCatalogIds = new Set(allPps.map((p) => p.catalog2_product_id!));
 
   // (1) pacotes contratados juntos (todos os produtos do pacote neste mesmo pagamento)
   const contractedProductIds = new Set(pps.map((p) => p.catalog2_product_id!));
@@ -245,16 +265,29 @@ async function materializeDependencyRulesCore(db: Db, projectId: string, project
   }
 
   // (2) regras: as dos pacotes detectados + as de pré-requisito de produto (sem pacote)
-  const productRules = await db.catalog2DependencyRule.findMany({ where: { package_id: null, is_active: true, dependent_product_id: { in: [...contractedProductIds] } } });
+  const productRules = await db.catalog2DependencyRule.findMany({
+    where: {
+      package_id: null, is_active: true,
+      OR: [
+        { dependent_product_id: { in: [...contractedProductIds] } },
+        // vínculo "somente se comprados juntos": o dependente já estava no projeto e o produto-alvo acabou de ser contratado
+        { condition_mode: "when_bought_together", dependent_product_id: { in: [...projectCatalogIds] }, target_product_id: { in: [...contractedProductIds] } },
+      ],
+    },
+  });
   const applicable = [...packages.filter((p) => packageInstances.has(p.id)).flatMap((p) => p.rules.map((r) => ({ rule: r, instanceId: packageInstances.get(p.id)! }))), ...productRules.map((r) => ({ rule: r, instanceId: null as string | null }))];
 
   for (const { rule, instanceId } of applicable) {
+    const togetherOnly = (rule as { condition_mode?: string }).condition_mode === "when_bought_together";
+    // "Somente se comprados juntos": sem o outro produto no pedido/projeto, a regra nem existe (não obriga a compra do outro).
+    if (togetherOnly && rule.target_product_id && rule.target_product_id !== rule.dependent_product_id && !projectCatalogIds.has(rule.target_product_id)) continue;
+    const scopePps = togetherOnly ? allPps : pps;
     const dependentTasksAll = await db.projectTask.findMany({
       where: {
-        project_id: projectId, project_product_id: { in: pps.filter((p) => p.catalog2_product_id === rule.dependent_product_id).map((p) => p.id) },
+        project_id: projectId, project_product_id: { in: scopePps.filter((p) => p.catalog2_product_id === rule.dependent_product_id).map((p) => p.id) },
         ...(rule.dependent_task_key ? { catalog2_task: { key: rule.dependent_task_key } } : {}),
       },
-      select: { id: true, title: true, status: true, cycle_kind: true, project_product_id: true, occurrence_index: true },
+      select: { id: true, title: true, status: true, cycle_kind: true, project_product_id: true, occurrence_index: true, catalog2_task_id: true },
     });
     // Só as tarefas dos ciclos em que a regra vale (implantação, recorrência, revalidação ou todos).
     const dependentTasks = dependentTasksAll.filter((t) => ruleAppliesToCycle((rule as { applies_to?: string }).applies_to, t.cycle_kind));
@@ -267,23 +300,56 @@ async function materializeDependencyRulesCore(db: Db, projectId: string, project
       const exists = await db.projectDependencyRule.findFirst({ where: { task_id: t.id, source_rule_id: rule.id }, select: { id: true } });
       if (exists) continue;
       const tgt = sameProduct ? await resolveSameProductTarget(db, rule, t) : target;
+      // Etapa específica aguardando o outro produto (o resto da tarefa continua) / começo parcial (executa, mas não entrega).
+      const stepKey = (rule as { dependent_step_key?: string | null }).dependent_step_key ?? null;
+      const stepRow = stepKey && t.catalog2_task_id ? await db.catalog2TaskStep.findFirst({ where: { task_id: t.catalog2_task_id, key: stepKey }, select: { id: true } }) : null;
+      let effBehavior = rule.behavior;
+      if (stepKey && stepRow && effBehavior !== "alert_only") effBehavior = "block_stage";
+      else if ((rule as { allow_partial_start?: boolean }).allow_partial_start && effBehavior === "block_start") effBehavior = "block_final";
+      const stageGate = effBehavior === "block_stage" ? ((rule as { stage_gate?: string | null }).stage_gate ?? "start") : null;
       if (sameProduct && tgt.taskId === t.id) continue; // uma tarefa nunca espera por ela mesma
       await db.projectDependencyRule.create({
         data: {
           project_id: projectId, project_package_id: instanceId, task_id: t.id, source_rule_id: rule.id, target_kind: rule.target_kind,
           target_task_id: tgt.taskId, target_stage_key: tgt.stepId, target_project_product_id: tgt.ppId, target_product_id: rule.target_product_id,
           target_asset_type: rule.target_asset_type, target_deliverable_key: (rule as { target_deliverable_key?: string | null }).target_deliverable_key ?? null, target_missing: tgt.missing,
-          behavior: rule.behavior, reason: rule.note?.trim() || `Depende de: ${what}`,
+          behavior: effBehavior, reason: rule.note?.trim() || `Depende de: ${what}`,
+          dependent_stage_key: effBehavior === "block_stage" ? stepRow?.id ?? null : null, stage_gate: stageGate,
+          provides_input: !!(rule as { provides_input?: boolean }).provides_input, input_label: (rule as { input_label?: string | null }).input_label ?? null,
         },
       });
       result.rulesCreated++;
-      if (rule.behavior === "block_start" && t.status === "PARA_LANCAMENTO") {
+      if (effBehavior === "block_start" && t.status === "PARA_LANCAMENTO") {
         await db.projectTask.update({ where: { id: t.id }, data: { status: "PENDENTE_DE_LIBERACAO" } });
         await logProjectDecision(db, { projectId, projectTaskId: t.id, kind: "dependency_blocked", message: `"${t.title}" aguarda: ${what}.` });
       }
     }
   }
   return result;
+}
+
+/**
+ * Entregável APROVADO de outro produto (ou tarefa) vira ENTRADA da tarefa dependente: guarda o vínculo com o link/anexo, a versão e a aprovação.
+ * Só age em regras marcadas "provides_input"; produtos sem esse recurso não geram nada.
+ */
+export async function syncTaskInputs(db: Db, projectId: string): Promise<number> {
+  const rules = await db.projectDependencyRule.findMany({ where: { project_id: projectId, provides_input: true, target_kind: { in: ["product_deliverables", "deliverable"] } } });
+  let n = 0;
+  for (const r of rules) {
+    const taskIds: string[] = [];
+    if (r.target_kind === "product_deliverables" && r.target_project_product_id) {
+      taskIds.push(...(await db.projectTask.findMany({ where: { project_product_id: r.target_project_product_id, occurrence_index: 0, status: { not: "CANCELADA" } }, select: { id: true } })).map((t) => t.id));
+    } else if (r.target_task_id) taskIds.push(r.target_task_id);
+    if (taskIds.length === 0) continue;
+    const dels = await db.projectTaskDeliverable.findMany({ where: { project_task_id: { in: taskIds }, status: "aprovado", ...(r.target_kind === "deliverable" && r.target_deliverable_key ? { key: r.target_deliverable_key } : {}) } });
+    for (const d of dels) {
+      const data = { source_project_task_id: d.project_task_id, source_product_id: r.target_product_id, label: r.input_label ?? d.name, link_url: d.content_url, version_number: d.version, approval_status: d.status, approved_at: d.reviewed_at };
+      const cur = await db.projectTaskInput.findFirst({ where: { project_task_id: r.task_id, source_rule_id: r.id, source_deliverable_key: d.key } });
+      if (cur) { await db.projectTaskInput.update({ where: { id: cur.id }, data }); }
+      else { await db.projectTaskInput.create({ data: { project_task_id: r.task_id, source_rule_id: r.id, source_deliverable_key: d.key, ...data } }); n++; }
+    }
+  }
+  return n;
 }
 
 /** Pré-requisito de produto cujo alvo ainda não existia (produto exigido não contratado): procura de novo. */
@@ -348,7 +414,8 @@ export async function reevaluateProjectDependencies(db: Db, projectId: string): 
     }
     const held = await db.projectTask.findMany({ where: { project_id: projectId, status: "AGUARDANDO_DEPENDENCIA_PRODUTO" }, select: { id: true, title: true } });
     for (const t of held) {
-      if ((await unmetRules(db, t.id, ["block_final", "require_before_delivery"])).length === 0) {
+      const gatesHold = await (await import("./approval-gates")).unmetDeliveryGates(db, t.id);
+      if ((await unmetRules(db, t.id, ["block_final", "require_before_delivery"])).length === 0 && gatesHold.length === 0) {
         const { enviarParaAceite, garantirRevisor, garantirQualificador } = await import("./stage-engine");
         const destino = await enviarParaAceite(db, t.id, {});
         // avisa quem precisa decidir (depois da transação, se houver uma em andamento)
@@ -358,6 +425,16 @@ export async function reevaluateProjectDependencies(db: Db, projectId: string): 
         moved++;
       }
     }
+    // Etapas que esperavam o entregável de outro produto: reavalia e abre as liberadas.
+    const waitingStages = await db.projectTaskStage.findMany({ where: { status: "AGUARDANDO_DEPENDENCIA", project_task: { project_id: projectId } }, select: { id: true } });
+    if (waitingStages.length > 0) {
+      const { abrirEtapa } = await import("./stage-engine");
+      for (const s of waitingStages) { const r = await abrirEtapa(db, s.id); if (r.status !== "AGUARDANDO_DEPENDENCIA") moved++; }
+    }
+    // Entregável aprovado de outro produto vira ENTRADA da tarefa (anexo/link, versão e aprovação).
+    await syncTaskInputs(db, projectId);
+    // Relógios de SLA acompanham o estado real (âncoras, conclusões).
+    await (await import("./sla")).syncSlaClocks(db, projectId);
   } catch (err) {
     console.error("[dependencies] reavaliar:", err);
   }

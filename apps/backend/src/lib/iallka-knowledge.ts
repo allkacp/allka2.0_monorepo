@@ -80,9 +80,7 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
     let pricingSimulation: Awaited<ReturnType<typeof computePricing>> | null = null;
     try {
       pricing = await computePricing(target.id, await defaultSelection(target.id));
-      if (opts.includeProvisional) {
-        pricingSimulation = await computePricing(target.id, await defaultSelection(target.id), { simulateProvisional: true });
-      }
+      if (opts.includeProvisional) pricingSimulation = pricing; // fonte única: mesma regra real
     } catch {
       pricing = null;
       pricingSimulation = null;

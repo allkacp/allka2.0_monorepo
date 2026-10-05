@@ -35,7 +35,7 @@ import { prisma } from "./prisma";
 import { startTaskRotation } from "./task-rotation-engine";
 import { atribuirLiderParaTarefa } from "./atribuir-lider";
 import { nestedAlertEventCreate } from "./alert-events";
-import { unmetRules, DependencyBlockedError } from "./project-dependencies";
+import { unmetRules, DependencyBlockedError, evaluateRule } from "./project-dependencies";
 import { logProjectDecision } from "./catalog2-cycles";
 import { assertRequiredDeliverablesForStage } from "./task-deliverables";
 
@@ -145,6 +145,42 @@ export async function abrirEtapa(
     include: { project_task: { select: { id: true, title: true, lider_responsavel_id: true } } },
   });
 
+  // Portão de aprovação (antes de iniciar / depois da etapa anterior / antes de publicar): a etapa espera, sem prazo correndo.
+  {
+    const gates = await import("./approval-gates");
+    const unmet = await gates.unmetGatesForStageStart(db, stage);
+    if (unmet.length > 0) {
+      const wasWaiting = stage.status === gates.STAGE_WAITING_APPROVAL;
+      const waiting = await db.projectTaskStage.update({ where: { id: stageId }, data: { status: gates.STAGE_WAITING_APPROVAL, iniciada_em: null } });
+      if (!wasWaiting) {
+        await gates.notifyApprovers(db, stage.project_task.id, unmet);
+        await (await import("./sla")).pauseTaskClocks(db, stage.project_task.id, { reason: "aprovacao_pendente", reasonText: `Aprovação pendente: ${unmet.map((g) => g.name).join("; ")}`, party: unmet[0].approver_kind === "client" ? "client" : "leader" });
+        const t = await db.projectTask.findUnique({ where: { id: stage.project_task.id }, select: { project_id: true } });
+        if (t) await logProjectDecision(db, { projectId: t.project_id, projectTaskId: stage.project_task.id, kind: "approval_gate_waiting", message: `A etapa "${stage.titulo}" aguarda aprovação: ${unmet.map((g) => g.name).join("; ")}.` });
+      }
+      return { stageId: waiting.id, titulo: waiting.titulo, status: waiting.status, executor_type: waiting.executor_type, nomade_id: null, lider_id: null, prazo_execucao: null, herdou_nomade: false };
+    }
+  }
+
+  // Dependência de ETAPA (ex.: aguardando o entregável aprovado de outro produto comprado junto): só esta etapa espera.
+  if (stage.catalog_step_ref) {
+    const rules = await db.projectDependencyRule.findMany({ where: { task_id: stage.project_task_id, behavior: "block_stage", stage_gate: "start", dependent_stage_key: stage.catalog_step_ref, NOT: { target_kind: "connection" } } });
+    const unmetDeps = (await Promise.all(rules.map((r) => evaluateRule(db, r)))).filter((s) => !s.satisfied);
+    if (unmetDeps.length > 0) {
+      const wasWaiting = stage.status === "AGUARDANDO_DEPENDENCIA";
+      const waiting = await db.projectTaskStage.update({ where: { id: stageId }, data: { status: "AGUARDANDO_DEPENDENCIA", iniciada_em: null } });
+      if (!wasWaiting) {
+        const t = await db.projectTask.findUnique({ where: { id: stage.project_task.id }, select: { project_id: true, lider_responsavel_id: true } });
+        if (t) {
+          await logProjectDecision(db, { projectId: t.project_id, projectTaskId: stage.project_task.id, kind: "stage_waiting_dependency", message: `A etapa "${stage.titulo}" aguarda: ${unmetDeps.map((d) => d.reason).join("; ")}.` });
+          await (await import("./sla")).pauseTaskClocks(db, stage.project_task.id, { reason: "material_nao_enviado", reasonText: `Aguardando entregável de outro produto: ${unmetDeps.map((d) => d.reason).join("; ")}`, party: "leader" });
+        }
+      }
+      return { stageId: waiting.id, titulo: waiting.titulo, status: waiting.status, executor_type: waiting.executor_type, nomade_id: null, lider_id: null, prazo_execucao: null, herdou_nomade: false };
+    }
+    if (stage.status === "AGUARDANDO_DEPENDENCIA") await (await import("./sla")).resumeTaskClocks(db, stage.project_task_id, null, "material_nao_enviado");
+  }
+
   const agora = new Date();
   const prazoExecucao = stage.prazo_execucao
     ? stage.prazo_execucao
@@ -222,7 +258,7 @@ export async function iniciarEtapasDaTarefa(
   if (etapas.length === 0) return null;
 
   const jaAndando = etapas.some((e) =>
-    [STAGE_STATUS.EM_ANDAMENTO, STAGE_STATUS.AGUARDANDO_EXECUTOR].includes(e.status as any),
+    [STAGE_STATUS.EM_ANDAMENTO, STAGE_STATUS.AGUARDANDO_EXECUTOR, "AGUARDANDO_APROVACAO", "AGUARDANDO_DEPENDENCIA"].includes(e.status as any),
   );
   if (jaAndando) return null;
 
@@ -442,6 +478,18 @@ export async function concluirEtapa(
     };
   }
 
+  if (stage.status === "AGUARDANDO_APROVACAO") {
+    throw new DependencyBlockedError("Esta etapa aguarda uma aprovação antes de começar. Ela só pode ser trabalhada depois que o portão de aprovação for aprovado.");
+  }
+  if (stage.status === "AGUARDANDO_DEPENDENCIA") {
+    throw new DependencyBlockedError("Esta etapa aguarda o entregável de outro produto comprado junto. Ela só começa depois que ele for aprovado.");
+  }
+  // Dependência de etapa que bloqueia a CONCLUSÃO (ex.: não concluir a publicação sem o ativo do outro produto).
+  if (stage.catalog_step_ref) {
+    const concl = await db.projectDependencyRule.findMany({ where: { task_id: stage.project_task_id, behavior: "block_stage", stage_gate: "conclude", dependent_stage_key: stage.catalog_step_ref, NOT: { target_kind: "connection" } } });
+    const unmetConcl = (await Promise.all(concl.map((r) => evaluateRule(db, r)))).filter((s) => !s.satisfied);
+    if (unmetConcl.length) throw new DependencyBlockedError(`Esta etapa só conclui depois que: ${unmetConcl.map((d) => d.reason).join("; ")}`);
+  }
   // Tarefa pausada por dependência externa (conexão): nada avança até resolver (SLA suspenso).
   if (stage.project_task.status === "PAUSADA_DEPENDENCIA_EXTERNA") {
     throw new DependencyBlockedError("A tarefa está pausada por dependência externa (conexão necessária). Resolva a pendência de conexão para continuar.");
@@ -480,6 +528,12 @@ export async function concluirEtapa(
       concluida_por: opts.userId ?? null,
     },
   });
+
+  // Etapa de retorno concluída de novo: portões reprovados voltam a ficar pendentes (nova rodada).
+  if (stage.catalog_step_ref) {
+    const done = await db.catalog2TaskStep.findUnique({ where: { id: stage.catalog_step_ref }, select: { key: true } });
+    if (done) await (await import("./approval-gates")).reopenRejectedGates(db, stage.project_task_id, done.key);
+  }
 
   // A próxima etapa é a seguinte NA LISTA, não a de "ordem maior": dados
   // vindos da plataforma antiga trazem ordem repetida (três etapas "número
@@ -527,8 +581,14 @@ export async function concluirEtapa(
   let enviadaParaRevisao = false;
   let aguardandoDependencia = false;
   if (pendentesObrigatorias === 0 && !["CONCLUIDA", "CANCELADA"].includes(stage.project_task.status)) {
-    const seguradas = await unmetRules(db, stage.project_task_id, ["require_before_delivery"]);
+    const seguradasRegras = await unmetRules(db, stage.project_task_id, ["require_before_delivery"]);
+    const seguradasGates = await (await import("./approval-gates")).unmetDeliveryGates(db, stage.project_task_id);
+    const seguradas = [...seguradasRegras, ...seguradasGates.map((g) => ({ reason: `aprovação "${g.name}"` }))];
     if (seguradas.length > 0) {
+      if (seguradasGates.length > 0) {
+        await (await import("./approval-gates")).notifyApprovers(db, stage.project_task_id, seguradasGates);
+        await (await import("./sla")).pauseTaskClocks(db, stage.project_task_id, { reason: "aprovacao_pendente", reasonText: `Aprovação pendente: ${seguradasGates.map((g) => g.name).join("; ")}`, party: seguradasGates[0].approver_kind === "client" ? "client" : "leader" });
+      }
       await db.projectTask.update({ where: { id: stage.project_task_id }, data: { status: "AGUARDANDO_DEPENDENCIA_PRODUTO", data_conclusao: agora } });
       const t = await db.projectTask.findUnique({ where: { id: stage.project_task_id }, select: { project_id: true, project_product_id: true, title: true } });
       if (t) {

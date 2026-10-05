@@ -453,6 +453,13 @@ const navigationConfig = {
           current: false,
         },
         {
+          name: "Pedidos de orçamento",
+          href: "/admin/pedidos-comerciais",
+          icon: ClipboardList,
+          current: false,
+          masterOnly: true,
+        },
+        {
           name: "Modelos de Tarefas",
           href: "/admin/modelos-tarefas",
           icon: ClipboardList,

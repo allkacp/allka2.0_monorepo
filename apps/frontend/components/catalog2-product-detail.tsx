@@ -37,6 +37,8 @@ import {
   GripVertical,
   ShoppingCart,
   Loader2,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +67,39 @@ function clampRightFraction(value: number) {
 function money(v: number | null | undefined, currency = "BRL") {
   if (v == null) return "A definir";
   return `${currency} ${Number(v).toFixed(2)}`;
+}
+
+/** Controle único para adicionais por quantidade. A regra real (mínimo,
+ * máximo e incremento) continua validada pelo backend; aqui só evitamos
+ * que a interface proponha um valor fora da faixa. */
+function AddonQuantityControl({ addon, quantity, onChange }: { addon: any; quantity: number; onChange: (next: number) => void }) {
+  const min = addon.qty_min ?? 1;
+  const max = addon.qty_max ?? null;
+  const step = Math.max(1, addon.qty_step ?? 1);
+  const valid = Number.isInteger(quantity) && quantity >= min && (max == null || quantity <= max) && (quantity - min) % step === 0;
+  const update = (raw: number) => onChange(Math.trunc(raw));
+  const down = () => update(Math.max(min, quantity - step));
+  const up = () => update(max == null ? quantity + step : Math.min(max, quantity + step));
+  const unit = addon.unit_label ?? "unidade";
+  const totalMinutes = addon.unit_minutes != null ? addon.unit_minutes * Math.max(0, quantity) : null;
+  const totalCost = addon.unit_base_cost != null ? addon.unit_base_cost * Math.max(0, quantity) : null;
+  return (
+    <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50/50 p-2 text-[11px] text-slate-700 dark:border-violet-900 dark:bg-violet-950/20 dark:text-slate-200" onClick={(e) => e.preventDefault()}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="font-semibold">Quantidade ({unit})</span>
+        <Button type="button" size="icon" variant="outline" className="h-7 w-7" aria-label={`Diminuir ${addon.name}`} disabled={quantity <= min} onClick={down}><Minus className="h-3.5 w-3.5" /></Button>
+        <Input aria-label={`Quantidade de ${addon.name}`} type="number" min={min} max={max ?? undefined} step={step} className="h-7 w-16 bg-background px-1.5 text-center text-xs" value={Number.isFinite(quantity) ? quantity : ""} onChange={(e) => update(Number(e.target.value))} />
+        <Button type="button" size="icon" variant="outline" className="h-7 w-7" aria-label={`Aumentar ${addon.name}`} disabled={max != null && quantity >= max} onClick={up}><Plus className="h-3.5 w-3.5" /></Button>
+        <span className="text-muted-foreground">mín. {min}{max != null ? ` · máx. ${max}` : ""} · de {step} em {step}</span>
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+        {addon.unit_minutes != null && <span>{addon.unit_minutes} min por {unit} · total {totalMinutes} min</span>}
+        {addon.unit_base_cost != null && <span>{fmtBRL(addon.unit_base_cost)} por {unit} · impacto base {fmtBRL(totalCost ?? 0)}</span>}
+        {max != null && quantity >= max && <span className="font-medium text-amber-700">Limite máximo atingido.</span>}
+      </div>
+      {!valid && <p className="mt-1 font-medium text-red-600">Quantidade inválida: informe um valor entre {min}{max != null ? ` e ${max}` : ""}, respeitando o incremento de {step}.</p>}
+    </div>
+  );
 }
 
 interface RealOption {
@@ -147,6 +182,7 @@ export function Catalog2ProductDetail({
   const [expandedOptionId, setExpandedOptionId] = useState<string | null>(null);
   const [selectedOptionKeys, setSelectedOptionKeys] = useState<string[]>([]);
   const [selectedAddonKeys, setSelectedAddonKeys] = useState<string[]>([]);
+  const [selectedAddonSelections, setSelectedAddonSelections] = useState<Record<string, { quantity?: number }>>({});
   const [selectionSimulation, setSelectionSimulation] = useState<any | null>(null);
   const [retryToken, setRetryToken] = useState(0);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -326,7 +362,9 @@ export function Catalog2ProductDetail({
       return option?.key ? [option.key] : [];
     });
     setSelectedOptionKeys(defaults);
-    setSelectedAddonKeys((targetVersion.addons ?? []).filter((addon: any) => addon.is_default_selected).map((addon: any) => addon.key));
+    const defaultAddons = (targetVersion.addons ?? []).filter((addon: any) => addon.is_default_selected);
+    setSelectedAddonKeys(defaultAddons.map((addon: any) => addon.key));
+    setSelectedAddonSelections(Object.fromEntries(defaultAddons.filter((addon: any) => addon.addon_type === "quantity").map((addon: any) => [addon.key, { quantity: addon.qty_min ?? 1 }])));
   }, [isClient, targetVersion?.id]);
 
   useEffect(() => {
@@ -337,12 +375,12 @@ export function Catalog2ProductDetail({
     }
     let cancelled = false;
     apiClient.simulateCatalog2(targetVersion.id, {
-      variation_option_keys: selectedOptionKeys, addon_keys: selectedAddonKeys, quantity: 1, answers: {},
+      variation_option_keys: selectedOptionKeys, addon_keys: selectedAddonKeys, addon_selections: selectedAddonSelections, quantity: 1, answers: {},
     }).then((result: any) => {
       if (!cancelled) { setSelectionSimulation(result.pricing ?? null); setPriceSummary(result.price_summary ?? null); }
     }).catch(() => { if (!cancelled) setSelectionSimulation(null); });
     return () => { cancelled = true; };
-  }, [isClient, targetVersion?.id, hasRealOptions, selectedOptionKeys, selectedAddonKeys]);
+  }, [isClient, targetVersion?.id, hasRealOptions, selectedOptionKeys, selectedAddonKeys, selectedAddonSelections]);
 
   // ── Opções: CLIENT (real, achatadas por variação — mesma linha visual) ─
   const clientOptionRows = useMemo(() => {
@@ -369,6 +407,28 @@ export function Catalog2ProductDetail({
   }
   function toggleClientAddon(key: string, on: boolean) {
     setSel((s: any) => ({ ...s, addon_keys: on ? [...s.addon_keys, key] : s.addon_keys.filter((k: string) => k !== key) }));
+  }
+  function setClientAddonQuantity(key: string, quantity: number) {
+    setSel((s: any) => ({ ...s, addon_selections: { ...(s.addon_selections ?? {}), [key]: { quantity: Math.max(0, Math.trunc(quantity) || 0) } } }));
+  }
+  function toggleAdminAddon(addon: any, on: boolean) {
+    setSelectedAddonKeys((current) => on ? [...current, addon.key] : current.filter((key) => key !== addon.key));
+    if (addon.addon_type === "quantity") setSelectedAddonSelections((current) => ({ ...current, [addon.key]: { quantity: on ? (addon.qty_min ?? 1) : undefined } }));
+  }
+  function setAdminAddonQuantity(key: string, quantity: number) {
+    setSelectedAddonSelections((current) => ({ ...current, [key]: { quantity: Math.max(0, Math.trunc(quantity) || 0) } }));
+  }
+  async function requestCustomQuote() {
+    if (busy) return;
+    setBusy(true); setMsg(null);
+    try {
+      const r: any = await apiClient.createClientCatalog2CommercialRequest(productId, sel, period);
+      setMsg(r?.already_open ? "Você já tem uma solicitação aberta para esta configuração." : "Solicitação enviada. Nossa equipe comercial vai responder com uma proposta.");
+    } catch (e: any) {
+      setMsg(e?.message ?? "Não foi possível enviar a solicitação.");
+    } finally {
+      setBusy(false);
+    }
   }
   function setClientQuantity(next: number) {
     setSel((s: any) => ({ ...s, quantity: next, delivery_groups: [next] }));
@@ -920,10 +980,11 @@ export function Catalog2ProductDetail({
                     const checked = selectedAddonKeys.includes(addon.key);
                     return (
                       <label key={addon.id} className={cn("flex cursor-pointer items-start gap-2 rounded-xl border bg-background px-3 py-2.5 transition-colors", checked ? "border-purple-400 bg-purple-50/50 dark:bg-purple-950/20" : "border-border/70 hover:border-purple-300")}>
-                        <input type="checkbox" className="mt-0.5" checked={checked} onChange={(event) => setSelectedAddonKeys((current) => event.target.checked ? [...current, addon.key] : current.filter((key) => key !== addon.key))} />
+                        <input type="checkbox" className="mt-0.5" checked={checked} onChange={(event) => toggleAdminAddon(addon, event.target.checked)} />
                         <span className="min-w-0 flex-1">
                           <span className="block text-xs font-bold">{addon.name}</span>
                           {addon.description && <span className="mt-0.5 block text-[11px] text-muted-foreground">{addon.description}</span>}
+                          {checked && addon.addon_type === "quantity" && <AddonQuantityControl addon={addon} quantity={selectedAddonSelections[addon.key]?.quantity ?? addon.qty_min ?? 1} onChange={(next) => setAdminAddonQuantity(addon.key, next)} />}
                         </span>
                         {addon.base_cost != null && <span className="text-xs font-semibold">+ {fmtBRL(addon.base_cost)}</span>}
                       </label>
@@ -943,6 +1004,7 @@ export function Catalog2ProductDetail({
                         <span className="min-w-0 flex-1">
                           <span className="block text-xs font-bold">{addon.name}</span>
                           {addon.description && <span className="mt-0.5 block text-[11px] text-muted-foreground">{addon.description}</span>}
+                          {checked && addon.type === "quantity" && <AddonQuantityControl addon={addon} quantity={sel.addon_selections?.[addon.key]?.quantity ?? addon.qty_min ?? 1} onChange={(next) => setClientAddonQuantity(addon.key, next)} />}
                         </span>
                       </label>
                     );
@@ -1069,9 +1131,16 @@ export function Catalog2ProductDetail({
           <div className="shrink-0 p-3 border-t border-border/50 space-y-2">
             {isClient && canBuy ? (
               <>
-                <Button type="button" className="w-full gap-2 rounded-xl border-0 bg-gradient-to-r from-[#4a2cff] via-[#7b2cdb] to-[#d92293] text-white" disabled={busy || !clientProduct.can_configure || clientSelErrors.length > 0 || !!contractBlockedReason} onClick={addToCart} title={contractBlockedReason ?? ""}>
+                <Button type="button" className="w-full gap-2 rounded-xl border-0 bg-gradient-to-r from-[#4a2cff] via-[#7b2cdb] to-[#d92293] text-white" disabled={busy || !!clientPricing?.requires_commercial_request || !clientProduct.can_configure || clientSelErrors.length > 0 || !!contractBlockedReason} onClick={addToCart} title={contractBlockedReason ?? ""}>
                   <ShoppingCart className="h-4 w-4" /> Adicionar à cesta
                 </Button>
+                {clientPricing?.requires_commercial_request && (
+                  <div className="space-y-1.5 rounded-xl border border-violet-300 bg-violet-50 p-3 text-xs text-violet-900 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100" data-testid="custom-quote-box">
+                    <p className="font-semibold">Esta configuração precisa de proposta personalizada.</p>
+                    <ul className="list-inside list-disc">{(clientPricing.quote_requirements ?? []).map((q: any, i: number) => <li key={i}>{q.message}</li>)}</ul>
+                    <Button type="button" className="w-full" disabled={busy || config?.can_request_commercial === false} onClick={requestCustomQuote}>{clientPricing.cta_label ?? "Solicitar orçamento"}</Button>
+                  </div>
+                )}
                 <Button type="button" variant="outline" className="w-full" disabled={busy || !canQuote} onClick={generateQuote} title={canQuote ? "" : (config?.quote_blockers ?? []).join("; ")}>
                   Gerar pré-cotação
                 </Button>

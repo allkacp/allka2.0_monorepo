@@ -58,6 +58,14 @@ export interface TaskModelFields {
   requires_review?: boolean | null;
   review_minutes?: number | null;
   review_specialty_id?: string | null;
+  /** Qualificação configurável (2026-10-02): inherit | percent | hourly_time | fixed | time_and_percent. */
+  qualification_cost_mode?: string | null;
+  qualification_specialty_id?: string | null;
+  qualification_hourly_rate?: number | null;
+  qualification_minutes?: number | null;
+  qualification_percent?: number | null;
+  qualification_fixed_amount?: number | null;
+  qualifier_kind?: string | null;
 }
 
 export interface StepModelFields {
@@ -108,6 +116,13 @@ export async function createTaskModel(db: Db, f: TaskModelFields, userId?: strin
       requires_review: !!f.requires_review,
       review_minutes: f.review_minutes ?? null,
       review_specialty_id: f.review_specialty_id ?? null,
+      qualification_cost_mode: f.qualification_cost_mode ?? "inherit",
+      qualification_specialty_id: f.qualification_specialty_id ?? null,
+      qualification_hourly_rate: f.qualification_hourly_rate ?? null,
+      qualification_minutes: f.qualification_minutes ?? null,
+      qualification_percent: f.qualification_percent ?? null,
+      qualification_fixed_amount: f.qualification_fixed_amount ?? null,
+      qualifier_kind: f.qualifier_kind ?? "area_leader",
       signature: taskModelSignature(f),
       created_by_user_id: userId ?? null,
     },
@@ -305,6 +320,13 @@ export function taskDataFromModel(m: TaskModelRow) {
     requires_review: m.requires_review,
     review_minutes: m.review_minutes,
     review_specialty_id: m.review_specialty_id,
+    qualification_cost_mode: m.qualification_cost_mode,
+    qualification_specialty_id: m.qualification_specialty_id,
+    qualification_hourly_rate: m.qualification_hourly_rate,
+    qualification_minutes: m.qualification_minutes,
+    qualification_percent: m.qualification_percent,
+    qualification_fixed_amount: m.qualification_fixed_amount,
+    qualifier_kind: m.qualifier_kind,
     task_model_id: m.id,
     task_model_revision: m.revision,
   };
@@ -360,6 +382,8 @@ export function taskDivergesFromModel(t: {
   cycle_type: string; repeat_rule: string; repeat_every_cycles: number | null; executor_continuity: string; asset_rule: string; asset_revalidate_days: number | null;
   ops?: unknown;
   requires_review?: boolean; review_minutes?: number | null; review_specialty_id?: string | null;
+  qualification_cost_mode?: string; qualification_specialty_id?: string | null; qualification_hourly_rate?: number | null; qualification_minutes?: number | null;
+  qualification_percent?: number | null; qualification_fixed_amount?: number | null; qualifier_kind?: string;
 }, m: TaskModelRow): boolean {
   return !(
     eqText(t.name, m.name) && eqText(t.description, m.description) && t.execution_mode === m.execution_mode &&
@@ -369,7 +393,11 @@ export function taskDivergesFromModel(t: {
     t.cycle_type === m.cycle_type && t.repeat_rule === m.repeat_rule && (t.repeat_every_cycles ?? null) === (m.repeat_every_cycles ?? null) &&
     t.executor_continuity === m.executor_continuity && t.asset_rule === m.asset_rule && (t.asset_revalidate_days ?? null) === (m.asset_revalidate_days ?? null) &&
     opsEqual(normalizeTaskOps(t.ops), normalizeTaskOps(m.ops)) &&
-    (t.requires_review ?? false) === m.requires_review && (t.review_minutes ?? null) === (m.review_minutes ?? null) && (t.review_specialty_id ?? null) === (m.review_specialty_id ?? null)
+    (t.requires_review ?? false) === m.requires_review && (t.review_minutes ?? null) === (m.review_minutes ?? null) && (t.review_specialty_id ?? null) === (m.review_specialty_id ?? null) &&
+    (t.qualification_cost_mode ?? "inherit") === m.qualification_cost_mode && (t.qualification_specialty_id ?? null) === (m.qualification_specialty_id ?? null) &&
+    (t.qualification_hourly_rate ?? null) === (m.qualification_hourly_rate ?? null) && (t.qualification_minutes ?? null) === (m.qualification_minutes ?? null) &&
+    (t.qualification_percent ?? null) === (m.qualification_percent ?? null) && (t.qualification_fixed_amount ?? null) === (m.qualification_fixed_amount ?? null) &&
+    (t.qualifier_kind ?? "area_leader") === m.qualifier_kind
   );
 }
 

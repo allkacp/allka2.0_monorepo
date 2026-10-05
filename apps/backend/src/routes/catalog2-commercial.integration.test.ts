@@ -395,14 +395,15 @@ describe("Consistência comercial — modalidade, recorrência, prévia e preço
     const { projectId, pps } = await checkoutAndPay(CO_A.token, [q.json.id]);
     assert.equal((await prisma.projectProduct.findUniqueOrThrow({ where: { id: pps[0].id } })).preco_final_cliente_snapshot, amount, "pedido/contrato");
     assert.equal((await prisma.invoice.findFirstOrThrow({ where: { project_id: projectId } })).amount, amount, "fatura");
-    // quando o cálculo real NÃO fecha, o servidor só mostra simulação se disser que é simulação
-    const fakeReal = { ...real, lines: { ...real.lines, commercial_final_price: { label: "x", amount: null } }, commercial_ready: false } as typeof real;
-    const fakeSim = { ...real, simulation: { ...real.simulation, total: 848.44 } } as typeof real;
-    const s = priceSummary(fakeReal, fakeSim);
+    // quando o cálculo real NÃO fecha, o servidor só mostra valor ilustrativo da MESMA regra real e diz o que falta (fonte única, 2026-10-02)
+    const fakeReal = { ...real, lines: { ...real.lines, commercial_final_price: { label: "x", amount: null } }, simulation: { ...real.simulation, total: 848.44 }, commercial_ready: false, pending_info: ["custo por token de IA"] } as typeof real;
+    const s = priceSummary(fakeReal);
     assert.equal(s.amount, 848.44);
     assert.equal(s.source, "simulacao");
-    assert.match(s.explanation, /simulação/i);
-    const pend = priceSummary({ ...real, commercial_ready: false } as typeof real, fakeSim);
+    assert.match(s.explanation, /regras reais de preço/i);
+    assert.match(s.explanation, /custo por token de IA/);
+    assert.equal(s.rule_version, real.rule.version);
+    const pend = priceSummary({ ...real, commercial_ready: false } as typeof real);
     assert.equal(pend.amount, amount, "com pendência comercial mostra o cálculo real, nunca o simulado");
     assert.equal(pend.source, "calculado");
   });

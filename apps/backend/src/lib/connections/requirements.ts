@@ -1,6 +1,7 @@
 // Exigências de conexão por VERSÃO de produto (módulo universal, opcional). Quando `requires_connections` é falso a versão
 // se comporta como se o módulo não existisse: nada aparece para o cliente, não cria pendência e não bloqueia nada.
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { ACTIVATION_MODES, replaceTriggers, validateTriggers, type TriggerInput } from "./triggers";
 import {
   ASSET_RULES_CONN, ConnectionError, CONNECTION_METHODS, DEPENDENCY_KINDS, GRANT_SCOPES, OBLIGATIONS, PENDING_BEHAVIORS, VALIDATION_MODES, WHEN_NEEDED,
   dependencyKey, parseJsonArray, serializeConnectionType, slugKey,
@@ -19,9 +20,12 @@ export interface RequirementInput {
   asset_rule?: string; revalidate_days?: number | null; light_check?: boolean;
   reminder_interval_hours?: number | null; reminder_limit?: number | null; escalate_after_reminders?: number | null; visible_to_client?: boolean;
   dependents?: DependentInput[];
+  /** Ativação por gatilhos (variação, opção, adicional, tarefa, etapa, resposta, produto vinculado). Sem isto: modo manual (como sempre). */
+  activation_mode?: string;
+  triggers?: TriggerInput[];
 }
 
-const REQ_INCLUDE = { connection_type: true, dependencies: { orderBy: { dep_key: "asc" as const } } } satisfies Prisma.Catalog2ConnectionRequirementInclude;
+const REQ_INCLUDE = { connection_type: true, dependencies: { orderBy: { dep_key: "asc" as const } }, triggers: { orderBy: { sort_order: "asc" as const } } } satisfies Prisma.Catalog2ConnectionRequirementInclude;
 export type RequirementRow = Prisma.Catalog2ConnectionRequirementGetPayload<{ include: typeof REQ_INCLUDE }>;
 
 export function serializeRequirement(r: RequirementRow) {
@@ -36,6 +40,7 @@ export function serializeRequirement(r: RequirementRow) {
       visible_to_client: r.visible_to_client,
     },
     dependents: r.dependencies.map((d) => ({ id: d.id, task_key: d.task_key, step_key: d.step_key, kind: d.kind })),
+    activation: { mode: r.activation_mode, triggers: (r.triggers ?? []).map((t) => ({ id: t.id, kind: t.kind, ref_key: t.ref_key, ref_value: t.ref_value, operator: t.operator })) },
     sort_order: r.sort_order,
   };
 }
@@ -124,6 +129,9 @@ async function uniqueKey(db: Db, versionId: string, base: string, ignoreId?: str
 export async function createRequirement(db: Db, versionId: string, input: RequirementInput) {
   const n = await normalize(db, versionId, input);
   const deps = checkDependents(n.structure, input.dependents ?? (n.whenTask ? [{ task_key: n.whenTask, step_key: n.whenStep, kind: "start" as DependencyKind }] : []));
+  const trg = input.triggers ? await validateTriggers(db, versionId, input.triggers) : [];
+  const activationMode = pick(input.activation_mode ?? (trg.length ? "any_trigger" : "manual"), ACTIVATION_MODES, "activation_mode", "manual");
+  if (activationMode !== "manual" && trg.length === 0) throw new ConnectionError("Escolha ao menos um gatilho para ativar a conexão automaticamente.", 422, "trigger_missing");
   const count = await db.catalog2ConnectionRequirement.count({ where: { version_id: versionId } });
   const key = await uniqueKey(db, versionId, slugKey(input.key || input.label || n.type.key));
   const row = await db.catalog2ConnectionRequirement.create({
@@ -135,6 +143,8 @@ export async function createRequirement(db: Db, versionId: string, input: Requir
       asset_rule: n.assetRule, revalidate_days: n.revalidate, light_check: !!input.light_check,
       reminder_interval_hours: input.reminder_interval_hours ?? null, reminder_limit: input.reminder_limit ?? null, escalate_after_reminders: input.escalate_after_reminders ?? null,
       visible_to_client: input.visible_to_client !== false, sort_order: count + 1,
+      activation_mode: activationMode,
+      triggers: { create: trg.map((t, i) => ({ kind: t.kind, ref_key: t.ref_key ?? null, ref_value: t.ref_value ?? null, operator: t.operator ?? "selected", sort_order: i })) },
       dependencies: { create: deps.map((d) => ({ task_key: d.task_key, step_key: d.step_key ?? null, kind: d.kind ?? "start", dep_key: dependencyKey(d.task_key, d.step_key) })) },
     },
     include: REQ_INCLUDE,
@@ -147,9 +157,14 @@ export async function updateRequirement(db: Db, id: string, input: RequirementIn
   if (!cur) throw new ConnectionError("Exigência não encontrada.", 404, "requirement_not_found");
   const n = await normalize(db, cur.version_id, input, cur);
   const deps = input.dependents ? checkDependents(n.structure, input.dependents) : null;
+  const trg = input.triggers !== undefined ? await validateTriggers(db, cur.version_id, input.triggers) : null;
+  const nextMode = pick(input.activation_mode ?? (trg ? (trg.length ? (cur.activation_mode === "manual" ? "any_trigger" : cur.activation_mode) : "manual") : cur.activation_mode), ACTIVATION_MODES, "activation_mode", "manual");
+  const triggerCount = trg ? trg.length : cur.triggers.length;
+  if (nextMode !== "manual" && triggerCount === 0) throw new ConnectionError("Escolha ao menos um gatilho para ativar a conexão automaticamente.", 422, "trigger_missing");
   await db.catalog2ConnectionRequirement.update({
     where: { id },
     data: {
+      activation_mode: nextMode,
       connection_type_id: n.type.id, ...(input.label !== undefined ? { label: input.label?.trim() || null } : {}),
       when_needed: n.when, when_task_key: n.whenTask, when_step_key: n.whenStep, condition_text: n.condition,
       obligation: n.obligation, method: n.method, permission_level: n.permission, pending_behavior: n.pending,
@@ -162,6 +177,7 @@ export async function updateRequirement(db: Db, id: string, input: RequirementIn
       ...(input.visible_to_client !== undefined ? { visible_to_client: input.visible_to_client } : {}),
     },
   });
+  if (trg) await replaceTriggers(db, id, trg);
   if (deps) {
     await db.catalog2ConnectionDependency.deleteMany({ where: { requirement_id: id } });
     for (const d of deps) await db.catalog2ConnectionDependency.create({ data: { requirement_id: id, task_key: d.task_key, step_key: d.step_key ?? null, kind: d.kind ?? "start", dep_key: dependencyKey(d.task_key, d.step_key) } });
@@ -184,11 +200,11 @@ export async function setModuleFlag(db: Db, versionId: string, on: boolean) {
 export async function cloneConnections(tx: Prisma.TransactionClient, srcVersionId: string, destVersionId: string) {
   const src = await tx.catalog2ProductVersion.findUnique({ where: { id: srcVersionId }, select: { requires_connections: true } });
   if (src?.requires_connections) await tx.catalog2ProductVersion.update({ where: { id: destVersionId }, data: { requires_connections: true } });
-  const rows = await tx.catalog2ConnectionRequirement.findMany({ where: { version_id: srcVersionId }, include: { dependencies: true } });
+  const rows = await tx.catalog2ConnectionRequirement.findMany({ where: { version_id: srcVersionId }, include: { dependencies: true, triggers: true } });
   for (const r of rows) {
-    const { id: _id, version_id: _v, dependencies, created_at: _c, updated_at: _u, ...rest } = r;
+    const { id: _id, version_id: _v, dependencies, triggers, created_at: _c, updated_at: _u, ...rest } = r;
     await tx.catalog2ConnectionRequirement.create({
-      data: { ...rest, version_id: destVersionId, dependencies: { create: dependencies.map((d) => ({ task_key: d.task_key, step_key: d.step_key, kind: d.kind, dep_key: d.dep_key })) } },
+      data: { ...rest, version_id: destVersionId, dependencies: { create: dependencies.map((d) => ({ task_key: d.task_key, step_key: d.step_key, kind: d.kind, dep_key: d.dep_key })) }, triggers: { create: triggers.map((t) => ({ kind: t.kind, ref_key: t.ref_key, ref_value: t.ref_value, operator: t.operator, sort_order: t.sort_order })) } },
     });
   }
 }
@@ -215,6 +231,10 @@ export async function validateConnectionConfig(db: Db, versionId: string): Promi
       const t = structure.get(d.task_key);
       if (!t) issues.push(`Conexões: "${name}" tem dependência de uma tarefa que não existe ("${d.task_key}").`);
       else if (d.step_key && !t.steps.has(d.step_key)) issues.push(`Conexões: "${name}" tem dependência de uma etapa que não existe ("${d.step_key}").`);
+    }
+    if (r.activation_mode !== "manual" && r.triggers.length === 0) issues.push(`Conexões: "${name}" ativa por gatilho, mas nenhum gatilho foi definido.`);
+    if (r.triggers.length > 0) {
+      try { await validateTriggers(db, versionId, r.triggers); } catch (e) { issues.push(`Conexões: "${name}" tem gatilho inválido — ${(e as Error).message}`); }
     }
     const blocking = r.dependencies.length > 0; // dependência só informativa também é coerente (nada bloqueia, só informa)
     if (r.obligation === "required" && r.pending_behavior === "block_dependents" && !blocking) issues.push(`Conexões: "${name}" é obrigatória e bloqueia dependentes, mas nenhuma tarefa ou etapa depende dela.`);

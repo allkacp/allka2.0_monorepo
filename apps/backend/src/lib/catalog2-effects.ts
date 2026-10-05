@@ -31,10 +31,14 @@ export const CATALOG2_EFFECT_TYPES = [
   "add_step", // effect_value = "taskKey:stepKey" (etapa is_conditional da mesma versão)
   "require_info", // effect_value = texto (informação exigida do cliente)
   "add_deliverable", // effect_value = texto (entregável adicional)
+  // Esforço universal (2026-10-02): minutos/horas somados ou substituídos em uma tarefa/etapa (ver catalog2-effort.ts).
+  "add_effort_minutes", // effect_value = minutos (>= 0); alvo em source_task_key/source_step_key
+  "add_effort_hours", // effect_value = horas (>= 0)
+  "replace_effort_minutes", // effect_value = minutos que SUBSTITUEM o esforço-base do alvo
 ] as const;
 export type Catalog2EffectType = (typeof CATALOG2_EFFECT_TYPES)[number];
 
-const NUMERIC_EFFECTS = new Set<Catalog2EffectType>(["add_deadline_days", "add_fixed_amount", "add_percent"]);
+const NUMERIC_EFFECTS = new Set<Catalog2EffectType>(["add_deadline_days", "add_fixed_amount", "add_percent", "add_effort_minutes", "add_effort_hours", "replace_effort_minutes"]);
 const TASK_REF_EFFECTS = new Set<Catalog2EffectType>(["add_task", "remove_task"]);
 const TEXT_EFFECTS = new Set<Catalog2EffectType>(["require_info", "add_deliverable"]);
 
@@ -125,6 +129,9 @@ export function describeCondition(c: {
     add_step: `incluir a etapa "${c.effect_value}"`,
     require_info: `exigir a informação: ${c.effect_value}`,
     add_deliverable: `adicionar o entregável: ${c.effect_value}`,
+    add_effort_minutes: `somar ${c.effect_value} minuto(s) de esforço`,
+    add_effort_hours: `somar ${c.effect_value} hora(s) de esforço`,
+    replace_effort_minutes: `substituir o esforço por ${c.effect_value} minuto(s)`,
   };
   return `Se ${src[c.trigger_source] ?? c.trigger_source} ${op[c.operator] ?? c.operator}, ${eff[c.effect_type] ?? c.effect_type}.`;
 }

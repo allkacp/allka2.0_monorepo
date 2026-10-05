@@ -1,0 +1,25 @@
+-- Rollback manual (não é aplicado pelo prisma migrate). Ordem: tabelas novas e depois colunas novas.
+DROP TABLE IF EXISTS `project_task_inputs`;
+DROP TABLE IF EXISTS `project_sla_pauses`;
+DROP TABLE IF EXISTS `project_sla_clocks`;
+DROP TABLE IF EXISTS `catalog2_sla_rules`;
+DROP TABLE IF EXISTS `project_approval_gate_events`;
+DROP TABLE IF EXISTS `project_approval_gates`;
+DROP TABLE IF EXISTS `catalog2_approval_gates`;
+DROP TABLE IF EXISTS `catalog2_connection_triggers`;
+DROP TABLE IF EXISTS `catalog2_addon_choices`;
+DROP TABLE IF EXISTS `catalog2_commercial_requests`;
+DROP TABLE IF EXISTS `catalog2_pricing_rule_versions`;
+ALTER TABLE `catalog2_addon_effects` DROP COLUMN `effort_scale_by_quantity`;
+ALTER TABLE `catalog2_addons` DROP COLUMN `addon_type`, DROP COLUMN `auto_quote_limit`, DROP COLUMN `qty_max`, DROP COLUMN `qty_min`, DROP COLUMN `qty_step`, DROP COLUMN `unit_base_cost`, DROP COLUMN `unit_deadline_days`, DROP COLUMN `unit_label`, DROP COLUMN `unit_minutes`;
+ALTER TABLE `catalog2_ai_profiles` DROP COLUMN `expected_runs`, DROP COLUMN `review_limit`, DROP COLUMN `unit_tokens`;
+ALTER TABLE `catalog2_conditions` DROP COLUMN `effort_scale_by_quantity`;
+ALTER TABLE `catalog2_connection_requirements` DROP COLUMN `activation_mode`;
+ALTER TABLE `catalog2_dependency_rules` DROP COLUMN `allow_partial_start`, DROP COLUMN `condition_mode`, DROP COLUMN `dependent_step_key`, DROP COLUMN `input_label`, DROP COLUMN `provides_input`, DROP COLUMN `stage_gate`;
+ALTER TABLE `catalog2_option_effects` DROP COLUMN `effort_scale_by_quantity`;
+ALTER TABLE `catalog2_task_ai` DROP COLUMN `est_runs`;
+ALTER TABLE `catalog2_task_models` DROP COLUMN `qualification_cost_mode`, DROP COLUMN `qualification_fixed_amount`, DROP COLUMN `qualification_hourly_rate`, DROP COLUMN `qualification_minutes`, DROP COLUMN `qualification_percent`, DROP COLUMN `qualification_specialty_id`, DROP COLUMN `qualifier_kind`;
+ALTER TABLE `catalog2_tasks` DROP COLUMN `qualification_cost_mode`, DROP COLUMN `qualification_fixed_amount`, DROP COLUMN `qualification_hourly_rate`, DROP COLUMN `qualification_minutes`, DROP COLUMN `qualification_percent`, DROP COLUMN `qualification_specialty_id`, DROP COLUMN `qualifier_kind`;
+ALTER TABLE `catalog2_variation_options` DROP COLUMN `availability`, DROP COLUMN `availability_note`;
+ALTER TABLE `project_dependency_rules` DROP COLUMN `input_label`, DROP COLUMN `provides_input`, DROP COLUMN `stage_gate`;
+DELETE FROM `_prisma_migrations` WHERE `migration_name` = '20261002120000_universal_product_v2';

@@ -1657,6 +1657,9 @@ model ProjectTask {
   external_pause_total_minutes Int @default(0)
   status_before_external_pause String?
   original_due_date DateTime?
+  approval_gates ProjectApprovalGate[]
+  sla_clocks ProjectSlaClock[]
+  task_inputs ProjectTaskInput[]
 }
 
 // ─── Pacotes de produtos e regras de dependência (Pedido 2) ──────────────────
@@ -1732,6 +1735,12 @@ model Catalog2DependencyRule {
   @@map("catalog2_dependency_rules")
   target_deliverable_key String?
   applies_to String @default("all")
+  condition_mode String @default("always")
+  dependent_step_key String?
+  stage_gate String?
+  allow_partial_start Boolean @default(false)
+  provides_input Boolean @default(false)
+  input_label String?
 }
 
 // Instância de um pacote contratado num projeto (produtos pagos juntos).
@@ -1781,6 +1790,9 @@ model ProjectDependencyRule {
   target_connection_req_id String?
   connection_dep_kind String?
   dependent_stage_key String?
+  stage_gate String?
+  provides_input Boolean @default(false)
+  input_label String?
 }
 
 // ─── Ativos validados do cliente ───────────────────────────────────────────
@@ -5574,6 +5586,8 @@ model Catalog2ProductVersion {
   manual_deadline_days Int?
   requires_connections Boolean @default(false)
   connection_requirements Catalog2ConnectionRequirement[]
+  approval_gates Catalog2ApprovalGate[]
+  sla_rules Catalog2SlaRule[]
 }
 
 // Historico da versao (quem criou/alterou/publicou e quando). Imutavel —
@@ -5635,6 +5649,12 @@ model Catalog2VariationOption {
   @@index([variation_id, sort_order])
   @@map("catalog2_variation_options")
   is_active Boolean @default(true)
+  availability String @default("auto")
+  availability_note String? @db.Text
+  // Mídia opcional por opção. A URL pode ser um arquivo enviado ou uma imagem
+  // cadastrada; icon_key mantém uma alternativa sem imagem de marca.
+  media_url String? @db.Text
+  icon_key String?
 }
 
 // Efeito de escolher uma OPCAO de variacao — vocabulario FECHADO, igual ao
@@ -5664,6 +5684,7 @@ model Catalog2OptionEffect {
   charge_quantity Int?
   source_task_key String?
   source_step_key String?
+  effort_scale_by_quantity Boolean @default(false)
 }
 
 // ADICIONAL = escolha OPCIONAL (add-on), diferente da variacao obrigatoria.
@@ -5683,6 +5704,9 @@ model Catalog2Addon {
   // Custo direto do adicional (opcional). Nulo = sem custo direto (o impacto
   // vem so pelos efeitos). Nunca inventa valor.
   base_cost           Float?
+  // Mídia opcional cadastrada pelo administrador; nenhum logo é assumido.
+  media_url           String? @db.Text
+  icon_key            String?
 
   // Vinculo opcional a uma tarefa/etapa especifica da mesma versao.
   target_task_id String?
@@ -5703,6 +5727,16 @@ model Catalog2Addon {
   charge_quantity Int?
   source_task_key String?
   source_step_key String?
+  addon_type String @default("checkbox")
+  qty_min Int?
+  qty_max Int?
+  qty_step Int?
+  unit_label String?
+  unit_base_cost Float?
+  unit_minutes Int?
+  unit_deadline_days Float?
+  auto_quote_limit Int?
+  choices Catalog2AddonChoice[]
 }
 
 model Catalog2AddonEffect {
@@ -5725,6 +5759,7 @@ model Catalog2AddonEffect {
   charge_quantity Int?
   source_task_key String?
   source_step_key String?
+  effort_scale_by_quantity Boolean @default(false)
 }
 
 // Tarefa do produto (modelo de catalogo — NAO e a execucao de uma compra).
@@ -5832,6 +5867,13 @@ model Catalog2Task {
   review_minutes Int?
   review_specialty_id String?
   deliverables Catalog2TaskDeliverable[]
+  qualification_cost_mode String @default("inherit")
+  qualification_specialty_id String?
+  qualification_hourly_rate Float?
+  qualification_minutes Int?
+  qualification_percent Float?
+  qualification_fixed_amount Float?
+  qualifier_kind String @default("area_leader")
 }
 
 // Dependencia entre tarefas da MESMA versao (task depende de depends_on).
@@ -5950,6 +5992,13 @@ model Catalog2TaskModel {
   requires_review Boolean @default(false)
   review_minutes Int?
   review_specialty_id String?
+  qualification_cost_mode String @default("inherit")
+  qualification_specialty_id String?
+  qualification_hourly_rate Float?
+  qualification_minutes Int?
+  qualification_percent Float?
+  qualification_fixed_amount Float?
+  qualifier_kind String @default("area_leader")
 }
 
 model Catalog2StepModel {
@@ -6053,6 +6102,7 @@ model Catalog2TaskAI {
   instructions String? @db.Text
   prompt_version Int @default(1)
   ai_trigger String @default("manual")
+  est_runs Int?
 }
 
 // CONDICAO TIPADA (bloco 3, Parte 6). Gatilho -> efeito, vocabulario FECHADO
@@ -6097,6 +6147,7 @@ model Catalog2Condition {
   charge_quantity Int?
   source_task_key String?
   source_step_key String?
+  effort_scale_by_quantity Boolean @default(false)
 }
 
 // Modulo de precificacao (ata 2026-08-26): sobre o custo acumulado das
@@ -6837,6 +6888,9 @@ model Catalog2AIProfile {
   purpose String?
   is_system Boolean @default(false)
   knowledge_json String? @db.Text
+  unit_tokens Int @default(1000)
+  expected_runs Int?
+  review_limit Int?
 }
 
 // Cada execução de IA numa tarefa contratada: o que foi pedido, com que contexto/entradas, o que saiu, quanto custou e o que o humano decidiu.
@@ -6995,6 +7049,8 @@ model Catalog2ConnectionRequirement {
   @@unique([version_id, key])
   @@index([version_id, sort_order])
   @@map("catalog2_connection_requirements")
+  activation_mode String @default("manual")
+  triggers Catalog2ConnectionTrigger[]
 }
 
 // Tarefa/etapa do produto que depende da conexão. kind: start | continue | conclude | info
@@ -7223,4 +7279,256 @@ model ConnectionQuoteChoice {
 
   @@unique([quote_id, requirement_id])
   @@map("connection_quote_choices")
+}
+
+
+// ═══ Estrutura universal v2 (2026-10-02) — tudo opcional, com padrões seguros ═══
+
+/// Versão da REGRA de preço: cada combinação distinta de percentuais, ordem, valor/hora e componentes gera uma linha.
+model Catalog2PricingRuleVersion {
+  id            Int      @id @default(autoincrement())
+  hash          String   @unique @db.VarChar(64)
+  snapshot_json String   @db.LongText
+  created_at    DateTime @default(now())
+
+  @@map("catalog2_pricing_rule_versions")
+}
+
+/// Solicitação comercial gerada quando uma seleção exige orçamento personalizado / análise / contratação assistida.
+model Catalog2CommercialRequest {
+  id                    String    @id @default(cuid())
+  product_id            String
+  version_id            String
+  account_kind          String?
+  account_id            String?
+  requested_by_user_id  String
+  kind                  String    @default("custom_quote")
+  selection_json        String    @db.LongText
+  reasons_json          String    @db.LongText
+  pricing_snapshot_json String?   @db.LongText
+  status                String    @default("aberta")
+  client_note           String?   @db.Text
+  response_note         String?   @db.Text
+    internal_note         String?   @db.Text
+    assigned_to_user_id   String?
+    proposed_price        Float?
+    proposed_deadline_days Float?
+    proposal_valid_until  DateTime?
+    client_response_note  String?   @db.Text
+    converted_project_id  String?
+    history_json          String?   @db.LongText
+  handled_by_user_id    String?
+  handled_at            DateTime?
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
+
+  @@index([product_id, status])
+  @@index([requested_by_user_id])
+  @@map("catalog2_commercial_requests")
+}
+
+/// Escolhas de um adicional do tipo seleção única, múltipla ou faixa de quantidade.
+model Catalog2AddonChoice {
+  id             String        @id @default(cuid())
+  addon_id       String
+  addon          Catalog2Addon @relation(fields: [addon_id], references: [id], onDelete: Cascade)
+  key            String
+  label          String
+  sort_order     Int           @default(0)
+  is_default     Boolean       @default(false)
+  is_active      Boolean       @default(true)
+  base_cost      Float?
+  minutes        Int?
+  deadline_days  Float?
+  qty_from       Int?
+  qty_to         Int?
+  requires_quote Boolean       @default(false)
+  created_at     DateTime      @default(now())
+  updated_at     DateTime      @updatedAt
+
+  @@unique([addon_id, key])
+  @@map("catalog2_addon_choices")
+}
+
+/// Gatilhos que ativam uma exigência de conexão (produto, variação, opção, adicional, tarefa, etapa, resposta, produto vinculado).
+model Catalog2ConnectionTrigger {
+  id             String                        @id @default(cuid())
+  requirement_id String
+  requirement    Catalog2ConnectionRequirement @relation(fields: [requirement_id], references: [id], onDelete: Cascade)
+  kind           String
+  ref_key        String?
+  ref_value      String?
+  operator       String                        @default("selected")
+  sort_order     Int                           @default(0)
+
+  @@index([requirement_id])
+  @@map("catalog2_connection_triggers")
+}
+
+/// Portão de aprovação do fluxo (antes/depois de etapa, antes de publicar/entregar).
+model Catalog2ApprovalGate {
+  id                        String                 @id @default(cuid())
+  version_id                String
+  version                   Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+  key                       String
+  name                      String
+  description               String?                @db.Text
+  anchor_task_key           String
+  anchor_step_key           String?
+  position                  String                 @default("before_step")
+  approver_kind             String                 @default("client")
+  group_key                 String?
+  sequence_no               Int                    @default(0)
+  group_mode                String                 @default("sequence")
+  rejection_return_step_key String?
+  requires_comment          Boolean                @default(false)
+  is_required               Boolean                @default(true)
+  is_active                 Boolean                @default(true)
+  sort_order                Int                    @default(0)
+  created_at                DateTime               @default(now())
+  updated_at                DateTime               @updatedAt
+
+  @@unique([version_id, key])
+  @@map("catalog2_approval_gates")
+}
+
+/// Instância do portão em uma tarefa de projeto.
+model ProjectApprovalGate {
+  id               String      @id @default(cuid())
+  project_id       String
+  project_task_id  String
+  project_task     ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  source_gate_id   String?
+  gate_key         String
+  name             String
+  position         String
+  approver_kind    String
+  group_key        String?
+  sequence_no      Int         @default(0)
+  group_mode       String      @default("sequence")
+  anchor_stage_key String?
+  return_stage_key String?
+  requires_comment Boolean     @default(false)
+  is_required      Boolean     @default(true)
+  status           String      @default("pendente")
+  round            Int         @default(0)
+  decided_by       String?
+  decided_at       DateTime?
+  comment          String?     @db.Text
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+
+  events ProjectApprovalGateEvent[]
+
+  @@unique([project_task_id, gate_key])
+  @@index([project_id, status])
+  @@map("project_approval_gates")
+}
+
+model ProjectApprovalGateEvent {
+  id                    String              @id @default(cuid())
+  gate_id               String
+  gate                  ProjectApprovalGate @relation(fields: [gate_id], references: [id], onDelete: Cascade)
+  round                 Int                 @default(0)
+  decision              String
+  actor_user_id         String?
+  comment               String?             @db.Text
+  returned_to_stage_key String?
+  created_at            DateTime            @default(now())
+
+  @@index([gate_id])
+  @@map("project_approval_gate_events")
+}
+
+/// Regra de prazo/SLA estruturada por escopo (produto, modalidade, implantação, ciclo, tarefa, etapa, entregável, aprovação, relatório).
+model Catalog2SlaRule {
+  id          String                 @id @default(cuid())
+  version_id  String
+  version     Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
+  key         String
+  name        String
+  scope_kind  String
+  target_key  String?
+  modality    String                 @default("any")
+  amount      Float
+  unit        String                 @default("business_days")
+  anchor      String                 @default("prerequisites_valid")
+  description String?                @db.Text
+  is_active   Boolean                @default(true)
+  sort_order  Int                    @default(0)
+  created_at  DateTime               @default(now())
+  updated_at  DateTime               @updatedAt
+
+  @@unique([version_id, key])
+  @@map("catalog2_sla_rules")
+}
+
+/// Relógio de SLA de uma tarefa/entrega de projeto, com pausa e retomada.
+model ProjectSlaClock {
+  id                 String       @id @default(cuid())
+  project_id         String
+  project_task_id    String?
+  project_task       ProjectTask? @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  project_product_id String?
+  rule_id            String?
+  rule_key           String
+  scope_kind         String
+  target_key         String?
+  amount             Float
+  unit               String
+  anchor             String
+  status             String       @default("aguardando")
+  anchor_at          DateTime?
+  started_at         DateTime?
+  due_at             DateTime?
+  original_due_at    DateTime?
+  paused_minutes     Int          @default(0)
+  completed_at       DateTime?
+  created_at         DateTime     @default(now())
+  updated_at         DateTime     @updatedAt
+
+  pauses ProjectSlaPause[]
+
+  @@index([project_task_id, status])
+  @@index([project_id])
+  @@map("project_sla_clocks")
+}
+
+model ProjectSlaPause {
+  id                  String          @id @default(cuid())
+  clock_id            String
+  clock               ProjectSlaClock @relation(fields: [clock_id], references: [id], onDelete: Cascade)
+  reason_key          String
+  reason_text         String?         @db.Text
+  responsible_party   String          @default("client")
+  responsible_user_id String?
+  started_at          DateTime        @default(now())
+  resolved_at         DateTime?
+  resolved_by         String?
+  minutes             Int?
+
+  @@index([clock_id, resolved_at])
+  @@map("project_sla_pauses")
+}
+
+/// Entregável aprovado de outro produto (ou tarefa) que vira ENTRADA de uma tarefa deste projeto.
+model ProjectTaskInput {
+  id                     String      @id @default(cuid())
+  project_task_id        String
+  project_task           ProjectTask @relation(fields: [project_task_id], references: [id], onDelete: Cascade)
+  source_rule_id         String?
+  source_project_task_id String?
+  source_product_id      String?
+  source_deliverable_key String?
+  label                  String?
+  attachment_id          String?
+  link_url               String?
+  version_number         Int?
+  approval_status        String?
+  approved_at            DateTime?
+  created_at             DateTime    @default(now())
+  updated_at             DateTime    @updatedAt
+
+  @@index([project_task_id])
+  @@map("project_task_inputs")
 }

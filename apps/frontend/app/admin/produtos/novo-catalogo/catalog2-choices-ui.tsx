@@ -7,6 +7,7 @@ import { useState } from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Input } from "@/components/ui/input";
+import { AvailabilityFields, AddonTypeFields } from "./catalog2-universal-ui";
 
 type Act = (fn: () => Promise<any>, ok?: string) => Promise<any>;
 
@@ -124,6 +125,7 @@ export function OptionSettings({ o, va, index, list, readOnly, act }: { o: any; 
       {!isQty && <Check disabled={readOnly} checked={!!o.is_default} onChange={(v) => void put({ is_default: v }, v ? "Opção padrão definida." : "Opção deixou de ser padrão.")} title={(va.selection_type ?? "single") === "multiple" ? "Já vem marcada para o cliente." : "É a opção que já vem escolhida. Só uma por variação."}>Padrão</Check>}
       <Check disabled={readOnly} checked={o.is_active !== false} onChange={(v) => void put({ is_active: v }, v ? "Opção ativada." : "Opção desativada.")} title="Opção inativa não aparece para o cliente e não entra no preço.">Ativa</Check>
       {isQty && <span className="text-[10px] text-slate-500">Efeitos abaixo valem por unidade.</span>}
+      <AvailabilityFields o={o} readOnly={readOnly} act={act} />
       {!readOnly && <span className="ml-auto"><Arrows what="esta opção" disableUp={index === 0} disableDown={index === list.length - 1} onUp={() => void act(() => renumber(list, index, -1, apiClient.updateCatalog2Option.bind(apiClient)))} onDown={() => void act(() => renumber(list, index, 1, apiClient.updateCatalog2Option.bind(apiClient)))} /></span>}
     </div>
   );
@@ -158,6 +160,7 @@ export function AddonSettings({ a, index, list, version, readOnly, act }: { a: a
       <div className="flex flex-wrap items-center gap-2">
         <ChargeScopeFields disabled={readOnly} value={a} onChange={(v) => void put({ charge_scope: v.charge_scope, charge_start_cycle: v.charge_start_cycle ?? 0, charge_end_cycle: v.charge_end_cycle ?? null, charge_quantity: v.charge_quantity ?? null }, "Forma de cobrança salva.")} />
       </div>
+      <AddonTypeFields a={a} version={version} readOnly={readOnly} act={act} />
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="font-semibold">Vínculo:</span>
         <select disabled={readOnly} aria-label="Tarefa ligada ao adicional" className="h-7 max-w-[14rem] rounded-md border border-slate-200 bg-white px-1.5 text-xs dark:border-slate-700 dark:bg-slate-900" value={a.target_task_id ?? ""} onChange={(e) => void put({ target_task_id: e.target.value || null, target_step_id: null }, "Vínculo atualizado.")}>

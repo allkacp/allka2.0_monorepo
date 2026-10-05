@@ -971,6 +971,25 @@ class ApiClient {
   deleteCatalog2Addon(id: string) { return this.c2("DELETE", `/addons/${id}`); }
   addCatalog2AddonEffect(addonId: string, body: Record<string, any>) { return this.c2("POST", `/addons/${addonId}/effects`, body); }
   deleteCatalog2AddonEffect(id: string) { return this.c2("DELETE", `/addon-effects/${id}`); }
+  // universais (2026-10-02): escolhas de adicional, portões de aprovação, prazos/SLA, nome interno, pedidos comerciais
+  addCatalog2AddonChoice(addonId: string, body: Record<string, any>) { return this.c2("POST", `/addons/${addonId}/choices`, body); }
+  updateCatalog2AddonChoice(id: string, body: Record<string, any>) { return this.c2("PUT", `/addon-choices/${id}`, body); }
+  deleteCatalog2AddonChoice(id: string) { return this.c2("DELETE", `/addon-choices/${id}`); }
+  getCatalog2GateOptions() { return this.c2<any>("GET", "/approval-gate-options"); }
+  addCatalog2ApprovalGate(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/approval-gates`, body); }
+  updateCatalog2ApprovalGate(id: string, body: Record<string, any>) { return this.c2("PUT", `/approval-gates/${id}`, body); }
+  deleteCatalog2ApprovalGate(id: string) { return this.c2("DELETE", `/approval-gates/${id}`); }
+  getCatalog2SlaOptions() { return this.c2<any>("GET", "/sla-options"); }
+  addCatalog2SlaRule(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/sla-rules`, body); }
+  updateCatalog2SlaRule(id: string, body: Record<string, any>) { return this.c2("PUT", `/sla-rules/${id}`, body); }
+  deleteCatalog2SlaRule(id: string) { return this.c2("DELETE", `/sla-rules/${id}`); }
+  renameCatalog2ProductInternalName(productId: string, body: { internal_name: string; slug?: string | null; confirm_slug_change?: boolean }) { return this.c2<any>("PATCH", `/products/${productId}/internal-name`, body); }
+  listCatalog2CommercialRequests(params?: { status?: string; search?: string; product_id?: string; requested_by_user_id?: string; assigned_to_user_id?: string }) {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params ?? {})) if (value) query.set(key, value);
+    return this.c2<any>("GET", `/commercial-requests${query.size ? `?${query}` : ""}`);
+  }
+  updateCatalog2CommercialRequest(id: string, body: Record<string, any>) { return this.c2<any>("PATCH", `/commercial-requests/${id}`, body); }
   // tarefas / etapas
   addCatalog2Task(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/tasks`, body); }
   updateCatalog2Task(id: string, body: Record<string, any>) { return this.c2("PUT", `/tasks/${id}`, body); }
@@ -1071,6 +1090,10 @@ class ApiClient {
   createClientCatalog2Quote(product: string, selection: Record<string, any>, period?: string | null) {
     return this.cc("POST", "/quotes", { product, selection, ...(period ? { period } : {}) });
   }
+  createClientCatalog2CommercialRequest(product: string, selection: Record<string, any>, period?: string | null, note?: string) {
+    return this.cc<any>("POST", "/commercial-requests", { product, selection, ...(period ? { period } : {}), ...(note ? { note } : {}) });
+  }
+  listClientCatalog2CommercialRequests() { return this.cc<{ data: any[] }>("GET", "/commercial-requests"); }
   getClientCatalog2Quote(id: string) { return this.cc("GET", `/quotes/${id}`); }
   revalidateClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/revalidate`); }
   renewClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/renew`); }
