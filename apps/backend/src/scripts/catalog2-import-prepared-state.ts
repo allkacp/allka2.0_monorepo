@@ -144,6 +144,10 @@ function loadPackage(packageDir: string): ExportedPackage {
 const CONFIRM_PHRASE = "TRANSFERIR PARA PRODUCAO";
 type TargetEnv = "production" | "development";
 
+// Por padrão um campo divergente do produto bloqueia a transferência. Esta
+// opção só é usada na sincronização local → produção explicitamente pedida.
+const replaceExisting = arg("replace-existing") !== undefined;
+
 function canonicalManifestJSON(value: unknown): string {
   // Ordem estável (já vem ordenado por slug na query) — determinístico pra
   // permitir checksum-lock (mesmo padrão já usado em qa-migration-reconcile.yml:
@@ -333,7 +337,9 @@ async function main() {
         }
       }
       const existingProduct = await dst.catalog2Product.findUnique({ where: { slug: p.slug }, include: { versions: { orderBy: { version_number: "desc" }, take: 1 }, import_origin: true } });
-      line.product = existingProduct ? (existingProduct.delivery_recurrence === p.delivery_recurrence ? "unchanged" : "conflict") : "created";
+      line.product = existingProduct
+        ? (existingProduct.delivery_recurrence === p.delivery_recurrence ? "unchanged" : (replaceExisting ? "updated" : "conflict"))
+        : "created";
       const existingVersion = existingProduct?.versions[0];
       line.version = !existingProduct ? "created" : !existingVersion ? "created" : existingVersion.title === v.title && existingVersion.full_description === v.full_description ? "unchanged" : "updated";
       line.tasks.created = existingProduct ? 0 : v.tasks.length;
@@ -387,10 +393,12 @@ async function main() {
     if (!backupSha256) problems.push("--backup-sha256 é obrigatório para --target-env=production (sha256 de um backup real já validado — auditoria, não verificado automaticamente por este script)");
     if (!expectedManifestSha256) problems.push("--expected-manifest-sha256 é obrigatório para --target-env=production (rode --dry-run primeiro, revise o manifesto, copie o manifest_sha256 impresso)");
     else if (expectedManifestSha256 !== readOnlyManifestHash) problems.push(`--expected-manifest-sha256 ("${expectedManifestSha256}") não bate com o manifesto recalculado agora ("${readOnlyManifestHash}") — o destino pode ter mudado desde a revisão, ou o hash informado está errado. Rode --dry-run de novo e revise o novo manifesto.`);
-    const anyConflict = readOnlyManifest.some((l) => l.product === "conflict" || l.questionnaires.conflict > 0);
+    const anyProductConflict = readOnlyManifest.some((l) => l.product === "conflict");
+    const anyQuestionnaireConflict = readOnlyManifest.some((l) => l.questionnaires.conflict > 0);
     const anyGlobalDivergence = readOnlyManifest.some((l) => l.global_config_divergences.length > 0);
     if (extraProducts.length > 0) problems.push(`o destino ainda contém ${extraProducts.length} produto(s) fora do pacote local — exclua os extras antes de aplicar`);
-    if (anyConflict) problems.push("o manifesto tem pelo menos um conflito (produto ou questionário) — nunca aplicável em produção sem resolver antes, mesmo com confirmação");
+    if (anyProductConflict) problems.push("o manifesto tem conflito de produto; refaça a simulação com --replace-existing somente para uma sincronização local → produção explicitamente autorizada");
+    if (anyQuestionnaireConflict) problems.push("o manifesto tem pelo menos um conflito de questionário — nunca aplicável em produção sem resolver antes, mesmo com confirmação");
     if (anyGlobalDivergence) problems.push("o manifesto tem pelo menos uma divergência de configuração global (ex.: especialidade) — nunca aplicável em produção sem resolver antes, mesmo com confirmação");
     if (problems.length > 0) {
       console.error("\n❌ Portão de produção recusou a transferência:");
