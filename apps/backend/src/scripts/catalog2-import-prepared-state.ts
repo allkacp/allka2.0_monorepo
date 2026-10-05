@@ -478,9 +478,21 @@ async function main() {
         line.product = "created";
       } else {
         productId = existing.id;
-        const changed = existing.delivery_recurrence !== p.delivery_recurrence || existing.internal_name !== p.internal_name;
+        const changed = replaceExisting || existing.delivery_recurrence !== p.delivery_recurrence || existing.internal_name !== p.internal_name;
         if (changed) {
-          await tx.catalog2Product.update({ where: { id: productId }, data: { internal_name: p.internal_name, delivery_recurrence: p.delivery_recurrence } });
+          await tx.catalog2Product.update({
+            where: { id: productId },
+            data: {
+              internal_name: p.internal_name,
+              delivery_recurrence: p.delivery_recurrence,
+              // A sincronização espelho local nunca mantém uma publicação,
+              // categoria ou classificação que já não exista no pacote.
+              status: "em_preparacao",
+              published_version_id: null,
+              pillar_id: null,
+              category_id: null,
+            },
+          });
           line.product = "updated";
         } else {
           line.product = "unchanged";
@@ -498,6 +510,14 @@ async function main() {
         const dstCategory = await tx.catalog2Category.findUnique({ where: { key: p.category.key } });
         if (dstCategory) await tx.catalog2Product.update({ where: { id: productId }, data: { category_id: dstCategory.id } });
         else line.warnings.push(`categoria "${p.category.key}" não existe no destino`);
+      }
+
+      if (replaceExisting) {
+        // Modo espelho: remove exclusivamente a configuração comercial da
+        // versão/produto antes de recriar o que veio do local. Identidade,
+        // sequência, usuário, projetos e cobranças não são tocados.
+        await tx.catalog2ProductFourF.deleteMany({ where: { product_id: productId } });
+        await tx.catalog2ProductPeriod.deleteMany({ where: { product_id: productId } });
       }
 
       // four_f (liga por key, idempotente — nunca duplica o link)
@@ -533,8 +553,22 @@ async function main() {
         line.version = "created";
       } else {
         versionId = existingVersion.id;
-        const changed = existingVersion.title !== v.title || existingVersion.full_description !== v.full_description || existingVersion.summary !== v.summary;
+        const changed = replaceExisting || existingVersion.title !== v.title || existingVersion.full_description !== v.full_description || existingVersion.summary !== v.summary;
         if (changed) { await tx.catalog2ProductVersion.update({ where: { id: versionId }, data: versionData }); line.version = "updated"; }
+      }
+
+      if (replaceExisting && existingVersion) {
+        // Todas as relações abaixo pertencem à versão em rascunho. O banco
+        // protege qualquer vínculo operacional incompatível e, nesse caso,
+        // toda a transação do produto é desfeita sem alteração parcial.
+        await tx.catalog2VersionAccess.deleteMany({ where: { version_id: versionId } });
+        await tx.catalog2Task.deleteMany({ where: { version_id: versionId } });
+        await tx.catalog2Variation.deleteMany({ where: { version_id: versionId } });
+        await tx.catalog2Addon.deleteMany({ where: { version_id: versionId } });
+        await tx.catalog2Condition.deleteMany({ where: { version_id: versionId } });
+        await tx.catalog2ConnectionRequirement.deleteMany({ where: { version_id: versionId } });
+        await tx.catalog2ApprovalGate.deleteMany({ where: { version_id: versionId } });
+        await tx.catalog2SlaRule.deleteMany({ where: { version_id: versionId } });
       }
 
       // acessos externos exigidos pela versão (nunca guarda senha)
@@ -714,6 +748,8 @@ async function main() {
         };
         if (!existingPv) { await tx.catalog2ProvisionalPreview.create({ data: { product_id: productId, ...pvData } }); line.provisional_preview = "created"; }
         else { await tx.catalog2ProvisionalPreview.update({ where: { product_id: productId }, data: pvData }); line.provisional_preview = "unchanged"; }
+      } else if (replaceExisting) {
+        await tx.catalog2ProvisionalPreview.deleteMany({ where: { product_id: productId } });
       }
 
       // procedência da importação (metadado — nunca decide sozinho, só preserva o rastro)
