@@ -2,6 +2,13 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
+## Envio de produtos 2026-10-04 (local → allka.store)
+Usuário autorizou a substituição do cadastro de teste do servidor pelo estado atual LOCAL. Pacote cifrado exportado: **36 produtos / 31 imagens**. Simulação conferida antes do apply: destino=36, esperado=36, extras=0 e numeração divergente=0.
+
+**Aplicado:** produtos 1–36 sincronizados pelo slug e com a numeração local preservada; produto 1 levou as 8 tarefas cadastradas localmente; os demais permanecem em preparação, sem categoria/tarefas/preenchimento, prontos para continuação online. Nenhuma versão foi publicada ou ativada.
+
+**Backup antes da gravação:** `allka-before-catalog2-apply-20261005T012859Z.sql.gz` (SHA-256 registrado no log seguro do deploy). Pacote, release, chave de transferência e artefatos temporários foram removidos após a conferência.
+
 ## deploy-2026-10-04-1 (commit 96bbbfe) — no ar em allka.store / api.allka.store
 **Subiu:** Backend, frontend e as migrations aditivas da estrutura universal v2, fluxo comercial, mídia opcional de variações e adicionais. Inclui os ajustes compactos do editor de produtos e as abas de revisão/publicação.
 **Conferido:** deploy de Backend e Frontend concluídos com sucesso; `https://api.allka.store/api/health` e `https://allka.store` responderam 200.
