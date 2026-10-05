@@ -40,9 +40,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     env:
-      RELEASE_TAG: catalog2-transfer-2026-09-29
-      ASSET_NAME: catalog2-prepared-20260929.enc
-      PACKAGE_SHA256: 80532e638fd957541c51e653c025a35ed57df16fbc2aae604c90501d583f2f90
+      RELEASE_TAG: catalog2-transfer-2026-10-04
+      ASSET_NAME: catalog2-prepared-20261004.enc
+      PACKAGE_SHA256: 84945b7d3160f56067218e7b50a976801e89a3e8d8d327deff9d92ea12e8af49
     steps:
       - name: Validate controlled inputs and secrets
         shell: bash
@@ -102,9 +102,9 @@ jobs:
           const ciphertext = input.subarray(magic.length + 28);
           const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
           decipher.setAuthTag(tag);
-          fs.writeFileSync('.transfer/catalog2-prepared-20260917.zip', Buffer.concat([decipher.update(ciphertext), decipher.final()]), { mode: 0o600 });
+          fs.writeFileSync('.transfer/catalog2-prepared-20261004.zip', Buffer.concat([decipher.update(ciphertext), decipher.final()]), { mode: 0o600 });
           NODE
-          unzip -q .transfer/catalog2-prepared-20260917.zip -d .transfer
+          unzip -q .transfer/catalog2-prepared-20261004.zip -d .transfer
           test -f .transfer/catalog2-package-production-final/package.json
           actual="$(sha256sum .transfer/catalog2-package-production-final/package.json | awk '{print $1}')"
           test "$actual" = "$PACKAGE_SHA256" || { echo "::error::Checksum do pacote divergente; nada será enviado ao VPS."; exit 1; }
