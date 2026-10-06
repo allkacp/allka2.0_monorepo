@@ -1,0 +1,432 @@
+{
+  "atualizado_em": "2026-10-06",
+  "como_retomar": [
+    "Abra o ChatGPT (Codex) na pasta do projeto e diga: \"Leia o documento compartilhado entre Claude e você (documentos/Registro de Continuidade Produtos Allka.docx) e continue.\"",
+    "O Claude atualiza este documento a cada bloco concluído. O texto-fonte fica em documentos/registro-continuidade.json; o .docx e o .md são gerados com: node scripts/create_continuity_document.cjs",
+    "Regras fixas: trabalhar só no ambiente local; não publicar produto; não fazer deploy, push ou envio para QA online; fazer backup antes de alterações de dados; nunca preencher produtos com dados fictícios (os produtos ficam só com o título até o Vinicius cadastrar).",
+    "Ao terminar qualquer tarefa técnica, fechar com um resumo em linguagem simples do que deu e do que não deu certo, e devolver a tabela de situação abaixo."
+  ],
+  "estado_atual": [
+    "Os produtos do catálogo ficam somente com seus títulos para cadastro real item a item (o Produto ID 1 está recebendo a tarefa de teste cadastrada pelo Vinicius).",
+    "Os 36 produtos oficiais foram marcados como PRODUTO INDIVIDUAL (uma tarefa principal; o resto são etapas). Combos/compostos podem ter várias tarefas (a fixture de QA nº 40 continua como composta).",
+    "Nada foi publicado. Ambiente local apenas. Último deploy: 2026-10-04 (estrutura universal v2 + sincronização do catálogo).",
+    "Backup completo mais recente: backups/universal2-20261002-1251/ (restauração validada)."
+  ],
+  "decisoes": [
+    [
+      "Edição de tarefa",
+      "A ação Editar tarefa só aparece depois de liberar o editor geral pelo botão Editar."
+    ],
+    [
+      "Horas",
+      "A tarefa não tem tempo próprio. Todas as horas ficam nas etapas; a tarefa mostra a soma automática."
+    ],
+    [
+      "Preço",
+      "O preço comercial é calculado pelas etapas e especialidades, com taxas e margem. O cartão da tarefa mostra o custo estimado (horas × valor/hora, sem taxas e margem); cada etapa também mostra o seu."
+    ],
+    [
+      "Precificação",
+      "Especialidades, conhecimentos humanos, perfis e custos de IA ficam na tela global de Precificação."
+    ],
+    [
+      "Retorno para a tarefa",
+      "Antes de abrir a Precificação o rascunho é salvo; ao salvar volta para a mesma tarefa. O X dentro do cabeçalho fecha sem salvar e preserva o rascunho."
+    ],
+    [
+      "Accordions",
+      "Só cards principais recolhem; ao abrir um card os campos internos ficam visíveis (sem segundo nível)."
+    ],
+    [
+      "Nome interno",
+      "Será removido no futuro (reunião); por enquanto continua editável com histórico."
+    ],
+    [
+      "Uma tarefa por produto (reunião 05/10)",
+      "Produto individual tem UMA tarefa principal e o restante são etapas. Várias tarefas só existem em combos, que serão montados na TELA DE COMBOS juntando produtos prontos (não por botão no cadastro do produto). Tarefas condicionais ligadas a adicionais não contam como principal."
+    ],
+    [
+      "Checklist",
+      "O checklist é da ETAPA, com três tipos: execução, aprovação e qualificação (o de qualificação/aprovação é o que o Vinicius quer usar). A lista de etapas da tarefa também funciona como o checklist da tarefa."
+    ],
+    [
+      "Execução por etapa — respostas do Vinicius (05/10)",
+      "1) O CLIENTE APROVA CADA ETAPA, depois da qualificação, exceto etapas INTERNAS (ex.: validação de briefing/acessos): essas o cliente não vê nem aprova; só vê que está em execução. Se a validação interna achar problema, dá para ENVIAR AO CLIENTE (\"está errado isso aqui\") e aí ele vê. 2) PAGAMENTO CONFIGURÁVEL no cadastro do produto/tarefa: (a) o nômade recebe ao concluir/aprovar cada etapa, ou (b) o crédito de cada etapa fica BLOQUEADO e é liberado na carteira só quando a última etapa terminar. Deve funcionar para qualquer produto (uns marcam, outros não). 3) Prazo de aceite do nômade preferido: 2 horas, CONFIGURÁVEL. Também: especialidades IA/híbridas distintas; \"humano ou IA\" = a agência escolhe na contratação."
+    ]
+  ],
+  "checklist_titulo": "Situação dos itens da reunião de 05/10/2026",
+  "checklist": [
+    [
+      "A1",
+      "Uma tarefa principal por produto; só combos têm várias",
+      "FEITO",
+      "Campo task_structure no produto (single/multiple); backend recusa 2ª tarefa; 36 produtos marcados como individuais; teste catalog2-task-structure 5/5."
+    ],
+    [
+      "A2",
+      "Remover o botão Adicionar tarefa; aba única Tarefa e etapas",
+      "FEITO",
+      "Em produto individual a aba se chama \"Tarefa e etapas\", a tarefa já abre mostrando as etapas, e o botão de adicionar some depois que existe a tarefa principal. O botão \"tornar produto composto\" foi REMOVIDO (combos serão montados na tela de Combos, juntando produtos prontos)."
+    ],
+    [
+      "A3",
+      "Toda tarefa precisa de pelo menos 1 etapa",
+      "FEITO",
+      "Validação de publicação já existia; mensagem atualizada."
+    ],
+    [
+      "A4",
+      "Checklist da etapa (execução, aprovação, qualificação)",
+      "FEITO",
+      "Cada etapa tem o botão \"Checklist (N)\" que abre uma janelinha para cadastrar itens em 3 abas (Execução, Aprovação, Qualificação), com obrigatório sim/não e ordem. Guardado em ops.checklist da etapa. A lista de etapas também aparece como \"Checklist da tarefa\". Ainda NÃO aparece na execução do projeto (próximo passo)."
+    ],
+    [
+      "A4b",
+      "Layout da edição de etapa (conforme a arte do Vinicius de 05/10)",
+      "FEITO (aguardando conferência visual)",
+      "Cabeçalho da etapa com conector lateral e \"ETAPA N | nome\" + custo estimado; grade fixa e sempre aberta: (1) O que é + (2) Quem faz e quanto tempo [2x2]; (3) Quando termina + (4) Checklist, orientações e evidência (badge de itens, Gerenciar checklist, orientações, toggle evidência obrigatória, responsável pela evidência, exemplo); (5) Conexões e acessos em largura total (toggle, estado, botão Selecionar acessos em janelinha). Controles de 36px, divisões suaves. Os seletores de visibilidade por campo (executor/líder/cliente) saíram da tela; valores já gravados são preservados."
+    ],
+    [
+      "A4c",
+      "Especialidade filtrada pelo \"Quem executa\" (humano só humanas; IA só IA; humano ou IA só híbridas)",
+      "FEITO (aguardando conferência visual)",
+      "Nova coluna execution_kind na especialidade (padrão humano: as existentes continuam humanas). Tipo editável na Precificação e na criação. Na etapa, na nova etapa e na tarefa o seletor mostra só o tipo certo e limpa a especialidade ao trocar o tipo. Criadas 8 especialidades DE TESTE (prefixo [TESTE], valor/hora de teste, o Vinicius vai trocar pelas reais e excluir): 4 de IA (Redação, Imagem e Design, Análise de Dados, Atendimento) e 4 de Humano ou IA (Redator, Designer, Analista de Dados, Gestor de Tráfego). Botão de excluir na Precificação (só se nenhuma tarefa/etapa usa; se só modelos globais citam, pede confirmação extra e os modelos ficam sem especialidade). O backend não bloqueia combinação errada (para não quebrar dados antigos)."
+    ],
+    [
+      "A5",
+      "Botão Editar nas tarefas cadastradas",
+      "FEITO",
+      "Janela \"Selecionar etapa/tarefa existente\" (e outras janelas largas do editor: acessos, checklist, modelos) estava cortada: a largura do componente base (32 rem) vencia a largura pedida. Corrigido para usar até 95% da tela com o máximo desejado."
+    ],
+    [
+      "A6",
+      "Horas só nas etapas; tarefa soma sozinha",
+      "FEITO",
+      "Feito na sessão anterior."
+    ],
+    [
+      "A7",
+      "Valor de cada etapa e total acumulado na tarefa",
+      "FEITO",
+      "Cada etapa mostra o custo estimado; a tarefa mostra \"Custo total estimado\"."
+    ],
+    [
+      "A8",
+      "Etapas em paralelo e dependências (A e B juntas, C só depois das duas; só depois da 3...)",
+      "FEITO (aguardando conferência visual)",
+      "O fluxo agora se configura DIRETO em cada etapa (linha \"Começa\": depois da anterior / no início / junto com a anterior / depois de etapas específicas com caixas por etapa; linha \"Executor\": novo / mesmo / preferir o mesmo / nunca o mesmo de outra etapa). Salva ao escolher. O bloco \"Fluxo das etapas\" só mostra o resultado: Fase 1, 2…, quais etapas rodam em cada fase, o que cada uma espera, quem executa e \"Libera depois\" (quais etapas abrem quando ela termina). Botão \"Editar fluxo\" removido. A aba \"Tarefa e etapas\" já fica aberta e a faixa \"Produto individual: uma tarefa principal\" foi para a mesma linha do botão da aba, subindo as tarefas."
+    ],
+    [
+      "A8b",
+      "Execução por ETAPA (a etapa é a mini tarefa do nômade) — visão geral",
+      "FEITO (aguardando conferência)",
+      "Execução por ETAPA completa: modo por tarefa, qualificação/aprovação por etapa, etapa interna, painel de acompanhamento, executor por etapa (preferir/nunca o mesmo/mesmo), pagamento por etapa ou no fim, prazos em horas de aprovação e refação. Padrão antigo preservado quando o modo está desligado."
+    ],
+    [
+      "A8b-1",
+      "Fase 1: quem recebe a etapa (nômade / líder da área / líder específico / equipe interna)",
+      "FEITO (aguardando conferência visual)",
+      "Campo \"Quem recebe a etapa\" na edição da etapa. Líder da área = o líder da área com menos tarefas abertas (balanceado, não sorteio). Líder específico = sempre o escolhido (a etapa já nasce atribuída e começa com ele). Equipe interna começa sozinha. Valida líder ativo na publicação. Testes: integração 7/7."
+    ],
+    [
+      "A8b-2",
+      "Fase 2: por etapa — qualificação do líder, aprovação do cliente (exceto etapa interna), ajuste com mesmo executor/prazo, liberação da próxima (automática ou manual)",
+      "FEITO no backend e no cadastro (aguardando conferência; telas no projeto = fase 5)",
+      "Cadastro: na tarefa, caixa \"execução por etapa\"; na etapa (só nesse modo): etapa interna, passa pela qualificação, libera a próxima automaticamente. Projeto: etapa entregue vai para EM_QUALIFICACAO -> EM_APROVACAO_CLIENTE -> CONCLUIDA; reprovar volta ao MESMO executor com o MESMO prazo e conta rodada; etapa interna nunca vai ao cliente; líder pode avisar o cliente de problema numa etapa interna (ela passa a ficar visível); liberação manual da próxima; ao aprovar a última etapa a tarefa fecha direto (sem repetir o aceite). Rotas: POST /api/project-tasks/:id/etapas/:stageId/decisao | liberar-proxima | avisar-cliente | GET historico. Migração 20261005200000_stage_execution. Testes: integração 6/6. AINDA NÃO há botões nas telas do projeto para qualificar/aprovar (fase 5). Pagamento segue por tarefa (fase 4). CORREÇÃO (Vinicius não achou as opções): a caixa \"execução por etapa\" agora SALVA NA HORA (antes só mudava um rascunho) e as 3 opções (interna / qualificação / libera a próxima) aparecem direto na linha de cada etapa, sem abrir a edição."
+    ],
+    [
+      "A8b-3",
+      "Fase 3: oferta e rodízio por etapa; preferir o mesmo nômade (com prazo de aceite) ou NUNCA o mesmo; depois rodízio",
+      "FEITO (aguardando conferência)",
+      "Executor por etapa: no cadastro do fluxo, \"Quem executa\" agora tem 4 opções — novo automático, mesmo executor de outra etapa, PREFERIR o mesmo (reserva a etapa a ele pelo prazo de aceite, padrão 2 h configurável em Encaminhamento de Nômades e por etapa) e NUNCA o mesmo. Na execução por etapa, a etapa seguinte não herda mais calada o nômade da tarefa: fica na vaga (mural de etapas) para quem tiver afinidade; o preferido é avisado e só ele aceita até o prazo; o excluído não vê nem aceita. LIMITE HONESTO: a distribuição das etapas seguintes é pelo mural (primeiro que aceita), não pelo rodízio sequencial de ofertas da tarefa — o rodízio continua valendo para o primeiro nômade. Testes PR01–PR05."
+    ],
+    [
+      "A8b-4",
+      "Fase 4: pagamento do nômade por etapa — modo configurável (paga a cada etapa OU crédito bloqueado até a última etapa)",
+      "FEITO (aguardando conferência)",
+      "Pagamento do nômade por etapa configurável por tarefa do produto (campo \"Pagamento do nômade\" quando a execução por etapa está ligada): \"A cada etapa aprovada\" (paga na hora, uma vez por etapa) ou \"Só no fim da tarefa\" (padrão: créditos retidos até o aceite final; etapas feitas por outro nômade pagam a ele). Migração 20261006140000. Testes PY01–PY03."
+    ],
+    [
+      "A8b-5",
+      "Fase 5: telas do nômade (minhas etapas), do líder (qualificar) e da agência (aprovar)",
+      "FEITO (aguardando conferência)",
+      "Painel \"Andamento da tarefa por etapa\" no detalhe da tarefa (líder, cliente/agência, administração): status de cada etapa, aprovar/pedir ajuste/comentar, liberar a próxima, avisar o cliente (etapa interna), portões de aprovação, prazos (SLA) com pausar/retomar (motivo e responsável) e entradas de outros produtos. Os botões vêm do servidor conforme o perfil. A tela do nômade usa a lista que já existe."
+    ],
+    [
+      "A9",
+      "Todos os profissionais veem o questionário e as entregas das etapas anteriores",
+      "FEITO",
+      "O nômade da tarefa (ou de qualquer etapa dela) agora lê o questionário e as respostas do cliente (somente leitura) na tela Minhas tarefas, ao lado das orientações e dos entregáveis; nômade sem ligação com a tarefa recebe 404; o nômade não grava respostas do cliente. Teste BR01."
+    ],
+    [
+      "A10",
+      "Reutilizar etapas entre tarefas",
+      "ADIADO",
+      "Reunião: discutir depois."
+    ],
+    [
+      "B1",
+      "Prazos em horas (úteis/corridas) pela soma das etapas, com conversão em dias",
+      "FEITO (aguardando conferência)",
+      "Prazo comercial base informado em HORAS, com o reflexo em dias sobre 24 h = 1 dia, com fração (5 h = 0,21 dia; 24 h = 1 dia; 36 h = 1,5 dia). O sistema guarda o inteiro arredondado para cima (mínimo 1) para o resto do cálculo. Salva ao sair do campo ou Enter. Dado antigo em dias aparece como dias x 24 h. Teste AU07."
+    ],
+    [
+      "B2",
+      "Expediente, horas úteis e feriados nas configurações gerais",
+      "FEITO",
+      "Calendário de trabalho da plataforma: Configurações > aba \"Calendário de trabalho\" (dias úteis, início/fim do expediente, feriados). Todos os prazos úteis (SLA) usam esse calendário; sem cadastro vale o padrão antigo (seg-sex, 09-17). Migração 20261006090000_work_calendar. Testes: unitários 4 + integração 3."
+    ],
+    [
+      "B3",
+      "Entrega emergencial por etapa (redução em horas + custo extra fixo ou %)",
+      "FEITO (aguardando conferência)",
+      "Entrega emergencial: na aba Classificação e opções > Prazos e condições, liga \"Oferecer entrega emergencial\" e, para cada etapa, informa horas a reduzir + adicional (valor fixo R$ ou % do preço da etapa). O sistema recalcula o prazo (caminho mais longo das etapas, com as reduções) e o preço final; o cartão mostra o resultado (ex.: de 16 h para 8 h, + R$ 150). O cliente vê a caixa \"Entrega emergencial\" no produto; a escolha entra na cotação (outra configuração, outro preço). Publicar com a opção ligada sem nenhuma etapa configurada é bloqueado. Migração 20261006100000. Testes: unitário 5, integração EM01–EM04 (4/4), interface 2."
+    ],
+    [
+      "B4",
+      "Refação e aprovação por etapa (prazos em horas)",
+      "FEITO (aguardando conferência)",
+      "Prazo de refação por etapa, em horas úteis (campo \"prazo de refação\" na linha da etapa). Quando o cliente/líder reprova na execução por etapa, o executor recebe novo prazo de N horas úteis a partir da reprovação; sem configurar, mantém o prazo anterior. Migração 20261006120000. Teste DH01–DH02."
+    ],
+    [
+      "B5",
+      "Configuração de refação/aprovação ligada ao modelo da etapa",
+      "FEITO (aguardando conferência)",
+      "Prazo de aprovação do cliente por etapa, em horas úteis (campo \"prazo de aprovação do cliente\" na linha da etapa). Ao entrar em aprovação, a etapa ganha o prazo calculado pelo calendário de trabalho; sem configurar, vale o prazo antigo. Os prazos ficam na etapa do produto (copiados ao clonar/duplicar/exportar). Teste DH02."
+    ],
+    [
+      "B6",
+      "Mover prazos e condições para a aba de classificações e opções",
+      "FEITO",
+      "\"Prazos e condições\" saiu da aba Entrega e foi para a aba Classificação e opções (4ª subaba)."
+    ],
+    [
+      "C1",
+      "Separar implementação inicial de modalidade de contratação",
+      "FEITO",
+      "Modalidade (Avulso / Mensal) e Implementação inicial agora são duas caixas separadas; o resumo diz \"Modalidade: Avulso e Mensal · com implementação inicial no 1º mês\"."
+    ],
+    [
+      "C2",
+      "Cabeçalho do produto com nome completo visível",
+      "FEITO",
+      "O nome do produto no cabeçalho quebra linha e aparece completo (já estava corrigido no código)."
+    ],
+    [
+      "C3",
+      "Interface de acessos mais simples",
+      "FEITO (aguardando conferência visual)",
+      "Catálogo de acessos com layout novo: janela larga com cabeçalho fixo (busca, filtros Todos/Disponíveis/No produto/Inativos e botão Criar novo tipo) e cartões em 3 colunas com inicial/cor do provedor, descrição curta, formas de liberar e campos que o cliente informa em etiquetas (API destacada, segredo com cadeado), permissões, botão Adicionar e ícones Editar/Excluir. Onde achar: Produto > aba Entrega (passo 2) > cartão \"Acessos necessários\" > botão \"+ Adicionar acesso\"."
+    ],
+    [
+      "C4",
+      "Botões de IA só habilitam com 5+ palavras (com limite de caracteres/palavras)",
+      "FEITO",
+      "Botão de IA: não exige mais 5 palavras. Basta o nome do produto (título comercial) ou algum texto no campo. Com pouco texto a IA pesquisa na internet e escreve o campo do zero. Limites: mínimo e máximo de palavras e de caracteres (mínimo maior que máximo é recusado). Teste TS09."
+    ],
+    [
+      "C5",
+      "Itens incluídos/não incluídos: formulário fechava ao digitar; subcampos sempre abertos",
+      "FEITO",
+      "Causa do formulário que fechava ao digitar: os campos de lista eram recriados a cada tecla (componente criado dentro do render). Corrigido; os blocos Incluídos/Não incluídos e Requisitos/Entregas ficam sempre abertos. Teste de interface incluído."
+    ],
+    [
+      "C6",
+      "Cartão principal aberto mostra todos os campos internos",
+      "FEITO",
+      "Cartão principal aberto mostra todos os campos internos, sem segundo nível de gaveta (confirmado no código e pelo teste do C5)."
+    ],
+    [
+      "C7",
+      "Visibilidade do produto: todos / Company / agências (com nível do parceiro) / interno",
+      "FEITO (aguardando conferência)",
+      "Quem pode ver o produto, em lista de marcação: Todos, ou qualquer combinação de Company / Agency (SOMENTE agências comuns — as partner não veem) / Agency Partner (só agências partner ativas), ou Somente equipe interna (exclusivo). Para liberar a partner, marque Agency Partner. Vale em lista, detalhe, cotação, cesta, pedido comercial e IA; administração e líderes sempre veem. Testes AU01–AU06."
+    ],
+    [
+      "C8",
+      "Remover o campo nome interno",
+      "FEITO",
+      "Nome interno removido: o nome do produto é um só. A caixa de nome interno saiu da tela, o selo \"interno: ...\" some do detalhe, a criação pede apenas \"Nome do produto\", e ao salvar o título comercial o nome interno é atualizado sozinho (o endereço/slug não muda). Teste AU06."
+    ],
+    [
+      "D1",
+      "Módulo PLAC (13 passos automáticos ao fechar contrato)",
+      "FEITO (1ª versão, aguardando conferência)",
+      "PLAC — 13 passos: quando o PROJETO É PAGO, abre sozinho o cronograma de 13 passos (fonte: Imersão Partner Allka, páginas 19–23): Agendamento de Briefing, Reunião e Elaboração do Briefing, Criação e Detalhamento do PTT, Apresentação do PTT, Handover e Gravação, Lançamento das Tarefas Iniciais, Reserva de Agenda, Qualificação e Envio de Aprovações, Crítica Consultiva de Entregas, Relatório Mensal de Status, Agendamento do Próximo PTT, Análise e Criação do Novo PT com UPSELL, Reunião de Resultados e UPSELL. Configuração em Configurações > aba \"PLAC (13 passos)\": ordem, nome, descrição, quem faz (VC/AC/outro), fase, prazo D+N dias contado do pagamento ou de outro passo, horas, custo/hora, repetição (informativa), PARA QUEM VALE (Todos / Company / Agency sem partner / Agency Partner — mesma marcação do produto), classificação 4F (opcional, vazio = todas), responsáveis internos de cobrança (admin/líderes, um ou mais por passo), ativo, novo passo e excluir. Prazos iniciais são SUGESTÃO editável. No projeto: aba \"13 Passos (PLAC)\" com progresso, prazo, atraso, concluir/iniciar/dispensar; a administração ajusta prazo e cobrança por projeto e pode gerar os passos de projeto antigo. Passo vencido avisa os responsáveis internos uma vez (varredura a cada 15 min). Repetição mensal NÃO gera novas ocorrências ainda (regra a melhorar depois, como combinado). Migração 20261006180000. Testes PL01–PL05 e interface."
+    ],
+    [
+      "D2",
+      "Tarefas internas / gestão para agências",
+      "FEITO (1ª versão, aguardando conferência)",
+      "Tarefas internas da conta (agência ou empresa): quadro A fazer / Fazendo / Bloqueada / Feita (arrastar ou \"Mover para\"), prioridade, prazo, responsável da mesma conta, checklist, comentários, busca e \"só as minhas\", resumo (abertas, atrasadas, vencem em 3 dias, minhas). Qualquer membro da conta vê e edita; só quem criou (ou a administração) exclui; outra conta não vê. Administração: Projetos e Tarefas > Tarefas internas — define quem pode usar (Company / Agency sem partner / Agency Partner; padrão agências comum e partner) e se os passos PLAC viram tarefa interna sozinhos; vê qualquer conta. Encaixes: no projeto, cada passo PLAC tem \"Criar tarefa interna\" (concluir lá conclui aqui e vice-versa); aviso de atraso ao responsável; menu só aparece para quem foi liberado. Migração 20261006190000. Testes IT01–IT05 e interface. FALTA: widget no dashboard da agência (o dashboard é um sistema de widgets grande)."
+    ],
+    [
+      "D3",
+      "Navegador interno seguro e integrações por API",
+      "FEITO COM NAVEGADOR REAL (Chromium no servidor) — falta teste com conta real e escolha de servidor",
+      "Navegador seguro: perfis de conta guardada com CONSENTIMENTO registrado, autorização por TEMPO (quem, por quantos minutos, motivo; até 14 dias), uma sessão por perfil, tempo máximo por sessão, expiração por prazo e por inatividade (varredura a cada minuto), dono ou administração derrubam sessão, revogar autorização derruba, revogar a conta apaga a sessão guardada e cancela tudo, auditoria de cada evento, cofre cifrado para o estado da sessão (nunca devolvido por API), login inicial pelo dono. Telas: Navegador seguro no menu de agência, empresa, nômade, líder e administração (sessões ativas e derrubar). Novo método de acesso \"Navegador seguro da Allka\" nos tipos de acesso/conexões. O navegador exibido hoje é uma DEMONSTRAÇÃO (driver demo, com marca d'água, contador e bloqueio de copiar/colar). O driver REAL (contêiner Chromium acessível por navegador) existe só como esqueleto DESLIGADO (SECURE_BROWSER_DRIVER=docker + SECURE_BROWSER_DOCKER_IMAGE) e NÃO foi validado: falta servidor com Docker, imagem, injeção da sessão guardada e teste com conta real (riscos: bloqueio por login compartilhado, 2FA, custo). Migração 20261006200000. Testes SB01–SB04 e interface. NAVEGADOR REAL: serviço isolado browser-runner (Chromium/Playwright em contêiner, sem porta pública) transmite a tela por WebSocket; o usuário só envia mouse/teclado e vê a imagem (sem HTML, cookie ou senha); copiar/colar/atalhos bloqueados; marca d'água com identificação; bloqueio de rede interna (SSRF), sem downloads/permissões; uma aba só. Login inicial do dono guarda a sessão (cookies) CIFRADA no cofre; quem foi autorizado abre já logado, por tempo; ao derrubar/expirar a conexão fecha em até 3 s e a sessão é renovada no cofre. Riscos: Google/Meta podem pedir verificação ou bloquear login vindo do servidor; 2FA no login inicial; custo de servidor (~0,5–1 GB RAM por sessão aberta). Testes SBR00/SBR01 com Chromium real."
+    ],
+    [
+      "A11",
+      "Checklist e orientações da etapa aparecem na execução do projeto",
+      "FEITO (aguardando conferência)",
+      "Nas Orientações da tarefa (nômade, líder, cliente) cada etapa mostra os checklists: execução (quem executa e líder), qualificação (líder/equipe) e aprovação (todos). Teste unitário CK04."
+    ],
+    [
+      "A12",
+      "Pacotes de exportação/importação levam as estruturas novas",
+      "PLANO DEFINIDO (executar no final)",
+      "Decisão do Vinicius (2026-10-06): no final TUDO o que está no local sobe para o online como espelho completo (mesma configuração e nomes), apagando o que existir no online. Inclui os tipos de acesso criados (ainda NÃO estão no pacote: precisa incluir) e o modelo PLAC (também precisa entrar no pacote). Fazer com backup, simulação (dry-run) e conferência antes de aplicar."
+    ],
+    [
+      "A13",
+      "IA dos campos: basta o nome do produto; mínimo e máximo de palavras/caracteres",
+      "FEITO (aguardando conferência)",
+      "Ver C4: mínimo e máximo de palavras/caracteres no popover da IA de cada campo; só o nome do produto já libera a IA."
+    ],
+    [
+      "A14",
+      "Ícone de informação (i) em cada campo do editor de produto",
+      "FEITO (aguardando conferência visual)",
+      "Cada campo/legenda do editor de produto ganha um ícone \"i\"; ao passar o mouse aparece o que o campo é exatamente (mais de 170 campos descritos em field-help.ts). Funciona sobre as telas existentes e reaparece quando a tela muda. Campos novos devem entrar no dicionário field-help.ts. Teste de interface incluído."
+    ],
+    [
+      "A15",
+      "Histórico real de cada etapa (automático) e aprovações/prazos dentro da própria etapa",
+      "FEITO (aguardando conferência visual)",
+      "A aba \"Visão geral: aprovações e prazos\" foi REMOVIDA. Aprovações e prazos de cada etapa ficam dentro da etapa; as aprovações e prazos GERAIS do produto (implantação, ciclo recorrente, relatório, publicação) foram para o fim da aba \"Prazos e condições\" (Classificação e opções). Histórico real da etapa segue dentro da etapa."
+    ]
+  ],
+  "validacao_pendente": [
+    "Teste manual na tarefa \"Teste\" do Produto ID 1: etapas de 2 h (Gestor de Tráfego R$100/h) e 1,5 h (Redator R$80/h) -> total 3,5 h e custo estimado R$ 320,00 (etapas R$ 200,00 e R$ 120,00).",
+    "Conferir: aba \"Tarefa e etapas\" (singular), tarefa já aberta com as etapas, sem botão de produto composto.",
+    "Em uma etapa: clicar em \"Checklist (N)\", cadastrar itens nas abas Execução/Aprovação/Qualificação, salvar e reabrir.",
+    "Editar uma etapa e avaliar o novo layout (5 blocos); mandar a arte desejada para refinar.",
+    "Editar tarefa -> Precificação -> salvar valor -> volta para a mesma tarefa; X sem salvar preserva o rascunho.",
+    "A8: em uma tarefa com 4+ etapas, abrir \"Fluxo das etapas\", colocar 1, 2 e 3 em \"Junto com o início\", 4 \"Depois de etapas específicas\" (só a 3), 5 depois de todas; conferir o resumo (ordem e duração mínima) e salvar; escolher \"Mesmo executor de outra etapa\".",
+    "Conferir a edição de etapa contra a arte (grade 1-2 / 3-4 / 5), o botão Gerenciar checklist e o Selecionar acessos."
+  ],
+  "proximo_passo": "Conferência da fase 2 (cadastro) pelo Vinicius. Seguir com fase 3 (oferta/rodízio por etapa + preferir/nunca o mesmo nômade, aceite 2h configurável) ou fase 5 (telas do projeto) — Vinicius decide a ordem. Itens rápidos pendentes: C2, C4, C1, C5/C6.",
+  "historico": [
+    [
+      "2026-10-02",
+      "13 correções universais (estrutura universal v2) implementadas e testadas; commitadas e implantadas em 2026-10-04."
+    ],
+    [
+      "2026-10-05",
+      "Reunião de cadastro de produtos: lista de decisões convertida em checklist. Feito o bloco A (A1-A4, A7): produto individual × composto, tarefa única, checklist da tarefa, custo por etapa."
+    ],
+    [
+      "2026-10-05 (2)",
+      "Ajustes pedidos pelo Vinicius: aba Tarefa e etapas (singular) com tarefa aberta, botão de composto removido, checklist por etapa em janelinha, novo layout da edição de etapa."
+    ],
+    [
+      "2026-10-05 (3)",
+      "A8: fluxo das etapas (paralelo, dependências específicas, regra de executor). Migração 20261005140000_step_flow; lib step-flow.ts; rota PUT /api/admin/catalog2/tasks/:id/steps/flow; engine abre etapas liberadas; editor Fluxo das etapas. Testes: unit 6, integração 4, interface 4."
+    ],
+    [
+      "2026-10-05 (4)",
+      "Layout da edição de etapa refeito conforme a arte; novo campo opcional ops.evidence_owner (responsável pela evidência); acessos da etapa em linha compacta com janelinha."
+    ],
+    [
+      "2026-10-05 (5)",
+      "A8b entendido e planejado (execução por etapa). Nada implementado ainda; aguardando confirmação das perguntas (cliente aprova por etapa ou no fim? quando paga o nômade? prazo de aceite)."
+    ],
+    [
+      "2026-10-05 (6)",
+      "A8b fase 1: quem recebe a etapa. Migração 20261005160000_step_executor_kind; campos executor_kind/leader_mode/leader_user_id; engine usa o líder específico; UI na edição da etapa."
+    ],
+    [
+      "2026-10-05 (7)",
+      "Especialidades por tipo (humano/IA/híbrido) filtradas pelo Quem executa; respostas do Vinicius ao A8b registradas (cliente aprova cada etapa exceto internas; pagamento por etapa ou no fim; aceite 2 h configurável)."
+    ],
+    [
+      "2026-10-05 (8)",
+      "Cadastradas 8 especialidades de teste (4 IA + 4 Humano ou IA) a pedido do Vinicius; criada a exclusão de especialidade (guardada)."
+    ],
+    [
+      "2026-10-05 (9)",
+      "A8b fase 2 (execução por etapa): estados por etapa, qualificação, aprovação do cliente, etapa interna, ajuste, liberação manual. Também: etapas paralelas agora recebem executor todas (atribuirExecutoresPendentes)."
+    ],
+    [
+      "2026-10-05 (10)",
+      "Correção de usabilidade da fase 2: caixa salva na hora; opções visíveis na linha de cada etapa."
+    ],
+    [
+      "2026-10-05 (11)",
+      "Seletor rápido \"Começa:\" na linha de cada etapa (ao mesmo tempo que a anterior etc.), com a seguinte esperando as duas."
+    ],
+    [
+      "2026-10-06 (1)",
+      "Itens rápidos (C1, C2, C4, C5, C6), B6, B2 (calendário), B1 (prazo em horas) e A8b-5 (painel operacional)."
+    ],
+    [
+      "2026-10-06 (2)",
+      "B3 entrega emergencial completa (cadastro, preço/prazo, cliente), B4/B5 prazos de refação e aprovação por etapa, C7 visibilidade por público."
+    ],
+    [
+      "2026-10-06 (3)",
+      "A8b-3 (preferir/nunca o mesmo), A8b-4 (pagamento por etapa), A9 (questionário ao executor), checklist na execução, pacotes de transferência ampliados."
+    ],
+    [
+      "2026-10-06 (4)",
+      "Nome interno removido (C8); público do produto em lista de marcação (C7); IA com só o nome do produto e limites mínimo/máximo (C4/A13)."
+    ],
+    [
+      "2026-10-06 (5)",
+      "Agency só para agência comum (partner separado); prazo comercial base em horas com reflexo em dias."
+    ],
+    [
+      "2026-10-06 (6)",
+      "Prazo comercial: reflexo em dias sobre 24 h com fração."
+    ],
+    [
+      "2026-10-06 (7)",
+      "Cartão de dependências corrigido e explicado; ícone de ajuda (i) em todos os campos do editor."
+    ],
+    [
+      "2026-10-06 (8)",
+      "Cartão Dependências removido (redundante com a configuração na etapa)."
+    ],
+    [
+      "2026-10-06 (9)",
+      "Janelas largas do editor (selecionar etapa existente etc.) não ficam mais cortadas."
+    ],
+    [
+      "2026-10-06 (10)",
+      "Fluxo das etapas: visão organizada do salvo + botão Editar fluxo."
+    ],
+    [
+      "2026-10-06 (11)",
+      "Histórico real por etapa + aprovações e prazos dentro da etapa."
+    ],
+    [
+      "2026-10-06 (12)",
+      "Aba de visão geral de aprovações e prazos removida; gerais movidos para Prazos e condições."
+    ],
+    [
+      "2026-10-06 (13)",
+      "Fluxo configurado direto na etapa; fases mostram o resultado e o que libera depois; faixa do produto individual na linha da aba."
+    ],
+    [
+      "2026-10-06 (14)",
+      "Acessos: botão Adicionar acesso, catálogo com tipos criáveis (campos/API), exclusão pelo Admin Master."
+    ],
+    [
+      "2026-10-06 (15)",
+      "Layout do catálogo de acessos melhorado."
+    ],
+    [
+      "2026-10-06 (16)",
+      "PLAC 13 passos (D1) implementado; plano do A12 definido (espelho completo no final)."
+    ],
+    [
+      "2026-10-06 (17)",
+      "D2 tarefas internas e D3 navegador seguro (plano de controle) implementados."
+    ],
+    [
+      "2026-10-06 (18)",
+      "D3: navegador seguro REAL (browser-runner com Chromium, visualizador por WebSocket, sessão guardada cifrada) implementado e testado com navegador de verdade."
+    ]
+  ]
+}

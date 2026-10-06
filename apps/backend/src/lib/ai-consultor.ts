@@ -274,7 +274,9 @@ export async function improveProductField(
   length: ProductFieldLength = "manter",
   approach: ProductFieldApproach = "melhorar",
   research = false,
+  limits: { maxWords?: number | null; maxChars?: number | null; minWords?: number | null; minChars?: number | null } = {},
 ): Promise<string> {
+  const limitsLine = [limits.minWords ? `no mínimo ${limits.minWords} palavras` : null, limits.maxWords ? `no máximo ${limits.maxWords} palavras` : null, limits.minChars ? `no mínimo ${limits.minChars} caracteres` : null, limits.maxChars ? `no máximo ${limits.maxChars} caracteres` : null].filter(Boolean).join(", ");
   const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
   const otherFieldsText = context.otherFields
     ? Object.entries(context.otherFields)
@@ -305,7 +307,7 @@ Instruções:
       : "MELHORE o conteúdo atual — preserve as informações verdadeiras já escritas, ajustando clareza, estrutura e poder de venda."
   }
 - ${lengthInstruction(length, currentValue, mode)}
-- Se o campo estiver vazio, escreva conteúdo novo e coerente com nome/categoria/preço e os demais campos.
+${limitsLine ? `- LIMITE OBRIGATÓRIO: o resultado deve ter ${limitsLine}.\n` : ""}- Se o campo estiver vazio, escreva conteúdo novo e coerente com nome/categoria/preço e os demais campos.
 - Não invente números, prazos ou garantias que não constem no contexto.
 ${research ? `- HOJE é ${today}. Pesquise na internet como esse produto/serviço é conhecido e descrito ATUALMENTE no mercado (nome mais usado, termos, benefícios e diferenciais de hoje) e use isso para deixar o campo atual e competitivo. Não cite fontes nem links no texto.` : ""}
 ${

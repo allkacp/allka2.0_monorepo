@@ -21,6 +21,14 @@ import {
 // do painel branco da página (ex: HeaderSlideScreen) precisa saber disso
 // pra usar o mesmo padding, senão o gradiente de fundo vaza nas bordas.
 export const STANDARD_SHELL_ROUTES = [
+  "/admin/navegador-seguro",
+  "/admin/tarefas-internas",
+  "/agency/navegador-seguro",
+  "/agency/tarefas-internas",
+  "/company/navegador-seguro",
+  "/company/tarefas-internas",
+  "/nomades/navegador-seguro",
+  "/leader/navegador-seguro",
   "/admin/empresas",
   "/admin/dashboard",
   "/admin/dashboard-templates",

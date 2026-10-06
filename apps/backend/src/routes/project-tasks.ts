@@ -25,6 +25,7 @@ import { computeFlowStateFor, isExternalViewer } from "../lib/task-flow-state";
 import { logProjectDecision } from "../lib/catalog2-cycles";
 import { reevaluateSuccessors, DependencyInUseError, TaskReleaseError } from "../lib/task-release-service";
 import { recordWalletEvent } from "../lib/wallet-service";
+import { taskPaysAtEnd, pagarEtapasConcluidas, pagarOutrosNomadesNoFim } from "../lib/stage-payout";
 import {
   iniciarEtapasDaTarefa,
   concluirEtapa,
@@ -35,7 +36,11 @@ import {
   revisorDaTarefa,
   qualificarTarefa,
   QualificacaoError,
-  atribuirExecutorDaEtapa,
+  atribuirExecutorDaEtapa, atribuirExecutoresPendentes,
+  decidirEtapa,
+  EtapaDecisaoError,
+  liberarProximasEtapas,
+  avisarClienteDaEtapa,
   aprovarTarefa,
   reprovarTarefa,
   nivelPendente,
@@ -964,10 +969,8 @@ router.patch(
       // é a etapa, não a tarefa. Abrir a primeira etapa aqui é o que dá partida
       // — ver src/lib/stage-engine.ts.
       const abertura = await iniciarEtapasDaTarefa(prisma, updated.id);
-      if (abertura?.status === "AGUARDANDO_EXECUTOR") {
-        atribuirExecutorDaEtapa(abertura.stageId).catch((err) =>
-          console.error("[stage-engine] atribuir executor:", err),
-        );
+      if (abertura) {
+        atribuirExecutoresPendentes(updated.id).catch((err) => console.error("[stage-engine] atribuir executor:", err));
       }
 
       // Sem etapas: a tarefa entra no RODÍZIO de ofertas de Nômade (ata
@@ -993,6 +996,7 @@ router.patch(
 const routingSettingsSchema = z.object({
   offer_timeout_minutes: z.number().int().min(1).max(24 * 60),
   mandatory_decline_alerts: z.boolean(),
+  stage_preferred_accept_minutes: z.number().int().min(5).max(24 * 60).optional(),
 });
 const routingAreaSchema = z.object({ area: z.string().trim().min(1).max(191), auto_nomad_dispatch_enabled: z.boolean() });
 const routingTaskSchema = z.object({ auto_nomad_dispatch_enabled: z.boolean() });
@@ -1295,11 +1299,14 @@ router.get(
   verifyToken,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const scopeWhere = await getTaskScopeWhere(
-        req.user!.id,
-        req.user!.account_type,
-        req.user!.role,
-      );
+      // A9: quem executa (nômade da tarefa OU de qualquer etapa dela) lê o questionário e as respostas; só leitura — o PUT continua restrito à conta contratante.
+      let scopeWhere: ScopeWhere | null;
+      if (req.user!.account_type === "nomades") {
+        const nomade = await prisma.nomade.findUnique({ where: { user_id: req.user!.id }, select: { id: true } });
+        scopeWhere = nomade ? { OR: [{ nomade_responsavel_id: nomade.id }, { stages: { some: { nomade_id: nomade.id } } }] } : null;
+      } else {
+        scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+      }
       if (scopeWhere === null) {
         res.status(404).json({ error: "Tarefa não encontrada" });
         return;
@@ -1937,12 +1944,14 @@ router.patch(
       // valor_nomade de todas as etapas da tarefa; idempotencyKey por
       // task.id garante que reprocessar este PATCH (retry de rede) não
       // credita duas vezes.
-      if (resultado.concluida && task.nomade_responsavel_id) {
+      if (resultado.concluida && task.nomade_responsavel_id && (await taskPaysAtEnd(task.id))) {
         const stages = await prisma.projectTaskStage.findMany({
           where: { project_task_id: task.id },
-          select: { valor_nomade: true },
+          select: { valor_nomade: true, nomade_id: true },
         });
-        const totalNomade = stages.reduce((sum, s) => sum + (s.valor_nomade ?? 0), 0);
+        // Etapas feitas por OUTRO nômade (A8b-3) são pagas a ele; o responsável da tarefa recebe as dele (e as sem dono).
+        const totalNomade = stages.filter((s) => !s.nomade_id || s.nomade_id === task.nomade_responsavel_id).reduce((sum, s) => sum + (s.valor_nomade ?? 0), 0);
+        await pagarOutrosNomadesNoFim(task.id, req.user!.id);
         if (totalNomade > 0) {
           await recordWalletEvent("nomad", task.nomade_responsavel_id, {
             type: "task_payout",
@@ -2589,6 +2598,118 @@ router.post(
   },
 );
 
+// ── Execução por ETAPA (A8b fase 2): qualificação do líder e aprovação de quem contratou, etapa por etapa ──────────────────
+const decisaoEtapaSchema = z.object({
+  tipo: z.enum(["qualificacao", "aprovacao"]),
+  decisao: z.enum(["aprovar", "reprovar", "comentar"]),
+  comentario: z.string().max(4000).optional(),
+});
+const LADO_CONTRATANTE = new Set(["agencias", "empresas", "admin"]);
+
+async function etapaDaTarefa(taskId: string, stageId: string) {
+  return prisma.projectTaskStage.findFirst({
+    where: { id: stageId, project_task_id: taskId },
+    select: { id: true, titulo: true, status: true, lider_id: true, visivel_ao_cliente: true, project_task: { select: { id: true, project_id: true, task_code: true, stage_execution: true, lider_responsavel_id: true, nomade_responsavel_id: true } } },
+  });
+}
+
+router.post(
+  "/:id/etapas/:stageId/decisao",
+  verifyToken,
+  validate(decisaoEtapaSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const etapa = await etapaDaTarefa(req.params.id as string, req.params.stageId as string);
+      if (!etapa) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
+      const task = etapa.project_task;
+      const admin = isAdminUser(req.user);
+      const { tipo, decisao, comentario } = req.body as z.infer<typeof decisaoEtapaSchema>;
+      if (tipo === "qualificacao") {
+        const pode = admin || task.lider_responsavel_id === req.user!.id || etapa.lider_id === req.user!.id;
+        if (!pode) { res.status(403).json({ error: "Somente o líder/qualificador desta tarefa pode qualificar a etapa." }); return; }
+      } else {
+        // Aprovação: quem contratou (agência/empresa) enxerga a tarefa; etapa interna só aparece para o cliente depois de avisada.
+        const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+        if (scopeWhere === null) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
+        const visivel = await prisma.projectTask.findFirst({ where: applyScope({ id: task.id }, scopeWhere), select: { id: true } });
+        if (!visivel) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
+        const ladoOk = admin || LADO_CONTRATANTE.has(req.user!.account_type) || req.user!.role === "lider";
+        if (!ladoOk) { res.status(403).json({ error: "Somente quem contratou (agência ou empresa) aprova a etapa." }); return; }
+        if (!etapa.visivel_ao_cliente && !admin) { res.status(403).json({ error: "Esta é uma etapa interna: o cliente não a aprova." }); return; }
+      }
+      const resultado = await prisma.$transaction(async (tx) => {
+        const r = await decidirEtapa(tx, etapa.id, { tipo, decisao, userId: req.user!.id, comentario });
+        if (r.tarefaConcluida) {
+          await recordApprovedTask({ projectId: task.project_id, projectTaskId: task.id, approvedAt: new Date(), approvedByUserId: req.user!.id, idempotencyKey: `memory-approved-task:${task.id}` }, tx);
+          await reevaluateSuccessors(task.id, tx);
+        }
+        return r;
+      });
+      // Repasse do nômade quando a tarefa fecha (modo "no fim": soma de todas as etapas) — mesma regra e chave de idempotência do aceite da tarefa.
+      if (resultado.tarefaConcluida && task.nomade_responsavel_id && (await taskPaysAtEnd(task.id))) {
+        const stages = await prisma.projectTaskStage.findMany({ where: { project_task_id: task.id }, select: { valor_nomade: true, nomade_id: true } });
+        const totalNomade = stages.filter((st) => !st.nomade_id || st.nomade_id === task.nomade_responsavel_id).reduce((sum, st) => sum + (st.valor_nomade ?? 0), 0);
+        await pagarOutrosNomadesNoFim(task.id, req.user!.id);
+        if (totalNomade > 0) {
+          await recordWalletEvent("nomad", task.nomade_responsavel_id, {
+            type: "task_payout", direction: "credit", amount: totalNomade, description: `Repasse — tarefa ${task.task_code ?? task.id} concluída e aprovada`,
+            idempotencyKey: `task_payout_${task.id}`, referenceType: "project_task", referenceId: task.id, createdBy: req.user!.id, metadata: { project_id: task.project_id },
+          });
+        }
+      }
+      await pagarEtapasConcluidas(task.id, req.user!.id).catch((err) => console.error("[stage-payout]", err));
+      atribuirExecutoresPendentes(task.id).catch((err) => console.error("[stage-engine] atribuir executor:", err));
+      if (resultado.enviadaParaQualificacao) garantirQualificador(task.id).catch((err) => console.error("[stage-engine] qualificador:", err));
+      kickDependencies(task.project_id);
+      res.json(resultado);
+    } catch (err) {
+      if (err instanceof EtapaDecisaoError) { res.status(err.httpStatus).json({ error: err.message }); return; }
+      next(err);
+    }
+  },
+);
+
+router.post("/:id/etapas/:stageId/liberar-proxima", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const etapa = await etapaDaTarefa(req.params.id as string, req.params.stageId as string);
+    if (!etapa) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
+    if (!(isAdminUser(req.user) || etapa.project_task.lider_responsavel_id === req.user!.id || etapa.lider_id === req.user!.id)) { res.status(403).json({ error: "Somente o líder desta tarefa (ou o administrador) libera a próxima etapa." }); return; }
+    const abertas = await prisma.$transaction((tx) => liberarProximasEtapas(tx, etapa.project_task.id));
+    atribuirExecutoresPendentes(etapa.project_task.id).catch((err) => console.error("[stage-engine] atribuir executor:", err));
+    res.json({ liberadas: abertas.map((a) => ({ stage_id: a.stageId, titulo: a.titulo, status: a.status })) });
+  } catch (err) {
+    if (err instanceof EtapaDecisaoError) { res.status(err.httpStatus).json({ error: err.message }); return; }
+    next(err);
+  }
+});
+
+router.post("/:id/etapas/:stageId/avisar-cliente", verifyToken, validate(z.object({ mensagem: z.string().min(3).max(2000) })), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const etapa = await etapaDaTarefa(req.params.id as string, req.params.stageId as string);
+    if (!etapa) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
+    if (!(isAdminUser(req.user) || etapa.project_task.lider_responsavel_id === req.user!.id || etapa.lider_id === req.user!.id)) { res.status(403).json({ error: "Somente o líder desta tarefa (ou o administrador) avisa o cliente." }); return; }
+    await prisma.$transaction((tx) => avisarClienteDaEtapa(tx, etapa.id, { userId: req.user!.id, mensagem: req.body.mensagem }));
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof EtapaDecisaoError) { res.status(err.httpStatus).json({ error: err.message }); return; }
+    next(err);
+  }
+});
+
+router.get("/:id/etapas/:stageId/historico", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
+    const visivel = await prisma.projectTask.findFirst({ where: applyScope({ id: req.params.id as string }, scopeWhere), select: { id: true } });
+    const etapa = visivel ? await etapaDaTarefa(visivel.id, req.params.stageId as string) : null;
+    if (!etapa) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
+    const externo = !isAdminUser(req.user) && ["agencias", "empresas"].includes(req.user!.account_type);
+    if (externo && !etapa.visivel_ao_cliente) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
+    const rows = await prisma.projectTaskStageReview.findMany({ where: { stage_id: etapa.id }, orderBy: { created_at: "asc" } });
+    res.json({ data: rows.map((r) => ({ id: r.id, kind: r.kind, decision: r.decision, round: r.round, comment: r.comment, actor_user_id: r.actor_user_id, created_at: r.created_at })) });
+  } catch (err) { next(err); }
+});
+
 router.get(
   "/:id/qualificacao",
   verifyToken,
@@ -2824,13 +2945,10 @@ router.patch(
           concluirEtapa(tx, req.params.stageId as string, { userId: req.user!.id }),
         );
 
+        await pagarEtapasConcluidas(resultado.tarefaId, req.user!.id).catch((err) => console.error("[stage-payout]", err));
         // Etapa seguinte que depende de nômade novo: a escolha roda fora da
         // transação, como já acontece na liberação da tarefa.
-        if (resultado.proxima?.status === "AGUARDANDO_EXECUTOR") {
-          atribuirExecutorDaEtapa(resultado.proxima.stageId).catch((err) =>
-            console.error("[stage-engine] atribuir executor:", err),
-          );
-        }
+        atribuirExecutoresPendentes(resultado.tarefaId).catch((err) => console.error("[stage-engine] atribuir executor:", err));
         if (resultado.enviadaParaQualificacao) {
           garantirQualificador(resultado.tarefaId).catch((err) =>
             console.error("[stage-engine] qualificador:", err),

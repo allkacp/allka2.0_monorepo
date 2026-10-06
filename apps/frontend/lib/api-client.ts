@@ -661,9 +661,9 @@ class ApiClient {
     return this.post(`/project-tasks/${taskId}/rotation/restart`, {});
   }
   async getTaskRoutingSettings() {
-    return this.get<{ offer_timeout_minutes: number; mandatory_decline_alerts: boolean }>("/project-tasks/routing/settings");
+    return this.get<{ offer_timeout_minutes: number; mandatory_decline_alerts: boolean; stage_preferred_accept_minutes?: number }>("/project-tasks/routing/settings");
   }
-  async updateTaskRoutingSettings(data: { offer_timeout_minutes: number; mandatory_decline_alerts: boolean }) {
+  async updateTaskRoutingSettings(data: { offer_timeout_minutes: number; mandatory_decline_alerts: boolean; stage_preferred_accept_minutes?: number }) {
     return this.put("/project-tasks/routing/settings", data);
   }
   async getTaskRoutingAreas() {
@@ -898,6 +898,7 @@ class ApiClient {
   simulateCatalog2InactivationCompensation(base_amount: number) { return this.c2("POST", "/pricing-settings/simulate-inactivation-compensation", { base_amount }); }
   addCatalog2Specialty(body: Record<string, any>) { return this.c2("POST", "/specialties", body); }
   updateCatalog2Specialty(id: string, body: Record<string, any>) { return this.c2("PUT", `/specialties/${id}`, body); }
+  deleteCatalog2Specialty(id: string, detachModels = false) { return this.c2("DELETE", `/specialties/${id}${detachModels ? "?detach_models=1" : ""}`); }
   // questionários (reunião 2026-09-14, Item 3 — cadastro integrado)
   getCatalog2Questionnaires() { return this.c2<{ data: any[] }>("GET", "/questionnaires"); }
   getCatalog2Questionnaire(id: string) { return this.c2("GET", `/questionnaires/${id}`); }
@@ -946,6 +947,9 @@ class ApiClient {
   getCatalog2AccessTypes() { return this.c2<{ data: { key: string; label: string }[] }>("GET", `/access-types`); }
   // ── Conexões e acessos necessários (módulo universal) ──────────────────
   getConnectionVocabulary() { return this.c2<any>("GET", "/connection-vocabulary"); }
+  createConnectionType(body: Record<string, any>) { return this.c2<any>("POST", "/connection-types", body); }
+  updateConnectionType(id: number, body: Record<string, any>) { return this.c2<any>("PUT", `/connection-types/${id}`, body); }
+  deleteConnectionType(id: number) { return this.c2<any>("DELETE", `/connection-types/${id}`); }
   getConnectionTypes(all = false) { return this.c2<{ data: any[] }>("GET", `/connection-types${all ? "?all=1" : ""}`); }
   getVersionConnections(versionId: string) { return this.c2<any>("GET", `/versions/${versionId}/connections`); }
   setVersionConnectionsModule(versionId: string, requires_connections: boolean) { return this.c2<any>("PUT", `/versions/${versionId}/connections-module`, { requires_connections }); }
@@ -983,6 +987,10 @@ class ApiClient {
   addCatalog2SlaRule(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/sla-rules`, body); }
   updateCatalog2SlaRule(id: string, body: Record<string, any>) { return this.c2("PUT", `/sla-rules/${id}`, body); }
   deleteCatalog2SlaRule(id: string) { return this.c2("DELETE", `/sla-rules/${id}`); }
+  saveCatalog2StepFlow(taskId: string, steps: { step_id: string; depends_on?: string[] | null; executor_policy?: string; executor_same_as_key?: string | null }[]) { return this.c2<any>("PUT", `/tasks/${taskId}/steps/flow`, { steps }); }
+  setCatalog2ProductVisibility(productId: string, audiences: string[]) { return this.c2<any>("PATCH", `/products/${productId}/visibility`, { audiences }); }
+  getCatalog2StepPerformance(stepId: string) { return this.c2<any>("GET", `/steps/${stepId}/performance`); }
+  setCatalog2TaskStructure(productId: string, task_structure: "single" | "multiple") { return this.c2<any>("PATCH", `/products/${productId}/task-structure`, { task_structure }); }
   renameCatalog2ProductInternalName(productId: string, body: { internal_name: string; slug?: string | null; confirm_slug_change?: boolean }) { return this.c2<any>("PATCH", `/products/${productId}/internal-name`, body); }
   listCatalog2CommercialRequests(params?: { status?: string; search?: string; product_id?: string; requested_by_user_id?: string; assigned_to_user_id?: string }) {
     const query = new URLSearchParams();
@@ -1238,6 +1246,61 @@ class ApiClient {
   async getTaskCosts(taskId: string) {
     return this.get<any>(`/project-tasks/${taskId}/costs`);
   }
+  // Calendário de trabalho da plataforma (B2)
+  getInternalTaskSettings() { return this.get<any>("/internal-tasks/settings"); }
+  saveInternalTaskSettings(body: Record<string, any>) { return this.put<any>("/internal-tasks/settings", body); }
+  getInternalTasks(params: Record<string, any> = {}) { return this.get<any>("/internal-tasks", params); }
+  getInternalTasksSummary(params: Record<string, any> = {}) { return this.get<any>("/internal-tasks/summary", params); }
+  getInternalTaskMembers(params: Record<string, any> = {}) { return this.get<any>("/internal-tasks/members", params); }
+  createInternalTask(body: Record<string, any>) { return this.post<any>("/internal-tasks", body); }
+  updateInternalTask(id: string, body: Record<string, any>) { return this.patch<any>(`/internal-tasks/${id}`, body); }
+  deleteInternalTask(id: string) { return this.del<any>(`/internal-tasks/${id}`); }
+  getInternalTaskComments(id: string) { return this.get<any>(`/internal-tasks/${id}/comments`); }
+  addInternalTaskComment(id: string, body: string) { return this.post<any>(`/internal-tasks/${id}/comments`, { body }); }
+  createInternalTaskFromPlac(stepId: string) { return this.post<any>(`/internal-tasks/from-plac/${stepId}`, {}); }
+  getSecureBrowserConsent() { return this.get<any>("/secure-browser/consent"); }
+  getSecureBrowserProfiles(params: Record<string, any> = {}) { return this.get<any>("/secure-browser/profiles", params); }
+  createSecureBrowserProfile(body: Record<string, any>) { return this.post<any>("/secure-browser/profiles", body); }
+  revokeSecureBrowserProfile(id: string) { return this.post<any>(`/secure-browser/profiles/${id}/revoke`, {}); }
+  getSecureBrowserGrants(id: string) { return this.get<any>(`/secure-browser/profiles/${id}/grants`); }
+  getSecureBrowserGrantable(id: string) { return this.get<any>(`/secure-browser/profiles/${id}/grantable-users`); }
+  deleteSecureBrowserProfile(id: string) { return this.del<any>(`/secure-browser/profiles/${id}`); }
+  updateSecureBrowserProfile(id: string, body: Record<string, any>) { return this.patch<any>(`/secure-browser/profiles/${id}`, body); }
+  createSecureBrowserGroupGrant(id: string, body: Record<string, any>) { return this.post<any>(`/secure-browser/profiles/${id}/grants/group`, body); }
+  createSecureBrowserGrant(id: string, body: Record<string, any>) { return this.post<any>(`/secure-browser/profiles/${id}/grants`, body); }
+  revokeSecureBrowserGrant(grantId: string) { return this.del<any>(`/secure-browser/grants/${grantId}`); }
+  openSecureBrowserSession(id: string, mode: "use" | "setup") { return this.post<any>(`/secure-browser/profiles/${id}/sessions`, { mode }); }
+  getSecureBrowserProfileSessions(id: string) { return this.get<any>(`/secure-browser/profiles/${id}/sessions`); }
+  getSecureBrowserEvents(id: string) { return this.get<any>(`/secure-browser/profiles/${id}/events`); }
+  getSecureBrowserActiveSessions() { return this.get<any>("/secure-browser/sessions"); }
+  heartbeatSecureBrowserSession(id: string) { return this.post<any>(`/secure-browser/sessions/${id}/heartbeat`, {}); }
+  endSecureBrowserSession(id: string) { return this.post<any>(`/secure-browser/sessions/${id}/end`, {}); }
+  killSecureBrowserSession(id: string) { return this.post<any>(`/secure-browser/sessions/${id}/kill`, {}); }
+  saveSecureBrowserState(id: string) { return this.post<any>(`/secure-browser/sessions/${id}/save-state`, {}); }
+  getPlacTemplates() { return this.get<any>("/plac/templates"); }
+  getPlacInternalUsers() { return this.get<any>("/plac/internal-users"); }
+  createPlacTemplate(body: Record<string, any>) { return this.post<any>("/plac/templates", body); }
+  updatePlacTemplate(key: string, body: Record<string, any>) { return this.put<any>(`/plac/templates/${encodeURIComponent(key)}`, body); }
+  deletePlacTemplate(key: string) { return this.del<any>(`/plac/templates/${encodeURIComponent(key)}`); }
+  getProjectPlac(projectId: string) { return this.get<any>(`/plac/projects/${projectId}`); }
+  generateProjectPlac(projectId: string) { return this.post<any>(`/plac/projects/${projectId}/generate`, {}); }
+  updatePlacProjectStep(projectId: string, stepId: string, body: Record<string, any>) { return this.patch<any>(`/plac/projects/${projectId}/steps/${stepId}`, body); }
+  getWorkCalendar() { return this.get<any>("/work-calendar"); }
+  saveWorkCalendar(body: { work_days: number[]; start_time: string; end_time: string }) { return this.put<any>("/work-calendar", body); }
+  addHoliday(body: { date: string; name: string }) { return this.post<any>("/work-calendar/holidays", body); }
+  deleteHoliday(id: string) { return this.del<any>(`/work-calendar/holidays/${id}`); }
+  // Painel operacional da tarefa (A8b fase 5): etapas, portões de aprovação, prazos (SLA) e entradas de outros produtos.
+  getTaskFlowPanel(taskId: string) { return this.get<any>(`/task-flow/${taskId}`); }
+  decideStage(taskId: string, stageId: string, tipo: "qualificacao" | "aprovacao", decisao: "aprovar" | "reprovar" | "comentar", comentario?: string) {
+    return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/decisao`, { tipo, decisao, ...(comentario ? { comentario } : {}) });
+  }
+  releaseNextStage(taskId: string, stageId: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/liberar-proxima`, {}); }
+  warnStageClient(taskId: string, stageId: string, mensagem: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/avisar-cliente`, { mensagem }); }
+  getStageHistory(taskId: string, stageId: string) { return this.get<{ data: any[] }>(`/project-tasks/${taskId}/etapas/${stageId}/historico`); }
+  decideApprovalGate(gateId: string, decision: "approve" | "reject", comment?: string) { return this.post<any>(`/approval-gates/${gateId}/decision`, { decision, ...(comment ? { comment } : {}) }); }
+  getSlaReasons() { return this.get<{ reasons: { key: string; label: string }[]; responsibles: { key: string; label: string }[] }>("/sla/reasons"); }
+  pauseSla(taskId: string, body: { reason: string; responsible_party: string; note?: string }) { return this.post<any>(`/sla/task/${taskId}/pause`, body); }
+  resumeSla(taskId: string, reason?: string) { return this.post<any>(`/sla/task/${taskId}/resume`, reason ? { reason } : {}); }
   async getTaskFlow(taskId: string) {
     return this.get<any>(`/project-tasks/${taskId}/flow`);
   }
@@ -2769,6 +2832,10 @@ class ApiClient {
     length?: "manter" | "curto" | "medio" | "longo";
     approach?: "melhorar" | "recriar";
     research?: boolean;
+    max_words?: number | null;
+    max_chars?: number | null;
+    min_words?: number | null;
+    min_chars?: number | null;
     context?: {
       name?: string;
       category?: string;

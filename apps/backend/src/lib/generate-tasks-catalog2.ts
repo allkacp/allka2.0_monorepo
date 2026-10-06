@@ -12,6 +12,7 @@ import { getNextSequenceValue, formatInvoiceNumber } from "./sequence";
 import { prepareContinuity } from "./catalog2-continuity";
 import { applyAssetGate } from "./client-assets";
 import { materializeDependencyRules } from "./project-dependencies";
+import { effectiveDeps, hasConfiguredFlow } from "./step-flow";
 import { ensureSubscription } from "./catalog2-subscription-core";
 import { planTaskForCycle, resolveCycleContext, logProjectDecision, CYCLE_TYPE_LABEL, type CycleKind, type CycleType } from "./catalog2-cycles";
 
@@ -328,6 +329,8 @@ async function materializeTasksForProjectProduct(
         description: ct.description ?? ct.objective ?? null,
         status: "PARA_LANCAMENTO",
         exige_aprovacao_cliente: ct.requires_client_approval,
+        stage_execution: ct.stage_execution === "stage" ? "stage" : "task",
+        stage_payout_mode: ct.stage_execution === "stage" && ct.stage_payout_mode === "per_stage" ? "per_stage" : "at_end",
         // Qualificação obrigatória (aceite interno do líder) — herdada da tarefa contratada.
         // Tarefa com IA (Pedido 3, fase 5): a saída da IA sempre passa por revisão humana, salvo se o cadastro desligar explicitamente.
         requires_review: ct.requires_review || (!!ct.ai && ct.execution_mode !== "humano" && ct.ai.human_review_required !== false),
@@ -362,6 +365,14 @@ async function materializeTasksForProjectProduct(
     const stepsAll = ct.steps;
     const stepsKept = previouslyExecuted ? stepsAll.filter((st) => !(st.first_execution_only || st.step_model?.first_execution_only)) : stepsAll;
     const steps = stepsKept.length > 0 || stepsAll.length === 0 ? stepsKept : stepsAll;
+    // Fluxo das etapas (reunião 2026-10-05): só quando o cadastro configurou dependências; senão segue a sequência de sempre.
+    const flowInput = stepsAll.map((st) => ({ key: st.key, name: st.name, sort_order: st.sort_order, depends_on_json: st.depends_on_json, executor_policy: st.executor_policy, executor_same_as_key: st.executor_same_as_key }));
+    const graphMode = steps.length > 0 && hasConfiguredFlow(flowInput);
+    // Execução por etapa: cada etapa é qualificada e aprovada; etapa interna não passa pelo cliente.
+    const stageMode = ct.stage_execution === "stage";
+    const keptKeys = new Set(steps.map((st) => st.key));
+    const depsByKey = graphMode ? effectiveDeps(flowInput, keptKeys) : null;
+    const stepIdByKey = new Map(steps.map((st) => [st.key, st.id]));
     const stagesToCreate =
       steps.length > 0
         ? steps.map((step, sIdx) => ({
@@ -371,10 +382,23 @@ async function materializeTasksForProjectProduct(
             titulo: step.name,
             descricao: step.description ?? null,
             ordem: sIdx + 1,
-            status: sIdx === 0 ? "PENDENTE" : "BLOQUEADA",
+            status: graphMode ? ((depsByKey!.get(step.key) ?? []).length === 0 ? "PENDENTE" : "BLOQUEADA") : sIdx === 0 ? "PENDENTE" : "BLOQUEADA",
             obrigatoria: true,
-            depende_da_etapa_anterior: sIdx > 0,
-            briefing_necessario: sIdx === 0,
+            // Quem recebe a etapa (fase 1 da execução por etapa): nômade (padrão), líder ou equipe interna; líder específico já nasce atribuído.
+            visivel_ao_cliente: stageMode ? !step.internal_step : true,
+            exige_qualificacao: stageMode && step.requires_qualification !== false,
+            libera_proxima_auto: step.release_next_auto !== false,
+            aprovacao_horas: stageMode ? step.approval_hours ?? null : null,
+            preferencia_nomade: graphMode && stageMode && step.executor_same_as_key ? (step.executor_policy === "prefer_same_as_step" ? "prefer_same" : step.executor_policy === "other_than_step" ? "never_same" : null) : null,
+            preferencia_ref: graphMode && stageMode && step.executor_same_as_key && ["prefer_same_as_step", "other_than_step"].includes(step.executor_policy) ? stepIdByKey.get(step.executor_same_as_key) ?? null : null,
+            aceite_horas: stageMode ? step.executor_accept_hours ?? null : null,
+            refacao_horas: stageMode ? step.rework_hours ?? null : null,
+            executor_type: step.executor_kind === "leader" || step.executor_kind === "internal" ? step.executor_kind : "nomad",
+            lider_id: step.executor_kind === "leader" && step.leader_mode === "specific" ? step.leader_user_id ?? null : null,
+            depende_da_etapa_anterior: graphMode ? (depsByKey!.get(step.key) ?? []).length > 0 : sIdx > 0,
+            depende_de_json: graphMode ? JSON.stringify((depsByKey!.get(step.key) ?? []).map((k) => stepIdByKey.get(k)).filter(Boolean)) : null,
+            herdar_executor_de: graphMode && step.executor_policy === "same_as_step" && step.executor_same_as_key ? stepIdByKey.get(step.executor_same_as_key) ?? null : null,
+            briefing_necessario: graphMode ? (depsByKey!.get(step.key) ?? []).length === 0 : sIdx === 0,
             // Evidência obrigatória (Pedido 3): reaproveita o bloqueio já existente de "exige anexo" — a etapa só conclui com evidência anexada.
             exige_anexo: !!normalizeStepOps(step.ops)?.evidence_required,
             // Finalidade/executor/critério de conclusão efetivos (ajuste do produto ou do modelo global).

@@ -604,7 +604,7 @@ export function Catalog2ProductDetail({
   // nome"). `internal_name` (com prefixo "[TESTE LOCAL]"/rascunho) só como
   // informação extra pro admin, nunca no lugar do nome comercial.
   const title = isClient ? clientProduct.name : (targetVersion?.title || product.internal_name);
-  const showInternalNameBadge = !isClient && product.internal_name !== title;
+  const showInternalNameBadge = false; // o nome do produto é um só (externo = interno)
   const categoryName = isClient ? (clientProduct.category?.name ?? clientProduct.pillar?.name ?? "Sem categoria") : (product.category?.name || "Sem categoria");
   const statusValue = isClient ? clientProduct.status : product.status;
   const optionsCount = isClient ? clientOptionRows.length : adminOptions.length;
@@ -1056,6 +1056,17 @@ export function Catalog2ProductDetail({
                     />
                     <span className="text-xs text-muted-foreground">Unidades do mesmo serviço.</span>
                   </div>
+
+                  {clientPricing?.emergency?.available && (
+                    <label className="flex cursor-pointer flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background p-3 text-sm" data-testid="emergency-option">
+                      <input type="checkbox" checked={!!sel.emergency} onChange={(e) => setSel((s: any) => ({ ...s, emergency: e.target.checked }))} />
+                      <span className="font-bold text-xs uppercase tracking-wide text-muted-foreground">Entrega emergencial</span>
+                      <span className="text-xs text-muted-foreground">
+                        {clientPricing.emergency.extra_pending ? "Prazo menor mediante adicional (valor calculado na cotação)." : `Prazo menor por + ${Number(clientPricing.emergency.extra_price ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+                        {clientPricing.emergency.reduction_days > 0 && clientPricing.emergency.commercial_days_before != null ? ` · de ${clientPricing.emergency.commercial_days_before} para ${clientPricing.emergency.commercial_days_after} dia(s) útil(eis)` : ""}
+                      </span>
+                    </label>
+                  )}
 
                   <div className="space-y-2 rounded-xl border border-border/70 bg-background p-3">
                     <h2 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Distribuição para os profissionais</h2>

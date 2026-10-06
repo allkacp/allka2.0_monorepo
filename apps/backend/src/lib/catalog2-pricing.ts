@@ -20,6 +20,8 @@ import { effortActiveAt, effortMinutesOf, isEffortEffect, type EffortItem } from
 import { REQUEST_KIND_LABEL, normalizeAvailability, strongestRequirement, type QuoteRequirement } from "./catalog2-availability";
 import { normalizeAddonSelections, type AddonIssue, type AddonSelection, type NormalizedAddon } from "./catalog2-addon-types";
 import { snapshotPricingRule, type PricingRuleSnapshot } from "./catalog2-pricing-rule";
+import { computeEmergency, type EmergencyResult } from "./catalog2-emergency";
+import { businessMinutesPerDay, ensureWorkCalendar } from "./work-calendar";
 
 // Minutos úteis por dia — constante de conversão de capacidade (esforço →
 // prazo). Não é regra comercial: é aritmética explícita e configurável aqui.
@@ -36,6 +38,8 @@ export interface PricingSelection {
   variation_quantities?: Record<string, number>;
   /** Adicionais com quantidade, valor informado ou escolhas: chave do adicional → seleção. (addon_keys continua valendo.) */
   addon_selections?: Record<string, AddonSelection>;
+  /** Entrega emergencial escolhida pelo cliente (só vale em produto que a oferece). */
+  emergency?: boolean;
 }
 
 export interface PricingWarning {
@@ -62,12 +66,16 @@ export interface DeadlineResult {
   days_from_addons: number;
   commercial_deadline_days: number | null;
   commercial_deadline_pending: boolean;
+  /** Entrega emergencial escolhida: quantos dias úteis o prazo comercial encurtou. */
+  emergency_reduction_days?: number;
   detail: string;
 }
 
 export interface PricingResult {
   currency: string;
   quantity: number;
+  /** Entrega emergencial: disponibilidade, o que custaria/encurtaria e, se escolhida, o que foi aplicado. */
+  emergency: EmergencyResult;
   active_task_keys: string[];
   active_step_refs: string[];
   lines: {
@@ -976,6 +984,21 @@ async function computePricingCore(versionId: string, selection: PricingSelection
       : `Prazo comercial: ${commercialDeadline} dia(s) = base ${baseCommercial} + ${daysFromVariations} (variações) + ${daysFromConditions} (condições) + ${daysFromAddons} (adicionais). Esforço interno: ${effortDays} dia(s).`,
   };
 
+  // ── Entrega emergencial (B3): prazo menor por um adicional definido em cada etapa ──
+  await ensureWorkCalendar(prisma);
+  const emergencySteps = activeTasks.flatMap((t) => t.steps.filter((st) => activeStepSet.has(`${t.key}:${st.key}`)).map((st) => {
+    const ref = `${t.key}:${st.key}`;
+    const minutes = humanBreakdown.filter((b) => b.task_key === ref).reduce((a, b) => a + b.minutes, 0) || (st.estimated_minutes ?? 0);
+    const exact = humanExact.filter((b) => b.task_key === ref).reduce((a, b) => a + b.cost, 0);
+    return { task_key: t.key, step_key: st.key, name: st.name, sort_order: st.sort_order, depends_on_json: st.depends_on_json ?? null, minutes, reduction_minutes: st.emergency_reduction_minutes ?? null, extra_kind: st.emergency_extra_kind ?? null, extra_value: st.emergency_extra_value ?? null, exact_cost: exact > 0 ? exact : null };
+  }));
+  const emergencyInfo = computeEmergency({
+    enabled: !!version.emergency_enabled, selected: !!selection.emergency, steps: emergencySteps,
+    priceRatio: subtotalWithPercent > 0 && !pricingPending ? simulationTotal / subtotalWithPercent : null,
+    reviewPercent: reviewPct ?? null, baseCommercialDays: commercialDeadline, hoursPerDay: businessMinutesPerDay() / 60,
+  });
+  if (selection.emergency && !emergencyInfo.available) selectionIssues.push({ code: "emergency_unavailable", message: "Este produto não oferece entrega emergencial.", ref: "emergency" });
+
   if (requiredInfos.length) warnings.push({ code: "extra_info_required", message: `Informações extras exigidas: ${requiredInfos.join("; ")}` });
   if (extraDeliverables.length) warnings.push({ code: "extra_deliverables", message: `Entregáveis extras: ${extraDeliverables.join("; ")}` });
 
@@ -1074,9 +1097,10 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     steps_possible: stepsPossible,
   };
 
-  return {
+  const result: PricingResult = {
     currency,
     quantity,
+    emergency: emergencyInfo,
     active_task_keys: [...activeTaskKeys],
     active_step_refs: activeStepRefs,
     split,
@@ -1151,6 +1175,25 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     active_scenario: activeScenario,
     scenario: { implementation_applicable: implementationApplicable, quantity, modality_note: implementationApplicable ? "Primeira contratação: implantação aplicável." : activeTasksAll.some((t) => t.cycle_type === "implementacao") ? "Renovação ou implantação já concluída: sem cobrança de implantação." : "Produto sem tarefa de implantação." },
   };
+  // Entrega emergencial ESCOLHIDA: soma os adicionais na primeira cobrança (não nas renovações) e encurta o prazo comercial.
+  if (emergencyInfo.selected) {
+    const x = emergencyInfo.extra_price;
+    if (x != null && x > 0) {
+      result.simulation.total = round2(result.simulation.total + x);
+      const fl = result.lines.commercial_final_price;
+      if (fl.amount != null) fl.amount = round2(fl.amount + x);
+      const sp = result.split;
+      if (sp.first_charge != null) sp.first_charge = round2(sp.first_charge + x);
+      if (sp.avulso_total != null) sp.avulso_total = round2(sp.avulso_total + x);
+      if (sp.cycle_prices?.[0]?.price != null) sp.cycle_prices[0].price = round2(sp.cycle_prices[0].price + x);
+      if (sp.first_charge_parts) (sp.first_charge_parts as Record<string, number>).emergency = x;
+    }
+    if (emergencyInfo.reduction_days > 0 && result.deadline.commercial_deadline_days != null) {
+      result.deadline.commercial_deadline_days = Math.max(1, result.deadline.commercial_deadline_days - emergencyInfo.reduction_days);
+      result.deadline.emergency_reduction_days = emergencyInfo.reduction_days;
+    }
+  }
+  return result;
 }
 
 function parseJsonArray(raw: string | null | undefined): string[] {

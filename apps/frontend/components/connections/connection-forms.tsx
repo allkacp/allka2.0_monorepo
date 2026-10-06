@@ -22,17 +22,19 @@ export function StateBadge({ status, label }: { status: string; label?: string }
 export const METHOD_LABEL: Record<string, string> = {
   oauth: "OAuth / integração oficial", account_link: "Vinculação de conta", manager_account: "Conta gerenciadora", partner_business: "Empresa parceira",
   user_invite: "Convite de usuário corporativo da Allka", temporary_user: "Usuário temporário (permissão mínima)", revocable_token: "Token revogável", app_password: "Senha de aplicação",
-  plugin: "Integração por plugin", protected_file: "Arquivo protegido", manual_instruction: "Instrução manual", other: "Outro método",
+  api_key: "Chave de API / integração por API", secure_browser: "Navegador seguro da Allka (login uma vez, uso por tempo autorizado)", plugin: "Integração por plugin", protected_file: "Arquivo protegido", manual_instruction: "Instrução manual", other: "Outro método",
 };
 export const SCOPE_LABEL: Record<string, string> = { task: "Somente nesta tarefa", selected_tasks: "Em tarefas selecionadas", project: "Em todo este projeto" };
-const SECRET_METHODS = ["revocable_token", "app_password", "protected_file", "temporary_user"];
+const SECRET_METHODS = ["revocable_token", "api_key", "app_password", "protected_file", "temporary_user"];
+export interface ConnFieldDef { key: string; label: string; type: "text" | "secret" | "url" | "email" | "number" | "textarea"; required: boolean; help?: string | null }
 const LBL = "mb-0.5 block text-[11px] font-semibold text-slate-600 dark:text-slate-300";
 const SEL = "h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900";
 
 /** Formulário "Conectar agora": escolhe o método (mais seguro primeiro), informa só metadados e o escopo de uso. */
 export function ConnectForm({
-  allowedMethods, permissionLevels, defaultPermission, defaultScope = "project", tasks, submitLabel = "Conectar agora", onSubmit, onCancel,
+  allowedMethods, permissionLevels, defaultPermission, defaultScope = "project", tasks, submitLabel = "Conectar agora", onSubmit, onCancel, fields = [],
 }: {
+  fields?: ConnFieldDef[];
   allowedMethods: string[]; permissionLevels: { key: string; label: string }[]; defaultPermission?: string; defaultScope?: string;
   tasks?: { id: string; title: string }[]; submitLabel?: string; onSubmit: (body: Record<string, any>) => Promise<void>; onCancel?: () => void;
 }) {
@@ -44,15 +46,17 @@ export function ConnectForm({
   const [scope, setScope] = useState(defaultScope);
   const [taskIds, setTaskIds] = useState<string[]>([]);
   const [secret, setSecret] = useState("");
+  const [vals, setVals] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const needsSecret = SECRET_METHODS.includes(method);
   const needsTasks = scope !== "project";
   const taskOk = !needsTasks || (scope === "task" ? taskIds.length === 1 : taskIds.length >= 1);
+  const fieldsOk = fields.every((f) => !f.required || (vals[f.key] ?? "").trim() !== "");
   const submit = async () => {
     setBusy(true); setErr(null);
     try {
-      await onSubmit({ method, label: label.trim() || undefined, account_label: account.trim() || null, external_id: externalId.trim() || null, permission_level: permission || null, scope, ...(needsTasks ? { task_ids: taskIds } : {}), ...(needsSecret && secret ? { secret_value: secret } : {}) });
+      await onSubmit({ method, label: label.trim() || undefined, account_label: account.trim() || null, external_id: externalId.trim() || null, permission_level: permission || null, scope, ...(needsTasks ? { task_ids: taskIds } : {}), ...(fields.length ? { fields: fields.map((f) => ({ key: f.key, value: (vals[f.key] ?? "").trim() })).filter((x) => x.value) } : {}), ...(needsSecret && secret ? { secret_value: secret } : {}) });
       setSecret("");
     } catch (e: any) { setErr(e?.message ?? "Não foi possível conectar."); } finally { setBusy(false); }
   };
@@ -70,6 +74,25 @@ export function ConnectForm({
         <div><label className={LBL}>Conta/usuário (identificação, não é senha)</label><Input aria-label="Conta ou usuário" value={account} onChange={(e) => setAccount(e.target.value)} placeholder="Ex.: e-mail da conta ou nome do usuário" /></div>
         <div className="sm:col-span-2"><label className={LBL}>ID, endereço ou identificador da conta</label><Input aria-label="Identificador da conta" value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder="Ex.: ID da conta de anúncios, URL do site" /></div>
       </div>
+      {fields.length > 0 && (
+        <div className="space-y-2 rounded-md border border-violet-200 bg-white p-2 dark:border-violet-900 dark:bg-slate-900" data-testid="connect-fields">
+          <p className="text-[11px] font-semibold text-violet-800 dark:text-violet-200">O que precisamos para este acesso</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {fields.map((f) => (
+              <div key={f.key} className={f.type === "textarea" ? "sm:col-span-2" : ""}>
+                <label className={`${LBL} flex items-center gap-1`}>{f.type === "secret" ? <KeyRound className="h-3 w-3" /> : null}{f.label}{f.required ? <span className="text-red-600"> *</span> : null}</label>
+                {f.type === "textarea"
+                  ? <textarea aria-label={f.label} rows={3} className="w-full rounded-md border border-slate-300 bg-white p-2 text-sm dark:border-slate-700 dark:bg-slate-900" value={vals[f.key] ?? ""} onChange={(e) => setVals({ ...vals, [f.key]: e.target.value })} />
+                  : <Input aria-label={f.label} type={f.type === "secret" ? "password" : f.type === "number" ? "number" : f.type === "email" ? "email" : "text"} autoComplete="off" value={vals[f.key] ?? ""} onChange={(e) => setVals({ ...vals, [f.key]: e.target.value })} placeholder={f.type === "url" ? "https://…" : f.type === "secret" ? "Fica cifrado em cofre" : ""} />}
+                {f.help && <p className="mt-0.5 text-[11px] text-slate-500">{f.help}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {method === "secure_browser" && (
+        <p className="rounded-md border border-sky-200 bg-sky-50 p-2 text-[11px] text-sky-900" data-testid="secure-browser-note">Você faz o login <strong>uma única vez</strong> no navegador seguro da Allka (a sua senha não passa por nós) e autoriza, por tempo determinado, quem pode usar. Você pode revogar a qualquer momento e todo uso fica registrado. Configure em <strong>Navegador seguro</strong> no menu.</p>
+      )}
       {needsSecret && (
         <div className="rounded-md border border-amber-300 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-950/20">
           <label className={`${LBL} flex items-center gap-1`}><KeyRound className="h-3 w-3" />Segredo protegido (token ou senha de aplicação — revogável)</label>
@@ -98,7 +121,7 @@ export function ConnectForm({
       </div>
       {err && <p className="rounded bg-red-50 px-2 py-1 text-xs text-red-700" role="alert">{err}</p>}
       <div className="flex items-center gap-2">
-        <Button size="sm" disabled={busy || !taskOk} onClick={() => void submit()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{submitLabel}</Button>
+        <Button size="sm" disabled={busy || !taskOk || !fieldsOk} onClick={() => void submit()}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{submitLabel}</Button>
         {onCancel && <Button size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>}
       </div>
     </div>

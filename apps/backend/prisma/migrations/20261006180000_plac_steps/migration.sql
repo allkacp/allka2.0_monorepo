@@ -1,0 +1,50 @@
+-- PLAC: cronograma de 13 passos abertos automaticamente quando o projeto é pago (2026-10-06). Modelo editável + passos de cada projeto.
+CREATE TABLE `plac_step_templates` (
+  `id` VARCHAR(191) NOT NULL,
+  `key` VARCHAR(191) NOT NULL,
+  `sort_order` INTEGER NOT NULL DEFAULT 0,
+  `name` VARCHAR(191) NOT NULL,
+  `description` TEXT NULL,
+  `role_kind` VARCHAR(191) NOT NULL DEFAULT 'ac',
+  `phase` VARCHAR(191) NOT NULL DEFAULT 'inicio',
+  `after_key` VARCHAR(191) NULL,
+  `offset_days` DOUBLE NOT NULL DEFAULT 0,
+  `estimated_hours` DOUBLE NULL,
+  `hourly_cost` DOUBLE NULL,
+  `repeat_rule` VARCHAR(191) NOT NULL DEFAULT 'none',
+  `audience` VARCHAR(191) NOT NULL DEFAULT 'all',
+  `four_f_ids` TEXT NULL,
+  `internal_user_ids` TEXT NULL,
+  `is_active` BOOLEAN NOT NULL DEFAULT true,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL,
+  UNIQUE INDEX `plac_step_templates_key_key`(`key`),
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE `plac_project_steps` (
+  `id` VARCHAR(191) NOT NULL,
+  `project_id` VARCHAR(191) NOT NULL,
+  `template_key` VARCHAR(191) NOT NULL,
+  `sort_order` INTEGER NOT NULL DEFAULT 0,
+  `name` VARCHAR(191) NOT NULL,
+  `description` TEXT NULL,
+  `role_kind` VARCHAR(191) NOT NULL DEFAULT 'ac',
+  `phase` VARCHAR(191) NOT NULL DEFAULT 'inicio',
+  `estimated_hours` DOUBLE NULL,
+  `due_at` DATETIME(3) NULL,
+  `status` VARCHAR(191) NOT NULL DEFAULT 'pendente',
+  `completed_at` DATETIME(3) NULL,
+  `completed_by_user_id` VARCHAR(191) NULL,
+  `assignee_user_id` VARCHAR(191) NULL,
+  `internal_user_ids` TEXT NULL,
+  `note` TEXT NULL,
+  `overdue_alerted_at` DATETIME(3) NULL,
+  `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `updated_at` DATETIME(3) NOT NULL,
+  UNIQUE INDEX `plac_project_steps_project_id_template_key_key`(`project_id`, `template_key`),
+  INDEX `plac_project_steps_project_id_idx`(`project_id`),
+  INDEX `plac_project_steps_status_due_at_idx`(`status`, `due_at`),
+  PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE `plac_project_steps` ADD CONSTRAINT `plac_project_steps_project_id_fkey` FOREIGN KEY (`project_id`) REFERENCES `projects`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;

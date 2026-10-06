@@ -49,6 +49,7 @@ import { useIallkaContext } from "@/contexts/iallka-context";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { ProjectConnectionsTab } from "@/components/project-connections-tab";
 import { ProjectMemoriaTab } from "@/components/project-memoria-tab";
+import { ProjectPlacTab } from "@/components/project-plac-tab";
 import { LaunchSessionPanel } from "@/components/launch-session-panel";
 import { TaskReleaseBlockersPanel } from "@/components/task-release-blockers-panel";
 import { ProjectMetaAdsWidget } from "@/components/project-meta-ads-widget";
@@ -1535,7 +1536,7 @@ export function ProjectViewSlidePanel({
               >
                 {/* Tab bar */}
                 <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
-                  <TabsList className="grid w-max grid-cols-11 gap-1 bg-transparent p-0 h-auto">
+                  <TabsList className="grid w-max grid-cols-12 gap-1 bg-transparent p-0 h-auto">
                     {[
                       { value: "visao-geral", label: "Visão Geral" },
                       {
@@ -1550,6 +1551,7 @@ export function ProjectViewSlidePanel({
                       { value: "financeiro", label: "Financeiro" },
                       { value: "equipe", label: "Equipe" },
                       { value: "nomades", label: "Nômades" },
+                      { value: "plac", label: "13 Passos (PLAC)" },
                       { value: "conexoes", label: "Conexões" },
                       { value: "memoria", label: "Memória" },
                       { value: "lancamento-ia", label: "IA de Lançamento" },
@@ -3065,6 +3067,15 @@ export function ProjectViewSlidePanel({
                 {/* ══════════════════════════════════════════════════════════
                     TAB: CONEXÕES
                 ══════════════════════════════════════════════════════════ */}
+                <TabsContent
+                  value="plac"
+                  className="flex-1 overflow-y-auto bg-slate-200 mt-0"
+                >
+                  <div className="px-[50px] py-[30px] pb-[80px] space-y-4">
+                    <ProjectPlacTab projectId={project.id} />
+                  </div>
+                </TabsContent>
+
                 <TabsContent
                   value="conexoes"
                   className="flex-1 overflow-y-auto bg-slate-200 mt-0"

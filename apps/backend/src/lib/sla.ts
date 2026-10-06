@@ -6,6 +6,7 @@
 // O relógio pode ser PAUSADO (motivo + responsável pela pendência) e RETOMADO: o que faltava continua de onde parou.
 //
 // Produto sem regras: nenhum relógio é criado e nada muda no prazo atual.
+import { businessMinutesPerDay, ensureWorkCalendar, getBusinessCalendar, isNonWorkday } from "./work-calendar";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { logProjectDecision } from "./catalog2-cycles";
 
@@ -45,29 +46,35 @@ export const SLA_RESPONSIBLES = ["client", "agency", "nomad", "leader", "admin",
 export const SLA_RESPONSIBLE_LABEL: Record<(typeof SLA_RESPONSIBLES)[number], string> = { client: "Cliente", agency: "Agência", nomad: "Nômade", leader: "Líder", admin: "Administração", platform: "Plataforma externa" };
 
 // ── Aritmética de tempo ───────────────────────────────────────────────────────────────────────────────
+// O expediente, os dias úteis e os feriados vêm do CALENDÁRIO DA PLATAFORMA (configurações gerais) — ver work-calendar.ts.
+// Padrão sem nada cadastrado: segunda a sexta, 09:00–17:00, sem feriados.
 export const BUSINESS_START_HOUR = 9;
 export const BUSINESS_END_HOUR = 17;
 export const BUSINESS_MINUTES_PER_DAY = (BUSINESS_END_HOUR - BUSINESS_START_HOUR) * 60;
-const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
+const setMin = (x: Date, mins: number) => x.setHours(Math.floor(mins / 60), mins % 60, 0, 0);
+const minOfDay = (x: Date) => x.getHours() * 60 + x.getMinutes();
 
-/** Primeiro instante útil em ou depois de `d` (pula fim de semana e horas fora da janela comercial). */
+/** Primeiro instante útil em ou depois de `d` (pula dias não úteis, feriados e horas fora do expediente). */
 export function nextBusinessInstant(d: Date): Date {
+  const c = getBusinessCalendar();
   const x = new Date(d.getTime());
-  for (let guard = 0; guard < 14; guard++) {
-    if (isWeekend(x)) { x.setDate(x.getDate() + 1); x.setHours(BUSINESS_START_HOUR, 0, 0, 0); continue; }
-    if (x.getHours() < BUSINESS_START_HOUR) { x.setHours(BUSINESS_START_HOUR, 0, 0, 0); return x; }
-    if (x.getHours() >= BUSINESS_END_HOUR) { x.setDate(x.getDate() + 1); x.setHours(BUSINESS_START_HOUR, 0, 0, 0); continue; }
+  for (let guard = 0; guard < 800; guard++) {
+    if (isNonWorkday(x, c)) { x.setDate(x.getDate() + 1); setMin(x, c.startMin); continue; }
+    const m = minOfDay(x);
+    if (m < c.startMin) { setMin(x, c.startMin); return x; }
+    if (m >= c.endMin) { x.setDate(x.getDate() + 1); setMin(x, c.startMin); continue; }
     return x;
   }
   return x;
 }
 
-/** Soma `minutes` minutos ÚTEIS (janela comercial, segunda a sexta). */
+/** Soma `minutes` minutos ÚTEIS (expediente configurado, dias úteis e feriados). */
 export function addBusinessMinutes(from: Date, minutes: number): Date {
+  const c = getBusinessCalendar();
   let cur = nextBusinessInstant(from);
   let left = Math.max(0, Math.round(minutes));
   for (let guard = 0; guard < 100000 && left > 0; guard++) {
-    const endOfDay = new Date(cur.getTime()); endOfDay.setHours(BUSINESS_END_HOUR, 0, 0, 0);
+    const endOfDay = new Date(cur.getTime()); setMin(endOfDay, c.endMin);
     const room = Math.floor((endOfDay.getTime() - cur.getTime()) / 60000);
     if (left <= room) return new Date(cur.getTime() + left * 60000);
     left -= room;
@@ -78,11 +85,12 @@ export function addBusinessMinutes(from: Date, minutes: number): Date {
 
 /** Minutos úteis entre dois instantes (0 se `to` <= `from`). */
 export function businessMinutesBetween(from: Date, to: Date): number {
+  const c = getBusinessCalendar();
   if (to.getTime() <= from.getTime()) return 0;
   let cur = nextBusinessInstant(from);
   let total = 0;
   for (let guard = 0; guard < 100000 && cur.getTime() < to.getTime(); guard++) {
-    const endOfDay = new Date(cur.getTime()); endOfDay.setHours(BUSINESS_END_HOUR, 0, 0, 0);
+    const endOfDay = new Date(cur.getTime()); setMin(endOfDay, c.endMin);
     const stop = Math.min(endOfDay.getTime(), to.getTime());
     total += Math.max(0, Math.floor((stop - cur.getTime()) / 60000));
     cur = nextBusinessInstant(new Date(endOfDay.getTime() + 1));
@@ -94,7 +102,7 @@ export function businessMinutesBetween(from: Date, to: Date): number {
 export function computeDue(anchor: Date, amount: number, unit: string): Date {
   if (unit === "calendar_days") return new Date(anchor.getTime() + amount * 86400000);
   if (unit === "business_hours") return addBusinessMinutes(anchor, amount * 60);
-  return addBusinessMinutes(anchor, amount * BUSINESS_MINUTES_PER_DAY); // business_days
+  return addBusinessMinutes(anchor, amount * businessMinutesPerDay()); // business_days
 }
 
 /** Quanto falta (na mesma unidade de contagem) entre `at` e o prazo — base da retomada depois de uma pausa. */
@@ -149,6 +157,7 @@ export function clockDisplay(c: { status: string; due_at: Date | null }, now = n
 
 /** Cria os relógios previstos pelas regras da versão para os produtos contratados. Idempotente (uma linha por regra/alvo/ciclo). */
 export async function materializeSlaClocks(db: Db, projectId: string, projectProductIds: string[]): Promise<number> {
+  await ensureWorkCalendar(db);
   let created = 0;
   const pps = await db.projectProduct.findMany({ where: { id: { in: projectProductIds }, project_id: projectId, catalog2_version_id: { not: null } }, select: { id: true, catalog2_version_id: true, catalog2_period_months: true } });
   for (const pp of pps) {
@@ -193,6 +202,7 @@ export async function materializeSlaClocks(db: Db, projectId: string, projectPro
 
 /** Pausa os relógios (ainda correndo) de uma tarefa — a parte dependente espera. Registra motivo e responsável. */
 export async function pauseTaskClocks(db: Db, taskId: string, p: { reason: string; reasonText?: string | null; party?: string; userId?: string | null; stageKey?: string | null }): Promise<number> {
+  await ensureWorkCalendar(db);
   const clocks = await db.projectSlaClock.findMany({ where: { project_task_id: taskId, status: { in: ["correndo", "aguardando"] } } });
   let n = 0;
   const now = new Date();
@@ -207,6 +217,7 @@ export async function pauseTaskClocks(db: Db, taskId: string, p: { reason: strin
 
 /** Retoma os relógios pausados de uma tarefa: o que faltava continua a contar a partir de agora. */
 export async function resumeTaskClocks(db: Db, taskId: string, resolvedBy?: string | null, onlyReason?: string): Promise<number> {
+  await ensureWorkCalendar(db);
   const clocks = await db.projectSlaClock.findMany({ where: { project_task_id: taskId, status: "pausado" }, include: { pauses: { where: { resolved_at: null } } } });
   let n = 0;
   const now = new Date();
@@ -238,6 +249,7 @@ export async function resumeTaskClocks(db: Db, taskId: string, resolvedBy?: stri
 
 /** Âncora o relógio (primeira vez) e calcula o prazo. Também grava o prazo na tarefa (due_date) quando o escopo é a própria tarefa. */
 export async function anchorClock(db: Db, clockId: string, at: Date): Promise<void> {
+  await ensureWorkCalendar(db);
   const c = await db.projectSlaClock.findUnique({ where: { id: clockId } });
   if (!c || c.anchor_at || c.status === "concluido") return;
   const due = computeDue(at, c.amount, c.unit);
@@ -252,6 +264,7 @@ const DONE_TASK = ["CONCLUIDA", "APROVADA"];
  * tarefa liberada → âncora de tarefa/implantação; etapa aberta → âncora de etapa; ciclo iniciado → âncora de ciclo; fechamento do ciclo → relatório.
  */
 export async function syncSlaClocks(db: Db, projectId: string): Promise<void> {
+  await ensureWorkCalendar(db);
   const clocks = await db.projectSlaClock.findMany({ where: { project_id: projectId, status: { not: "concluido" } } });
   if (clocks.length === 0) return;
   const now = new Date();
@@ -311,6 +324,7 @@ export async function syncSlaClocks(db: Db, projectId: string): Promise<void> {
 
 /** Relógios de uma tarefa (e do produto dela) com estado de exibição, pausas e motivo — para as telas. */
 export async function slaView(db: Db, taskId: string) {
+  await ensureWorkCalendar(db);
   const task = await db.projectTask.findUnique({ where: { id: taskId }, select: { project_product_id: true, project_id: true } });
   if (!task) return [];
   const clocks = await db.projectSlaClock.findMany({ where: { OR: [{ project_task_id: taskId }, { project_task_id: null, project_product_id: task.project_product_id }] }, include: { pauses: { orderBy: { started_at: "asc" } } }, orderBy: { created_at: "asc" } });

@@ -29,6 +29,7 @@ import {
 import { computePricing, defaultSelection, PRICING_MODES, type PricingMode } from "./catalog2-pricing";
 import { logCommercialChangeEvent } from "./catalog2-commercial-change-log";
 import { recordCatalog2ProductHistory } from "./catalog2-product-history";
+import { parseDepends, validateStepFlow, validateStepExecutor } from "./step-flow";
 import { maybeCreateCatalog2ActivationJobOnStatusTransition, notifyValidQuoteOwnersOfCommercialChange, createCatalog2NotificationJob, type Catalog2NotificationRecipientInput } from "./catalog2-notifications";
 import type { DbClient } from "./project-scope";
 import { cloneConnections, serializeRequirement, validateConnectionConfig } from "./connections/requirements";
@@ -119,6 +120,46 @@ export async function renameProductInternalName(
   return { changed: true, internal_name: name, slug: newSlug ?? product.slug };
 }
 
+/** Ao remover uma etapa, tira a chave dela do fluxo das outras (dependências e "mesmo executor"). */
+export async function cleanStepFlowRefs(db: Pick<typeof prisma, "catalog2TaskStep">, taskId: string, removedKey: string) {
+  const steps = await db.catalog2TaskStep.findMany({ where: { task_id: taskId } });
+  for (const s of steps) {
+    const deps = parseDepends(s.depends_on_json);
+    const patch: Record<string, unknown> = {};
+    if (deps && deps.includes(removedKey)) patch.depends_on_json = JSON.stringify(deps.filter((k) => k !== removedKey));
+    if (s.executor_same_as_key === removedKey) { patch.executor_same_as_key = null; patch.executor_policy = "auto"; }
+    if (Object.keys(patch).length) await db.catalog2TaskStep.update({ where: { id: s.id }, data: patch });
+  }
+}
+export const TASK_STRUCTURES = ["single", "multiple"] as const;
+export type TaskStructure = (typeof TASK_STRUCTURES)[number];
+/** Produto individual tem UMA tarefa principal (as tarefas condicionais de adicionais não contam). Só combos/compostos têm várias. */
+export async function assertCanAddBaseTask(db: Pick<typeof prisma, "catalog2ProductVersion" | "catalog2Task">, versionId: string, opts: { conditional?: boolean } = {}) {
+  if (opts.conditional) return;
+  const v = await db.catalog2ProductVersion.findUnique({ where: { id: versionId }, select: { product: { select: { task_structure: true } } } });
+  if (v?.product.task_structure !== "single") return;
+  const existing = await db.catalog2Task.count({ where: { version_id: versionId, is_conditional: false } });
+  if (existing >= 1) throw new Catalog2Error("Este produto tem uma única tarefa principal. O restante do trabalho é cadastrado como etapas dentro dela. Só produtos compostos (combos) têm várias tarefas.", 422, "single_task_product");
+}
+export async function setProductTaskStructure(productId: string, structure: string, actorUserId: string) {
+  if (!(TASK_STRUCTURES as readonly string[]).includes(structure)) throw new Catalog2Error("Estrutura inválida: use single ou multiple.", 422, "invalid_task_structure");
+  const product = await prisma.catalog2Product.findUnique({ where: { id: productId }, select: { id: true, task_structure: true, internal_name: true } });
+  if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (product.task_structure === structure) return { changed: false, task_structure: structure };
+  if (structure === "single") {
+    const versions = await prisma.catalog2ProductVersion.findMany({ where: { product_id: productId }, select: { id: true, version_number: true } });
+    for (const v of versions) {
+      const n = await prisma.catalog2Task.count({ where: { version_id: v.id, is_conditional: false } });
+      if (n > 1) throw new Catalog2Error(`A versão ${v.version_number} tem ${n} tarefas. Para virar produto individual, ela precisa ter só uma tarefa principal (as demais viram etapas).`, 422, "too_many_tasks_for_single");
+    }
+  }
+  await prisma.$transaction(async (tx) => {
+    await tx.catalog2Product.update({ where: { id: productId }, data: { task_structure: structure } });
+    await recordCatalog2ProductHistory(tx, { productId, eventType: "task_structure_updated", description: `Estrutura de tarefas alterada de "${product.task_structure}" para "${structure}" (${structure === "single" ? "produto individual: uma tarefa principal" : "produto composto: várias tarefas"}).`, before: { task_structure: product.task_structure }, after: { task_structure: structure }, actorUserId });
+  });
+  return { changed: true, task_structure: structure };
+}
+
 export async function createProduct(
   input: {
     internal_name: string;
@@ -128,6 +169,7 @@ export async function createProduct(
     origin?: string | null;
     four_f_ids?: string[];
     version_title?: string;
+    task_structure?: string | null;
   },
   actorUserId: string,
 ) {
@@ -141,6 +183,7 @@ export async function createProduct(
       data: {
         slug,
         internal_name: input.internal_name,
+        task_structure: input.task_structure === "single" ? "single" : "multiple",
         pillar_id: input.pillar_id ?? null,
         category_id: input.category_id ?? null,
         origin: input.origin ?? null,
@@ -201,6 +244,8 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
         ...commercialCloneData(last as unknown as Record<string, unknown> | null),
         // O prazo comercial base acompanha a versão (senão a nova versão "perde" o prazo).
         base_commercial_deadline_days: last?.base_commercial_deadline_days ?? null,
+        base_commercial_deadline_hours: last?.base_commercial_deadline_hours ?? null,
+        emergency_enabled: last?.emergency_enabled ?? false,
         pricing_mode: last?.pricing_mode ?? undefined,
         manual_price: last?.manual_price ?? undefined,
         manual_deadline_days: last?.manual_deadline_days ?? undefined,
@@ -248,6 +293,8 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         task_model_id: t.task_model_id,
         task_model_revision: t.task_model_revision,
         requires_qualification: t.requires_qualification,
+        stage_execution: t.stage_execution,
+        stage_payout_mode: t.stage_payout_mode,
         cycle_type: t.cycle_type,
         repeat_rule: t.repeat_rule,
         repeat_every_cycles: t.repeat_every_cycles,
@@ -302,6 +349,21 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
           first_execution_only: s.first_execution_only,
           skip_when_same_executor: s.skip_when_same_executor,
           ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined,
+          depends_on_json: s.depends_on_json,
+          executor_policy: s.executor_policy,
+          executor_same_as_key: s.executor_same_as_key,
+          executor_kind: s.executor_kind,
+          leader_mode: s.leader_mode,
+          leader_user_id: s.leader_user_id,
+          internal_step: s.internal_step,
+          requires_qualification: s.requires_qualification,
+          release_next_auto: s.release_next_auto,
+          emergency_reduction_minutes: s.emergency_reduction_minutes,
+          emergency_extra_kind: s.emergency_extra_kind,
+          emergency_extra_value: s.emergency_extra_value,
+          approval_hours: s.approval_hours,
+          executor_accept_hours: s.executor_accept_hours,
+          rework_hours: s.rework_hours,
           task_id: nt.id,
           key: s.key,
           name: s.name,
@@ -552,6 +614,8 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
   if (v.tasks.length === 0) issues.push("O produto precisa de ao menos uma tarefa.");
   // Toda tarefa precisa de ao menos uma ETAPA: é a etapa que carrega especialidade,
   // horas e o pagamento do nômade (ou o custo interno).
+  if (v.emergency_enabled && !v.tasks.some((t) => t.steps.some((s) => (s.emergency_reduction_minutes ?? 0) > 0 || s.emergency_extra_kind != null))) issues.push("A entrega emergencial está ligada, mas nenhuma etapa define redução de prazo ou adicional. Configure as etapas ou desligue a opção.");
+  if (v.product.task_structure === "single" && v.tasks.filter((t) => !t.is_conditional).length > 1) issues.push("Produto individual precisa de uma única tarefa principal; as demais divisões devem ser etapas (ou marque o produto como composto/combo).");
   for (const t of v.tasks) {
     // IA (Pedido 3, fase 5): tarefa feita por IA (ou humano+IA) precisa de um perfil de IA ativo e autorizado.
     if (AI_EXECUTION_MODES.includes(t.execution_mode)) {
@@ -566,7 +630,16 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
         if (runCost(full, 1000, 1000) === null) issues.push(`A tarefa "${t.name}": o custo da IA não pode ser calculado (defina o custo por 1.000 tokens ou um custo fixo no perfil "${full.name}").`);
       }
     }
-    if (t.steps.length === 0) issues.push(`A tarefa "${t.name}" precisa de ao menos uma etapa.`);
+    for (const e of validateStepFlow(t.steps.map((s) => ({ key: s.key, name: s.name, sort_order: s.sort_order, depends_on_json: s.depends_on_json, executor_policy: s.executor_policy, executor_same_as_key: s.executor_same_as_key })))) issues.push(`Tarefa "${t.name}": ${e}`);
+    for (const s of t.steps) {
+      const e = validateStepExecutor(s);
+      if (e) issues.push(`Tarefa "${t.name}": ${e}`);
+      else if (s.executor_kind === "leader" && s.leader_mode === "specific" && s.leader_user_id) {
+        const u = await prisma.user.findUnique({ where: { id: s.leader_user_id }, select: { is_active: true, role: true } });
+        if (!u || !u.is_active || !["lider", "admin"].includes(u.role)) issues.push(`Tarefa "${t.name}": o líder escolhido para a etapa "${s.name}" não existe, está inativo ou não é líder.`);
+      }
+    }
+    if (t.steps.length === 0) issues.push(`A tarefa "${t.name}" precisa de ao menos uma etapa (as etapas formam o checklist da tarefa).`);
     for (const st of t.steps) {
       if (!(st.estimated_minutes && st.estimated_minutes > 0) || !(st.specialty_id ?? t.specialty_id)) {
         issues.push(`A etapa "${st.name}" da tarefa "${t.name}" precisa de especialidade e horas.`);
@@ -1254,6 +1327,7 @@ export async function getProductDetail(productId: string) {
   return {
     id: product.id,
     delivery_recurrence: product.delivery_recurrence,
+    task_structure: product.task_structure,
     slug: product.slug,
     sequence_number: product.sequence_number,
     internal_name: product.internal_name,
@@ -1279,6 +1353,8 @@ export async function getProductDetail(productId: string) {
       ...serializeCommercialFields(v as unknown as Record<string, unknown>),
       change_summary: v.change_summary,
       base_commercial_deadline_days: v.base_commercial_deadline_days ?? null,
+      base_commercial_deadline_hours: v.base_commercial_deadline_hours ?? null,
+      emergency_enabled: v.emergency_enabled ?? false,
       accepts_one_time: v.accepts_one_time,
       accepts_recurring: v.accepts_recurring,
       has_initial_implementation: v.has_initial_implementation,
@@ -1371,6 +1447,8 @@ export async function getProductDetail(productId: string) {
         task_model_id: t.task_model_id,
         task_model_revision: t.task_model_revision,
         requires_qualification: t.requires_qualification,
+        stage_execution: t.stage_execution,
+        stage_payout_mode: t.stage_payout_mode,
         cycle_type: t.cycle_type,
         repeat_rule: t.repeat_rule,
         repeat_every_cycles: t.repeat_every_cycles,
@@ -1452,6 +1530,22 @@ export async function getProductDetail(productId: string) {
           sort_order: s.sort_order,
           estimated_minutes: s.estimated_minutes,
           is_conditional: s.is_conditional,
+          // Fluxo: null = depois da anterior · [] = começa junto · [chaves] = depois de todas elas
+          depends_on: parseDepends(s.depends_on_json),
+          executor_policy: s.executor_policy ?? "auto",
+          executor_same_as_key: s.executor_same_as_key ?? null,
+          executor_kind: s.executor_kind ?? "nomad",
+          leader_mode: s.leader_mode ?? "auto",
+          leader_user_id: s.leader_user_id ?? null,
+          internal_step: s.internal_step ?? false,
+          requires_qualification: s.requires_qualification ?? true,
+          release_next_auto: s.release_next_auto ?? true,
+          emergency_reduction_minutes: s.emergency_reduction_minutes ?? null,
+          emergency_extra_kind: s.emergency_extra_kind ?? null,
+          emergency_extra_value: s.emergency_extra_value ?? null,
+          approval_hours: s.approval_hours ?? null,
+          executor_accept_hours: s.executor_accept_hours ?? null,
+          rework_hours: s.rework_hours ?? null,
           specialty_id: s.specialty_id,
           step_model_id: s.step_model_id,
           step_model_revision: s.step_model_revision,

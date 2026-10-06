@@ -53,10 +53,10 @@ function Item({ quote, item, reload }: { quote: any; item: any; reload: () => vo
       </div>
       {mode === "connect" && (
         <ConnectForm
-          allowedMethods={item.allowed_methods} permissionLevels={item.permission_levels ?? [{ key: item.permission_level, label: item.permission_level }]} defaultPermission={item.permission_level} defaultScope={item.default_grant_scope} tasks={tasks}
+          fields={item.fields ?? []} allowedMethods={item.allowed_methods} permissionLevels={item.permission_levels ?? [{ key: item.permission_level, label: item.permission_level }]} defaultPermission={item.permission_level} defaultScope={item.default_grant_scope} tasks={tasks}
           submitLabel="Conectar e usar neste pedido" onCancel={() => setMode("none")}
           onSubmit={async (b) => {
-            const created = await apiClient.createConnection({ connection_type_id: item.connection_type.id, method: b.method, label: b.label ?? item.label, account_label: b.account_label, external_id: b.external_id, permission_level: b.permission_level, ...(b.secret_value ? { secret_value: b.secret_value } : {}) });
+            const created = await apiClient.createConnection({ connection_type_id: item.connection_type.id, method: b.method, label: b.label ?? item.label, account_label: b.account_label, external_id: b.external_id, permission_level: b.permission_level, ...(b.fields ? { fields: b.fields } : {}), ...(b.secret_value ? { secret_value: b.secret_value } : {}) });
             await save({ handling: "now", connection_id: created.id, grant_scope: b.scope, ...(b.task_ids ? { task_keys: b.task_ids } : {}) });
             if (b.method === "oauth") {
               try { const o = await apiClient.startConnectionOAuth(created.id, b.permission_level); window.location.href = o.url; return; } catch (e: any) { setErr(e?.message ?? "A integração oficial ainda não está configurada; a conexão ficou como rascunho."); }

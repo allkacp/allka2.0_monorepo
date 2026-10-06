@@ -120,3 +120,58 @@ Release/secret/artefatos temporários apagados ao final, como sempre.
 - Funções: fonte única de preço (regra versionada), efeito de esforço, disponibilidade de opção (orçamento personalizado), tipos de adicional, gatilhos de conexão, portões de aprovação, prazos/SLA, vínculo entre produtos, edição do nome interno, qualificação configurável, perfil de IA com estados de custo.
 - Produto ID 1 configurado com as funções novas (continua Em preparação, V1 rascunho, invisível ao cliente). Nada enviado a QA/produção.
 - Pendente de deploy: migração + backend + frontend; pacotes de transferência (export/import) ainda não carregam as estruturas novas.
+
+## 2026-10-05 — Reunião de cadastro: produto individual × composto (local, nada publicado)
+- Migração aditiva 20261005120000_task_structure (padrão "multiple": produtos antigos não mudam). Os 36 produtos oficiais foram marcados como individuais (uma tarefa principal) só na base local.
+- Pendente de deploy: migração + backend + frontend + marcação dos produtos.
+
+## 2026-10-05 (2) — Fluxo das etapas: paralelo e dependências (local, nada publicado)
+- Migração aditiva 20261005140000_step_flow (etapas do catálogo: depends_on_json, executor_policy, executor_same_as_key; etapas do projeto: depende_de_json, herdar_executor_de). Padrão = comportamento antigo.
+- Pendente de deploy: migração + backend + frontend. Limite conhecido: um nômade por tarefa (rodízio por etapa é item à parte).
+
+## 2026-10-05 (3) — Execução por etapa, fase 1: quem recebe a etapa (local, nada publicado)
+- Migração aditiva 20261005160000_step_executor_kind (executor_kind, leader_mode, leader_user_id na etapa do catálogo). Padrão = nômade, como sempre.
+- Pendente de deploy: migração + backend + frontend.
+
+## 2026-10-05 (4) — Tipo da especialidade (local, nada publicado)
+- Migração aditiva 20261005180000_specialty_execution_kind (humano/ia/hibrido; padrão humano). Pendente de deploy.
+
+## 2026-10-05 (5) — Execução por etapa, fase 2: qualificação e aprovação por etapa (local, nada publicado)
+- Migração aditiva 20261005200000_stage_execution (tarefa/etapa do catálogo, tarefa/etapa do projeto e tabela project_task_stage_reviews). Padrão = comportamento antigo.
+- Rotas novas em /api/project-tasks/:id/etapas/:stageId/{decisao,liberar-proxima,avisar-cliente,historico}. Pendente de deploy.
+
+## 2026-10-06 — Calendário de trabalho, execução por etapa (telas) e ajustes de cadastro (local, nada publicado)
+- Migração aditiva 20261006090000_work_calendar (platform_work_calendar, platform_holidays). Padrão = seg-sex 09-17 sem feriados.
+- Novas rotas: /api/work-calendar. Painel da tarefa por etapa (frontend). Pendente de deploy.
+
+## 2026-10-06 — B3/B4/B5/C7 (LOCAL, nada publicado)
+- Migrações locais: 20261006100000_emergency_delivery, 20261006120000_step_approval_rework_hours, 20261006130000_product_audience (todas com rollback.sql).
+- B3 entrega emergencial (preço/prazo por etapa), B4/B5 prazos de refação/aprovação em horas por etapa, C7 visibilidade do produto por público (lista/detalhe/cotação/cesta/IA).
+- Nenhum deploy, push ou publicação de produto.
+
+## 2026-10-06 (3) — A8b-3/A8b-4/A9 + checklist + pacotes (LOCAL, nada publicado)
+- Migrações locais: 20261006140000_stage_payout_mode, 20261006150000_stage_executor_preference (com rollback.sql).
+- Pagamento do nômade por etapa (per_stage|at_end), executor por etapa (preferir/nunca o mesmo, reserva por prazo), questionário ao executor, checklist na execução, importação de pacote ampliada.
+- Nenhum deploy, push ou publicação de produto.
+
+## 2026-10-06 (4)
+- Nome interno removido (sincroniza com o título); público do produto em lista de marcação (company/agency/partner/internal); IA só com o nome do produto + mínimos. Sem migração nova. Nada publicado.
+
+## 2026-10-06 (5)
+- Migração local 20261006160000_commercial_deadline_hours (+rollback). Agency = só agência comum. Nada publicado; dados preenchidos preservados.
+
+## 2026-10-06 (14)
+- Migração local 20261006170000_connection_type_fields (+rollback): fields_json no tipo, field_values_json na conexão, tombstone de tipos excluídos. Nada publicado.
+
+## 2026-10-06 (16)
+- Migração local 20261006180000_plac_steps (+rollback). PLAC 13 passos. A12: espelho completo local->online no final. Nada publicado.
+
+## 2026-10-06 (17)
+- Migrações locais 20261006190000_internal_tasks e 20261006200000_secure_browser (+rollback). D2 e D3 (plano de controle; navegador real pendente). Nada publicado. A12: incluir também internal_task_settings, tabelas de navegador seguro (perfis/grants não são dados de produto: não migrar) no espelho.
+
+## 2026-10-06 — Navegador seguro real (D3) — LOCAL, nada publicado
+- Novo serviço `browser-runner` (docker/browser-runner): Chromium via Playwright 1.49.1, só alcançável pelo backend (`SECURE_BROWSER_RUNNER_URL`/`SECURE_BROWSER_RUNNER_SECRET`). No compose local publica em 127.0.0.1:7000 apenas para testes; em produção NÃO publicar.
+- Backend: driver `runner` (ativo quando `SECURE_BROWSER_RUNNER_URL` existe), ponte WebSocket `/api/secure-browser/ws/:id?t=ticket` (lib/secure-browser-ws.ts). Proxy reverso de produção precisa repassar WebSocket (Upgrade) em `/api`.
+- Cofre: `META_TOKEN_ENCRYPTION_KEY` precisa existir no servidor (a do compose local é só de desenvolvimento). `ws` declarado em apps/backend/package.json (lock atualizado; backup em backups/pre-runner).
+- Para ir ao ar: contêiner extra no servidor (≥2 GB RAM livres), variáveis acima, WebSocket liberado no proxy. Aguardando ordem do usuário.
+- 2026-10-06 (2): migração `20261006210000_browser_allowed_hosts` (coluna `allowed_hosts` em browser_profiles; rollback.sql incluso). Runner: sessão de USO só navega nos sites permitidos e bloqueia "sair da conta"; sessão de uso nunca regrava o login guardado. Exclusão de conta guardada (DELETE /api/secure-browser/profiles/:id).

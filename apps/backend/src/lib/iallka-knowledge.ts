@@ -40,6 +40,8 @@ interface Catalog2KnowledgeOpts {
    * (mesma regra de checkClientVisibility/listClientProducts) — Admin
    * Master vê tudo, inclusive em preparação, sempre rotulado como tal. */
   clientVisibleOnly: boolean;
+  /** Público de quem pergunta (C7): produto exclusivo de outro público nunca entra no contexto da IA. Ausente = só produtos para todos. */
+  audienceViewer?: AudienceViewer | null;
 }
 
 /** Catálogo2 — bloco INFORMATIVO (nunca usado pra `selected_products`).
@@ -47,6 +49,8 @@ interface Catalog2KnowledgeOpts {
  * provisório como fato comercial (sempre rotulado "[PROVISÓRIO]", e só
  * quando `includeProvisional` for true); nunca lista um produto "em
  * preparação" como contratável. */
+import { audienceAllows, type AudienceViewer } from "./catalog2-audience";
+
 export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): Promise<{ text: string; sources: KnowledgeSource[] }> {
   const products = await prisma.catalog2Product.findMany({
     where: { NOT: { internal_name: { startsWith: TEST_LOCAL_PREFIX } } },
@@ -89,6 +93,7 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
     const pend = safeJsonArray(p.import_origin?.pendencies_json);
     const clientVisible = p.status === "disponivel" && !!published && pend.length === 0 && !!pricing?.commercial_ready;
     if (opts.clientVisibleOnly && !clientVisible) continue; // cliente comum nunca vê o que não pode contratar
+    if (opts.clientVisibleOnly && !audienceAllows(p, opts.audienceViewer)) continue; // produto de outro público (C7)
 
     const specialties = Array.from(new Set(target.tasks.map((t) => t.specialty?.name).filter((n): n is string => !!n)));
     const stepCount = target.tasks.reduce((a, t) => a + t._count.steps, 0);

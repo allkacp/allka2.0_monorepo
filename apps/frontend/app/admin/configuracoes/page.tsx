@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { NeonBadge } from "@/components/neon-badge";
+import { WorkCalendarSettings } from "@/components/work-calendar-settings";
+import { PlacSettings } from "@/components/plac-settings";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import {
   Globe,
@@ -1042,6 +1044,10 @@ export default function AdminConfiguracoesPage() {
           <TabsTrigger value="general" className="text-xs px-3 h-8">
             Geral
           </TabsTrigger>
+          <TabsTrigger value="calendar" className="text-xs px-3 h-8">
+            Calendário de trabalho
+          </TabsTrigger>
+          <TabsTrigger value="plac" className="text-xs px-3 h-8">PLAC (13 passos)</TabsTrigger>
           <TabsTrigger value="emails" className="text-xs px-3 h-8">
             Emails
           </TabsTrigger>
@@ -1130,6 +1136,14 @@ export default function AdminConfiguracoesPage() {
         </TabsContent>
 
         {/* ─── EMAILS ────────────────────────────────────────────────────────── */}
+        <TabsContent value="calendar" className="space-y-4">
+          <WorkCalendarSettings />
+        </TabsContent>
+
+        <TabsContent value="plac" className="space-y-4">
+          <PlacSettings />
+        </TabsContent>
+
         <TabsContent value="emails" className="space-y-4">
           {/* Stats — gradient cards (docs/padrao-tabela-empresas.md) */}
           <div className="grid grid-cols-2 gap-3">

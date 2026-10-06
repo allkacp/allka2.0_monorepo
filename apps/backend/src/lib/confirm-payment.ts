@@ -4,6 +4,7 @@ import { projectVisibleToUser } from "./project-scope";
 import { recalculateProjectValue } from "./project-value";
 import { gerarTarefasDoProjeto, type GerarTarefasResult } from "./generate-tasks";
 import { gerarTarefasCatalog2DoProjeto, mergeGerarTarefasResults } from "./generate-tasks-catalog2";
+import { generatePlacForProject } from "./plac";
 import { satisfyPaymentTriggersByReference } from "./task-release-service";
 import { getPaymentGateway } from "./payment-gateway";
 import { getNextSequenceValue, formatInvoiceNumber } from "./sequence";
@@ -380,6 +381,9 @@ export async function confirmPaymentAndGenerateProjectTasks(
     where: { id: project.id },
     data: { status: "in-progress" },
   });
+
+  // PLAC: projeto pago abre o cronograma de 13 passos (uma vez por projeto; os prazos contam do pagamento). Nunca derruba a confirmação.
+  try { await generatePlacForProject(tx, project.id, paidAt); } catch (err) { console.error("[plac] não foi possível abrir os passos PLAC:", err); }
 
   // Gatilho de pagamento (bloco 4/4) — evento financeiro REAL (nunca um
   // gateway novo): qualquer TaskReleaseTrigger esperando este Payment

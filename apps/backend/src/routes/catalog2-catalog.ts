@@ -119,6 +119,7 @@ const selectionSchema = z.object({
   quantity: z.number().int().positive().max(100000).optional(),
   delivery_groups: z.array(z.number().int().positive().max(100000)).max(100000).optional(),
   answers: z.record(z.string()).optional(),
+  emergency: z.boolean().optional(),
 });
 router.post("/products/:slug/configure", async (req, res, next) => {
   try {

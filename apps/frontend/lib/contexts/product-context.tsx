@@ -548,9 +548,7 @@ export function ProductProvider({ children }: { children: ReactNode }) {
   const updateProduct = async (id: string, product: Product) => {
     const calculated = calculateProductPricing(product);
     const payload = frontendToBackendProduct(calculated);
-    // Backend não faz upsert de variations/addons no update — remove antes
-    const { variations: _v, addons: _a, ...rest } = payload as any;
-    const updated: any = await apiClient.updateProduct(id, rest);
+    const updated: any = await apiClient.updateProduct(id, payload as any);
     const next = backendToFrontendProduct(updated as BackendProduct);
     setProducts((prev) => prev.map((p) => (p.id === id ? next : p)));
   };

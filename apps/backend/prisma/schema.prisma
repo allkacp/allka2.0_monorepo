@@ -673,6 +673,7 @@ model BankAccount {
 model Project {
   id                   String          @id @default(cuid())
   title                String
+  plac_steps           PlacProjectStep[]
   description          String?         @db.LongText
   client_id            String?
   client               Company?        @relation("ProjectLegacyClient", fields: [client_id], references: [id])
@@ -1587,6 +1588,10 @@ model ProjectTask {
   // sem afetar a política da área nem tarefas já atribuídas.
   auto_nomad_dispatch_enabled Boolean @default(true)
 
+  // Cópia do modo de execução do cadastro: "task" (padrão) ou "stage" (cada etapa é qualificada e aprovada).
+  stage_execution         String             @default("task")
+  // Pagamento do nômade na execução por etapa (A8b-4): "at_end" (padrão) ou "per_stage".
+  stage_payout_mode       String             @default("at_end")
   stages                  ProjectTaskStage[]
   briefing_answers        TaskBriefingAnswer[]
   attachments             TaskAttachment[]
@@ -1901,6 +1906,24 @@ model ProjectTaskQualification {
 
 // ─── ProjectTaskStage ─────────────────────────────────────────────────────
 
+// Decisões por ETAPA (qualificação do líder e aprovação do cliente) — execução por etapa, A8b fase 2.
+model ProjectTaskStageReview {
+  id             String           @id @default(cuid())
+  stage_id       String
+  stage          ProjectTaskStage @relation(fields: [stage_id], references: [id], onDelete: Cascade)
+  // qualificacao | aprovacao | aviso_cliente
+  kind           String
+  // solicitada | aprovada | reprovada | comentario
+  decision       String
+  round          Int              @default(1)
+  comment        String?          @db.Text
+  actor_user_id  String?
+  created_at     DateTime         @default(now())
+
+  @@index([stage_id, created_at])
+  @@map("project_task_stage_reviews")
+}
+
 model ProjectTaskStage {
   id              String      @id @default(cuid())
   project_task_id String
@@ -1923,6 +1946,29 @@ model ProjectTaskStage {
   // PENDENTE | AGUARDANDO_EXECUTOR | EM_ANDAMENTO | CONCLUIDA | BLOQUEADA
   obrigatoria               Boolean @default(true)
   depende_da_etapa_anterior Boolean @default(true)
+  // Fluxo configurado: JSON com os IDs de etapa do catálogo (catalog_step_ref) que precisam terminar antes. null = sequência antiga.
+  depende_de_json           String? @db.Text
+  // catalog_step_ref da etapa cujo executor esta etapa deve manter. null = executor novo/automático.
+  herdar_executor_de        String?
+  // Execução por etapa (A8b fase 2): o cliente vê/aprova? passa por qualificação? libera a próxima sozinha?
+  visivel_ao_cliente        Boolean   @default(true)
+  exige_qualificacao        Boolean   @default(false)
+  libera_proxima_auto       Boolean   @default(true)
+  rodada_ajuste             Int       @default(0)
+  entregue_em               DateTime?
+  qualificada_em            DateTime?
+  aprovada_em               DateTime?
+  // Prazos configurados na etapa do catálogo, em horas úteis (B4/B5).
+  aprovacao_horas           Int?
+  refacao_horas             Int?
+  // Quem recebe a etapa (A8b-3): preferir o mesmo nômade de outra etapa (reserva até 'reservada_ate') ou nunca o mesmo.
+  preferencia_nomade        String?
+  preferencia_ref           String?
+  aceite_horas              Int?
+  nomade_preferido_id       String?
+  reservada_ate             DateTime?
+  nomade_excluido_id        String?
+  stage_reviews             ProjectTaskStageReview[]
   briefing_necessario       Boolean @default(false)
 
   // ── Motor de execução por etapa ──────────────────────────────────────
@@ -2868,6 +2914,8 @@ model TaskRoutingSettings {
   id                        String   @id @default("singleton")
   offer_timeout_minutes     Int      @default(60)
   mandatory_decline_alerts  Boolean  @default(true)
+  // Prazo padrão (minutos) para o nômade preferido aceitar uma etapa antes de ela abrir para os demais (A8b-3).
+  stage_preferred_accept_minutes Int @default(120)
   updated_at                DateTime @updatedAt
 
   @@map("task_routing_settings")
@@ -5067,6 +5115,10 @@ model Catalog2Specialty {
   max_hourly_rate  Float?
   hourly_rate_note String? @db.Text
 
+  // Tipo da especialidade (reunião 2026-10-05): humano · ia · hibrido ("humano ou IA", a agência escolhe na contratação).
+  // A etapa/tarefa só oferece as especialidades do mesmo tipo do "Quem executa" escolhido.
+  execution_kind String @default("humano")
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -5162,6 +5214,10 @@ model Catalog2Product {
   // periodo configurado sem que isso o transforme em recorrente).
   delivery_recurrence String?
 
+  // Reunião 2026-10-05: "single" = produto individual (UMA tarefa principal; o resto são etapas) · "multiple" = produto composto/combo (várias tarefas).
+  // Padrão do banco "multiple" para não alterar produtos antigos; o cadastro novo envia "single".
+  task_structure String @default("multiple")
+
   // Estado do PRODUTO (nao da versao):
   //   "em_preparacao"            = sem versao publicada; nao aparece pro cliente.
   //   "disponivel"               = tem versao publicada e esta ofertavel.
@@ -5253,6 +5309,10 @@ model Catalog2Product {
   package_items       Catalog2PackageItem[]
   dependency_rules_as_dependent Catalog2DependencyRule[] @relation("DependencyDependentProduct")
   dependency_rules_as_target    Catalog2DependencyRule[] @relation("DependencyTargetProduct")
+
+  // Visibilidade por público (C7): all | company | agency | internal; para agência, nível mínimo de parceiro opcional.
+  visibility_mode             String  @default("all")
+  visibility_min_partner_level String?
 
   @@index([status])
   @@index([pillar_id])
@@ -5509,6 +5569,10 @@ model Catalog2ProductVersion {
   // definicao"; o esforco calculado continua servindo so para planejamento
   // interno e nao vira promessa de entrega.
   base_commercial_deadline_days Int?
+  // Prazo comercial informado em HORAS úteis (2026-10-06); os dias acima são o reflexo (arredondado para cima) pelo calendário da plataforma.
+  base_commercial_deadline_hours Int?
+  // Entrega emergencial (reunião 2026-10-05): o produto oferece prazo menor por um adicional, definido por etapa.
+  emergency_enabled Boolean @default(false)
 
   // ── Modalidades de contratação e ciclos (Pedido 2, 2026-09-29) ─────────────
   // Avulso / recorrente mensal / recorrente com implementação inicial / pacote.
@@ -5786,6 +5850,12 @@ model Catalog2Task {
   // "humano" | "ia" | "hibrido"
   execution_mode String @default("humano")
 
+  // Execução por ETAPA (reunião 2026-10-05): "task" = como sempre (qualificação/aprovação só no fim da tarefa) ·
+  // "stage" = cada etapa é qualificada e aprovada antes de liberar a próxima.
+  stage_execution String @default("task")
+  // Pagamento do nômade na execução por etapa (A8b-4): at_end = créditos retidos até a última etapa · per_stage = cada etapa aprovada paga o nômade dela.
+  stage_payout_mode String @default("at_end")
+
   // Duracao estimada da tarefa (minutos) — base do custo humano.
   estimated_minutes        Int?
   requires_review          Boolean @default(false)
@@ -5920,6 +5990,31 @@ model Catalog2TaskStep {
   // mesmo executor é mantido.
   first_execution_only    Boolean @default(false)
   skip_when_same_executor Boolean @default(false)
+
+  // Fluxo das etapas (reunião 2026-10-05): null = começa depois da anterior (padrão antigo) · [] = começa junto com a tarefa · [chaves] = começa quando todas terminarem.
+  depends_on_json      String? @db.Text
+  // auto = executor novo escolhido pelo sistema · same_as_step = mesmo executor da etapa executor_same_as_key
+  executor_policy      String  @default("auto")
+  executor_same_as_key String?
+  // Fase 1 da execução por etapa (2026-10-05): quem RECEBE a etapa. nomad = oferta/rodízio de nômade · leader = líder · internal = equipe interna.
+  executor_kind        String  @default("nomad")
+  // Só para executor_kind = leader: auto = líder da área (menor carga) · specific = sempre o líder leader_user_id
+  leader_mode          String  @default("auto")
+  leader_user_id       String?
+  // Execução por etapa (só vale quando a tarefa tem stage_execution = "stage"):
+  // etapa INTERNA = o cliente não vê nem aprova · requires_qualification = passa pela qualificação do líder · release_next_auto = libera a próxima ao ser aprovada.
+  internal_step        Boolean @default(false)
+  requires_qualification Boolean @default(true)
+  release_next_auto    Boolean @default(true)
+  // Entrega emergencial: quantos minutos esta etapa encurta e quanto cobra a mais (fixed = R$ · percent = % do preço da etapa).
+  emergency_reduction_minutes Int?
+  emergency_extra_kind        String?
+  emergency_extra_value       Float?
+  // Prazos da etapa em HORAS úteis (B4/B5): aprovação de quem contratou e refação depois de uma reprovação. Nulo = padrão anterior.
+  approval_hours              Int?
+  rework_hours                Int?
+  // Prazo (horas) para o nômade PREFERIDO aceitar antes de a etapa abrir para os demais (A8b-3). Nulo = padrão da plataforma (2 h).
+  executor_accept_hours       Int?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -6997,6 +7092,8 @@ model ConnectionType {
   permission_levels_json   String   @db.Text
   supports_auto_validation Boolean  @default(false)
   default_instructions     String?  @db.Text
+  // Campos que o cliente preenche para este tipo (definição): [{ key, label, type, required, help }]. Segredo vai para o cofre.
+  fields_json              String?  @db.Text
   is_active                Boolean  @default(true)
   sort_order               Int      @default(0)
   created_at               DateTime @default(now())
@@ -7097,6 +7194,8 @@ model ClientConnection {
   revoked_at            DateTime?
   revoked_by_user_id    String?
   revoke_reason         String?        @db.Text
+  // Valores NÃO secretos dos campos definidos no tipo; campos secretos ficam só no cofre (aqui aparecem como "__set__").
+  field_values_json     String?        @db.Text
   secret_ref            String?
   last_problem          String?        @db.Text
   correction_needed     String?        @db.Text
@@ -7111,6 +7210,15 @@ model ClientConnection {
   @@index([company_id, connection_type_id])
   @@index([agency_id, status])
   @@map("client_connections")
+}
+
+// Tipo de acesso excluído pelo Admin Master: impede que a semente padrão o recrie.
+model ConnectionTypeTombstone {
+  key                String   @id
+  deleted_at         DateTime @default(now())
+  deleted_by_user_id String?
+
+  @@map("connection_type_tombstones")
 }
 
 // Segredo CIFRADO (AES-256-GCM). Nunca é devolvido por nenhuma API.
@@ -7531,4 +7639,237 @@ model ProjectTaskInput {
 
   @@index([project_task_id])
   @@map("project_task_inputs")
+}
+
+// ─── Calendário de trabalho da plataforma (reunião 2026-10-05, B2) ───
+model PlatformWorkCalendar {
+  id                 String   @id @default("default")
+  work_days          String   @default("1,2,3,4,5")
+  start_time         String   @default("09:00")
+  end_time           String   @default("17:00")
+  updated_by_user_id String?
+  updated_at         DateTime @updatedAt
+
+  @@map("platform_work_calendar")
+}
+
+model PlatformHoliday {
+  id         String   @id @default(cuid())
+  date       String   @unique
+  name       String
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+
+  @@map("platform_holidays")
+}
+
+// ── PLAC: cronograma de 13 passos aberto automaticamente quando o projeto é pago (2026-10-06) ─────────────
+/// Modelo editável dos passos (um só para a plataforma): quem faz, quando (D+N depois de outro passo ou do pagamento), para quem vale.
+model PlacStepTemplate {
+  id                String   @id @default(cuid())
+  key               String   @unique
+  sort_order        Int      @default(0)
+  name              String
+  description       String?  @db.Text
+  // vc (consultor) | ac (assistente consultiva) | other
+  role_kind         String   @default("ac")
+  // inicio | mensal | fim
+  phase             String   @default("inicio")
+  // chave do passo anterior; nulo = conta a partir do pagamento do contrato
+  after_key         String?
+  offset_days       Float    @default(0)
+  estimated_hours   Float?
+  hourly_cost       Float?
+  // none | monthly | end_of_cycle (informativo por enquanto: o passo é gerado uma vez)
+  repeat_rule       String   @default("none")
+  // all ou lista separada por vírgula: company, agency, partner (mesma marcação de "Quem pode ver" do produto)
+  audience          String   @default("all")
+  // JSON: ids de classificação 4F; vazio = todos os projetos
+  four_f_ids        String?  @db.Text
+  // JSON: usuários internos (admin/líder) designados para acompanhar e cobrar este passo
+  internal_user_ids String?  @db.Text
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@map("plac_step_templates")
+}
+
+model PlacProjectStep {
+  id                   String   @id @default(cuid())
+  project_id           String
+  project              Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  template_key         String
+  sort_order           Int      @default(0)
+  name                 String
+  description          String?  @db.Text
+  role_kind            String   @default("ac")
+  phase                String   @default("inicio")
+  estimated_hours      Float?
+  due_at               DateTime?
+  // pendente | em_andamento | concluida | dispensada
+  status               String   @default("pendente")
+  completed_at         DateTime?
+  completed_by_user_id String?
+  assignee_user_id     String?
+  internal_user_ids    String?  @db.Text
+  note                 String?  @db.Text
+  overdue_alerted_at   DateTime?
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  @@unique([project_id, template_key])
+  @@index([project_id])
+  @@index([status, due_at])
+  @@map("plac_project_steps")
+}
+
+// ── D2: tarefas internas da conta (agência ou empresa) ────────────────────────────────────────────────
+/// Quadro da equipe: qualquer membro da mesma conta vê e edita; a administração vê tudo. Pode nascer de um passo PLAC.
+model InternalTask {
+  id                 String    @id @default(cuid())
+  agency_id          String?
+  company_id         String?
+  title              String
+  description        String?   @db.Text
+  // todo | doing | blocked | done
+  status             String    @default("todo")
+  // low | medium | high | urgent
+  priority           String    @default("medium")
+  due_date           DateTime?
+  project_id         String?
+  assignee_user_id   String?
+  created_by_user_id String
+  completed_at       DateTime?
+  position           Int       @default(0)
+  // JSON: [{ id, text, done }]
+  checklist_json     String?   @db.Text
+  // origem (ex.: plac_step) para não duplicar
+  source_kind        String?
+  source_id          String?
+  overdue_alerted_at DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  comments InternalTaskComment[]
+
+  @@unique([source_kind, source_id])
+  @@index([agency_id, status])
+  @@index([company_id, status])
+  @@index([assignee_user_id])
+  @@index([status, due_date])
+  @@map("internal_tasks")
+}
+
+model InternalTaskComment {
+  id             String       @id @default(cuid())
+  task_id        String
+  task           InternalTask @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  author_user_id String
+  body           String       @db.Text
+  created_at     DateTime     @default(now())
+
+  @@index([task_id, created_at])
+  @@map("internal_task_comments")
+}
+
+/// Quem pode usar o módulo (mesma marcação do público do produto) e se os passos PLAC viram tarefa interna sozinhos.
+model InternalTaskSettings {
+  id             String   @id
+  audience       String   @default("agency,partner")
+  auto_from_plac Boolean  @default(false)
+  updated_at     DateTime @updatedAt
+
+  @@map("internal_task_settings")
+}
+
+// ── D3: navegador seguro (sessão de navegador no servidor, uso por tempo, sem expor senha/cookie) ──────────────
+/// Conta guardada de um cliente (consentimento registrado; estado da sessão cifrado no cofre; nunca devolvido por API).
+model BrowserProfile {
+  id                  String    @id @default(cuid())
+  company_id          String?
+  agency_id           String?
+  connection_id       String?
+  label               String
+  start_url           String
+  provider_hint       String?
+  // active | revoked
+  status              String    @default("active")
+  consent_at          DateTime
+  consent_by_user_id  String
+  consent_version     String    @default("v1")
+  state_ciphertext    String?   @db.LongText
+  state_updated_at    DateTime?
+  // sites que a sessão de USO pode abrir (CSV); vazio = o site de entrada e seus domínios irmãos conhecidos
+  allowed_hosts       String?   @db.Text
+  max_session_minutes Int       @default(60)
+  created_by_user_id  String
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  grants   BrowserAccessGrant[]
+  sessions BrowserSession[]
+
+  @@index([company_id, status])
+  @@index([agency_id, status])
+  @@map("browser_profiles")
+}
+
+/// Autorização por tempo: quem pode abrir o navegador deste perfil e em que janela.
+model BrowserAccessGrant {
+  id                 String         @id @default(cuid())
+  profile_id         String
+  profile            BrowserProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  user_id            String
+  valid_from         DateTime
+  valid_until        DateTime
+  project_task_id    String?
+  reason             String?
+  granted_by_user_id String
+  revoked_at         DateTime?
+  revoked_by_user_id String?
+  created_at         DateTime       @default(now())
+
+  @@index([profile_id, user_id])
+  @@index([user_id, valid_until])
+  @@map("browser_access_grants")
+}
+
+model BrowserSession {
+  id               String         @id @default(cuid())
+  profile_id       String
+  profile          BrowserProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  user_id          String
+  grant_id         String?
+  // use | setup (login inicial do dono, para guardar a sessão)
+  mode             String         @default("use")
+  // active | ended | expired | killed | failed
+  status           String         @default("active")
+  started_at       DateTime       @default(now())
+  expires_at       DateTime
+  ended_at         DateTime?
+  end_reason       String?
+  last_activity_at DateTime       @default(now())
+  driver           String         @default("demo")
+  driver_ref       String?
+  ticket_hash      String?
+
+  @@index([profile_id, status])
+  @@index([user_id, status])
+  @@index([status, expires_at])
+  @@map("browser_sessions")
+}
+
+model BrowserSessionEvent {
+  id            String   @id @default(cuid())
+  profile_id    String
+  session_id    String?
+  kind          String
+  actor_user_id String?
+  detail        String?  @db.Text
+  created_at    DateTime @default(now())
+
+  @@index([profile_id, created_at])
+  @@index([session_id])
+  @@map("browser_session_events")
 }

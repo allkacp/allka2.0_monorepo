@@ -1,7 +1,10 @@
 // Seção universal "Conexões e acessos necessários" do editor de produto (qualquer produto, atual ou futuro).
 // Opcional: desativada, o produto se comporta como se o módulo não existisse. Nunca coleta senha: só descreve o que é exigido.
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Info, Plug, Plus, Save, ShieldCheck, Trash2, X } from "lucide-react";
+import { ChevronDown, Info, Link2, Plug, Plus, Save, ShieldCheck, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api-client";
 
 type Act = (fn: () => Promise<any>, ok?: string | ((r: any) => string | undefined), opts?: { rethrow?: boolean }) => Promise<any>;
@@ -164,6 +167,15 @@ function RequirementRow({ initial, isNew, types, vocab, tasks, version, readOnly
   );
 }
 
+/** Corpo para adicionar um tipo de acesso ao produto inteiro (padrão do botão "Adicionar acesso"): obrigatório, antes das tarefas, primeiro método e permissão do tipo. */
+export function buildProductRequirementBody(version: any, type: any) {
+  return toBody({
+    ...emptyForm(), connection_type_id: type.id, method: type.allowed_methods?.[0] ?? "", permission_level: type.permission_levels?.[0]?.key ?? "",
+    when_needed: "before_task", when_task_key: version.tasks?.[0]?.key ?? "",
+    dependents: (version.tasks ?? []).map((task: any) => ({ task_key: task.key, step_key: "", kind: "start" })),
+  });
+}
+
 export function ConnectionsSection({ version, readOnly, act, scope }: { version: any; readOnly: boolean; act: Act; scope?: ConnectionScope }) {
   const [types, setTypes] = useState<any[]>([]);
   const [vocab, setVocab] = useState<Vocab | null>(null);
@@ -239,6 +251,33 @@ export function ConnectionsSection({ version, readOnly, act, scope }: { version:
       </div>}
     </div>
   );
+  const [pickerOpen, setPickerOpen] = useState(false);
+  if (scope && scope.kind === "step") {
+    const inheritedFromStep = taskReqs.length > 0 ? "da tarefa, válido para todas as etapas dela" : "do produto, válido para todas as tarefas";
+    const linked = reqs.length;
+    return <section className="space-y-2" data-testid="connections-section">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className={`flex h-9 items-center gap-2 text-sm ${readOnly || inherited ? "opacity-70" : "cursor-pointer"}`}>
+          <Switch aria-label="Esta etapa precisa de acesso" checked={on || inherited} disabled={readOnly || inherited} onCheckedChange={(v) => toggleScopedAccess(!!v)} />
+          <span className="font-semibold text-slate-700 dark:text-slate-200">Esta etapa precisa de acesso</span>
+        </label>
+        <div className="flex min-h-[44px] min-w-[16rem] flex-1 items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/40" data-testid="step-access-state">
+          <Link2 className="h-5 w-5 shrink-0 text-slate-400" />
+          <div className="min-w-0 text-xs">
+            <p className="font-semibold text-slate-700 dark:text-slate-200">{inherited ? "Acesso herdado" : linked > 0 ? `${linked} acesso${linked > 1 ? "s" : ""} vinculado${linked > 1 ? "s" : ""}` : "Nenhum acesso vinculado"}</p>
+            <p className="truncate text-slate-500">{inherited ? `Esta etapa já usa o acesso ${inheritedFromStep}.` : linked > 0 ? reqs.map((r) => r.label || r.connection_type?.name).filter(Boolean).join(" · ") : "Selecione os acessos necessários para esta etapa."}</p>
+          </div>
+        </div>
+        <Button type="button" variant="outline" className="h-9" disabled={readOnly || inherited || (!on && drafts.length === 0)} onClick={() => setPickerOpen(true)} data-testid="select-step-access"><Link2 className="mr-1.5 h-4 w-4" />Selecionar acessos</Button>
+      </div>
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-h-[85vh] w-[95vw] max-w-4xl overflow-y-auto sm:max-w-4xl">
+          <DialogTitle className="text-base">Acessos desta etapa — {scope.step?.name}</DialogTitle>
+          {content}
+        </DialogContent>
+      </Dialog>
+    </section>;
+  }
   if (scope) {
     const part = scope.kind === "task" ? "tarefa" : "etapa";
     const inheritedFrom = scope.kind === "task" ? "do produto, válido para todas as tarefas" : taskReqs.length > 0 ? "da tarefa, válido para todas as etapas dela" : "do produto, válido para todas as tarefas";

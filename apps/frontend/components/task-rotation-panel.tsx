@@ -203,6 +203,7 @@ function MasterRoutingDialog({ open, onOpenChange, taskId, category, taskAutomat
   const [areaEnabled, setAreaEnabled] = useState(true);
   const [minutes, setMinutes] = useState("60");
   const [alertOnMandatoryDecline, setAlertOnMandatoryDecline] = useState(true);
+  const [preferredHours, setPreferredHours] = useState("2");
   const [nomades, setNomades] = useState<Array<{ id: string; name: string; eligible: boolean }>>([]);
   const [selected, setSelected] = useState("");
   const [nomadQuery, setNomadQuery] = useState("");
@@ -223,6 +224,7 @@ function MasterRoutingDialog({ open, onOpenChange, taskId, category, taskAutomat
         if (!live) return;
         setMinutes(String(settings.offer_timeout_minutes));
         setAlertOnMandatoryDecline(settings.mandatory_decline_alerts);
+        setPreferredHours(String(Math.round(((settings.stage_preferred_accept_minutes ?? 120) / 60) * 100) / 100));
         setAreaEnabled(category ? (areas.find((a) => a.area === category)?.auto_nomad_dispatch_enabled ?? true) : true);
         setNomades(list);
       })
@@ -234,11 +236,13 @@ function MasterRoutingDialog({ open, onOpenChange, taskId, category, taskAutomat
   async function saveSettings() {
     const value = Number(minutes);
     if (!Number.isInteger(value) || value < 1 || value > 1440) { setError("Informe de 1 minuto a 24 horas."); return; }
+    const prefMin = Math.round(Number(String(preferredHours).replace(",", ".")) * 60);
+    if (!Number.isInteger(prefMin) || prefMin < 5 || prefMin > 1440) { setError("O prazo do nômade preferido vai de 5 minutos a 24 horas."); return; }
     setSaving(true); setError(null);
     try {
       await Promise.all([
         apiClient.updateTaskRouting(taskId, enabled),
-        apiClient.updateTaskRoutingSettings({ offer_timeout_minutes: value, mandatory_decline_alerts: alertOnMandatoryDecline }),
+        apiClient.updateTaskRoutingSettings({ offer_timeout_minutes: value, mandatory_decline_alerts: alertOnMandatoryDecline, stage_preferred_accept_minutes: prefMin }),
         category ? apiClient.updateTaskRoutingArea(category, areaEnabled) : Promise.resolve(),
       ]);
       onChanged();
@@ -264,6 +268,7 @@ function MasterRoutingDialog({ open, onOpenChange, taskId, category, taskAutomat
         <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-3"><span><b className="text-sm">Encaminhar esta tarefa automaticamente</b><small className="block text-xs text-slate-500 mt-0.5">Desligar não altera uma tarefa que já tenha responsável.</small></span><Switch checked={enabled} onCheckedChange={setEnabled} /></label>
         {category && <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-3"><span><b className="text-sm">Automático para a área “{category}”</b><small className="block text-xs text-slate-500 mt-0.5">Vale para novas ofertas desta área.</small></span><Switch checked={areaEnabled} onCheckedChange={setAreaEnabled} /></label>}
         <div className="rounded-xl border border-slate-200 p-3 space-y-2"><label className="text-sm font-semibold">Prazo para responder à oferta</label><div className="flex items-center gap-2"><Input type="number" min="1" max="1440" value={minutes} onChange={(e) => setMinutes(e.target.value)} className="w-28" /><span className="text-sm text-slate-500">minutos</span></div><label className="flex items-center gap-2 text-xs text-slate-600"><Switch checked={alertOnMandatoryDecline} onCheckedChange={setAlertOnMandatoryDecline} /> Avisar responsáveis se uma oferta obrigatória for recusada</label></div>
+        <div className="rounded-xl border border-slate-200 p-3 space-y-2"><label className="text-sm font-semibold" htmlFor={`preferred-hours-${taskId}`}>Prazo do nômade preferido (etapas)</label><div className="flex items-center gap-2"><Input id={`preferred-hours-${taskId}`} inputMode="decimal" value={preferredHours} onChange={(e) => setPreferredHours(e.target.value)} className="w-28" /><span className="text-sm text-slate-500">horas</span></div><p className="text-xs text-slate-500">Quando uma etapa pede “preferir o mesmo executor”, só ele pode aceitar nesse prazo; depois a etapa abre para os demais. Cada etapa pode ter um prazo próprio no cadastro do produto.</p></div>
         <div className="rounded-xl border border-slate-200 p-3 space-y-2">
           <label className="text-sm font-semibold" htmlFor={`nomad-search-${taskId}`}>Escolher Nômade manualmente</label>
           <Input id={`nomad-search-${taskId}`} value={nomadQuery} onChange={(e) => setNomadQuery(e.target.value)} placeholder="Pesquisar Nômade por nome…" />

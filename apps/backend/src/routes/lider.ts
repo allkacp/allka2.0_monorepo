@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { pagarEtapasConcluidas } from "../lib/stage-payout";
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
-import { concluirEtapa, atribuirExecutorDaEtapa, garantirQualificador, garantirRevisor } from "../lib/stage-engine";
+import { concluirEtapa, atribuirExecutorDaEtapa, atribuirExecutoresPendentes, garantirQualificador, garantirRevisor } from "../lib/stage-engine";
 import { kickDependenciesForTask } from "../lib/project-dependencies";
 import { verifyToken } from "../middleware/auth";
 import { reevaluateSuccessors } from "../lib/task-release-service";
@@ -308,11 +309,8 @@ router.patch("/tasks/:id/stages/:stageId/approve", async (req: Request, res: Res
       concluirEtapa(tx, stageId, { userId: req.user!.id }),
     );
 
-    if (resultado.proxima?.status === "AGUARDANDO_EXECUTOR") {
-      atribuirExecutorDaEtapa(resultado.proxima.stageId).catch((err) =>
-        console.error("[stage-engine] atribuir executor:", err),
-      );
-    }
+    await pagarEtapasConcluidas(resultado.tarefaId, req.user!.id).catch((err) => console.error("[stage-payout]", err));
+    atribuirExecutoresPendentes(resultado.tarefaId).catch((err) => console.error("[stage-engine] atribuir executor:", err));
     kickDependenciesForTask(resultado.tarefaId);
     if (resultado.enviadaParaQualificacao) {
       garantirQualificador(resultado.tarefaId).catch((err) =>

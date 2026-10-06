@@ -14,6 +14,7 @@
 
 import { clientCommercialView } from "./catalog2-commercial-fields";
 import { prisma } from "./prisma";
+import { audienceAllows, audienceWhere, viewerFromContext } from "./catalog2-audience";
 import { config } from "../config";
 import { hashPayload } from "./canonical-json";
 import { Catalog2Error, isNewByPublicationDate, computeInactivationState } from "./catalog2-service";
@@ -74,6 +75,8 @@ export interface ClientContext {
   // e leader que vê tudo mesmo inativo". Nunca configura/contrata (ver
   // can_configure/can_contract, que continuam false pra leader).
   always_sees_all_products: boolean;
+  /** Nível de parceiro da agência (visibilidade por público, C7). */
+  agency_is_partner?: boolean;
 }
 
 // Item 16.1 (reunião 2026-09-14, "Visibilidade e teste") — parseia a lista
@@ -103,6 +106,8 @@ export async function resolveClientContext(userId: string, accountType: string, 
       // project-scope.ts e quebraria pra um sub-usuário no futuro).
       company_id: true,
       agency_id: true,
+      agency_link: { select: { partner_profile: { select: { status: true } } } },
+      owned_agency: { select: { partner_profile: { select: { status: true } } } },
       admin_profile: { select: { is_master: true, is_active: true } },
     },
   });
@@ -155,6 +160,7 @@ export async function resolveClientContext(userId: string, accountType: string, 
     // decisão adiada pelo usuário, feita pelo fluxo do projeto da empresa,
     // não por aqui.
     always_sees_all_products: kind === "leader" || isMaster,
+    agency_is_partner: kind === "agency" && (user?.agency_link?.partner_profile?.status ?? user?.owned_agency?.partner_profile?.status) === "active",
   };
 }
 
@@ -316,6 +322,8 @@ export function clientPricingView(p: PricingResult) {
     commercial_price_label: p.quote_requirements.length ? (REQUEST_KIND_LABEL[strongestRequirement(p.quote_requirements) ?? "custom_quote"] ?? "Sob solicitação") : p.pricing_mode === "on_request" ? "Sob consulta" : p.lines.commercial_final_price.amount == null ? "A definir" : undefined,
     // Versão da regra de preço usada neste cálculo (a mesma da memória de cálculo do administrador).
     pricing_rule_version: p.rule?.version ?? null,
+    // Entrega emergencial: só aparece quando o produto oferece. Mostra o que o cliente ganha (prazo) e paga a mais.
+    emergency: p.emergency.available ? { available: true, selected: p.emergency.selected, extra_price: p.emergency.extra_price, extra_pending: p.emergency.extra_pending, reduction_days: p.emergency.reduction_days, commercial_days_before: p.emergency.commercial_days_before, commercial_days_after: p.emergency.commercial_days_after } : { available: false },
     // Opção/adicional que exige orçamento personalizado, análise ou contratação assistida: sem preço definitivo e sem contratação automática.
     price_status: p.price_status,
     requires_commercial_request: p.quote_requirements.length > 0,
@@ -430,6 +438,9 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
   if (f.category_id) where.category_id = f.category_id;
   if (f.four_f_id) where.four_f = { some: { four_f_id: f.four_f_id } };
   if (f.q) where.OR = [{ internal_name: { contains: f.q } }, { slug: { contains: f.q } }];
+  // Público do produto (C7): empresa/agência só enxergam o que é para o seu público.
+  const audience = audienceWhere(viewerFromContext(ctx));
+  if (audience) where.AND = [...((where.AND as unknown[]) ?? []), audience];
   // (Produtos são novos: pendências de importação não escondem mais nada do catálogo.)
 
   const orderBy =
@@ -568,6 +579,7 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
     },
   });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (!audienceAllows(product, viewerFromContext(ctx))) throw new Catalog2Error("Produto não encontrado.", 404);
 
   const previewMode = (opts.preview && ctx.can_preview_drafts) || ctx.always_sees_all_products;
   const vis = await checkClientVisibility(product);
@@ -742,6 +754,7 @@ export function normalizeSelection(raw: unknown): PricingSelection {
     addon_keys: arr(r.addon_keys),
     ...(Object.keys(addon_selections).length > 0 ? { addon_selections } : {}),
     ...(Object.keys(variation_quantities).length > 0 ? { variation_quantities } : {}),
+    ...(r.emergency === true ? { emergency: true } : {}),
     quantity: qty,
     // Cotações anteriores não possuíam essa escolha: preservam exatamente o
     // comportamento anterior, com uma única tarefa para toda a quantidade.
@@ -761,6 +774,8 @@ export function configChecksum(productId: string, versionId: string, sel: Pricin
     quantity: sel.quantity ?? 1,
     delivery_groups: sel.delivery_groups ?? [sel.quantity ?? 1],
     answers: sel.answers ?? {},
+    // Entrega emergencial escolhida: é outra configuração (outro preço e prazo).
+    ...(sel.emergency ? { emergency: true } : {}),
     // Só entra quando há adicional tipado — assim as cotações antigas mantêm o mesmo checksum.
     ...(sel.addon_selections && Object.keys(sel.addon_selections).length > 0 ? { addon_selections: Object.fromEntries(Object.entries(sel.addon_selections).sort(([a], [b]) => a.localeCompare(b))) } : {}),
     // Só entra quando há variação por quantidade — assim as cotações antigas mantêm o mesmo checksum.
@@ -839,6 +854,7 @@ export async function configureProduct(ctx: ClientContext, productIdOrSlug: stri
     },
   });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (!audienceAllows(product, viewerFromContext(ctx))) throw new Catalog2Error("Produto não encontrado.", 404);
 
   const previewMode = (opts.preview && ctx.can_preview_drafts) || ctx.always_sees_all_products;
   const vis = await checkClientVisibility(product);
@@ -928,6 +944,7 @@ export async function createQuote(ctx: ClientContext, productIdOrSlug: string, r
     },
   });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (!audienceAllows(product, viewerFromContext(ctx))) throw new Catalog2Error("Produto não encontrado.", 404);
 
   const vis = await checkClientVisibility(product);
   // Bloqueia por CONTRATABILIDADE, não só visibilidade: um produto em
@@ -1637,6 +1654,7 @@ export async function addToCart(ctx: ClientContext, productIdOrSlug: string, raw
     },
   });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (!audienceAllows(product, viewerFromContext(ctx))) throw new Catalog2Error("Produto não encontrado.", 404);
   const vis = await checkClientVisibility(product);
   // Mesma regra de createQuote: contratabilidade, não só visibilidade.
   // Item 5: `contractable` já embute o bloqueio desde o agendamento de inativação.
@@ -1743,6 +1761,7 @@ export async function createCommercialRequest(ctx: ClientContext, productIdOrSlu
     },
   });
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (!audienceAllows(product, viewerFromContext(ctx))) throw new Catalog2Error("Produto não encontrado.", 404);
   const vis = await checkClientVisibility(product);
   if (!vis.contractable) throw new Catalog2Error(`Produto indisponível.${vis.reasons.length ? ` ${vis.reasons.join("; ")}.` : ""}`, 409, "not_quotable");
   const version = product.versions.find((v) => v.id === product.published_version_id);

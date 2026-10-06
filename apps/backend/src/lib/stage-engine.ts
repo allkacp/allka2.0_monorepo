@@ -32,6 +32,9 @@
 
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "./prisma";
+import { pagarEtapasConcluidas } from "./stage-payout";
+import { addBusinessMinutes } from "./sla";
+import { ensureWorkCalendar } from "./work-calendar";
 import { startTaskRotation } from "./task-rotation-engine";
 import { atribuirLiderParaTarefa } from "./atribuir-lider";
 import { nestedAlertEventCreate } from "./alert-events";
@@ -47,6 +50,9 @@ export const STAGE_STATUS = {
   AGUARDANDO_EXECUTOR: "AGUARDANDO_EXECUTOR",
   EM_ANDAMENTO: "EM_ANDAMENTO",
   CONCLUIDA: "CONCLUIDA",
+  // Execução por etapa (A8b fase 2): a etapa entregue espera a qualificação do líder e a aprovação de quem contratou.
+  EM_QUALIFICACAO: "EM_QUALIFICACAO",
+  EM_APROVACAO_CLIENTE: "EM_APROVACAO_CLIENTE",
 } as const;
 
 export interface AberturaEtapa {
@@ -110,6 +116,23 @@ async function avisarExecutor(
   }
 }
 
+/** Aviso ao nômade preferido: a etapa ficou reservada a ele até o prazo (A8b-3). Nunca derruba a abertura da etapa. */
+async function avisarNomadePreferido(db: Db, nomadeId: string, etapa: string, tarefa: string, ate: Date): Promise<void> {
+  try {
+    const n = await db.nomade.findUnique({ where: { id: nomadeId }, select: { user_id: true } });
+    if (!n?.user_id) return;
+    await db.systemAlert.create({
+      data: {
+        type: "etapa_reservada", title: `Etapa reservada para você: ${etapa}`,
+        message: `A etapa "${etapa}" da tarefa "${tarefa}" ficou reservada para você. Aceite até ${ate.toLocaleString("pt-BR")}; depois disso ela abre para os demais profissionais.`,
+        severity: "info", category: "alerta", entity_type: "project_task_stage", entity_id: null, user_id: n.user_id, action_url: "/nomades/minhastarefas",
+      },
+    });
+  } catch (err) {
+    console.error("[stage-engine] avisar nômade preferido:", err);
+  }
+}
+
 /** Dia útil não é modelado no sistema; prazo é em dias corridos. */
 function somarDias(base: Date, dias: number): Date {
   return new Date(base.getTime() + dias * 86400000);
@@ -138,6 +161,8 @@ export async function abrirEtapa(
      * significado e trocaria de executor exatamente onde não devia.
      */
     herdarNomade?: boolean;
+    /** Nômade que executou a etapa citada na regra "preferir/nunca o mesmo" (A8b-3). */
+    preferenciaNomadeId?: string | null;
   } = {},
 ): Promise<AberturaEtapa> {
   const stage = await db.projectTaskStage.findUniqueOrThrow({
@@ -200,7 +225,8 @@ export async function abrirEtapa(
   } else if (stage.executor_type === "leader") {
     // Etapa do líder da área — reaproveita o líder já atribuído à tarefa
     // quando houver, senão fica aguardando definição.
-    liderId = stage.project_task.lider_responsavel_id ?? null;
+    // Líder específico configurado na etapa tem prioridade; senão o líder da tarefa (atribuído por área).
+    liderId = stage.lider_id ?? stage.project_task.lider_responsavel_id ?? null;
     status = liderId ? STAGE_STATUS.EM_ANDAMENTO : STAGE_STATUS.AGUARDANDO_EXECUTOR;
   } else {
     // nomad: continuidade tem prioridade sobre nova seleção.
@@ -225,6 +251,19 @@ export async function abrirEtapa(
     },
   });
 
+  // A8b-3: "preferir o mesmo" reserva a etapa ao nômade preferido por um prazo de aceite; "nunca o mesmo" o exclui da vaga.
+  if (status === STAGE_STATUS.AGUARDANDO_EXECUTOR && stage.executor_type === "nomad" && stage.preferencia_nomade && opts.preferenciaNomadeId) {
+    if (stage.preferencia_nomade === "never_same") {
+      await db.projectTaskStage.update({ where: { id: stageId }, data: { nomade_excluido_id: opts.preferenciaNomadeId } });
+    } else if (stage.preferencia_nomade === "prefer_same") {
+      const cfg = await db.taskRoutingSettings.findUnique({ where: { id: "singleton" }, select: { stage_preferred_accept_minutes: true } });
+      const minutos = stage.aceite_horas ? stage.aceite_horas * 60 : cfg?.stage_preferred_accept_minutes ?? 120;
+      const ate = new Date(agora.getTime() + minutos * 60000);
+      await db.projectTaskStage.update({ where: { id: stageId }, data: { nomade_preferido_id: opts.preferenciaNomadeId, reservada_ate: ate } });
+      await avisarNomadePreferido(db, opts.preferenciaNomadeId, stage.titulo, stage.project_task.title, ate);
+    }
+  }
+
   // Só avisa quando a etapa já tem dono; se ficou AGUARDANDO_EXECUTOR, o aviso
   // sai quando a atribuição acontecer (ver atribuirExecutorDaEtapa).
   if (status === STAGE_STATUS.EM_ANDAMENTO && (nomadeId || liderId)) {
@@ -244,6 +283,32 @@ export async function abrirEtapa(
 }
 
 /**
+ * Fluxo configurado (A8): abre todas as etapas ainda não abertas cujas dependências já terminaram.
+ * Quem decide o executor é a própria etapa que abre: se ela pede "o mesmo executor de X", herda o de X; senão o sistema escolhe.
+ */
+export async function abrirEtapasLiberadas(db: Db, taskId: string, concluida: { id: string; nomade_id: string | null } | null): Promise<AberturaEtapa[]> {
+  const etapas = await db.projectTaskStage.findMany({ where: { project_task_id: taskId }, orderBy: [{ ordem: "asc" }, { created_at: "asc" }] });
+  const doneRefs = new Set(etapas.filter((e) => e.status === STAGE_STATUS.CONCLUIDA && e.catalog_step_ref).map((e) => e.catalog_step_ref as string));
+  const byRef = new Map(etapas.filter((e) => e.catalog_step_ref).map((e) => [e.catalog_step_ref as string, e]));
+  const abertas: AberturaEtapa[] = [];
+  for (const e of etapas) {
+    if (![STAGE_STATUS.PENDENTE, STAGE_STATUS.BLOQUEADA].includes(e.status as never) || e.iniciada_em) continue;
+    let deps: string[] = [];
+    try { deps = e.depende_de_json ? (JSON.parse(e.depende_de_json) as string[]) : []; } catch { deps = []; }
+    if (!deps.every((d) => doneRefs.has(d))) continue;
+    const origem = e.herdar_executor_de ? byRef.get(e.herdar_executor_de) : null;
+    const refPref = e.preferencia_ref ? byRef.get(e.preferencia_ref) : null;
+    abertas.push(await abrirEtapa(db, e.id, {
+      nomadeAnterior: origem?.nomade_id ?? null,
+      herdarNomade: !!origem?.nomade_id,
+      preferenciaNomadeId: refPref?.nomade_id ?? null,
+    }));
+  }
+  void concluida;
+  return abertas;
+}
+
+/**
  * Abre a primeira etapa de uma tarefa — chamado quando a tarefa é liberada
  * para execução. Idempotente: se alguma etapa já está andando, não faz nada.
  */
@@ -258,9 +323,15 @@ export async function iniciarEtapasDaTarefa(
   if (etapas.length === 0) return null;
 
   const jaAndando = etapas.some((e) =>
-    [STAGE_STATUS.EM_ANDAMENTO, STAGE_STATUS.AGUARDANDO_EXECUTOR, "AGUARDANDO_APROVACAO", "AGUARDANDO_DEPENDENCIA"].includes(e.status as any),
+    [STAGE_STATUS.EM_ANDAMENTO, STAGE_STATUS.AGUARDANDO_EXECUTOR, STAGE_STATUS.EM_QUALIFICACAO, STAGE_STATUS.EM_APROVACAO_CLIENTE, "AGUARDANDO_APROVACAO", "AGUARDANDO_DEPENDENCIA"].includes(e.status as any),
   );
   if (jaAndando) return null;
+
+  // Fluxo configurado (etapas em paralelo / dependências): abre todas as que não esperam ninguém.
+  if (etapas.some((e) => e.depende_de_json != null)) {
+    const abertas = await abrirEtapasLiberadas(db, taskId, null);
+    return abertas[0] ?? null;
+  }
 
   const primeira = etapas.find((e) => e.status !== STAGE_STATUS.CONCLUIDA);
   if (!primeira) return null;
@@ -285,6 +356,7 @@ async function avisarAprovadores(
   db: Db,
   taskId: string,
   nivel: NivelAprovacao,
+  etapa?: string,
 ): Promise<void> {
   try {
     const tarefa = await db.projectTask.findUnique({
@@ -348,12 +420,14 @@ async function avisarAprovadores(
 
     const codigo = tarefa.task_code ? ` (${tarefa.task_code})` : "";
     const projeto = tarefa.project?.title ? ` do projeto "${tarefa.project.title}"` : "";
-    const titulo =
-      nivel === "agencia"
+    const titulo = etapa
+      ? `Etapa para aprovar: ${etapa} — ${tarefa.title}`
+      : nivel === "agencia"
         ? `Entrega para conferir: ${tarefa.title}`
         : `Sua aprovação foi solicitada: ${tarefa.title}`;
-    const mensagem =
-      nivel === "agencia"
+    const mensagem = etapa
+      ? `A etapa "${etapa}" da tarefa "${tarefa.title}"${codigo}${projeto} foi qualificada e aguarda a sua aprovação para liberar a próxima.`
+      : nivel === "agencia"
         ? `A execução da tarefa "${tarefa.title}"${codigo}${projeto} terminou e está aguardando a conferência da agência.`
         : `A agência já conferiu a tarefa "${tarefa.title}"${codigo}${projeto}. Falta o seu aceite para encerrar.`;
 
@@ -450,6 +524,10 @@ export interface ResultadoConclusao {
   enviadaParaQualificacao?: boolean;
   /** Última etapa concluída, mas a entrega ficou segura por uma dependência (anexo/aprovação/item de outro produto). */
   aguardandoDependencia?: boolean;
+  /** Execução por etapa: a etapa foi aprovada mas a próxima só abre com liberação manual. */
+  aguardandoLiberacao?: boolean;
+  /** Execução por etapa: a etapa foi entregue e aguarda qualificação ("qualificacao") ou aprovação ("aprovacao"). */
+  etapaEmConferencia?: "qualificacao" | "aprovacao";
 }
 
 /**
@@ -463,9 +541,12 @@ export async function concluirEtapa(
 ): Promise<ResultadoConclusao> {
   const stage = await db.projectTaskStage.findUniqueOrThrow({
     where: { id: stageId },
-    include: { project_task: { select: { id: true, status: true, requires_qualification: true, qualification_round: true } } },
+    include: { project_task: { select: { id: true, status: true, requires_qualification: true, qualification_round: true, stage_execution: true } } },
   });
 
+  if (stage.status === STAGE_STATUS.EM_QUALIFICACAO || stage.status === STAGE_STATUS.EM_APROVACAO_CLIENTE) {
+    throw new DependencyBlockedError("Esta etapa já foi entregue e aguarda a conferência. Ela segue quando for aprovada, ou volta para ajuste se for reprovada.");
+  }
   if (stage.status === STAGE_STATUS.CONCLUIDA) {
     return {
       etapaConcluida: stageId,
@@ -520,6 +601,8 @@ export async function concluirEtapa(
   }
 
   const agora = new Date();
+  // Execução por ETAPA: a entrega do executor vai para qualificação/aprovação em vez de concluir direto.
+  if (stage.project_task.stage_execution === "stage") return entregarEtapa(db, stage, opts, agora);
   await db.projectTaskStage.update({
     where: { id: stageId },
     data: {
@@ -528,7 +611,16 @@ export async function concluirEtapa(
       concluida_por: opts.userId ?? null,
     },
   });
+  return seguirDepoisDeEtapaConcluida(db, stage, opts, agora);
+}
 
+type StageComTarefa = Prisma.ProjectTaskStageGetPayload<{ include: { project_task: { select: { id: true; status: true; requires_qualification: true; qualification_round: true; stage_execution: true } } } }>;
+
+/** Tudo o que acontece DEPOIS de uma etapa ficar concluída: reabre portões, libera as próximas etapas e encerra a tarefa quando acabou. */
+async function seguirDepoisDeEtapaConcluida(db: Db, stage: StageComTarefa, opts: { userId?: string }, agora: Date): Promise<ResultadoConclusao> {
+  const stageId = stage.id;
+  const modoEtapa = stage.project_task.stage_execution === "stage";
+  let aguardandoLiberacao = false;
   // Etapa de retorno concluída de novo: portões reprovados voltam a ficar pendentes (nova rodada).
   if (stage.catalog_step_ref) {
     const done = await db.catalog2TaskStep.findUnique({ where: { id: stage.catalog_step_ref }, select: { key: true } });
@@ -543,13 +635,25 @@ export async function concluirEtapa(
     orderBy: [{ ordem: "asc" }, { created_at: "asc" }],
     select: { id: true, status: true },
   });
+  const todasFlow = await db.projectTaskStage.findMany({ where: { project_task_id: stage.project_task_id }, select: { id: true, depende_de_json: true } });
   const posicaoAtual = todas.findIndex((e) => e.id === stageId);
   const seguinte = todas
     .slice(posicaoAtual + 1)
     .find((e) => e.status !== STAGE_STATUS.CONCLUIDA);
 
   let proxima: AberturaEtapa | null = null;
-  if (seguinte) {
+  const fluxoConfigurado = todasFlow.some((e) => e.depende_de_json != null);
+  if (modoEtapa && !stage.libera_proxima_auto) {
+    // Liberação manual: a próxima etapa só abre quando o líder/administrador liberar (ver liberarProximasEtapas).
+    aguardandoLiberacao = true;
+  } else if (fluxoConfigurado) {
+    const abertas = await abrirEtapasLiberadas(db, stage.project_task_id, stage);
+    proxima = abertas[0] ?? null;
+    if (abertas.length) {
+      const { recalcTaskConnections } = await import("./connections/flow");
+      await recalcTaskConnections(db, stage.project_task_id, opts.userId ? { id: opts.userId } : null);
+    }
+  } else if (seguinte) {
     proxima = await abrirEtapa(db, seguinte.id, {
       // Continuidade só faz sentido a partir de quem acabou de executar, e
       // quem decide é a etapa que está fechando (`keepNomadOnNextStage`).
@@ -599,15 +703,202 @@ export async function concluirEtapa(
       }
       aguardandoDependencia = true;
     } else {
-      const destino = await enviarParaAceite(db, stage.project_task_id, { userId: opts.userId, agora });
-      enviadaParaQualificacao = destino === "qualificacao";
-      enviadaParaRevisao = destino === "revisao";
-      enviadaParaAprovacao = destino === "aprovacao";
+      if (modoEtapa) {
+        // Cada etapa já foi qualificada e aprovada: a tarefa encerra direto, sem repetir o aceite no fim.
+        await db.projectTask.update({ where: { id: stage.project_task_id }, data: { status: "CONCLUIDA", data_conclusao: agora, completed_at: agora } });
+        tarefaConcluida = true;
+      } else {
+        const destino = await enviarParaAceite(db, stage.project_task_id, { userId: opts.userId, agora });
+        enviadaParaQualificacao = destino === "qualificacao";
+        enviadaParaRevisao = destino === "revisao";
+        enviadaParaAprovacao = destino === "aprovacao";
+      }
     }
   }
 
-  return { etapaConcluida: stageId, tarefaId: stage.project_task_id, proxima, tarefaConcluida, enviadaParaAprovacao, enviadaParaQualificacao, enviadaParaRevisao, aguardandoDependencia };
+  return { etapaConcluida: stageId, tarefaId: stage.project_task_id, proxima, tarefaConcluida, enviadaParaAprovacao, enviadaParaQualificacao, enviadaParaRevisao, aguardandoDependencia, aguardandoLiberacao };
 }
+
+// ─── Execução por ETAPA (A8b fase 2, reunião 2026-10-05) ──────────────────────────────────────────────
+// Quando a tarefa tem stage_execution = "stage", cada etapa percorre: executor entrega → qualificação do líder (se exigida) →
+// aprovação de quem contratou (se a etapa não é interna) → concluída → libera a próxima (automática, se configurado).
+// Reprovação em qualquer ponto devolve a etapa ao MESMO executor, com o MESMO prazo, e conta uma rodada de ajuste.
+// Tarefas em modo "task" (padrão) não passam por nada disto.
+
+export class EtapaDecisaoError extends Error {
+  constructor(message: string, public httpStatus = 422) {
+    super(message);
+    this.name = "EtapaDecisaoError";
+  }
+}
+export type TipoDecisaoEtapa = "qualificacao" | "aprovacao";
+export type DecisaoEtapa = "aprovar" | "reprovar" | "comentar";
+
+const baseResultado = (stage: StageComTarefa): ResultadoConclusao => ({
+  etapaConcluida: stage.id,
+  tarefaId: stage.project_task_id,
+  proxima: null,
+  tarefaConcluida: false,
+  enviadaParaAprovacao: false,
+  enviadaParaQualificacao: false,
+  enviadaParaRevisao: false,
+});
+
+/** Quem aprova no nível de "quem contratou": a agência (quando o projeto tem uma) ou a empresa. */
+async function nivelDoProjeto(db: Db, taskId: string): Promise<NivelAprovacao> {
+  const t = await db.projectTask.findUnique({ where: { id: taskId }, select: { project: { select: { agency_id: true, agency: true } } } });
+  return t?.project?.agency_id || t?.project?.agency ? "agencia" : "cliente";
+}
+
+/** O executor entregou a etapa: vai para a qualificação do líder (se a etapa exige) ou direto para a aprovação/conclusão. */
+async function entregarEtapa(db: Db, stage: StageComTarefa, opts: { userId?: string }, agora: Date): Promise<ResultadoConclusao> {
+  const round = (stage.rodada_ajuste ?? 0) + 1;
+  if (stage.exige_qualificacao) {
+    await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.EM_QUALIFICACAO, entregue_em: agora, concluida_por: opts.userId ?? null } });
+    await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: "qualificacao", decision: "solicitada", round, actor_user_id: opts.userId ?? null } });
+    return { ...baseResultado(stage), enviadaParaQualificacao: true, etapaEmConferencia: "qualificacao" };
+  }
+  await db.projectTaskStage.update({ where: { id: stage.id }, data: { entregue_em: agora, concluida_por: opts.userId ?? null } });
+  return seguirParaAprovacaoOuConcluir(db, stage, opts, agora, round);
+}
+
+/** Depois da qualificação (ou sem ela): o cliente aprova a etapa; etapa interna conclui sem passar pelo cliente. */
+async function seguirParaAprovacaoOuConcluir(db: Db, stage: StageComTarefa, opts: { userId?: string }, agora: Date, round: number): Promise<ResultadoConclusao> {
+  if (stage.visivel_ao_cliente) {
+    // B5: prazo de aprovação da etapa, em horas úteis do calendário da plataforma (sem configuração, vale o prazo antigo).
+    let prazoAprovacao: Date | undefined;
+    if (stage.aprovacao_horas) { await ensureWorkCalendar(db); prazoAprovacao = addBusinessMinutes(agora, stage.aprovacao_horas * 60); }
+    await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.EM_APROVACAO_CLIENTE, ...(prazoAprovacao ? { prazo_aprovacao: prazoAprovacao } : {}) } });
+    await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: "aprovacao", decision: "solicitada", round, actor_user_id: opts.userId ?? null } });
+    await avisarAprovadores(db, stage.project_task_id, await nivelDoProjeto(db, stage.project_task_id), stage.titulo);
+    return { ...baseResultado(stage), enviadaParaAprovacao: true, etapaEmConferencia: "aprovacao" };
+  }
+  await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.CONCLUIDA, concluida_em: agora, aprovada_em: agora } });
+  return seguirDepoisDeEtapaConcluida(db, stage, opts, agora);
+}
+
+/** Qualificação (líder) ou aprovação (quem contratou) de UMA etapa. Reprovar devolve ao mesmo executor, com o mesmo prazo. */
+export async function decidirEtapa(
+  db: Db,
+  stageId: string,
+  opts: { tipo: TipoDecisaoEtapa; decisao: DecisaoEtapa; userId: string; comentario?: string | null },
+): Promise<ResultadoConclusao & { decisao: DecisaoEtapa; status: string }> {
+  const stage = await db.projectTaskStage.findUniqueOrThrow({
+    where: { id: stageId },
+    include: { project_task: { select: { id: true, status: true, requires_qualification: true, qualification_round: true, stage_execution: true } } },
+  });
+  if (stage.project_task.stage_execution !== "stage") throw new EtapaDecisaoError("Esta tarefa não usa execução por etapa.");
+  const esperado = opts.tipo === "qualificacao" ? STAGE_STATUS.EM_QUALIFICACAO : STAGE_STATUS.EM_APROVACAO_CLIENTE;
+  if (stage.status !== esperado) {
+    throw new EtapaDecisaoError(`A etapa está "${stage.status}" e não aguarda ${opts.tipo === "qualificacao" ? "qualificação" : "aprovação"} agora.`);
+  }
+  const texto = (opts.comentario ?? "").trim();
+  const round = (stage.rodada_ajuste ?? 0) + 1;
+  const agora = new Date();
+  const base = baseResultado(stage);
+
+  if (opts.decisao === "comentar") {
+    if (!texto) throw new EtapaDecisaoError("Escreva o comentário.");
+    await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: opts.tipo, decision: "comentario", round, comment: texto, actor_user_id: opts.userId } });
+    return { ...base, decisao: "comentar", status: stage.status };
+  }
+
+  if (opts.decisao === "reprovar") {
+    if (texto.length < 3) throw new EtapaDecisaoError("Informe o motivo da reprovação (mínimo 3 caracteres).");
+    // Volta para o MESMO executor. Prazo: o mesmo, a não ser que a etapa tenha prazo de refação (B4) — aí conta N horas úteis a partir de agora.
+    let prazoRefacao: Date | undefined;
+    if (stage.refacao_horas) { await ensureWorkCalendar(db); prazoRefacao = addBusinessMinutes(agora, stage.refacao_horas * 60); }
+    await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.EM_ANDAMENTO, rodada_ajuste: { increment: 1 }, entregue_em: null, concluida_por: null, ...(prazoRefacao ? { prazo_execucao: prazoRefacao } : {}) } });
+    await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: opts.tipo, decision: "reprovada", round, comment: texto, actor_user_id: opts.userId } });
+    await avisarReprovacao(db, stage.id, texto, opts.tipo === "qualificacao" ? "qualificacao" : "cliente");
+    return { ...base, decisao: "reprovar", status: STAGE_STATUS.EM_ANDAMENTO };
+  }
+
+  await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: opts.tipo, decision: "aprovada", round, comment: texto || null, actor_user_id: opts.userId } });
+  if (opts.tipo === "qualificacao") {
+    await db.projectTaskStage.update({ where: { id: stage.id }, data: { qualificada_em: agora } });
+    const r = await seguirParaAprovacaoOuConcluir(db, stage, { userId: opts.userId }, agora, round);
+    return { ...r, decisao: "aprovar", status: stage.visivel_ao_cliente ? STAGE_STATUS.EM_APROVACAO_CLIENTE : STAGE_STATUS.CONCLUIDA };
+  }
+  await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.CONCLUIDA, concluida_em: agora, aprovada_em: agora } });
+  const r = await seguirDepoisDeEtapaConcluida(db, stage, { userId: opts.userId }, agora);
+  return { ...r, decisao: "aprovar", status: STAGE_STATUS.CONCLUIDA };
+}
+
+/** Liberação MANUAL da(s) próxima(s) etapa(s): vale para etapas aprovadas cuja configuração não libera sozinha. */
+export async function liberarProximasEtapas(db: Db, taskId: string): Promise<AberturaEtapa[]> {
+  const task = await db.projectTask.findUnique({ where: { id: taskId }, select: { stage_execution: true, status: true } });
+  if (!task || task.stage_execution !== "stage") throw new EtapaDecisaoError("Esta tarefa não usa execução por etapa.");
+  const etapas = await db.projectTaskStage.findMany({ where: { project_task_id: taskId }, orderBy: [{ ordem: "asc" }, { created_at: "asc" }] });
+  let abertas: AberturaEtapa[] = [];
+  if (etapas.some((e) => e.depende_de_json != null)) {
+    abertas = await abrirEtapasLiberadas(db, taskId, null);
+  } else {
+    const i = etapas.findIndex((e) => e.status !== STAGE_STATUS.CONCLUIDA);
+    const alvo = i >= 0 ? etapas[i] : null;
+    const anteriorOk = i <= 0 || etapas[i - 1].status === STAGE_STATUS.CONCLUIDA;
+    if (alvo && anteriorOk && [STAGE_STATUS.PENDENTE, STAGE_STATUS.BLOQUEADA].includes(alvo.status as never) && !alvo.iniciada_em) abertas = [await abrirEtapa(db, alvo.id)];
+  }
+  if (abertas.length === 0) throw new EtapaDecisaoError("Não há etapa pronta para liberar agora (a anterior precisa estar aprovada).");
+  return abertas;
+}
+
+/** Líder/administrador avisa quem contratou de um problema numa etapa interna (ex.: acesso ou briefing errado): a etapa passa a ficar visível para o cliente. */
+export async function avisarClienteDaEtapa(db: Db, stageId: string, opts: { userId: string; mensagem: string }): Promise<void> {
+  const texto = opts.mensagem.trim();
+  if (texto.length < 3) throw new EtapaDecisaoError("Escreva o que o cliente precisa corrigir (mínimo 3 caracteres).");
+  const stage = await db.projectTaskStage.findUniqueOrThrow({ where: { id: stageId }, include: { project_task: { select: { id: true, stage_execution: true } } } });
+  if (stage.project_task.stage_execution !== "stage") throw new EtapaDecisaoError("Esta tarefa não usa execução por etapa.");
+  await db.projectTaskStage.update({ where: { id: stageId }, data: { visivel_ao_cliente: true } });
+  await db.projectTaskStageReview.create({ data: { stage_id: stageId, kind: "aviso_cliente", decision: "comentario", round: (stage.rodada_ajuste ?? 0) + 1, comment: texto, actor_user_id: opts.userId } });
+  const nivel = await nivelDoProjeto(db, stage.project_task_id);
+  const tarefa = await db.projectTask.findUnique({ where: { id: stage.project_task_id }, select: { title: true, project: { select: { agency_id: true, company_id: true, client_id: true } } } });
+  const donos: string[] = [];
+  if (nivel === "agencia" && tarefa?.project?.agency_id) donos.push(...(await db.user.findMany({ where: { agency_id: tarefa.project.agency_id }, select: { id: true } })).map((u) => u.id));
+  const companyId = tarefa?.project?.company_id ?? tarefa?.project?.client_id;
+  if (companyId) donos.push(...(await db.user.findMany({ where: { company_id: companyId }, select: { id: true } })).map((u) => u.id));
+  const destinatarios = [...new Set(donos)];
+  if (destinatarios.length) {
+    await db.systemAlert.createMany({
+      data: destinatarios.map((userId) => ({
+        type: "aviso_etapa_cliente", title: `Atenção na etapa "${stage.titulo}"`, message: `A equipe encontrou um problema na etapa "${stage.titulo}" da tarefa "${tarefa?.title ?? ""}": ${texto}`,
+        severity: "warning", category: "alerta", entity_type: "project_task", entity_id: stage.project_task_id, user_id: userId, action_url: "/company/tarefas",
+      })),
+    });
+  }
+}
+
+/** Depois de pronta a etapa de execução por etapa, garante que o líder/qualificador seja avisado (fora da transação). */
+export async function garantirQualificadorDaEtapa(stageId: string): Promise<void> {
+  try {
+    const etapa = await prisma.projectTaskStage.findUnique({ where: { id: stageId }, select: { id: true, titulo: true, status: true, lider_id: true, project_task_id: true, project_task: { select: { title: true, task_code: true, lider_responsavel_id: true } } } });
+    if (!etapa || etapa.status !== STAGE_STATUS.EM_QUALIFICACAO) return;
+    let liderId = etapa.lider_id ?? etapa.project_task.lider_responsavel_id;
+    if (!liderId) {
+      await atribuirLiderParaTarefa(etapa.project_task_id).catch(() => null);
+      liderId = (await prisma.projectTask.findUnique({ where: { id: etapa.project_task_id }, select: { lider_responsavel_id: true } }))?.lider_responsavel_id ?? null;
+    }
+    if (!liderId) return; // atribuirLider já avisa o admin quando não há líder
+    await prisma.systemAlert.create({
+      data: {
+        type: "qualificacao_pendente", title: `Etapa para qualificar: ${etapa.titulo}`,
+        message: `A etapa "${etapa.titulo}" da tarefa "${etapa.project_task.title}" foi entregue e aguarda a sua qualificação (aprovar, pedir ajustes ou comentar).`,
+        severity: "info", category: "alerta", entity_type: "project_task", entity_id: etapa.project_task_id, user_id: liderId, action_url: "/leader/tarefas",
+      },
+    });
+  } catch (err) {
+    console.error("[stage-engine] garantir qualificador da etapa:", err);
+  }
+}
+
+/** Atribui executor a TODAS as etapas que ficaram aguardando (etapas em paralelo podem abrir várias de uma vez). Idempotente. */
+export async function atribuirExecutoresPendentes(taskId: string): Promise<void> {
+  // Gancho pós-transação de toda mudança de etapa: etapas que acabaram de fechar pagam o nômade quando a tarefa paga "a cada etapa" (A8b-4).
+  await pagarEtapasConcluidas(taskId).catch((err) => console.error("[stage-payout] pagar etapas:", err));
+  const pend = await prisma.projectTaskStage.findMany({ where: { project_task_id: taskId, status: STAGE_STATUS.AGUARDANDO_EXECUTOR }, select: { id: true }, orderBy: { ordem: "asc" } });
+  for (const p of pend) await atribuirExecutorDaEtapa(p.id).catch((err) => console.error("[stage-engine] atribuir executor:", err));
+}
+
 
 /**
  * Manda a entrega concluída para o próximo aceite: qualificação do líder (quando a
@@ -696,6 +987,12 @@ export async function atribuirExecutorDaEtapa(
       await avisarExecutor(prisma, atualizada, stage.project_task.title);
       return { status: atualizada.status, nomade_id: null, lider_id: atualizada.lider_id };
     }
+    return { status: stage.status, nomade_id: null, lider_id: null };
+  }
+
+  if (stage.executor_type === "nomad" && stage.project_task.nomade_responsavel_id && (await prisma.projectTask.findUnique({ where: { id: stage.project_task_id }, select: { stage_execution: true } }))?.stage_execution === "stage") {
+    // Execução por etapa (A8b-3): a tarefa já tem um nômade (de outra etapa). Esta etapa NÃO herda ninguém calado: fica na vaga para quem tiver
+    // afinidade (respeitando a reserva do preferido e a exclusão de "nunca o mesmo"). Quem pede "o mesmo executor" já herdou na abertura.
     return { status: stage.status, nomade_id: null, lider_id: null };
   }
 
@@ -858,6 +1155,9 @@ export type DecisaoQualificacao = "aprovar" | "reprovar" | "comentar";
  */
 export async function garantirQualificador(taskId: string): Promise<void> {
   try {
+    // Execução por etapa: quem aguarda qualificação é a ETAPA entregue, não a tarefa.
+    const emQual = await prisma.projectTaskStage.findFirst({ where: { project_task_id: taskId, status: STAGE_STATUS.EM_QUALIFICACAO }, select: { id: true } });
+    if (emQual) { await garantirQualificadorDaEtapa(emQual.id); return; }
     let tarefa = await prisma.projectTask.findUnique({
       where: { id: taskId },
       select: { title: true, task_code: true, status: true, lider_responsavel_id: true },

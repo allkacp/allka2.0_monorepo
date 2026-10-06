@@ -8,6 +8,7 @@ import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -16,13 +17,22 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useIallkaContext } from "@/contexts/iallka-context";
-import { ModelPickerDialog, TaskModelInfoDialog, ModelScopeDialog, SimilarModelsDialog, ModelStatusChips, TaskIndicators, EXEC_LABEL, PURPOSE_LABEL, CYCLE_TYPE_LABEL, REPEAT_RULE_LABEL, IMPLEMENTATION_RULE_LABEL, CONTINUITY_LABEL, ASSET_RULE_LABEL, fmtMinutes } from "./catalog2-models-ui";
-import { TaskOpsForm, StepOpsForm } from "./catalog2-ops-ui";
+import { ModelPickerDialog, TaskModelInfoDialog, ModelScopeDialog, SimilarModelsDialog, ModelStatusChips, TaskIndicators, EXEC_LABEL, PURPOSE_LABEL, CYCLE_TYPE_LABEL, REPEAT_RULE_LABEL, IMPLEMENTATION_RULE_LABEL, CONTINUITY_LABEL, ASSET_RULE_LABEL } from "./catalog2-models-ui";
+import { TaskOpsForm } from "./catalog2-ops-ui";
 import { TaskDeliverablesEditor } from "./catalog2-deliverables-ui";
 import { AiConfig } from "./catalog2-ai-ui";
 import { CommercialConsistencyBanner } from "./commercial-consistency";
 import { CommercialFieldsCard } from "./catalog2-commercial-ui";
 import { ConnectionsSection } from "./catalog2-connections-ui";
+import { StepChecklistDialog, checklistCount, type ChecklistItem } from "./catalog2-step-checklist-ui";
+import { AudienceCard } from "./catalog2-audience-ui";
+import { FieldHelpLayer } from "./field-help-layer";
+import { AccessCatalogDialog, typeSummary } from "./catalog2-access-catalog-ui";
+import { StepGovernance } from "./catalog2-step-governance-ui";
+import { EmergencyCard } from "./catalog2-emergency-ui";
+import { StepFlowEditor, StepFlowControls, stepFlowChips, stepStartMode, startChangePayload, flowSummary } from "./catalog2-step-flow-ui";
+import { useWorkCalendar, fmtBusinessMinutes, businessDaysOf } from "@/lib/use-work-calendar";
+import { specialtiesForMode, keepSpecialtyForMode, isSpecialtyCompatible, emptySpecialtyHint, EXEC_KIND_LABEL, specialtyKind } from "./catalog2-specialty-kind";
 import { EffortEffectForm, EFFORT_TYPES, isEffortType, effortEffectSummary, InternalNameEditor, ProductCounts, ApprovalGatesSection, SlaRulesSection, UniversalMemory, availabilityLabel } from "./catalog2-universal-ui";
 import { QuestionConfigFields, emptyQuestion, draftFromServer, payloadFromDraft, questionTypeLabel, type QuestionDraft } from "./catalog2-questions-ui";
 import { BillingSplitSection } from "@/components/catalog2-pricing-memory-popover";
@@ -68,6 +78,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   // Prontidão navegável (pedido do usuário 2026-09-25): clicar num item leva
   // à aba/sub-aba/campo certo e destaca em amarelo até o item ficar resolvido.
   const [loadCount, setLoadCount] = useState(0);
+  const [accessCatalogOpen, setAccessCatalogOpen] = useState(false);
   const [subTabs, setSubTabs] = useState({ opcoes: "class", entrega: "tarefas", revisao: "preview" });
   const entregaInfo = {
     tarefas: { title: "Tarefas e etapas", text: "Roxo identifica tarefas e seus números; azul identifica as etapas. Verde indica modelo global ou configuração válida." },
@@ -77,6 +88,10 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   const [watch, setWatch] = useState<{ key: string; ids: string[] } | null>(null);
   const [noticeHidden, setNoticeHidden] = useState(false);
   const [pricingOpen, setPricingOpen] = useState(false);
+  // Ao configurar um custo global a partir de uma tarefa, a pessoa não perde o
+  // contexto: o editor guarda a origem e reabre a própria tarefa ao voltar.
+  const [pricingReturnTaskId, setPricingReturnTaskId] = useState<string | null>(null);
+  const [taskEditRequest, setTaskEditRequest] = useState<string | null>(null);
   // A tela abre TRAVADA (só leitura): só o botão "Editar" libera os campos, pra
   // ninguém alterar produto sem querer.
   const [editMode, setEditMode] = useState(false);
@@ -105,6 +120,29 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   const flushers = useRef(new Set<() => Promise<void>>());
   const registerFlusher = useCallback((fn: () => Promise<void>) => { flushers.current.add(fn); return () => { flushers.current.delete(fn); }; }, []);
   async function flushPending() { for (const fn of [...flushers.current]) await fn(); }
+  async function openPricingFromTask(taskId: string) {
+    // Campos da tarefa podem estar abertos. Persistimos antes de abrir a
+    // configuração global para que o retorno seja sempre para um rascunho real.
+    await flushPending();
+    autoDraftRef.current = { promise: null, draftId: null, baseId: null };
+    setTaskEditRequest(taskId);
+    setPricingReturnTaskId(taskId);
+    setPricingOpen(true);
+    setMsg("Rascunho salvo. Configure a precificação e você volta para esta mesma tarefa.");
+  }
+  async function closePricing(returnToTask = true, saved = false) {
+    const taskId = pricingReturnTaskId;
+    setPricingOpen(false);
+    await load();
+    if (!returnToTask || !taskId) return;
+    setEditorTab("entrega");
+    setSubTabs((current) => ({ ...current, entrega: "tarefas" }));
+    setHighlightTaskIds([taskId]);
+    setTaskEditRequest(taskId);
+    setPricingReturnTaskId(null);
+    setMsg(saved ? "Precificação salva. Você voltou à tarefa que estava editando." : "Você voltou à tarefa que estava editando. O rascunho continua salvo.");
+    window.setTimeout(() => document.getElementById(`catalog2-task-${taskId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 250);
+  }
   const [doneIds, setDoneIds] = useState<string[]>([]);
   const [readinessItems, setReadinessItems] = useState<Record<string, { level: string; note: string }> | null>(null);
   const { setScreenContext: setIallkaScreenContext } = useIallkaContext();
@@ -380,6 +418,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   return (
     <RingCtx.Provider value={ringOf}>
     <FlushCtx.Provider value={registerFlusher}>
+    <FieldHelpLayer>
     <div className="product-editor relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-[#dfe5f6] p-3 dark:bg-slate-950">
       {!previewOpen && <EditorHeader
         product={product}
@@ -437,54 +476,53 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
               continuam todas aqui — reagrupadas, nada removido. */}
           <Stepper current={editorTab} onSelect={(t: string) => { void flushPending().then(() => setEditorTab(t)); }} items={readinessItems} />
 
-          <TabsContent value="info" className="mt-3">
-            <div className="mb-3 space-y-2"><InternalNameEditor product={product} readOnly={readOnly && !product} onDone={() => void load()} /><ProductCounts version={version} /></div>
+          <KeepTabsContent value="info" className="mt-3">
+            <div className="mb-3 space-y-2"><ProductCounts version={version} /><AudienceCard product={product} readOnly={!product} onDone={() => void load()} /></div>
             <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} />
-          </TabsContent>
+          </KeepTabsContent>
 
-          <TabsContent value="opcoes" className={TAB_CARD}>
+          <KeepTabsContent value="opcoes" className={TAB_CARD}>
             <StepIntro>Como o produto é classificado e as escolhas que o cliente faz na contratação.</StepIntro>
             <Tabs value={subTabs.opcoes} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, opcoes: v }))}>
               <TabsList className={SUB_TABS_LIST}>
                 <TabsTrigger value="class" className={SUB_TAB}><Tag className="h-3.5 w-3.5" />Classificação</TabsTrigger>
                 <TabsTrigger value="var" className={SUB_TAB}><Layers className="h-3.5 w-3.5" />Variações</TabsTrigger>
                 <TabsTrigger value="add" className={SUB_TAB}><Plus className="h-3.5 w-3.5" />Adicionais</TabsTrigger>
+                <TabsTrigger value="cond" className={SUB_TAB}><Clock className="h-3.5 w-3.5" />Prazos e condições</TabsTrigger>
               </TabsList>
-              <TabsContent value="class"><ClassTab product={product} refs={refs} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></TabsContent>
-              <TabsContent value="var"><div id="sec-var" className={secRing("sec-var")}><VariationsTab version={version} readOnly={readOnly} act={act} /></div></TabsContent>
-              <TabsContent value="add"><div id="sec-add" className={secRing("sec-add")}><AddonsTab version={version} readOnly={readOnly} act={act} /></div></TabsContent>
+              <KeepTabsContent value="class"><ClassTab product={product} refs={refs} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></KeepTabsContent>
+              <KeepTabsContent value="var"><div id="sec-var" className={secRing("sec-var")}><VariationsTab version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
+              <KeepTabsContent value="add"><div id="sec-add" className={secRing("sec-add")}><AddonsTab version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
+              <KeepTabsContent value="cond"><EmergencyCard version={version} readOnly={readOnly} act={act} /><ConditionsTab version={version} readOnly={readOnly} act={act} /><div className="mt-4 space-y-4"><p className="rounded-lg bg-white/70 px-3 py-2 text-xs text-slate-600 dark:bg-slate-900/40 dark:text-slate-300">Aprovações e prazos GERAIS do produto (implantação, ciclo recorrente, relatório, publicação…). A aprovação e o prazo de cada etapa se configuram dentro da própria etapa (aba Tarefa e etapas).</p><ApprovalGatesSection version={version} readOnly={readOnly} act={act} /><SlaRulesSection version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
             </Tabs>
-          </TabsContent>
+          </KeepTabsContent>
 
-          <TabsContent value="entrega" className="mt-3 space-y-3">
+          <KeepTabsContent value="entrega" className="mt-3 space-y-3">
             <div className="mb-3 space-y-3">
               <DeliveryCommercialOverview version={version} readOnly={readOnly} act={act} ringOf={ringOf} locked={!editMode} />
-              <ProductPrerequisitesSection version={version} compact />
-              <details id="sec-connections" className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[30px] cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Lock className="h-4 w-4" /></span>Acessos necessários<span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-semibold ${(version.access_requirements?.length ?? 0) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{(version.access_requirements?.length ?? 0) > 0 ? `${version.access_requirements.length} configurado${version.access_requirements.length === 1 ? "" : "s"}` : "1 acesso pendente"}</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3 min-w-0 space-y-4"><AccessRequirementsSection version={version} readOnly={readOnly} act={act} /><div className="border-t border-slate-100 pt-4 dark:border-slate-800"><ConnectionsSection version={version} readOnly={readOnly} act={act} /></div></div></details>
+              <AccessCatalogDialog open={accessCatalogOpen} onOpenChange={setAccessCatalogOpen} version={version} readOnly={readOnly} act={act} />
+              <PersistDetails persistKey="d1" id="sec-connections" className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[30px] cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Lock className="h-4 w-4" /></span>Acessos necessários{!readOnly && <button type="button" data-testid="add-access-header" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAccessCatalogOpen(true); }} className="ml-2 inline-flex h-7 items-center gap-1 rounded-lg border border-violet-300 bg-white px-2.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-50"><Plus className="h-3.5 w-3.5" />Adicionar acesso</button>}<span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-semibold ${(version.access_requirements?.length ?? 0) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{(version.access_requirements?.length ?? 0) > 0 ? `${version.access_requirements.length} configurado${version.access_requirements.length === 1 ? "" : "s"}` : "1 acesso pendente"}</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3 min-w-0 space-y-4"><AccessRequirementsSection version={version} readOnly={readOnly} act={act} /><div className="border-t border-slate-100 pt-4 dark:border-slate-800"><ConnectionsSection version={version} readOnly={readOnly} act={act} /></div></div></PersistDetails>
             </div>
             <Tabs value={subTabs.entrega} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, entrega: v }))}>
               <div className="flex items-center gap-3">
                 <TabsList className={`${SUB_TABS_LIST} !gap-0.5 !p-0.5`}>
-                  <TabsTrigger value="tarefas" className={`${SUB_TAB} !px-2.5 !py-1 !text-xs`}><ListOrdered className="h-3.5 w-3.5" />Tarefas e etapas</TabsTrigger>
-                  <TabsTrigger value="cond" className={`${SUB_TAB} !px-2.5 !py-1 !text-xs`}><Clock className="h-3.5 w-3.5" />Prazos e condições</TabsTrigger>
-                  <TabsTrigger value="aprov" className={`${SUB_TAB} !px-2.5 !py-1 !text-xs`}><CheckSquare className="h-3.5 w-3.5" />Aprovações e prazos</TabsTrigger>
+                  <TabsTrigger value="tarefas" className={`${SUB_TAB} !px-2.5 !py-1 !text-xs`}><ListOrdered className="h-3.5 w-3.5" />{product?.task_structure === "single" ? "Tarefa e etapas" : "Tarefas e etapas"}</TabsTrigger>
                 </TabsList>
+                <span className="min-w-0 flex-1 truncate text-[11px] text-violet-900 dark:text-violet-100" data-testid="task-structure-banner" title={product?.task_structure === "single" ? "Produto individual: uma tarefa principal. Todo o trabalho é dividido em etapas dentro da tarefa. Várias tarefas só existem em combos (tela de Combos)." : "Cada tarefa é um bloco de trabalho; as etapas são o passo a passo de cada uma."}><strong>{product?.task_structure === "single" ? "Produto individual: uma tarefa principal." : "Produto composto (combo): várias tarefas."}</strong> {product?.task_structure === "single" ? "Todo o trabalho é dividido em etapas." : "As etapas são o passo a passo de cada tarefa."}</span>
                 <div className="ml-auto flex items-center gap-1 text-[11px]">
                   <Tooltip><TooltipTrigger asChild><button type="button" className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700" aria-label={`Informações: ${entregaInfo.title}`}><Info className="h-3.5 w-3.5" /></button></TooltipTrigger><TooltipContent side="bottom" className="max-w-xs text-xs"><p className="font-bold">{entregaInfo.title}</p><p className="mt-1">{entregaInfo.text}</p></TooltipContent></Tooltip>
                   <Tooltip><TooltipTrigger asChild><button type="button" aria-label="Recolher todas as tarefas" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-white hover:text-violet-700" onClick={() => window.dispatchEvent(new Event("catalog2:collapse-tasks"))}><ChevronUp className="h-4 w-4" /></button></TooltipTrigger><TooltipContent side="bottom">Recolher todas</TooltipContent></Tooltip>
                   <Tooltip><TooltipTrigger asChild><button type="button" aria-label="Expandir todas as tarefas" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-white hover:text-violet-700" onClick={() => window.dispatchEvent(new Event("catalog2:expand-tasks"))}><ChevronDown className="h-4 w-4" /></button></TooltipTrigger><TooltipContent side="bottom">Expandir todas</TooltipContent></Tooltip>
                 </div>
               </div>
-              <TabsContent value="tarefas"><TasksTab version={version} productId={productId} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} /></TabsContent>
-              <TabsContent value="cond"><ConditionsTab version={version} readOnly={readOnly} act={act} /></TabsContent>
-              <TabsContent value="aprov"><div className="mt-3 space-y-5"><ApprovalGatesSection version={version} readOnly={readOnly} act={act} /><SlaRulesSection version={version} readOnly={readOnly} act={act} /></div></TabsContent>
+              <KeepTabsContent value="tarefas"><TasksTab taskStructure={product?.task_structure ?? "multiple"} version={version} productId={productId} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} editTaskId={taskEditRequest} onOpenPricing={openPricingFromTask} /></KeepTabsContent>
             </Tabs>
-          </TabsContent>
+          </KeepTabsContent>
 
-          <TabsContent value="precos" className={TAB_CARD}>
+          <KeepTabsContent value="precos" className={TAB_CARD}>
             <StepIntro>Taxas, margens e valor/hora das especialidades. O preço e o prazo são sempre calculados no servidor.</StepIntro>
             <CostTab version={version} refs={refs} act={act} onReloadRefs={load} productId={productId} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} />
-          </TabsContent>
+          </KeepTabsContent>
 
           <TabsContent value="revisao" className={TAB_CARD}>
             <StepIntro>Confira como o produto aparece para o cliente e publique a versão quando estiver pronta.</StepIntro>
@@ -556,11 +594,11 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
           onClose={() => setPublishing(null)}
         />
       )}
-      <Dialog open={pricingOpen} onOpenChange={(o) => { setPricingOpen(o); if (!o) void load(); }}>
-        <DialogContent className="h-[88vh] w-[96vw] max-w-[1280px] overflow-y-auto border-0 bg-[#dde2f3] p-3">
+      <Dialog open={pricingOpen} onOpenChange={(o) => { if (o) setPricingOpen(true); else void closePricing(true, false); }}>
+        <DialogContent showCloseButton={false} className="h-[94vh] w-[98vw] max-w-[1680px] overflow-y-auto border-0 bg-[#dde2f3] p-2 sm:p-3">
           <DialogTitle className="sr-only">Precificação</DialogTitle>
           <Suspense fallback={<div className="flex items-center gap-2 p-10 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>}>
-            <PricingPageLazy />
+            <PricingPageLazy returnAfterSave={!!pricingReturnTaskId} onSaveComplete={() => void closePricing(true, true)} onClose={() => void closePricing(true, false)} />
           </Suspense>
         </DialogContent>
       </Dialog>
@@ -602,6 +640,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
           />
         );
       })()}
+    </FieldHelpLayer>
     </FlushCtx.Provider>
     </RingCtx.Provider>
   );
@@ -623,11 +662,20 @@ function AiFieldButton({ label, value, mode = "text", context, onResult, disable
   const [length, setLength] = useState<"manter" | "curto" | "medio" | "longo">("manter");
   const [research, setResearch] = useState(defaultResearch);
   const [prev, setPrev] = useState<string | null>(null);
+  const [maxWords, setMaxWords] = useState("");
+  const [maxChars, setMaxChars] = useState("");
+  const [minWords, setMinWords] = useState("");
+  const [minChars, setMinChars] = useState("");
+  // Basta o NOME do produto (a IA pesquisa na internet e escreve o campo); ou algum texto no próprio campo.
+  const words = value.trim().split(/\s+/).filter(Boolean).length;
+  const hasName = !!String(context?.name ?? "").trim();
+  const tooShort = words < 1 && !hasName;
+  const limitsBad = (!!minWords && !!maxWords && Number(minWords) > Number(maxWords)) || (!!minChars && !!maxChars && Number(minChars) > Number(maxChars));
   async function run() {
     setBusy(true);
     setErr(null);
     try {
-      const r: any = await apiClient.aiImproveProductField({ field_label: label, current_value: value, mode, length, approach, research, context });
+      const r: any = await apiClient.aiImproveProductField({ field_label: label, current_value: value, mode, length, approach, research, context, max_words: maxWords ? Number(maxWords) : null, max_chars: maxChars ? Number(maxChars) : null, min_words: minWords ? Number(minWords) : null, min_chars: minChars ? Number(minChars) : null });
       const text = String(r?.improved_value ?? "").trim();
       if (!text) throw new Error("A IA não devolveu texto.");
       setPrev(value);
@@ -650,8 +698,8 @@ function AiFieldButton({ label, value, mode = "text", context, onResult, disable
         <PopoverTrigger asChild>
           <button
             type="button"
-            disabled={disabled}
-            title="Preencher ou melhorar com Inteligência Artificial"
+            disabled={disabled || tooShort}
+            title={tooShort ? "Informe o nome do produto (título comercial) ou escreva algo no campo para liberar a IA." : "Preencher ou melhorar com Inteligência Artificial"}
             className={`inline-flex items-center rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50 ${compact ? "h-6 w-6 justify-center" : "gap-1 px-2 py-1 text-[11px]"}`}
           >
             <Sparkles className="h-3 w-3" />{!compact && " IA"}
@@ -669,12 +717,20 @@ function AiFieldButton({ label, value, mode = "text", context, onResult, disable
               <option value="manter">Manter</option><option value="curto">Curto</option><option value="medio">Médio</option><option value="longo">Longo</option>
             </select>
           </label>
+          <p className="text-[11px] text-slate-500">Com só o nome do produto, a IA pesquisa na internet e escreve este campo do zero.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex flex-col gap-0.5">Mín. palavras<input type="number" min={1} value={minWords} onChange={(e) => setMinWords(e.target.value)} placeholder="sem mínimo" className="h-7 rounded border border-slate-200 px-1.5 text-xs" aria-label="Mínimo de palavras" /></label>
+            <label className="flex flex-col gap-0.5">Mín. caracteres<input type="number" min={1} value={minChars} onChange={(e) => setMinChars(e.target.value)} placeholder="sem mínimo" className="h-7 rounded border border-slate-200 px-1.5 text-xs" aria-label="Mínimo de caracteres" /></label>
+            <label className="flex flex-col gap-0.5">Máx. palavras<input type="number" min={1} value={maxWords} onChange={(e) => setMaxWords(e.target.value)} placeholder="sem limite" className="h-7 rounded border border-slate-200 px-1.5 text-xs" aria-label="Limite de palavras" /></label>
+            <label className="flex flex-col gap-0.5">Máx. caracteres<input type="number" min={1} value={maxChars} onChange={(e) => setMaxChars(e.target.value)} placeholder="sem limite" className="h-7 rounded border border-slate-200 px-1.5 text-xs" aria-label="Limite de caracteres" /></label>
+          </div>
           <label className="flex items-start gap-2">
             <input type="checkbox" checked={research} onChange={(e) => setResearch(e.target.checked)} className="mt-0.5" />
             <span>Pesquisar na internet (como o produto é conhecido <strong>hoje</strong>)</span>
           </label>
+          {limitsBad && <p className="text-red-600">O mínimo não pode ser maior que o máximo.</p>}
           {err && <p className="text-red-600">{err}</p>}
-          <Button size="sm" className="w-full gap-1.5" disabled={busy} onClick={() => void run()}>
+          <Button size="sm" className="w-full gap-1.5" disabled={busy || limitsBad} onClick={() => void run()}>
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {busy ? "Gerando…" : "Gerar"}
           </Button>
         </PopoverContent>
@@ -859,7 +915,12 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
   fRef.current = f;
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
-  useEffect(() => { dirtyRef.current = false; setF({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" }); }, [version.id]);
+  // Uma atualização recebida do servidor deve aparecer após Recarregar, mas
+  // nunca pode substituir texto ainda não salvo no formulário atual.
+  useEffect(() => {
+    if (dirtyRef.current) return;
+    setF({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" });
+  }, [version.id, version.updated_at]);
   useEffect(() => registerFlusher(async () => {
     if (!dirtyRef.current || readOnly) return;
     dirtyRef.current = false;
@@ -1025,13 +1086,13 @@ function VariationsTab({ version, readOnly, act }: any) {
         {!readOnly && <AddBtn onClick={() => setAdding((v) => !v)}>Nova variação</AddBtn>}
       </div>
       {version.variations.map((va: any, vi: number) => (
-        <details key={va.id} className="group rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-          <summary className="flex min-h-[58px] cursor-pointer list-none items-center justify-between gap-2 px-3 [&::-webkit-details-marker]:hidden" title="Abrir editor da variação">
+        <section key={va.id} className="rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+          <div className="flex min-h-[58px] items-center justify-between gap-2 px-3">
             <div className="flex min-w-0 items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200"><Layers className="h-4 w-4" /></span><span className="min-w-0"><span className="block truncate font-semibold text-slate-800 dark:text-slate-100">{va.name}</span><span className="block text-[11px] text-slate-500">{va.options.length === 1 ? "1 opção disponível" : `${va.options.length} opções disponíveis`}</span></span><Badge className={va.is_required ? "border-0 bg-amber-100 text-amber-800" : "border-0 bg-slate-100 text-slate-600"}>{va.is_required ? "Obrigatória" : "Opcional"}</Badge>{va.options.find((o: any) => o.is_default) && <Badge className="border-0 bg-blue-100 text-blue-700">Padrão: {va.options.find((o: any) => o.is_default)?.label}</Badge>}<Badge className={va.options.some((o: any) => (o.effects ?? []).length > 0) ? "border-0 bg-emerald-100 text-emerald-700" : "border-0 bg-slate-100 text-slate-500"}>{va.options.some((o: any) => (o.effects ?? []).length > 0) ? "Configurada" : "A configurar"}</Badge>{va.is_active === false && <Badge className="border-0 bg-neutral-200 text-neutral-600">Inativa</Badge>}</div>
-            <span className="flex items-center gap-1"><ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />{!readOnly && <span onClick={(e) => e.preventDefault()}><DeleteBtn label="Remover variação?" tip="Remover esta variação" onConfirm={() => act(() => apiClient.deleteCatalog2Variation(va.id), "Variação removida.")} /></span>}</span>
-          </summary>
+            <span className="flex items-center gap-1">{!readOnly && <DeleteBtn label="Remover variação?" tip="Remover esta variação" onConfirm={() => act(() => apiClient.deleteCatalog2Variation(va.id), "Variação removida.")} />}</span>
+          </div>
           <VariationEditor va={va} index={vi} list={version.variations} version={version} readOnly={readOnly} act={act} />
-        </details>
+        </section>
       ))}
       {!readOnly && adding && (
         <div className="flex flex-wrap items-end gap-2 rounded-[14px] border border-dashed border-violet-300 bg-white p-3 dark:border-violet-800 dark:bg-slate-900/60">
@@ -1071,7 +1132,6 @@ function VariationEditor({ va, index, list, version, readOnly, act }: any) {
 function VariationOptionRow({ option, variation, index, list, version, readOnly, act }: any) {
   const [label, setLabel] = useState(option.label);
   const [message, setMessage] = useState(option.availability_note ?? "");
-  const [impactsOpen, setImpactsOpen] = useState(false);
   const put = (body: any, ok: string) => act(() => apiClient.updateCatalog2Option(option.id, body), ok);
   const customQuote = option.availability === "custom_quote";
   const saveImage = (file: File) => {
@@ -1090,10 +1150,10 @@ function VariationOptionRow({ option, variation, index, list, version, readOnly,
       <label className="min-w-0"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Disponibilidade</span><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={option.availability ?? "auto"} onChange={(e) => void put({ availability: e.target.value }, "Disponibilidade atualizada.")}><option value="auto">Contratação automática</option><option value="commercial_review">Exige revisão comercial</option><option value="custom_quote">Orçamento personalizado</option><option value="assisted_only">Só com atendimento</option><option value="unavailable">Indisponível</option></select></label>
       <div className="min-w-0"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Impactos</span><EffectChips effects={option.effects ?? []} /></div>
       <CheckPill disabled={readOnly} checked={option.is_active !== false} onChange={(v) => void put({ is_active: v }, "Opção atualizada.")}>Ativa</CheckPill>
-      <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Mais ações da opção"><MoreVertical className="h-4 w-4" /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setImpactsOpen((v) => !v)}>Configurar impactos</DropdownMenuItem>{!readOnly && <><DropdownMenuItem onClick={() => void put({ icon_key: "layers", media_url: null }, "Ícone definido.")}>Usar ícone de camadas</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "globe", media_url: null }, "Ícone definido.")}>Usar ícone de globo</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "tag", media_url: null }, "Ícone definido.")}>Usar ícone de etiqueta</DropdownMenuItem>{(option.media_url || option.icon_key) && <DropdownMenuItem onClick={() => void put({ icon_key: null, media_url: null }, "Mídia removida.")}>Manter sem mídia</DropdownMenuItem>}<DropdownMenuItem className="text-red-600" onClick={() => void act(() => apiClient.deleteCatalog2Option(option.id), "Opção removida.")}>Remover opção</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>
+      <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Mais ações da opção"><MoreVertical className="h-4 w-4" /></button></DropdownMenuTrigger><DropdownMenuContent align="end">{!readOnly && <><DropdownMenuItem onClick={() => void put({ icon_key: "layers", media_url: null }, "Ícone definido.")}>Usar ícone de camadas</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "globe", media_url: null }, "Ícone definido.")}>Usar ícone de globo</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "tag", media_url: null }, "Ícone definido.")}>Usar ícone de etiqueta</DropdownMenuItem>{(option.media_url || option.icon_key) && <DropdownMenuItem onClick={() => void put({ icon_key: null, media_url: null }, "Mídia removida.")}>Manter sem mídia</DropdownMenuItem>}<DropdownMenuItem className="text-red-600" onClick={() => void act(() => apiClient.deleteCatalog2Option(option.id), "Opção removida.")}>Remover opção</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>
     </div>
     {customQuote && <label className="mt-2 block pl-[60px]"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Mensagem ao cliente (opcional)</span><Input disabled={readOnly} className="h-8 text-xs" maxLength={1000} placeholder="Explique como o cliente receberá o orçamento" value={message} onChange={(e) => setMessage(e.target.value)} onBlur={() => { if (message !== (option.availability_note ?? "")) void put({ availability_note: message.trim() || null }, "Mensagem salva."); }} /></label>}
-    {impactsOpen && <div className="mt-2 border-t border-slate-200 pt-2"><EffectList version={version} effects={option.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2OptionEffect(option.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2OptionEffect(id), "Impacto removido.")} /></div>}
+    <div className="mt-2 border-t border-slate-200 pt-2"><EffectList version={version} effects={option.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2OptionEffect(option.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2OptionEffect(id), "Impacto removido.")} /></div>
   </li>;
 }
 
@@ -1146,13 +1206,13 @@ function AddonsTab({ version, readOnly, act }: any) {
     <div className="mt-3 space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500"><span>Escolhas opcionais. Uma contratação sem adicional continua válida.</span><span className="ml-auto text-violet-700">Os impactos atualizam automaticamente prazo, preço e entrega.</span>{!readOnly && <AddBtn onClick={() => setAdding((v) => !v)}>Novo adicional</AddBtn>}</div>
       {version.addons.map((a: any, ai: number) => (
-        <details key={a.id} className="group rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-          <summary className="flex min-h-[56px] cursor-pointer list-none items-center justify-between gap-2 px-3 [&::-webkit-details-marker]:hidden" title="Abrir editor do adicional">
+        <section key={a.id} className="rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+          <div className="flex min-h-[56px] items-center justify-between gap-2 px-3">
             <div className="flex min-w-0 items-center gap-2"><AddonMedia addon={a} readOnly={true} /><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-fuchsia-100 text-fuchsia-700"><Plus className="h-4 w-4" /></span><span className="min-w-0"><span className="block truncate font-semibold text-slate-800 dark:text-slate-100">{a.name}</span><span className="block text-[11px] text-slate-500">{a.base_cost != null ? `R$ ${Number(a.base_cost).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "Valor pelos impactos"}</span></span><AddonImpactChips effects={a.effects ?? []} compact />{a.is_active === false && <Badge className="border-0 bg-slate-100 text-slate-500">Inativo</Badge>}</div>
-            <span className="flex items-center gap-1"><ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />{!readOnly && <span onClick={(e) => e.preventDefault()}><DeleteBtn label="Remover adicional?" tip="Remover este adicional" onConfirm={() => act(() => apiClient.deleteCatalog2Addon(a.id), "Adicional removido.")} /></span>}</span>
-          </summary>
+            <span className="flex items-center gap-1">{!readOnly && <DeleteBtn label="Remover adicional?" tip="Remover este adicional" onConfirm={() => act(() => apiClient.deleteCatalog2Addon(a.id), "Adicional removido.")} />}</span>
+          </div>
           <AddonEditor addon={a} index={ai} list={version.addons} version={version} readOnly={readOnly} act={act} />
-        </details>
+        </section>
       ))}
       {!readOnly && adding && (
         <div className="rounded-[14px] border border-dashed border-violet-300 bg-white p-3 dark:border-violet-800 dark:bg-slate-900/60">
@@ -1180,7 +1240,7 @@ function AddonMedia({ addon, readOnly, onChange }: { addon: any; readOnly: boole
 }
 
 function AddonEditor({ addon, index, list, version, readOnly, act }: any) {
-  const [name, setName] = useState(addon.name); const [help, setHelp] = useState(addon.description ?? ""); const [cost, setCost] = useState(addon.base_cost == null ? "" : String(addon.base_cost)); const [impactsOpen, setImpactsOpen] = useState(false);
+  const [name, setName] = useState(addon.name); const [help, setHelp] = useState(addon.description ?? ""); const [cost, setCost] = useState(addon.base_cost == null ? "" : String(addon.base_cost));
   const put = (body: any, ok = "Adicional salvo.") => act(() => apiClient.updateCatalog2Addon(addon.id, body), ok);
   const tasks = version.tasks ?? []; const steps = addon.target_task_id ? (tasks.find((t: any) => t.id === addon.target_task_id)?.steps ?? []) : tasks.flatMap((t: any) => t.steps ?? []);
   return <div className="space-y-3 border-t border-slate-100 px-3 py-3 dark:border-slate-800">
@@ -1188,8 +1248,8 @@ function AddonEditor({ addon, index, list, version, readOnly, act }: any) {
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto]"><MiniField label="Nome"><Input disabled={readOnly} className="h-10 text-xs" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => name.trim() && name !== addon.name && void put({ name: name.trim() })} /></MiniField><MiniField label="Preço adicional (R$)"><Input disabled={readOnly} type="number" min={0} className="h-10 text-xs" value={cost} onChange={(e) => setCost(e.target.value)} onBlur={() => { const value = cost === "" ? null : Number(cost); if (value === null || Number.isFinite(value)) void put({ base_cost: value }); }} /></MiniField><CheckPill disabled={readOnly} checked={addon.is_active !== false} onChange={(v) => void put({ is_active: v }, v ? "Adicional ativado." : "Adicional inativado.")}>Ativo</CheckPill></div>
     <MiniField label="Texto de ajuda ao cliente"><Input disabled={readOnly} className="h-10 text-xs" value={help} onChange={(e) => setHelp(e.target.value)} onBlur={() => help !== (addon.description ?? "") && void put({ description: help.trim() || null })} placeholder="Explique o que este adicional inclui" /></MiniField>
     <div className="grid gap-3 lg:grid-cols-3"><MiniField label="Forma de cobrança"><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs" value={addon.charge_scope ?? "recurring"} onChange={(e) => void put({ charge_scope: e.target.value })}><option value="recurring">Uma única vez</option><option value="per_cycle">Por ciclo</option><option value="per_quantity">Por quantidade</option></select></MiniField><MiniField label="Tipo de seleção"><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs" value={addon.addon_type ?? "checkbox"} onChange={(e) => void put({ addon_type: e.target.value })}><option value="checkbox">Seleção simples</option><option value="quantity">Quantidade</option><option value="single_select">Escolha única</option><option value="multi_select">Várias escolhas</option></select></MiniField><MiniField label="Vincular à tarefa"><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs" value={addon.target_task_id ?? ""} onChange={(e) => void put({ target_task_id: e.target.value || null, target_step_id: null })}><option value="">Sem tarefa específica</option>{tasks.map((task: any) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></MiniField></div>
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><MiniField label="Vincular à etapa"><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs" value={addon.target_step_id ?? ""} onChange={(e) => void put({ target_step_id: e.target.value || null })}><option value="">Sem etapa específica</option>{steps.map((step: any) => <option key={step.id} value={step.id}>{step.name}</option>)}</select></MiniField><div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2"><span className="text-xs font-semibold text-blue-700">Impactos configurados</span><div className="mt-1"><AddonImpactChips effects={addon.effects ?? []} /></div><button type="button" disabled={readOnly} className="mt-1 text-[11px] font-medium text-violet-700" onClick={() => setImpactsOpen((v) => !v)}>{impactsOpen ? "Fechar impactos" : "Configurar impactos"}</button></div></div>
-    {impactsOpen && <EffectList version={version} effects={addon.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2AddonEffect(addon.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2AddonEffect(id), "Impacto removido.")} />}
+    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><MiniField label="Vincular à etapa"><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs" value={addon.target_step_id ?? ""} onChange={(e) => void put({ target_step_id: e.target.value || null })}><option value="">Sem etapa específica</option>{steps.map((step: any) => <option key={step.id} value={step.id}>{step.name}</option>)}</select></MiniField><div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2"><span className="text-xs font-semibold text-blue-700">Impactos configurados</span><div className="mt-1"><AddonImpactChips effects={addon.effects ?? []} /></div></div></div>
+    <EffectList version={version} effects={addon.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2AddonEffect(addon.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2AddonEffect(id), "Impacto removido.")} />
     <div className="flex items-center justify-between border-t border-slate-100 pt-2"><button type="button" disabled={readOnly} className="text-xs font-medium text-rose-600" onClick={() => void act(() => apiClient.deleteCatalog2Addon(addon.id), "Adicional removido.")}>Remover</button>{!readOnly && <SaveButton onClick={() => void put({ name: name.trim() || addon.name, description: help.trim() || null, base_cost: cost === "" ? null : Number(cost) })}>Salvar adicional</SaveButton>}</div>
   </div>;
 }
@@ -1207,7 +1267,7 @@ function AddonEditor({ addon, index, list, version, readOnly, act }: any) {
 // Cartão recolhível de configuração do produto (modalidades, pré-requisitos, acessos).
 function SetupCard({ icon: Icon, title, summary, help, children, defaultOpen = false, onToggle, scroll = false }: { icon: React.ComponentType<{ className?: string }>; title: string; summary?: React.ReactNode; help?: string; children: React.ReactNode; defaultOpen?: boolean; onToggle?: (e: React.SyntheticEvent<HTMLDetailsElement>) => void; scroll?: boolean }) {
   return (
-    <details open={defaultOpen || undefined} onToggle={onToggle} className="group h-full min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+    <details open={readOpen("setup:" + title, defaultOpen) || undefined} onToggle={(e) => { writeOpen("setup:" + title, (e.currentTarget as HTMLDetailsElement).open); onToggle?.(e); }} className="group h-full min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
       <summary className="flex cursor-pointer select-none list-none items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"><Icon className="h-3.5 w-3.5" /></span>
         <span className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">{title}</span>
@@ -1305,7 +1365,8 @@ function ContractModesSection({ version, readOnly, act, compact = false }: any) 
     await actRef.current(() => apiClient.updateCatalog2VersionInfo(version.id, fRef.current));
   }), [registerFlusher, readOnly, version.id]);
   const set = (patch: Partial<typeof f>) => setF((cur: any) => ({ ...cur, ...patch }));
-  const summary = [f.accepts_one_time && "Avulso", f.accepts_recurring && (f.has_initial_implementation ? "Assinatura mensal com implementação inicial" : "Assinatura mensal"), f.sell_mode === "package_only" && "Somente em pacote"].filter(Boolean).join(" · ") || "Nenhuma modalidade";
+  const modalidades = [f.accepts_one_time && "Avulso", f.accepts_recurring && "Mensal"].filter(Boolean).join(" e ") || "nenhuma modalidade";
+  const summary = `Modalidade: ${modalidades} · ${f.has_initial_implementation ? "com implementação inicial no 1º mês" : "sem implementação inicial"}${f.sell_mode === "package_only" ? " · somente em pacote" : ""}`;
   if (compact) return <><label className="flex h-[52px] min-w-0 flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-700 dark:bg-slate-800/40"><span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Tipo de preço</span><select disabled={readOnly} className="mt-0.5 w-full bg-transparent text-xs text-slate-800 outline-none dark:text-slate-100" value={f.pricing_mode} onChange={(e) => set({ pricing_mode: e.target.value })}><option value="calculated">Calculado pelas tarefas (custo + taxas)</option><option value="manual_fixed">Preço fixo informado</option><option value="on_request">Sob consulta</option></select></label><label className="flex h-[52px] min-w-0 flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-700 dark:bg-slate-800/40"><span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Implementação roda</span><select disabled={readOnly || !f.has_initial_implementation} className="mt-0.5 w-full bg-transparent text-xs text-slate-800 outline-none disabled:opacity-50 dark:text-slate-100" value={f.implementation_rule} onChange={(e) => set({ implementation_rule: e.target.value })}>{Object.entries(IMPLEMENTATION_RULE_LABEL).map(([v, l]) => <option key={v} value={v}>{l as string}</option>)}</select></label><div className="col-span-full mt-1"><p className="mb-1.5 text-xs font-bold text-slate-800 dark:text-slate-100">Modalidades de contratação</p><div className="grid gap-2 sm:grid-cols-3">{([{ key: "accepts_one_time", label: "Avulso", hint: "Compra única" }, { key: "accepts_recurring", label: "Assinatura mensal recorrente", hint: "Contrato contínuo" }, { key: "has_initial_implementation", label: "Implementação inicial", hint: "Configuração e onboarding" }] as const).map((mode) => <label key={mode.key} className={`flex min-w-0 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 ${f[mode.key] ? "border-violet-400 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/30" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}`}><input type="checkbox" disabled={readOnly} checked={!!f[mode.key]} onChange={(e) => set({ [mode.key]: e.target.checked })} className="sr-only" /><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${f[mode.key] ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 text-transparent"}`}>✓</span><span className="min-w-0"><span className="block truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{mode.label}</span><span className="block truncate text-[10px] text-slate-500">{mode.hint}</span></span></label>)}</div></div>{!readOnly && <div className="col-span-full mt-1 flex items-center justify-end gap-3"><span className={`text-[11px] ${JSON.stringify(f) === sig ? "text-slate-400" : "text-amber-700"}`}>{JSON.stringify(f) === sig ? "Alterações salvas" : "Alterações não salvas"}</span><Button type="button" onClick={() => void act(() => apiClient.updateCatalog2VersionInfo(version.id, f), "Alterações salvas.")} className="h-8 bg-violet-700 px-3 text-xs text-white hover:bg-fuchsia-700">Salvar alterações</Button></div>}</>;
   return (
     <SetupCard icon={Settings2} title="Modalidades de contratação" summary={summary} help="Define como este produto pode ser contratado e cobrado. Não cria tarefas nem muda o prazo das entregas; essas configurações ficam nas próprias tarefas e etapas.">
@@ -1313,10 +1374,22 @@ function ContractModesSection({ version, readOnly, act, compact = false }: any) 
       <p className="mb-2 text-[11px] text-slate-500">
         Três coisas diferentes: <strong>modalidades de compra</strong> (avulso e/ou assinatura mensal — abaixo), <strong>tipo de entrega</strong> (única ou mensal recorrente — Passo 4) e <strong>implementação inicial</strong> (própria regra, não é forma de pagamento).
       </p>
+      <div className="grid gap-2 md:grid-cols-2" data-testid="modalities-vs-implementation">
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900/60">
+          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Modalidade de contratação</p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <CheckPill disabled={readOnly} checked={f.accepts_one_time} onChange={(v) => set({ accepts_one_time: v })} hint="Compra de um único mês/ciclo, sem renovação">Avulso</CheckPill>
+            <CheckPill disabled={readOnly} checked={f.accepts_recurring} onChange={(v) => set({ accepts_recurring: v })} hint="Cobra e renova todo mês. Exige a entrega mensal recorrente marcada (Passo 4) e o período Mensal ativo.">Mensal</CheckPill>
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-500">Marque uma ou as duas.</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900/60">
+          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Implementação inicial</p>
+          <CheckPill disabled={readOnly} checked={f.has_initial_implementation} onChange={(v) => set({ has_initial_implementation: v })} hint="Implantação, configuração ou diagnóstico no primeiro mês, antes da rotina">Este produto tem implementação no 1º mês</CheckPill>
+          <p className="mt-1.5 text-[11px] text-slate-500">Não é forma de pagamento: só informa se existe essa etapa inicial.</p>
+        </div>
+      </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        <CheckPill disabled={readOnly} checked={f.accepts_one_time} onChange={(v) => set({ accepts_one_time: v })} hint="Compra de um único mês/ciclo, sem renovação">Avulso</CheckPill>
-        <CheckPill disabled={readOnly} checked={f.accepts_recurring} onChange={(v) => set({ accepts_recurring: v })} hint="Assinatura: cobra e renova todo mês. Exige a entrega mensal recorrente marcada (Passo 4) e o período Mensal ativo.">Assinatura mensal recorrente</CheckPill>
-        <CheckPill disabled={readOnly} checked={f.has_initial_implementation} onChange={(v) => set({ has_initial_implementation: v })} hint="Implantação, configuração ou diagnóstico antes da rotina">Implementação inicial</CheckPill>
         <CheckPill disabled={readOnly} checked={f.show_executor_name} onChange={(v) => set({ show_executor_name: v })} hint="Por padrão o cliente vê só 'Especialista responsável'. Marque para mostrar o nome do profissional nesta versão.">Mostrar nome do profissional ao cliente</CheckPill>
         <span className="mx-1 hidden h-5 w-px bg-slate-200 dark:bg-slate-700 sm:block" />
         <select disabled={readOnly} aria-label="Venda" className="h-7 rounded-full border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" value={f.sell_mode} onChange={(e) => set({ sell_mode: e.target.value })}>
@@ -1365,7 +1438,6 @@ function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked }: 
   const readyParts = [
     { label: "Estrutura comercial", ok: !!version.title && !!version.summary },
     { label: "Tarefas e etapas", ok: tasks.length > 0 },
-    { label: "Dependências", ok: dependencyCount > 0 || tasks.length === 0 },
     { label: "Acessos necessários", ok: (version.access_requirements?.length ?? 0) > 0 },
   ];
   const ready = readyParts.filter((part) => part.ok).length;
@@ -1378,7 +1450,7 @@ function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked }: 
     </button>
     {open && <div className="mt-3 space-y-3">
       <div className="grid items-start gap-2 lg:grid-cols-3"><DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={locked} compact /><ContractModesSection version={version} readOnly={readOnly} act={act} compact /></div>
-      <section className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20 lg:grid-cols-[auto_minmax(9rem,1fr)_repeat(4,minmax(0,1fr))] lg:items-center">
+      <section className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20 lg:grid-cols-[auto_minmax(9rem,1fr)_repeat(3,minmax(0,1fr))] lg:items-center">
         <div className="flex items-center gap-2"><span className="flex h-12 w-12 items-center justify-center rounded-full border-[5px] border-emerald-500 bg-white text-sm font-extrabold text-slate-900 dark:bg-slate-900 dark:text-slate-100">{percent}%</span><span><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Prontidão da entrega</span><span className="block text-[10px] text-slate-500">Produto configurado para entrega.</span></span></div>
         <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${percent}%` }} /></div>
         {readyParts.map((part) => <div key={part.label} className={`flex min-w-0 items-center gap-1.5 border-l border-emerald-100 pl-2 text-[11px] dark:border-emerald-900/40 ${part.ok ? "text-emerald-800 dark:text-emerald-200" : "text-amber-800 dark:text-amber-200"}`}><CheckCircle2 className="h-4 w-4 shrink-0" /><span className="min-w-0"><span className="block truncate">{part.label}</span><strong className="block text-[10px]">{part.ok ? "OK" : "REVISAR"}</strong></span></div>)}
@@ -1389,11 +1461,28 @@ function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked }: 
 
 // Pré-requisitos do PRODUTO: exige outro produto/tarefa/aprovação já concluído pelo mesmo cliente
 // antes de começar (fora de pacote). Regras de pacote ficam em Pacotes e Dependências.
-function ProductPrerequisitesSection({ version, compact = false }: { version: any; compact?: boolean }) {
+function ProductPrerequisitesSection({ version, compact = false, onAdd }: { version: any; compact?: boolean; onAdd?: () => void }) {
   const tasks = version.tasks ?? [];
   const byId = new Map(tasks.map((task: any) => [task.id, task]));
-  const rules = tasks.flatMap((task: any) => (task.depends_on ?? []).map((dependencyId: string) => ({ task, prerequisite: byId.get(dependencyId) })));
-  if (compact) return <details className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex cursor-pointer list-none items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Link2 className="h-4 w-4" /></span><span className="flex-1 text-sm font-bold text-slate-900 dark:text-slate-100">Dependências</span><span className="text-xs text-slate-500">{rules.length} regra{rules.length === 1 ? "" : "s"} <span className="text-slate-300">•</span> <strong className="text-emerald-700">{rules.length} configurada{rules.length === 1 ? "" : "s"}</strong></span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3">{rules.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-500 dark:bg-slate-800/50">Nenhuma tarefa está aguardando outra.</p> : <ol className="space-y-1.5">{rules.map(({ task, prerequisite }: any, index: number) => <li key={`${task.id}-${prerequisite?.id ?? "missing"}`} className="relative flex min-h-[46px] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/50"><span className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">{index + 1}</span>{index < rules.length - 1 && <span className="absolute bottom-[-8px] left-[26px] h-3 w-px bg-violet-400" />}<strong className="min-w-0 flex-[0.9] truncate text-slate-800 dark:text-slate-100">{task.name}</strong><ChevronRight className="h-4 w-4 shrink-0 text-violet-500" /><span className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300"><span className="text-slate-400">Depois de:</span> {prerequisite?.name ?? "tarefa indisponível"}</span><span className="shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">Configurada</span></li>)}</ol>}<div className="mt-3 flex justify-end"><Button type="button" variant="outline" className="h-8 border-violet-300 px-3 text-xs text-violet-700 hover:bg-violet-50" onClick={() => document.getElementById("catalog2-editor-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Plus className="mr-1 h-3.5 w-3.5" />Adicionar dependência</Button></div></div></details>;
+  const taskRules = tasks.flatMap((task: any) => (task.depends_on ?? []).map((dependencyId: string) => ({ task, prerequisite: byId.get(dependencyId) })));
+  // Dependências entre ETAPAS (fluxo): "junto com o início", "depois de X" e regras de executor.
+  const stepRules: { task: any; step: any; text: string }[] = [];
+  for (const task of tasks) {
+    const steps: any[] = task.steps ?? [];
+    const nm = (k: string) => steps.find((s) => s.key === k)?.name ?? k;
+    for (const s of steps) {
+      const parts: string[] = [];
+      if (Array.isArray(s.depends_on)) parts.push(s.depends_on.length === 0 ? "começa junto com o início da tarefa" : "começa depois de " + s.depends_on.map(nm).join(" e "));
+      if (s.executor_same_as_key && s.executor_policy === "same_as_step") parts.push("mantém o executor de " + nm(s.executor_same_as_key));
+      if (s.executor_same_as_key && s.executor_policy === "prefer_same_as_step") parts.push("prefere o executor de " + nm(s.executor_same_as_key));
+      if (s.executor_same_as_key && s.executor_policy === "other_than_step") parts.push("nunca o executor de " + nm(s.executor_same_as_key));
+      if (parts.length) stepRules.push({ task, step: s, text: parts.join("; ") });
+    }
+  }
+  const rules = taskRules;
+  const totalRules = taskRules.length + stepRules.length;
+  const totalSteps = tasks.reduce((n: number, t: any) => n + (t.steps?.length ?? 0), 0);
+  if (compact) return <PersistDetails persistKey="d2" className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex cursor-pointer list-none items-center gap-2"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Link2 className="h-4 w-4" /></span><span className="flex-1 text-sm font-bold text-slate-900 dark:text-slate-100">Dependências</span><span className="text-xs text-slate-500">{totalRules} regra{totalRules === 1 ? "" : "s"} <span className="text-slate-300">•</span> <strong className="text-emerald-700">{totalRules} configurada{totalRules === 1 ? "" : "s"}</strong></span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3"><p className="mb-2 text-[11px] text-slate-500">Dependência é a ordem em que as coisas começam: entre <strong>etapas</strong> (quais rodam juntas, quais esperam outras e se mantêm o mesmo executor) e entre <strong>tarefas</strong> (combos: uma tarefa só abre depois de outra).</p>{stepRules.length > 0 && <ul className="mb-2 space-y-1">{stepRules.map(({ task, step, text }) => <li key={task.id + step.id} className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-1.5 text-xs dark:border-indigo-900/50 dark:bg-indigo-950/20"><strong>{step.name}</strong> <span className="text-slate-400">({task.name})</span>: {text}.</li>)}</ul>}{rules.length === 0 && stepRules.length === 0 ? <p className="rounded-xl bg-slate-50 px-3 py-3 text-xs text-slate-500 dark:bg-slate-800/50">{totalSteps < 2 ? "Ainda não há dependências: com uma única etapa não há o que ordenar. Cadastre pelo menos 2 etapas e use \"Quando começa\" / \"Fluxo das etapas\" para definir a ordem." : "Nenhuma dependência definida: as etapas seguem em sequência, uma depois da outra. Use \"Adicionar dependência\" para colocar etapas em paralelo ou depender de etapas específicas."}</p> : rules.length === 0 ? null : <ol className="space-y-1.5">{rules.map(({ task, prerequisite }: any, index: number) => <li key={`${task.id}-${prerequisite?.id ?? "missing"}`} className="relative flex min-h-[46px] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/50"><span className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">{index + 1}</span>{index < rules.length - 1 && <span className="absolute bottom-[-8px] left-[26px] h-3 w-px bg-violet-400" />}<strong className="min-w-0 flex-[0.9] truncate text-slate-800 dark:text-slate-100">{task.name}</strong><ChevronRight className="h-4 w-4 shrink-0 text-violet-500" /><span className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300"><span className="text-slate-400">Depois de:</span> {prerequisite?.name ?? "tarefa indisponível"}</span><span className="shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">Configurada</span></li>)}</ol>}<div className="mt-3 flex justify-end"><Button type="button" variant="outline" className="h-8 border-violet-300 px-3 text-xs text-violet-700 hover:bg-violet-50" onClick={() => (onAdd ? onAdd() : document.getElementById("catalog2-editor-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }))}><Plus className="mr-1 h-3.5 w-3.5" />Adicionar dependência</Button></div></div></PersistDetails>;
   return (
     <SetupCard icon={Link2} title="Resumo de dependências" summary={rules.length ? `${rules.length} regra${rules.length === 1 ? "" : "s"} cadastrada${rules.length === 1 ? "" : "s"}` : "nenhuma tarefa aguarda outra"} help="Este é apenas um resumo. As dependências são cadastradas e alteradas dentro da tarefa ou da etapa que será bloqueada; toda alteração feita lá aparece aqui automaticamente." scroll>
       {rules.length === 0 ? <p className="text-xs text-slate-500">Nenhuma tarefa está aguardando outra. Configure uma dependência dentro da própria tarefa quando precisar controlar a ordem de início.</p> : <ul className="space-y-2">
@@ -1440,6 +1529,10 @@ function AccessRequirementsSection({ version, readOnly, act }: any) {
   };
   const [st, setSt] = useState(build);
   const [newOther, setNewOther] = useState("");
+  const [catalog, setCatalog] = useState<{ types: any[]; methods: any[] }>({ types: [], methods: [] });
+  useEffect(() => { void Promise.all([apiClient.getConnectionTypes(), apiClient.getConnectionVocabulary()]).then(([t, v]) => setCatalog({ types: t.data, methods: v.methods ?? [] })).catch(() => {}); }, []);
+  const LEGACY_TYPE: Record<string, string> = { google_ads: "google_ads", meta_business_manager: "meta_business_manager", ad_account: "meta_ad_account", pixel_capi: "pixel_capi", google_analytics: "google_analytics_4", google_tag_manager: "google_tag_manager", crm: "crm", site_landing: "site_landing" };
+  const hintOf = (k: string) => { const t = catalog.types.find((x) => x.key === LEGACY_TYPE[k]); if (!t) return "Informa a identificação da conta"; const s = typeSummary(t, (m) => catalog.methods.find((x: any) => x.key === m)?.label ?? m); return `Libera por: ${s.how} · Informa: ${s.needs}`; };
   const sig = JSON.stringify(current.map((a) => [a.access_type, a.label, a.is_required]));
   useEffect(() => { setSt(build()); }, [version.id, sig]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = () => act(() => apiClient.updateCatalog2AccessRequirements(version.id, [
@@ -1458,7 +1551,7 @@ function AccessRequirementsSection({ version, readOnly, act }: any) {
       <div><div className="flex justify-end"><span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-200">{total} selecionado{total === 1 ? "" : "s"}</span></div><p className="text-[11px] leading-relaxed text-slate-500">Escolha os acessos que o cliente precisa liberar. Use convite, permissão ou parceiro/agência — nunca senha.</p></div>
       <section className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-700 dark:bg-slate-800/40"><p className="mb-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">Acessos comuns</p><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {ACCESS_OPTIONS.map(([k, label]) => (
-          <button key={k} type="button" disabled={readOnly} onClick={() => setSt({ ...st, sel: { ...st.sel, [k]: { ...st.sel[k], on: !st.sel[k].on } } })} className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left text-xs transition-colors ${st.sel[k].on ? "border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-100" : "border-slate-200 bg-white text-slate-700 hover:border-violet-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] ${st.sel[k].on ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 bg-white text-transparent"}`}>{st.sel[k].on ? "✓" : ""}</span><AccessBrandMark type={k} /><span className="truncate font-semibold">{label}</span></button>
+          <button key={k} type="button" disabled={readOnly} onClick={() => setSt({ ...st, sel: { ...st.sel, [k]: { ...st.sel[k], on: !st.sel[k].on } } })} className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left text-xs transition-colors ${st.sel[k].on ? "border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-100" : "border-slate-200 bg-white text-slate-700 hover:border-violet-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] ${st.sel[k].on ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 bg-white text-transparent"}`}>{st.sel[k].on ? "✓" : ""}</span><AccessBrandMark type={k} /><span className="min-w-0"><span className="block truncate font-semibold">{label}</span><span className="block truncate text-[10px] font-normal text-slate-500" title={hintOf(k)}>{hintOf(k)}</span></span></button>
         ))}
       </div></section>
       <section className="rounded-xl border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900/60"><p className="mb-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">Selecionados para este produto</p>{total === 0 ? <p className="rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-500 dark:bg-slate-800/50">Nenhum acesso selecionado ainda.</p> : <div className="space-y-1.5">{ACCESS_OPTIONS.filter(([k]) => st.sel[k].on).map(([k, label]) => <div key={k} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs dark:bg-slate-800/50"><span className="min-w-0 flex-1 truncate font-medium text-slate-800 dark:text-slate-100">{label}</span><button type="button" disabled={readOnly} onClick={() => setSt({ ...st, sel: { ...st.sel, [k]: { ...st.sel[k], required: !st.sel[k].required } } })} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.sel[k].required ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200"}`}>{st.sel[k].required ? "Obrigatório" : "Opcional"}</button><button type="button" disabled={readOnly} aria-label={`Remover ${label}`} onClick={() => setSt({ ...st, sel: { ...st.sel, [k]: { ...st.sel[k], on: false } } })} className="text-slate-400 hover:text-rose-600"><X className="h-4 w-4" /></button></div>)}{st.others.map((item, index) => <div key={`other-${index}`} className="flex items-center gap-2 rounded-lg bg-violet-50 px-2.5 py-2 text-xs text-violet-900 dark:bg-violet-950/30 dark:text-violet-100"><span className="min-w-0 flex-1 truncate font-medium">{item.label}</span><button type="button" disabled={readOnly} onClick={() => setSt({ ...st, others: st.others.map((other, i) => i === index ? { ...other, required: !other.required } : other) })} className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-slate-900/70 dark:text-violet-200">{item.required ? "Obrigatório" : "Opcional"}</button><button type="button" disabled={readOnly} aria-label={`Remover ${item.label}`} onClick={() => setSt({ ...st, others: st.others.filter((_, i) => i !== index) })} className="text-violet-500 hover:text-rose-600"><X className="h-4 w-4" /></button></div>)}</div>}</section>
@@ -1469,8 +1562,37 @@ function AccessRequirementsSection({ version, readOnly, act }: any) {
   );
 }
 
-function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, highlightTaskIds, clearHighlight }: any) {
+function formatStageHours(minutes: number | null | undefined) {
+  const hours = (minutes ?? 0) / 60;
+  return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(hours)} h`;
+}
+
+/** Custo estimado de UMA etapa (horas × valor/hora da especialidade). Nulo quando falta hora ou valor/hora. */
+function stepCostEstimate(step: any, task: any, refs: any): number | null {
+  const rate = (refs?.specialties ?? []).find((item: any) => item.id === (step.specialty_id ?? task?.specialty?.id))?.max_hourly_rate;
+  if ((step.estimated_minutes ?? 0) <= 0 || rate == null) return null;
+  return (step.estimated_minutes / 60) * Number(rate);
+}
+const brl2 = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function taskStagesPrice(task: any, refs: any) {
+  const steps = task.steps ?? [];
+  if (steps.length === 0) return null;
+  let total = 0;
+  for (const step of steps) {
+    const rate = (refs?.specialties ?? []).find((item: any) => item.id === (step.specialty_id ?? task.specialty?.id))?.max_hourly_rate;
+    if ((step.estimated_minutes ?? 0) <= 0 || rate == null) return null;
+    total += (step.estimated_minutes / 60) * Number(rate);
+  }
+  return total;
+}
+
+function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, highlightTaskIds, clearHighlight, editTaskId, onOpenPricing, taskStructure }: any) {
   const ringOf = useContext(RingCtx);
+  // Reunião 2026-10-05: produto individual = UMA tarefa principal (o resto são etapas); só combos/compostos têm várias.
+  const single = taskStructure === "single";
+  const wc = useWorkCalendar();
+  const hasBaseTask = (version.tasks ?? []).some((x: any) => !x.is_conditional);
   const [nt, setNt] = useState({ name: "" });
   const [showCreate, setShowCreate] = useState(false);
   const [similarAsk, setSimilarAsk] = useState<any[] | null>(null);
@@ -1483,7 +1605,7 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
   const tasks = version.tasks;
   const [advancedTask, setAdvancedTask] = useState<string | null>(null);
   // Acordeão: cada tarefa pode ser recolhida; abre sozinha quando a prontidão aponta para ela.
-  const [closed, setClosed] = useState<Set<string>>(() => new Set(tasks.map((task: any) => task.id)));
+  const [closed, setClosed] = useState<Set<string>>(() => (single ? new Set<string>() : new Set(tasks.map((task: any) => task.id))));
   const toggleTask = (id: string) => setClosed((cur) => {
     if (!cur.has(id)) return new Set([...tasks.map((task: any) => task.id), id]);
     const next = new Set(tasks.map((task: any) => task.id)); next.delete(id); return next;
@@ -1509,10 +1631,15 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
     window.addEventListener("catalog2:expand-tasks", expand);
     return () => { window.removeEventListener("catalog2:collapse-tasks", collapse); window.removeEventListener("catalog2:expand-tasks", expand); };
   }, [tasks]);
+  useEffect(() => {
+    if (!editTaskId || !tasks.some((task: any) => task.id === editTaskId)) return;
+    setClosed((cur) => { const next = new Set(cur); next.delete(editTaskId); return next; });
+    setAdvancedTask(editTaskId);
+  }, [editTaskId, tasks]);
   return (
     <div id="catalog2-tasks" className="mt-3 scroll-mt-6 space-y-3">
       {tasks.map((t: any, i: number) => (
-        <div key={t.id} className="rounded-xl border border-violet-200 border-l-4 border-l-violet-500 bg-white p-3 shadow-sm dark:border-violet-900/60 dark:border-l-violet-500 dark:bg-slate-900/60">
+        <div id={`catalog2-task-${t.id}`} key={t.id} className="scroll-mt-8 rounded-xl border border-violet-200 border-l-4 border-l-violet-500 bg-white p-3 shadow-sm dark:border-violet-900/60 dark:border-l-violet-500 dark:bg-slate-900/60">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-1.5">
@@ -1522,49 +1649,54 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
               </div>
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
                 <MetaChip title="Quem executa">{EXEC_LABEL[t.execution_mode] ?? t.execution_mode}</MetaChip>
+                {t.stage_execution === "stage" && <MetaChip title="Cada etapa é qualificada e aprovada antes de liberar a próxima">Execução por etapa</MetaChip>}
                 <MetaChip title="Especialidade">{t.specialty?.name ?? "sem especialidade"}</MetaChip>
-                <MetaChip title="Tempo estimado"><Clock className="h-3 w-3" /> {fmtMinutes(t.estimated_minutes)}</MetaChip>
+                <MetaChip title="Total das etapas"><Clock className="h-3 w-3" /> {formatStageHours((t.steps ?? []).reduce((sum: number, step: any) => sum + (step.estimated_minutes ?? 0), 0))} nas etapas</MetaChip>
+                {flowSummary(t.steps ?? []).criticalMinutes > 0 && <MetaChip title="Prazo calculado pelas etapas, em horas úteis do calendário da plataforma. Etapas em paralelo contam só a mais longa."><Clock className="h-3 w-3" /> Prazo pelas etapas: {fmtBusinessMinutes(flowSummary(t.steps).criticalMinutes)} úteis (≈ {businessDaysOf(flowSummary(t.steps).criticalMinutes, wc.business_hours_per_day).toLocaleString("pt-BR")} dia(s) útil(eis))</MetaChip>}
+                <MetaChip title="Soma do custo estimado de todas as etapas (horas × valor/hora, sem taxas e margem)">Custo total estimado: {taskStagesPrice(t, refs) == null ? "a definir" : brl2(taskStagesPrice(t, refs)!)}</MetaChip>
                 <MetaChip title="Etapas desta tarefa">{t.steps.length} etapa{t.steps.length === 1 ? "" : "s"}</MetaChip>
                 {t.questionnaire && <MetaChip title="Questionário vinculado">questionário: {t.questionnaire.name}</MetaChip>}
                 <TaskIndicators task={t} />
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <button
+              {!readOnly && <button
                 type="button"
                 aria-expanded={advancedTask === t.id}
-                aria-label={`${advancedTask === t.id ? "Fechar" : "Abrir"} configurações avançadas de ${t.name}`}
+                aria-label={`${advancedTask === t.id ? "Fechar" : "Editar"} tarefa ${t.name}`}
                 onClick={() => toggleAdvancedTask(t.id)}
                 className={`inline-flex h-7 items-center gap-1 rounded-lg border px-2 text-[10px] font-semibold transition-colors ${advancedTask === t.id ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}
               >
-                <Settings2 className="h-3.5 w-3.5" /> Avançado
-              </button>
+                <Pencil className="h-3.5 w-3.5" /> {advancedTask === t.id ? "Fechar edição" : "Editar tarefa"}
+              </button>}
               {!readOnly && (
               <div className="flex gap-1">
-                <IconBtn label="Mover tarefa para cima — ela passa a ser executada antes da anterior" disabled={i === 0} onClick={() => act(() => apiClient.reorderCatalog2Tasks(version.id, move(tasks.map((x: any) => x.id), i, -1)))}><ChevronUp className="h-4 w-4" /></IconBtn>
-                <IconBtn label="Mover tarefa para baixo — ela passa a ser executada depois da próxima" disabled={i === tasks.length - 1} onClick={() => act(() => apiClient.reorderCatalog2Tasks(version.id, move(tasks.map((x: any) => x.id), i, 1)))}><ChevronDown className="h-4 w-4" /></IconBtn>
-                <IconBtn label="Duplicar esta tarefa (cria uma cópia dela neste produto)" onClick={() => act(() => apiClient.duplicateCatalog2Task(t.id), "Tarefa duplicada.")}><Copy className="h-4 w-4" /></IconBtn>
+                {!single && <IconBtn label="Mover tarefa para cima — ela passa a ser executada antes da anterior" disabled={i === 0} onClick={() => act(() => apiClient.reorderCatalog2Tasks(version.id, move(tasks.map((x: any) => x.id), i, -1)))}><ChevronUp className="h-4 w-4" /></IconBtn>}
+                {!single && <IconBtn label="Mover tarefa para baixo — ela passa a ser executada depois da próxima" disabled={i === tasks.length - 1} onClick={() => act(() => apiClient.reorderCatalog2Tasks(version.id, move(tasks.map((x: any) => x.id), i, 1)))}><ChevronDown className="h-4 w-4" /></IconBtn>}
+                {!single && <IconBtn label="Duplicar esta tarefa (cria uma cópia dela neste produto)" onClick={() => act(() => apiClient.duplicateCatalog2Task(t.id), "Tarefa duplicada.")}><Copy className="h-4 w-4" /></IconBtn>}
                 <DeleteBtn label="Remover tarefa deste produto?" onConfirm={() => act(() => apiClient.deleteCatalog2Task(t.id), "Tarefa removida do produto.")} />
               </div>
               )}
             </div>
           </div>
           <div className={closed.has(t.id) && !highlightTaskIds.includes(t.id) ? "hidden" : ""}>
-          {!readOnly && advancedTask === t.id && <TaskInlineEdit version={version} task={t} refs={refs} act={act} effortHighlighted={(highlightTarget === "catalog2-task-effort" && highlightTaskIds.includes(t.id)) || ringOf("task-effort:" + t.id).includes("amber")} durationHighlighted={(highlightTarget === "catalog2-task-duration" && highlightTaskIds.includes(t.id)) || ringOf("task-duration:" + t.id).includes("amber")} effortDone={ringOf("task-effort:" + t.id).includes("emerald")} durationDone={ringOf("task-duration:" + t.id).includes("emerald")} onSaved={(target: string) => clearHighlight(target)} />}
-          <ul className="mt-2 ml-2 space-y-1 border-l-2 border-sky-200 pl-3 dark:border-sky-900/60">
+           {!readOnly && advancedTask === t.id && <TaskInlineEdit version={version} task={t} refs={refs} act={act} effortHighlighted={(highlightTarget === "catalog2-task-effort" && highlightTaskIds.includes(t.id)) || ringOf("task-effort:" + t.id).includes("amber")} durationHighlighted={(highlightTarget === "catalog2-task-duration" && highlightTaskIds.includes(t.id)) || ringOf("task-duration:" + t.id).includes("amber")} effortDone={ringOf("task-effort:" + t.id).includes("emerald")} durationDone={ringOf("task-duration:" + t.id).includes("emerald")} onSaved={(target: string) => clearHighlight(target)} onOpenPricing={onOpenPricing} />}
+          <p className="mt-2 ml-2 text-[11px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300" data-testid="task-checklist-title">Checklist da tarefa — etapas ({t.steps.length}){t.steps.length === 0 ? " · cadastre ao menos uma etapa" : ""}</p>
+          <ul className="mt-1 ml-2 space-y-1 border-l-2 border-sky-200 pl-3 dark:border-sky-900/60">
             {t.steps.map((st: any, si: number) => (
               <StepRow key={st.id} version={version} step={st} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} />
             ))}
             {!readOnly && <AddStepControl ringClass={ringOf("catalog2-step-add:" + t.id)} domId={"catalog2-step-add:" + t.id} refs={refs} task={t} act={act} />}
           </ul>
+          <StepFlowEditor task={t} readOnly={readOnly} act={act} />
           </div>
         </div>
       ))}
-      {!readOnly && (
+      {!readOnly && !(single && hasBaseTask) && (
         <div id="catalog2-task-create" className={`space-y-2 rounded-xl border-2 border-dashed border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900/60 dark:bg-violet-950/10 ${ringOf("catalog2-task-create")}`}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button" style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(110,44,150,0.3)] ring-1 ring-white/20 transition hover:brightness-110 active:scale-[0.98]"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/25"><Plus className="h-3 w-3" strokeWidth={3} /></span> Adicionar tarefa <ChevronDown className="h-3.5 w-3.5 opacity-80" /></button>
+              <button type="button" style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(110,44,150,0.3)] ring-1 ring-white/20 transition hover:brightness-110 active:scale-[0.98]"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/25"><Plus className="h-3 w-3" strokeWidth={3} /></span> {single ? "Cadastrar a tarefa principal" : "Adicionar tarefa"} <ChevronDown className="h-3.5 w-3.5 opacity-80" /></button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               <DropdownMenuItem onClick={() => { setPickTask(true); setShowCreate(false); }}><Search className="h-4 w-4" /> Selecionar modelo existente</DropdownMenuItem>
@@ -1576,7 +1708,7 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
               <Field label="Nome da nova tarefa"><Input className="w-72" value={nt.name} onChange={(e) => setNt({ name: e.target.value })} /></Field>
               <Button size="sm" disabled={!nt.name.trim()} onClick={() => void createTask()}>Criar tarefa</Button>
               <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>Cancelar</Button>
-              <p className="w-full text-xs text-neutral-500">A nova tarefa recebe um número próprio (Tarefa #ID) e fica disponível no catálogo global para outros produtos. Depois de criada, ajuste executor, especialidade e tempo no cartão dela.</p>
+              <p className="w-full text-xs text-neutral-500">A nova tarefa recebe um número próprio (Tarefa #ID) e fica disponível no catálogo global para outros produtos. Depois de criada, ajuste executor e especialidade; as horas ficam exclusivamente nas etapas.</p>
             </div>
           )}
         </div>
@@ -1588,44 +1720,151 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
   );
 }
 
-const SpecialtySelect = ({ refs, value, onChange, emptyLabel }: any) => (
-  <select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={value} onChange={(e) => onChange(e.target.value)}>
-    <option value="">{emptyLabel}</option>
-    {(refs?.specialties ?? []).map((sp: any) => <option key={sp.id} value={sp.id}>{sp.name}{sp.max_hourly_rate == null ? " (sem valor/hora)" : ""}</option>)}
-  </select>
-);
+const SpecialtySelect = ({ refs, value, onChange, emptyLabel, mode }: any) => {
+  const all: any[] = refs?.specialties ?? [];
+  const list = mode ? specialtiesForMode(all, mode) : all;
+  const current = value ? all.find((sp) => sp.id === value) : null;
+  const orphan = mode && current && !isSpecialtyCompatible(current, mode) ? current : null;
+  return (
+    <>
+      <select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{emptyLabel}</option>
+        {orphan && <option value={orphan.id} disabled>{orphan.name} (tipo {EXEC_KIND_LABEL[specialtyKind(orphan)]} — troque)</option>}
+        {list.map((sp: any) => <option key={sp.id} value={sp.id}>{sp.name}{sp.max_hourly_rate == null ? " (sem valor/hora)" : ""}</option>)}
+      </select>
+      {mode && list.length === 0 && <span className="mt-1 block text-[11px] text-amber-700" data-testid="specialty-empty-hint">{emptySpecialtyHint(mode)}</span>}
+    </>
+  );
+};
+
+function TaskField({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="flex min-w-[8.5rem] flex-col gap-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300"><span>{label}</span>{children}</label>;
+}
 
 function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, version }: any) {
   const [editing, setEditing] = useState(false);
   const [viewModel, setViewModel] = useState(false);
   const [scopeAsk, setScopeAsk] = useState(false);
-  const initial = () => ({ name: step.name, estimated_minutes: step.estimated_minutes ?? "", specialty_id: step.specialty_id ?? "", purpose: step.purpose ?? "execucao", execution_mode: step.execution_mode ?? "humano", completion_criteria: step.completion_criteria ?? "", first_execution_only: !!step.first_execution_only, skip_when_same_executor: !!step.skip_when_same_executor, description: step.description ?? "", ops: (step.ops ?? {}) as any });
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [savingChecklist, setSavingChecklist] = useState(false);
+  const [leaders, setLeaders] = useState<{ id: string; name: string; kind: string }[]>([]);
+  useEffect(() => {
+    if (!editing || leaders.length > 0) return;
+    apiClient.getCatalog2Qualifiers().then((r) => setLeaders(r.data.filter((u) => u.kind === "lider"))).catch(() => {});
+  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  const initial = () => ({ name: step.name, estimated_hours: step.estimated_minutes == null ? "" : String(step.estimated_minutes / 60), specialty_id: step.specialty_id ?? "", purpose: step.purpose ?? "execucao", execution_mode: step.execution_mode ?? "humano", completion_criteria: step.completion_criteria ?? "", first_execution_only: !!step.first_execution_only, skip_when_same_executor: !!step.skip_when_same_executor, description: step.description ?? "", ops: (step.ops ?? {}) as any, executor_kind: step.executor_kind ?? "nomad", leader_mode: step.leader_mode ?? "auto", leader_user_id: step.leader_user_id ?? "", internal_step: !!step.internal_step, requires_qualification: step.requires_qualification !== false, release_next_auto: step.release_next_auto !== false });
   const [f, setF] = useState(initial);
   const specName = (refs?.specialties ?? []).find((sp: any) => sp.id === (step.specialty_id ?? task?.specialty?.id))?.name;
-  const payload = () => ({ name: f.name, estimated_minutes: f.estimated_minutes === "" ? null : Number(f.estimated_minutes), specialty_id: f.specialty_id || null, purpose: f.purpose, execution_mode: f.execution_mode, completion_criteria: f.completion_criteria.trim() ? f.completion_criteria : null, first_execution_only: f.first_execution_only, skip_when_same_executor: f.skip_when_same_executor, description: f.description.trim() ? f.description : null, ops: f.ops });
+  const payload = () => ({ name: f.name, estimated_minutes: f.estimated_hours === "" ? null : Math.round(Number(f.estimated_hours) * 60), specialty_id: f.specialty_id || null, purpose: f.purpose, execution_mode: f.execution_mode, completion_criteria: f.completion_criteria.trim() ? f.completion_criteria : null, first_execution_only: f.first_execution_only, skip_when_same_executor: f.skip_when_same_executor, description: f.description.trim() ? f.description : null, ops: f.ops, executor_kind: f.executor_kind, leader_mode: f.executor_kind === "leader" ? f.leader_mode : "auto", leader_user_id: f.executor_kind === "leader" && f.leader_mode === "specific" ? f.leader_user_id || null : null, internal_step: f.internal_step, requires_qualification: f.requires_qualification, release_next_auto: f.release_next_auto });
   const doSave = (scope?: "product" | "model") => act(() => apiClient.updateCatalog2Step(step.id, { ...payload(), ...(scope ? { scope } : {}), ...(scope === "model" ? { confirm_model_update: true } : {}) }), "Etapa salva.").then(() => setEditing(false));
   const save = () => (step.step_model_id != null ? setScopeAsk(true) : void doSave());
   if (editing) {
+    const draftCost = (() => { const h = Number(f.estimated_hours); const sp = (refs?.specialties ?? []).find((x: any) => x.id === (f.specialty_id || task?.specialty?.id)); return f.estimated_hours !== "" && h > 0 && sp?.max_hourly_rate != null ? (h * Number(sp.max_hourly_rate)) : null; })();
+    const draftChecklist: ChecklistItem[] = (f.ops?.checklist as ChecklistItem[] | undefined) ?? [];
+    const setOps = (patch: Record<string, unknown>) => setF({ ...f, ops: { ...(f.ops ?? {}), ...patch } });
+    const CTL = "h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm dark:border-slate-700 dark:bg-slate-900";
+    const SECTION = "min-w-0 space-y-2.5 p-4";
+    const TITLE = "text-[11px] font-semibold uppercase tracking-wide text-slate-500";
     return (
-      <li className="space-y-2 rounded border border-neutral-200 p-2 dark:border-neutral-800">
-        <div className="flex flex-wrap items-end gap-2">
-          <Field label="Nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-          <Field label="Finalidade"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-          <Field label="Executor"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={f.execution_mode} onChange={(e) => setF({ ...f, execution_mode: e.target.value })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-          <Field label="Especialidade"><SpecialtySelect refs={refs} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
-          <Field label="Min"><Input className="w-20" type="number" value={f.estimated_minutes} onChange={(e) => setF({ ...f, estimated_minutes: e.target.value })} /></Field>
+      <li className="relative rounded-xl border border-sky-400 bg-white shadow-sm before:absolute before:-left-[14px] before:top-6 before:h-px before:w-3.5 before:bg-violet-300 after:absolute after:-left-[17px] after:top-[21px] after:h-1.5 after:w-1.5 after:rounded-full after:bg-violet-400 dark:border-sky-700 dark:bg-slate-900/60" data-testid="step-edit-form">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5 dark:border-slate-700">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-sky-500 px-1.5 text-xs font-bold text-white">{index + 1}</span>
+            <span className="rounded-md bg-sky-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">Etapa {index + 1}</span>
+            <span className="h-4 w-px bg-slate-300" />
+            <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{f.name || step.name}</span>
+          </div>
+          <span className="text-xs text-slate-500">{draftCost == null ? "Custo estimado desta etapa: a definir" : <>Custo estimado desta etapa: <strong className="text-slate-800 dark:text-slate-100">{brl2(draftCost)}</strong></>}</span>
         </div>
-        <Field label="Critério de conclusão"><Input value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
-        <div className="flex flex-wrap gap-4 text-xs">
-          <label className="flex items-center gap-1" title="Nunca se repete nos ciclos seguintes"><input type="checkbox" checked={f.first_execution_only} onChange={(e) => setF({ ...f, first_execution_only: e.target.checked })} /> somente na primeira execução</label>
-          <label className="flex items-center gap-1" title="Se o mesmo executor for mantido no ciclo seguinte, esta etapa é dispensada"><input type="checkbox" checked={f.skip_when_same_executor} onChange={(e) => setF({ ...f, skip_when_same_executor: e.target.checked })} /> dispensável quando o mesmo executor continua</label>
+
+        <div className="grid divide-slate-200 md:grid-cols-2 md:divide-x dark:divide-slate-700">
+          {/* 1 · O que é esta etapa */}
+          <section className={SECTION}>
+            <h5 className={TITLE}>1 · O que é esta etapa</h5>
+            <Field label="Nome da etapa"><input className={CTL} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+            <Field label="Descrição (o que acontece nesta etapa)"><Textarea rows={3} maxLength={8000} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-[88px] text-sm" /></Field>
+          </section>
+          {/* 2 · Quem faz e quanto tempo leva */}
+          <section className={SECTION}>
+            <h5 className={TITLE}>2 · Quem faz e quanto tempo leva</h5>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+              <Field label="Finalidade"><select className={CTL} value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+              <Field label="Quem executa"><select className={CTL} aria-label="Quem executa" value={f.execution_mode} onChange={(e) => setF({ ...f, execution_mode: e.target.value, specialty_id: keepSpecialtyForMode(refs?.specialties, f.specialty_id, e.target.value) })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+              <Field label="Especialidade"><SpecialtySelect refs={refs} mode={f.execution_mode} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
+              <Field label="Horas estimadas"><input className={CTL} type="number" min="0" step="0.25" value={f.estimated_hours} onChange={(e) => setF({ ...f, estimated_hours: e.target.value })} /></Field>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2.5" data-testid="step-receiver">
+              <Field label="Quem recebe a etapa">
+                <select className={CTL} aria-label="Quem recebe a etapa" value={f.executor_kind} onChange={(e) => setF({ ...f, executor_kind: e.target.value, ...(e.target.value !== "leader" ? { leader_mode: "auto", leader_user_id: "" } : {}) })}>
+                  <option value="nomad">Nômade da plataforma (oferta e rodízio)</option>
+                  <option value="leader">Líder</option>
+                  <option value="internal">Equipe interna</option>
+                </select>
+              </Field>
+              {f.executor_kind === "leader" ? (
+                <Field label="Qual líder">
+                  <select className={CTL} aria-label="Qual líder" value={f.leader_mode === "specific" ? f.leader_user_id : "__auto"} onChange={(e) => setF({ ...f, leader_mode: e.target.value === "__auto" ? "auto" : "specific", leader_user_id: e.target.value === "__auto" ? "" : e.target.value })}>
+                    <option value="__auto">Qualquer líder da área (o com menos tarefas abertas)</option>
+                    {leaders.map((u) => <option key={u.id} value={u.id}>Sempre {u.name}</option>)}
+                  </select>
+                </Field>
+              ) : <div className="self-end pb-2 text-[11px] text-slate-500">{f.executor_kind === "nomad" ? "A etapa vai para a fila de nômades habilitados na especialidade." : "A equipe interna executa sem passar pela fila de nômades."}</div>}
+            </div>
+          </section>
         </div>
-        <Field label="Descrição da etapa"><Textarea rows={2} maxLength={8000} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-0 text-xs" /></Field>
-        <StepOpsForm value={f.ops} onChange={(v) => setF({ ...f, ops: v })} />
-        <ConnectionsSection version={version} readOnly={readOnly} act={act} scope={{ kind: "step", task: { key: task.key, name: task.name }, step: { key: step.key, name: step.name } }} />
-        <div className="flex gap-2">
-          <SaveButton onClick={save}>Salvar</SaveButton>
-          <Button size="sm" variant="ghost" onClick={() => { setF(initial()); setEditing(false); }}>Cancelar</Button>
+
+        <div className="grid divide-slate-200 border-t border-slate-200 md:grid-cols-2 md:divide-x dark:divide-slate-700 dark:border-slate-700">
+          {/* 3 · Quando a etapa termina */}
+          <section className={SECTION}>
+            <h5 className={TITLE}>3 · Quando a etapa termina</h5>
+            <Field label="Critério de conclusão"><input className={CTL} value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
+            <label className="flex items-center gap-2 text-sm" title="Nunca se repete nos ciclos seguintes"><input type="checkbox" className="h-4 w-4" checked={f.first_execution_only} onChange={(e) => setF({ ...f, first_execution_only: e.target.checked })} /> Só na primeira execução</label>
+            <label className="flex items-center gap-2 text-sm" title="Se o mesmo executor for mantido no ciclo seguinte, esta etapa é dispensada"><input type="checkbox" className="h-4 w-4" checked={f.skip_when_same_executor} onChange={(e) => setF({ ...f, skip_when_same_executor: e.target.checked })} /> Dispensável quando o mesmo executor continua</label>
+            {task?.stage_execution === "stage" && (
+              <div className="mt-1 space-y-1.5 rounded-lg border border-violet-200 bg-violet-50/50 p-2.5 dark:border-violet-900 dark:bg-violet-950/20" data-testid="stage-flags">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">Execução por etapa</p>
+                <label className="flex items-center gap-2 text-sm" title="O cliente não vê nem aprova esta etapa (ex.: validação de briefing ou de acessos). Se achar um problema, o líder pode avisar o cliente."><input type="checkbox" className="h-4 w-4" checked={f.internal_step} onChange={(e) => setF({ ...f, internal_step: e.target.checked })} /> Etapa interna (o cliente não vê nem aprova)</label>
+                <label className="flex items-center gap-2 text-sm" title="Depois de entregue, o líder qualifica antes de seguir."><input type="checkbox" className="h-4 w-4" checked={f.requires_qualification} onChange={(e) => setF({ ...f, requires_qualification: e.target.checked })} /> Passa pela qualificação do líder</label>
+                <label className="flex items-center gap-2 text-sm" title="Desligado: depois de aprovada, o líder precisa liberar a próxima etapa."><input type="checkbox" className="h-4 w-4" checked={f.release_next_auto} onChange={(e) => setF({ ...f, release_next_auto: e.target.checked })} /> Libera a próxima etapa automaticamente</label>
+              </div>
+            )}
+          </section>
+          {/* 4 · Checklist, orientações e evidência */}
+          <section className={SECTION}>
+            <div className="flex items-center justify-between gap-2">
+              <h5 className={TITLE}>4 · Checklist, orientações e evidência</h5>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600" data-testid="step-checklist-count">{checklistCount(draftChecklist)} {checklistCount(draftChecklist) === 1 ? "item" : "itens"}</span>
+                <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setChecklistOpen(true)} data-testid="open-step-checklist"><ListChecks className="mr-1.5 h-4 w-4" />Gerenciar checklist</Button>
+              </div>
+            </div>
+            <Field label="Orientações para execução"><Textarea rows={2} maxLength={8000} value={f.ops?.instructions ?? ""} onChange={(e) => setOps({ instructions: e.target.value })} className="min-h-[64px] text-sm" placeholder="Como executar esta etapa, passo a passo." /></Field>
+            <label className="flex items-center gap-2.5 text-sm font-medium" title="A etapa só pode ser concluída depois de anexar uma evidência.">
+              <Switch aria-label="Evidência obrigatória" checked={!!f.ops?.evidence_required} onCheckedChange={(v) => setOps({ evidence_required: !!v })} />
+              Evidência obrigatória
+            </label>
+            <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
+              <Field label="Responsável pela evidência">
+                <select className={CTL} value={f.ops?.evidence_owner ?? "executor"} onChange={(e) => setOps({ evidence_owner: e.target.value })}>
+                  <option value="executor">Executor da etapa</option><option value="leader">Líder</option><option value="client">Cliente</option>
+                </select>
+              </Field>
+              <Field label="Exemplo de evidência (opcional)"><input className={CTL} maxLength={1000} value={f.ops?.evidence_hint ?? ""} onChange={(e) => setOps({ evidence_hint: e.target.value })} placeholder="Ex.: print da tela com a campanha publicada" /></Field>
+            </div>
+          </section>
+        </div>
+
+        {/* 5 · Conexões e acessos (largura total) */}
+        <section className="space-y-2.5 border-t border-slate-200 p-4 dark:border-slate-700">
+          <h5 className={TITLE}>5 · Conexões e acessos desta etapa</h5>
+          <ConnectionsSection version={version} readOnly={readOnly} act={act} scope={{ kind: "step", task: { key: task.key, name: task.name }, step: { key: step.key, name: step.name } }} />
+        </section>
+
+        <StepChecklistDialog open={checklistOpen} title={f.name || step.name} value={draftChecklist} onClose={() => setChecklistOpen(false)} onSave={(list) => { setOps({ checklist: list }); setChecklistOpen(false); }} />
+
+        <div className="sticky bottom-0 flex gap-2 rounded-b-xl border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+          <SaveButton onClick={save}>Salvar etapa</SaveButton>
+          <Button size="sm" variant="ghost" className="h-9" onClick={() => { setF(initial()); setEditing(false); }}>Cancelar</Button>
         </div>
         <ModelScopeDialog open={scopeAsk} kindLabel="etapa" modelId={step.step_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void doSave(sc); }} />
       </li>
@@ -1645,9 +1884,32 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
             {task?.effort_is_provisional && !readOnly && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">revisar</span>}
           </div>
           <div className="text-xs text-neutral-500">
-            {PURPOSE_LABEL[step.purpose] ?? step.purpose} · {EXEC_LABEL[step.execution_mode] ?? step.execution_mode} · {specName ?? "sem especialidade"} · {fmtMinutes(step.estimated_minutes)}{step.is_conditional ? " · condicional" : ""}
+            {PURPOSE_LABEL[step.purpose] ?? step.purpose} · {EXEC_LABEL[step.execution_mode] ?? step.execution_mode} · {specName ?? "sem especialidade"} · {formatStageHours(step.estimated_minutes)} · <span data-testid="step-cost" title="Custo estimado: horas × valor/hora da especialidade (sem taxas e margem)">{stepCostEstimate(step, task, refs) == null ? "custo a definir" : brl2(stepCostEstimate(step, task, refs)!)}</span>{step.is_conditional ? " · condicional" : ""}
           </div>
+          {!readOnly && steps.length > 1 && <StepFlowControls step={step} steps={steps} index={index} taskId={taskId} act={act} />}
+          {task?.stage_execution === "stage" && (readOnly ? (
+            <div className="mt-0.5 flex flex-wrap gap-1" data-testid="stage-chips">
+              {step.internal_step && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Interna (cliente não vê)</span>}
+              {step.requires_qualification === false && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Sem qualificação</span>}
+              {step.release_next_auto === false && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Libera a próxima manualmente</span>}
+            </div>
+          ) : (
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-violet-200 bg-violet-50/60 px-2 py-1 text-[11px] text-violet-900 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-100" data-testid="stage-quick-flags">
+              <span className="font-bold uppercase tracking-wide">Execução por etapa:</span>
+              <label className="flex items-center gap-1" title="O cliente não vê nem aprova esta etapa."><input type="checkbox" checked={!!step.internal_step} onChange={(e) => void act(() => apiClient.updateCatalog2Step(step.id, { internal_step: e.target.checked, scope: "product" }), "Salvo.")} /> etapa interna (cliente não vê)</label>
+              <label className="flex items-center gap-1" title="Depois de entregue, o líder qualifica antes de seguir."><input type="checkbox" checked={step.requires_qualification !== false} onChange={(e) => void act(() => apiClient.updateCatalog2Step(step.id, { requires_qualification: e.target.checked, scope: "product" }), "Salvo.")} /> qualificação do líder</label>
+              <label className="flex items-center gap-1" title="Desligado: depois de aprovada, o líder precisa liberar a próxima etapa."><input type="checkbox" checked={step.release_next_auto !== false} onChange={(e) => void act(() => apiClient.updateCatalog2Step(step.id, { release_next_auto: e.target.checked, scope: "product" }), "Salvo.")} /> libera a próxima sozinha</label>
+              {step.executor_policy === "prefer_same_as_step" && (
+                <label className="flex items-center gap-1" title="Quantas horas o executor preferido tem para aceitar esta etapa antes de ela abrir para os demais. Vazio = padrão da plataforma (2 h).">prazo de aceite do preferido <input type="number" min={1} step={1} aria-label="Prazo de aceite do preferido (horas)" disabled={readOnly} className="h-6 w-14 rounded border border-slate-200 bg-white px-1 text-xs dark:border-slate-700 dark:bg-slate-900" defaultValue={step.executor_accept_hours ?? ""} key={`acc-${step.executor_accept_hours ?? ""}`} onBlur={(e) => { const raw = e.target.value.trim(); const n = raw === "" ? null : Number(raw); if (n !== null && (!Number.isInteger(n) || n < 1)) { e.target.value = String(step.executor_accept_hours ?? ""); return; } if ((step.executor_accept_hours ?? null) !== n) void act(() => apiClient.updateCatalog2Step(step.id, { executor_accept_hours: n, scope: "product" }), "Salvo."); }} /> h</label>
+              )}
+              <label className="flex items-center gap-1" title="Quantas horas úteis o cliente tem para aprovar esta etapa (vale na execução por etapa). Vazio = padrão.">prazo de aprovação do cliente <input type="number" min={1} step={1} aria-label="prazo de aprovação do cliente (horas úteis)" disabled={readOnly} className="h-6 w-14 rounded border border-slate-200 bg-white px-1 text-xs dark:border-slate-700 dark:bg-slate-900" defaultValue={step.approval_hours ?? ""} key={`approval_hours-${step.approval_hours ?? ""}`} onBlur={(e) => { const raw = e.target.value.trim(); const n = raw === "" ? null : Number(raw); if (n !== null && (!Number.isInteger(n) || n < 1)) { e.target.value = String(step.approval_hours ?? ""); return; } if ((step.approval_hours ?? null) !== n) void act(() => apiClient.updateCatalog2Step(step.id, { approval_hours: n, scope: "product" }), "Salvo."); }} /> h úteis</label>
+              <label className="flex items-center gap-1" title="Quantas horas úteis o executor tem para refazer depois de uma reprovação (vale na execução por etapa). Vazio = mantém o prazo anterior.">prazo de refação <input type="number" min={1} step={1} aria-label="prazo de refação (horas úteis)" disabled={readOnly} className="h-6 w-14 rounded border border-slate-200 bg-white px-1 text-xs dark:border-slate-700 dark:bg-slate-900" defaultValue={step.rework_hours ?? ""} key={`rework_hours-${step.rework_hours ?? ""}`} onBlur={(e) => { const raw = e.target.value.trim(); const n = raw === "" ? null : Number(raw); if (n !== null && (!Number.isInteger(n) || n < 1)) { e.target.value = String(step.rework_hours ?? ""); return; } if ((step.rework_hours ?? null) !== n) void act(() => apiClient.updateCatalog2Step(step.id, { rework_hours: n, scope: "product" }), "Salvo."); }} /> h úteis</label>
+            </div>
+          ))}
+          {(step.executor_kind === "leader" || step.executor_kind === "internal") && <div className="mt-0.5"><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800" data-testid="step-receiver-chip">{step.executor_kind === "internal" ? "Equipe interna" : step.leader_mode === "specific" ? "Líder específico" : "Líder da área"}</span></div>}
+          {stepFlowChips(step, steps).length > 0 && <div className="mt-0.5 flex flex-wrap gap-1" data-testid="step-flow-chips">{stepFlowChips(step, steps).map((c) => <span key={c} className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200">{c}</span>)}</div>}
           {step.completion_criteria && <div className="text-xs text-neutral-500">Critério de conclusão: {step.completion_criteria}</div>}
+          <StepGovernance step={step} task={task} version={version} readOnly={readOnly} act={act} />
         </div>
         {!readOnly && (
           <span className="flex shrink-0 gap-1">
@@ -1658,6 +1920,7 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                 onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: step.name, estimated_minutes: step.estimated_minutes ?? null, specialty_id: step.specialty_id ?? task?.specialty?.id ?? null }), "Etapa confirmada.")}
               >Ok</button>
             )}
+            <button type="button" data-testid="step-checklist-btn" title="Ver e cadastrar o checklist desta etapa (execução, aprovação e qualificação)" onClick={() => setChecklistOpen(true)} className="inline-flex h-7 items-center gap-1 rounded-lg border border-sky-200 bg-white px-2 text-[11px] font-semibold text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:bg-slate-900"><ListChecks className="h-3.5 w-3.5" />Checklist ({checklistCount(step.ops?.checklist)})</button>
             <IconBtn label="Editar esta etapa (nome, executor, especialidade, tempo…)" onClick={() => setEditing(true)}><Pencil className="h-3.5 w-3.5" /></IconBtn>
             <IconBtn label="Mover etapa para cima — ela passa a acontecer antes da anterior" disabled={index === 0} onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, -1)))}><ChevronUp className="h-3.5 w-3.5" /></IconBtn>
             <IconBtn label="Mover etapa para baixo — ela passa a acontecer depois da próxima" disabled={index === steps.length - 1} onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, 1)))}><ChevronDown className="h-3.5 w-3.5" /></IconBtn>
@@ -1666,15 +1929,16 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
         )}
       </div>
       {viewModel && step.step_model_id != null && <TaskModelInfoDialog kind="step" id={step.step_model_id} onClose={() => setViewModel(false)} />}
+      <StepChecklistDialog open={checklistOpen} title={step.name} readOnly={readOnly} saving={savingChecklist} value={(step.ops?.checklist as ChecklistItem[] | undefined) ?? []} onClose={() => setChecklistOpen(false)}
+        onSave={(list) => { setSavingChecklist(true); void act(() => apiClient.updateCatalog2Step(step.id, { ops: { ...(step.ops ?? {}), checklist: list }, scope: "product" }), "Checklist da etapa salvo.").then(() => setChecklistOpen(false)).finally(() => setSavingChecklist(false)); }} />
     </li>
   );
 }
 
-function TaskInlineEdit({ task, version, refs, act, effortHighlighted, durationHighlighted, effortDone, durationDone, onSaved }: any) {
+function TaskInlineEdit({ task, version, refs, act, effortHighlighted, durationHighlighted, effortDone, durationDone, onSaved, onOpenPricing }: any) {
   const registerFlusher = useContext(FlushCtx);
-  const [t, setT] = useState({ execution_mode: task.execution_mode, estimated_minutes: task.estimated_minutes ?? "", specialty_id: task.specialty?.id ?? "", is_conditional: task.is_conditional, requires_review: task.requires_review, requires_client_approval: task.requires_client_approval, requires_qualification: task.requires_qualification ?? false, cycle_type: task.cycle_type ?? "recorrente", repeat_rule: task.repeat_rule ?? "all_cycles", repeat_every_cycles: task.repeat_every_cycles ?? "", executor_continuity: task.executor_continuity ?? "not_allowed", asset_rule: task.asset_rule ?? "first_only", asset_revalidate_days: task.asset_revalidate_days ?? "" });
+  const [t, setT] = useState({ stage_execution: task.stage_execution ?? "task", execution_mode: task.execution_mode, specialty_id: task.specialty?.id ?? "", is_conditional: task.is_conditional, requires_review: task.requires_review, requires_client_approval: task.requires_client_approval, requires_qualification: task.requires_qualification ?? false, cycle_type: task.cycle_type ?? "recorrente", repeat_rule: task.repeat_rule ?? "all_cycles", repeat_every_cycles: task.repeat_every_cycles ?? "", executor_continuity: task.executor_continuity ?? "not_allowed", asset_rule: task.asset_rule ?? "first_only", asset_revalidate_days: task.asset_revalidate_days ?? "" });
   const [scopeAsk, setScopeAsk] = useState(false);
-  const [showNewSpecialty, setShowNewSpecialty] = useState(false);
   const dirtyRef = useRef(false);
   const preview = (patch: Record<string, unknown>) => {
     dirtyRef.current = true;
@@ -1692,13 +1956,12 @@ function TaskInlineEdit({ task, version, refs, act, effortHighlighted, durationH
     if ((t.requires_qualification || t.requires_review) && qualifiers.length === 0) apiClient.getCatalog2Qualifiers().then((r) => setQualifiers(r.data)).catch(() => {});
   }, [t.requires_qualification, t.requires_review]); // eslint-disable-line react-hooks/exhaustive-deps
   const doSaveTask = (scope?: "product" | "model") => act(
-    () => apiClient.updateCatalog2Task(task.id, { ...t, description: descT.trim() ? descT : null, ops: opsT, qualifier_user_id: t.requires_qualification ? (qualifier || null) : null, reviewer_user_id: t.requires_review ? (reviewer || null) : null, review_minutes: t.requires_review && reviewMin !== "" ? Number(reviewMin) : null, review_specialty_id: t.requires_review ? (reviewSpec || null) : null, estimated_minutes: t.estimated_minutes === "" ? null : Number(t.estimated_minutes), specialty_id: t.specialty_id || null, repeat_every_cycles: t.repeat_rule === "every_n_cycles" && t.repeat_every_cycles !== "" ? Number(t.repeat_every_cycles) : null, asset_revalidate_days: t.asset_rule === "every_x_days" && t.asset_revalidate_days !== "" ? Number(t.asset_revalidate_days) : null, ...(scope ? { scope } : {}), ...(scope === "model" ? { confirm_model_update: true } : {}) }),
+    () => apiClient.updateCatalog2Task(task.id, { ...t, description: descT.trim() ? descT : null, ops: opsT, qualifier_user_id: t.requires_qualification ? (qualifier || null) : null, reviewer_user_id: t.requires_review ? (reviewer || null) : null, review_minutes: t.requires_review && reviewMin !== "" ? Number(reviewMin) : null, review_specialty_id: t.requires_review ? (reviewSpec || null) : null, estimated_minutes: null, specialty_id: t.specialty_id || null, repeat_every_cycles: t.repeat_rule === "every_n_cycles" && t.repeat_every_cycles !== "" ? Number(t.repeat_every_cycles) : null, asset_revalidate_days: t.asset_rule === "every_x_days" && t.asset_revalidate_days !== "" ? Number(t.asset_revalidate_days) : null, ...(scope ? { scope } : {}), ...(scope === "model" ? { confirm_model_update: true } : {}) }),
     scope === "model" ? "Modelo global atualizado." : "Tarefa salva."
   ).then((result: any) => {
     if (!result) return;
     dirtyRef.current = false;
     if (effortHighlighted) onSaved("catalog2-task-effort");
-    if (durationHighlighted && t.estimated_minutes !== "" && Number(t.estimated_minutes) >= 0) onSaved("catalog2-task-duration");
     return result;
   });
   // "Salvar rascunho" no cabeçalho deve salvar também as alterações ainda
@@ -1714,29 +1977,41 @@ function TaskInlineEdit({ task, version, refs, act, effortHighlighted, durationH
   // O modelo continua podendo ser atualizado, mas apenas por ação explícita.
   const saveTask = () => void doSaveTask("product");
   return (
-    <details className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-800/30" open={effortHighlighted || durationHighlighted || !!effortDone || !!durationDone ? true : undefined}>
-    <summary className="cursor-pointer select-none text-[12px] font-semibold text-slate-600 dark:text-slate-300">Configurar tarefa <span className="font-normal text-slate-400">(executor, especialidade, tempo, ciclo, acessos, questionário…)</span></summary>
+    <section className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-800/30">
+    <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300">Configurar tarefa <span className="font-normal text-slate-400">(executor, especialidade, ciclo, acessos, questionário…)</span></p>
     <div className="space-y-2 pt-2 text-xs">
-      <div className="flex flex-wrap items-center gap-2">
-        <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.execution_mode} onChange={(e) => { setT({ ...t, execution_mode: e.target.value }); preview({ execution_mode: e.target.value }); }}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-        <select className={`rounded border bg-transparent px-1 py-0.5 dark:border-neutral-700 ${effortDone ? "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : effortHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.specialty_id} onChange={(e) => { const specialty = refs.specialties.find((s: any) => s.id === e.target.value) ?? null; setT({ ...t, specialty_id: e.target.value }); preview({ specialty_id: e.target.value || null, specialty }); }}><option value="">sem especialidade</option>{refs.specialties.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
-        <button type="button" className="text-neutral-500 underline hover:text-neutral-900 dark:hover:text-neutral-100" onClick={() => setShowNewSpecialty((v) => !v)}>+ nova especialidade</button>
-        <label>min <input id={"task-duration:" + task.id} type="number" className={`w-16 rounded border bg-transparent px-1 dark:border-neutral-700 ${durationDone || effortDone ? "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : durationHighlighted || effortHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.estimated_minutes} onChange={(e) => { setT({ ...t, estimated_minutes: e.target.value }); preview({ estimated_minutes: e.target.value === "" ? null : Number(e.target.value) }); }} /></label>
+      <div className="flex flex-wrap items-end gap-2">
+        <TaskField label="Executor">
+          <select className="h-8 rounded border border-neutral-300 bg-white px-2 text-xs dark:border-neutral-700 dark:bg-slate-900" value={t.execution_mode} onChange={(e) => { const keep = keepSpecialtyForMode(refs?.specialties, t.specialty_id, e.target.value); setT({ ...t, execution_mode: e.target.value, specialty_id: keep }); preview({ execution_mode: e.target.value, ...(keep !== t.specialty_id ? { specialty_id: null, specialty: null } : {}) }); }}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        </TaskField>
+        <TaskField label="Especialidade / conhecimento humano">
+          <select className={`h-8 rounded border bg-white px-2 text-xs dark:border-neutral-700 dark:bg-slate-900 ${effortDone ? "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : effortHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.specialty_id} onChange={(e) => { const specialty = refs.specialties.find((s: any) => s.id === e.target.value) ?? null; setT({ ...t, specialty_id: e.target.value }); preview({ specialty_id: e.target.value || null, specialty }); }}><option value="">Sem especialidade</option>{specialtiesForMode(refs.specialties, t.execution_mode).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+        </TaskField>
+        <button type="button" className="mb-0.5 text-xs font-semibold text-violet-700 underline hover:text-violet-900 dark:text-violet-300" onClick={() => void onOpenPricing?.(task.id)}>Configurar especialidades e custos</button>
         <label><input type="checkbox" checked={t.is_conditional} onChange={(e) => setT({ ...t, is_conditional: e.target.checked })} /> condicional</label>
         <label title="A entrega passa por uma revisão técnica de um revisor ANTES da qualificação e da aprovação. Tem rodadas e pode devolver ao executor."><input type="checkbox" checked={t.requires_review} onChange={(e) => setT({ ...t, requires_review: e.target.checked })} /> revisão obrigatória</label>
         <label><input type="checkbox" checked={t.requires_client_approval} onChange={(e) => setT({ ...t, requires_client_approval: e.target.checked })} /> aprovação cliente</label>
-        <label className="flex items-center gap-1">ciclo
+        <label className="rounded-md border border-violet-300 bg-violet-50 px-2 py-1 font-semibold text-violet-800 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-200" title="Cada etapa passa pela qualificação do líder e pela aprovação de quem contratou antes de liberar a próxima. Desligado: qualificação e aprovação só no fim da tarefa (como sempre). Salva na hora." data-testid="stage-execution-toggle"><input type="checkbox" checked={t.stage_execution === "stage"} onChange={(e) => { const v = e.target.checked ? "stage" : "task"; setT({ ...t, stage_execution: v }); void act(() => apiClient.updateCatalog2Task(task.id, { stage_execution: v, scope: "product" }), v === "stage" ? "Execução por etapa ligada: cada etapa agora tem as opções de qualificação e aprovação (veja nas etapas, logo abaixo)." : "Execução por etapa desligada."); }} /> execução por etapa (qualifica e aprova cada etapa) — salva na hora</label>
+        {t.stage_execution === "stage" && (
+          <label className="flex flex-col gap-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300" title="Quando o nômade recebe: a cada etapa aprovada, ou só no fim da tarefa (créditos retidos até a última etapa). Salva na hora." data-testid="stage-payout-select">Pagamento do nômade
+            <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={task.stage_payout_mode ?? "at_end"} onChange={(e) => void act(() => apiClient.updateCatalog2Task(task.id, { stage_payout_mode: e.target.value, scope: "product" }), "Forma de pagamento do nômade salva.")}>
+              <option value="at_end">Só no fim da tarefa (créditos retidos)</option>
+              <option value="per_stage">A cada etapa aprovada</option>
+            </select>
+          </label>
+        )}
+        <label className="flex flex-col gap-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">Ciclo
           <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.cycle_type} onChange={(e) => setT({ ...t, cycle_type: e.target.value })}>{Object.entries(CYCLE_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         </label>
-        <label className="flex items-center gap-1">repetição
+        <label className="flex flex-col gap-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">Repetição
           <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.repeat_rule} onChange={(e) => setT({ ...t, repeat_rule: e.target.value })}>{Object.entries(REPEAT_RULE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           {t.repeat_rule === "every_n_cycles" && <input type="number" min={1} className="w-14 rounded border border-neutral-300 bg-transparent px-1 dark:border-neutral-700" value={t.repeat_every_cycles} onChange={(e) => setT({ ...t, repeat_every_cycles: e.target.value })} />}
         </label>
-        <label className="flex items-center gap-1" title="Quando a etapa de validação dos acessos pode ser dispensada ou precisa repetir">acessos
+        <label className="flex flex-col gap-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300" title="Quando a etapa de validação dos acessos pode ser dispensada ou precisa repetir">Regra de acessos
           <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.asset_rule} onChange={(e) => setT({ ...t, asset_rule: e.target.value })}>{Object.entries(ASSET_RULE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
           {t.asset_rule === "every_x_days" && <input type="number" min={1} placeholder="dias" className="w-14 rounded border border-neutral-300 bg-transparent px-1 dark:border-neutral-700" value={t.asset_revalidate_days} onChange={(e) => setT({ ...t, asset_revalidate_days: e.target.value })} />}
         </label>
-        <label className="flex items-center gap-1" title="Permitir continuidade com o mesmo executor do ciclo anterior">continuidade
+        <label className="flex flex-col gap-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300" title="Permitir continuidade com o mesmo executor do ciclo anterior">Continuidade do executor
           <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={t.executor_continuity} onChange={(e) => setT({ ...t, executor_continuity: e.target.value })}>{Object.entries(CONTINUITY_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         </label>
         <label title="A entrega concluída só é aceita depois da aprovação de um líder/qualificador"><input type="checkbox" checked={t.requires_qualification} onChange={(e) => setT({ ...t, requires_qualification: e.target.checked })} /> qualificação obrigatória</label>
@@ -1782,18 +2057,12 @@ function TaskInlineEdit({ task, version, refs, act, effortHighlighted, durationH
       <TaskDependencyCascade task={task} version={version} readOnly={false} act={act} />
       <ConnectionsSection version={version} readOnly={false} act={act} scope={{ kind: "task", task: { key: task.key, name: task.name } }} />
       {effortHighlighted && <p className="text-amber-700 dark:text-amber-300">Dados provisórios de teste: revise os valores já preenchidos e clique em <strong>Salvar tarefa</strong> para confirmá-los como dados reais.</p>}
-      {showNewSpecialty && (
-        <NewSpecialtyForm
-          onCreated={(s: any) => { setT((c) => ({ ...c, specialty_id: s.id })); setShowNewSpecialty(false); }}
-          act={act}
-        />
-      )}
-      {(t.execution_mode === "ia" || t.execution_mode === "hibrido") && <AiConfig task={task} act={act} />}
+      {(t.execution_mode === "ia" || t.execution_mode === "hibrido") && <AiConfig task={task} act={act} onOpenPricing={() => void onOpenPricing?.(task.id)} />}
       {t.execution_mode === "humano" && task.ai && <p className="rounded-md bg-slate-100 px-2 py-1 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">Esta tarefa está em execução humana. A configuração de IA existente fica inativa, não entra no preço e pode ser reaproveitada caso a execução por IA seja habilitada futuramente.</p>}
       <QuestionnaireSection task={task} refs={refs} act={act} />
       {task.task_model_id != null && <ModelScopeDialog open={scopeAsk} kindLabel="tarefa" modelId={task.task_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void doSaveTask(sc); }} />}
     </div>
-    </details>
+    </section>
   );
 }
 
@@ -1843,17 +2112,18 @@ function TaskDependencyCascade({ task, version, readOnly, act }: { task: any; ve
 // respeitando a permissão administrativa atual" (Item 3) — reaproveita
 // POST /specialties (guardAdminMaster já se aplica a toda a rota).
 function NewSpecialtyForm({ onCreated, act }: { onCreated: (s: any) => void; act: any }) {
-  const [f, setF] = useState({ key: "", name: "", max_hourly_rate: "" });
+  const [f, setF] = useState({ key: "", name: "", max_hourly_rate: "", execution_kind: "humano" });
   return (
     <div className="flex items-end gap-2 rounded border border-dashed border-neutral-300 p-2 dark:border-neutral-700">
       <Field label="key"><Input value={f.key} onChange={(e) => setF({ ...f, key: e.target.value })} /></Field>
       <Field label="nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
       <Field label="valor/hora (opcional)"><Input type="number" value={f.max_hourly_rate} onChange={(e) => setF({ ...f, max_hourly_rate: e.target.value })} /></Field>
+      <Field label="tipo"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={f.execution_kind} onChange={(e) => setF({ ...f, execution_kind: e.target.value })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
       <Button
         size="sm"
         onClick={() =>
           f.key && f.name &&
-          act(() => apiClient.addCatalog2Specialty({ key: f.key, name: f.name, max_hourly_rate: f.max_hourly_rate ? Number(f.max_hourly_rate) : null }), "Especialidade criada.")
+          act(() => apiClient.addCatalog2Specialty({ key: f.key, name: f.name, max_hourly_rate: f.max_hourly_rate ? Number(f.max_hourly_rate) : null, execution_kind: f.execution_kind }), "Especialidade criada.")
             .then((s: any) => s && onCreated(s))
         }
       >
@@ -1971,7 +2241,7 @@ function NewQuestionnaireForm({ taskId, act, onDone }: { taskId: string; act: an
               <span>{i + 1}. {q.label} {q.is_required && <span className="text-red-500">*</span>} <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{questionTypeLabel(q.question_type)}</span></span>
               <button type="button" aria-label="Remover pergunta" className="text-neutral-400 hover:text-red-500" onClick={() => setQuestions((qs) => qs.filter((_, idx) => idx !== i))}><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
-            <details className="mt-1"><summary className="cursor-pointer text-[11px] text-violet-600">Tipo e configurações da pergunta</summary><div className="mt-1"><QuestionConfigFields q={q} onChange={(patch) => updateQuestion(i, patch)} /></div></details>
+            <div className="mt-1"><p className="text-[11px] font-semibold text-violet-600">Tipo e configurações da pergunta</p><div className="mt-1"><QuestionConfigFields q={q} onChange={(patch) => updateQuestion(i, patch)} /></div></div>
           </div>
         ))}
       </div>
@@ -2054,7 +2324,7 @@ function EditQuestionnaireForm({ task, act, onDone, onCancel }: { task: any; act
             <button type="button" disabled={i === questions.length - 1} className="disabled:opacity-30" onClick={() => moveQuestion(i, 1)}><ChevronDown className="h-3.5 w-3.5" /></button>
             <button type="button" aria-label="Remover pergunta" className="text-neutral-400 hover:text-red-500" onClick={() => setQuestions((qs) => qs.filter((_, idx) => idx !== i))}><Trash2 className="h-3.5 w-3.5" /></button>
           </div>
-          <details><summary className="cursor-pointer text-[11px] text-violet-600">Tipo: {questionTypeLabel(qItem.question_type)} · configurações</summary><div className="mt-1"><QuestionConfigFields q={qItem} onChange={(patch) => updateQuestion(i, patch)} /></div></details>
+          <div><p className="text-[11px] font-semibold text-violet-600">Tipo: {questionTypeLabel(qItem.question_type)} · configurações</p><div className="mt-1"><QuestionConfigFields q={qItem} onChange={(patch) => updateQuestion(i, patch)} /></div></div>
           </div>
         ))}
         {questions.length === 0 && <p className="text-neutral-400">Nenhuma pergunta — adicione abaixo.</p>}
@@ -2085,12 +2355,12 @@ function EditQuestionnaireForm({ task, act, onDone, onCancel }: { task: any; act
     </div>
   );
 }
-// Vem PRÉ-PREENCHIDA com o nome, a especialidade e as horas da própria tarefa
-// (pedido do usuário: já vir preenchido, só clicar para confirmar e ajustar depois).
+// A duração pertence à etapa. A tarefa reúne o total de suas etapas, sem
+// transferir horas antigas para novas linhas automaticamente.
 function AddStepControl({ refs, ringClass, domId, task, act }: { refs?: any; ringClass?: string; domId?: string; task?: any; act: any }) {
   const defaults = () => ({
     name: task?.name ?? "",
-    estimated_minutes: task?.estimated_minutes != null ? String(task.estimated_minutes) : "",
+    estimated_hours: "",
     specialty_id: task?.specialty?.id ?? "",
     purpose: "execucao",
     execution_mode: task?.execution_mode ?? "humano",
@@ -2100,10 +2370,10 @@ function AddStepControl({ refs, ringClass, domId, task, act }: { refs?: any; rin
   const [showCreate, setShowCreate] = useState(false);
   const [pick, setPick] = useState(false);
   const [similarAsk, setSimilarAsk] = useState<any[] | null>(null);
-  const createStep = (justification?: string) => act(() => apiClient.addCatalog2Step(task.id, { name: s.name.trim(), estimated_minutes: s.estimated_minutes ? Number(s.estimated_minutes) : null, specialty_id: s.specialty_id || null, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria.trim() || null, client_action_id: `step-${task.id}-${Date.now()}`, ...(justification ? { duplicate_resolution: "create_anyway", duplicate_justification: justification } : {}) }), "Etapa criada e cadastrada no catálogo global de modelos.", { rethrow: true })
+  const createStep = (justification?: string) => act(() => apiClient.addCatalog2Step(task.id, { name: s.name.trim(), estimated_minutes: s.estimated_hours ? Math.round(Number(s.estimated_hours) * 60) : null, specialty_id: s.specialty_id || null, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria.trim() || null, client_action_id: `step-${task.id}-${Date.now()}`, ...(justification ? { duplicate_resolution: "create_anyway", duplicate_justification: justification } : {}) }), "Etapa criada e cadastrada no catálogo global de modelos.", { rethrow: true })
     .then((r: any) => { if (r) { setS(defaults()); setShowCreate(false); } })
     .catch((e: any) => { if (e?.code === "duplicate_model_candidates" && Array.isArray(e?.data?.details?.candidates)) setSimilarAsk(e.data.details.candidates); });
-  useEffect(() => { setS(defaults()); }, [task?.id, task?.name, task?.estimated_minutes, task?.specialty?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setS(defaults()); }, [task?.id, task?.name, task?.specialty?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <li id={domId} className={`space-y-2 ${ringClass ?? ""}`}>
       <DropdownMenu>
@@ -2121,9 +2391,9 @@ function AddStepControl({ refs, ringClass, domId, task, act }: { refs?: any; rin
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Nome"><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} /></Field>
             <Field label="Finalidade"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={s.purpose} onChange={(e) => setS({ ...s, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-            <Field label="Executor"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={s.execution_mode} onChange={(e) => setS({ ...s, execution_mode: e.target.value })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-            <Field label="Especialidade"><SpecialtySelect refs={refs} value={s.specialty_id} onChange={(v: string) => setS({ ...s, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
-            <Field label="Min"><Input className="w-20" type="number" value={s.estimated_minutes} onChange={(e) => setS({ ...s, estimated_minutes: e.target.value })} /></Field>
+            <Field label="Executor"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={s.execution_mode} onChange={(e) => setS({ ...s, execution_mode: e.target.value, specialty_id: keepSpecialtyForMode(refs?.specialties, s.specialty_id, e.target.value) })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+            <Field label="Especialidade"><SpecialtySelect refs={refs} mode={s.execution_mode} value={s.specialty_id} onChange={(v: string) => setS({ ...s, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
+            <Field label="Horas estimadas"><Input className="w-24" type="number" min="0" step="0.25" value={s.estimated_hours} onChange={(e) => setS({ ...s, estimated_hours: e.target.value })} /></Field>
           </div>
           <Field label="Critério de conclusão"><Input value={s.completion_criteria} onChange={(e) => setS({ ...s, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
           <div className="flex gap-2">
@@ -2216,30 +2486,56 @@ function ConditionsTab({ version, readOnly, act }: any) {
 // Prazo comercial base da versão: é o que o cliente vê como prazo de entrega.
 // Não é a soma das tarefas (isso é só a estimativa interna de esforço).
 function DeadlineBaseField({ version, act, ringOf, locked, compact = false }: any) {
-  const [v, setV] = useState<string>(version.base_commercial_deadline_days == null ? "" : String(version.base_commercial_deadline_days));
-  useEffect(() => { setV(version.base_commercial_deadline_days == null ? "" : String(version.base_commercial_deadline_days)); }, [version.id, version.base_commercial_deadline_days]);
-  const n = Number(v);
-  const valid = v !== "" && Number.isInteger(n) && n >= 1;
+  const wc = useWorkCalendar();
+  // O prazo comercial é informado em HORAS úteis; os dias úteis ao lado são o reflexo (arredondado para cima). Dado antigo só em dias vira horas pelo expediente.
+  const hoursOf = (x: any) => (x.base_commercial_deadline_hours != null ? x.base_commercial_deadline_hours : x.base_commercial_deadline_days != null ? x.base_commercial_deadline_days * 24 : null);
+  const [v, setV] = useState<string>(hoursOf(version) == null ? "" : String(hoursOf(version)));
+  useEffect(() => { setV(hoursOf(version) == null ? "" : String(hoursOf(version))); }, [version.id, version.base_commercial_deadline_days, version.base_commercial_deadline_hours, wc.business_hours_per_day]); // eslint-disable-line react-hooks/exhaustive-deps
+  const h = Number(v);
+  const valid = v !== "" && Number.isInteger(h) && h >= 1;
+  // 24 horas = 1 dia: o reflexo mostra a fração (5 h ≈ 0,21 dia); o sistema guarda o inteiro arredondado para cima (mínimo 1).
+  const n = valid ? Math.max(1, Math.ceil(h / 24)) : 0;
+  const dayFrac = valid ? h / 24 : 0;
+  const dayText = valid ? `${dayFrac.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ${dayFrac > 1 ? "dias" : "dia"}` : "";
+  const dirty = valid && h !== hoursOf(version);
+  // Prazo sugerido pelas etapas (horas úteis → dias úteis do calendário da plataforma).
+  const stepsMinutes = (version.tasks ?? []).filter((t: any) => !t.is_conditional).reduce((a: number, t: any) => a + flowSummary(t.steps ?? []).criticalMinutes, 0);
+  const suggestedDays = stepsMinutes > 0 ? Math.max(1, Math.ceil(stepsMinutes / 60 / wc.business_hours_per_day)) : null;
   const readOnly = version.state === "publicada" || !!locked;
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState(false);
   const save = async () => {
     setErr(null); setOkMsg(false);
-    try { await act(() => apiClient.updateCatalog2VersionInfo(version.id, { base_commercial_deadline_days: n }), "Prazo comercial salvo.", { rethrow: true }); setOkMsg(true); window.setTimeout(() => setOkMsg(false), 4000); }
+    try { await act(() => apiClient.updateCatalog2VersionInfo(version.id, { base_commercial_deadline_hours: h }), "Prazo comercial salvo.", { rethrow: true }); setOkMsg(true); window.setTimeout(() => setOkMsg(false), 4000); }
     catch (e: any) { setErr(e?.message ?? "Não foi possível salvar o prazo."); }
   };
-  if (compact) return <label id="catalog2-deadline-base" className={`flex h-[52px] min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-700 dark:bg-slate-800/40 ${ringOf("catalog2-deadline-base")}`}><span className="min-w-0 flex-1"><span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">Prazo comercial base</span><span className="block text-[10px] text-slate-500">Prazo prometido ao cliente</span></span><span className="inline-flex shrink-0 items-baseline gap-1"><Input type="number" min={1} className="h-8 w-10 border-0 bg-transparent p-0 text-right text-base font-bold text-slate-900 shadow-none focus-visible:ring-0 dark:text-slate-100" value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} /><span className="text-xs font-semibold text-slate-700 dark:text-slate-200">dias</span></span>{!readOnly && <button type="button" disabled={!valid} onClick={(event) => { event.preventDefault(); void save(); }} className="sr-only">Salvar prazo</button>}</label>;
+  if (compact) return (
+    <div id="catalog2-deadline-base" className={`flex min-h-[52px] min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800/40 ${ringOf("catalog2-deadline-base")}`}>
+      <span className="min-w-[120px] flex-1"><span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">Prazo comercial base</span><span className="block text-[10px] text-slate-500">Prazo prometido ao cliente (em horas)</span></span>
+      <span className="inline-flex shrink-0 items-baseline gap-1.5">
+        <Input type="number" min={1} aria-label="Prazo comercial base em horas" className="h-8 w-20 rounded-md border border-slate-300 bg-white px-2 text-right text-base font-bold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} onBlur={() => { if (dirty) void save(); }} onKeyDown={(e) => { if (e.key === "Enter" && dirty) void save(); }} />
+        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">horas</span>
+      </span>
+      <span className="w-full text-[11px] font-semibold text-violet-700 dark:text-violet-300" data-testid="deadline-days-reflex">{valid ? `= ${dayText} (24 h = 1 dia)` : "Informe as horas; os dias aparecem aqui."}{err ? <span className="ml-2 text-red-600">{err}</span> : null}{okMsg ? <span className="ml-2 text-emerald-700">✓ salvo</span> : null}</span>
+      {!readOnly && <button type="button" disabled={!valid} onClick={(event) => { event.preventDefault(); void save(); }} className="sr-only">Salvar prazo</button>}
+    </div>
+  );
+  if (false) return <label id="catalog2-deadline-base" className={`flex h-[52px] min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-700 dark:bg-slate-800/40 ${ringOf("catalog2-deadline-base")}`}><span className="min-w-0 flex-1"><span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">Prazo comercial base</span><span className="block text-[10px] text-slate-500">Prazo prometido ao cliente</span></span><span className="inline-flex shrink-0 items-baseline gap-1"><Input type="number" min={1} className="h-8 w-10 border-0 bg-transparent p-0 text-right text-base font-bold text-slate-900 shadow-none focus-visible:ring-0 dark:text-slate-100" value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} /><span className="text-xs font-semibold text-slate-700 dark:text-slate-200">dias</span></span>{!readOnly && <button type="button" disabled={!valid} onClick={(event) => { event.preventDefault(); void save(); }} className="sr-only">Salvar prazo</button>}</label>;
   return (
     <div id="catalog2-deadline-base" className={`h-full min-w-0 rounded-xl ${ringOf("catalog2-deadline-base")}`}>
-      <SetupCard icon={CalendarClock} title="Prazo comercial base" summary={valid ? `${n} dias` : "não definido"} help="É o prazo que o cliente vê para este produto. Variações, adicionais e condições podem acrescentar dias; o tempo interno das tarefas não substitui este prazo." scroll>
+      <SetupCard icon={CalendarClock} title="Prazo comercial base" summary={valid ? `${h} h (${dayText})` : "não definido"} help="É o prazo que o cliente vê para este produto. Variações, adicionais e condições podem acrescentar dias; o tempo interno das tarefas não substitui este prazo." scroll>
         <p className="text-[11px] text-slate-500">Prazo prometido ao cliente nesta versão. Dias extras de variações, adicionais e condições somam a ele.</p>
         <div className="flex items-center gap-2">
-          <Input type="number" min={1} className="h-7 w-20 text-xs" value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} />
-          <span className="text-xs text-slate-500">dias</span>
+          <Input type="number" min={1} className="h-8 w-24 text-sm" value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} />
+          <span className="text-xs text-slate-500">horas</span>
+          {valid && <span className="text-sm font-semibold text-violet-700" data-testid="deadline-hours">= {dayText} (24 h = 1 dia)</span>}
           <SaveButton disabled={readOnly || !valid} onClick={() => void save()}>Salvar prazo</SaveButton>
         </div>
+        {suggestedDays != null && (
+          <p className="text-[11px] text-slate-600" data-testid="deadline-suggestion">Pelas etapas cadastradas: <strong>{fmtBusinessMinutes(stepsMinutes)} úteis</strong> (≈ {suggestedDays} dia{suggestedDays > 1 ? "s" : ""} útil{suggestedDays > 1 ? "eis" : ""}).{!readOnly && n !== suggestedDays && <> <button type="button" className="font-semibold text-indigo-700 underline" onClick={() => setV(String(suggestedDays))}>Usar {suggestedDays} dia{suggestedDays > 1 ? "s" : ""}</button></>}</p>
+        )}
         {readOnly && <p className="text-[11px] text-amber-700">Versão publicada ou travada (somente leitura). Clique em Editar para alterar.</p>}
-        {!readOnly && v !== "" && !valid && <p className="text-[11px] text-red-600">Informe um número inteiro de dias, 1 ou mais.</p>}
+        {!readOnly && v !== "" && !valid && <p className="text-[11px] text-red-600">Informe um número inteiro de horas, 1 ou mais.</p>}
         {err && <p role="alert" className="text-xs font-semibold text-red-600">Não salvou: {err}</p>}
         {okMsg && <p role="status" className="text-xs font-semibold text-emerald-700">✓ Prazo salvo.</p>}
       </SetupCard>
@@ -2265,7 +2561,7 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
 
   const Card = ({ keyName, icon: Icon, title, subtitle, status }: any) => <button type="button" onClick={() => setOpen(keyName)} className="flex min-h-[112px] items-center gap-3 rounded-[14px] border border-slate-200 bg-white px-4 text-left shadow-sm transition hover:border-violet-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-semibold text-slate-800 dark:text-slate-100">{title}</span><span className="mt-0.5 block text-sm text-slate-500">{subtitle}</span></span><Badge className={status?.pending ? "border-0 bg-amber-100 text-amber-800" : "border-0 bg-emerald-100 text-emerald-700"}>{status?.text}</Badge><ChevronRight className="h-5 w-5 text-violet-600" /></button>;
   if (open === "overview") return <div id="catalog2-costs" className="mt-3 space-y-2">
-    <CostAccordion icon={DollarSign} title="Composição do preço" subtitle="Custos, taxas e margem" status={result?.pending_info?.length ? "Pendente" : "Configurado"} tone={result?.pending_info?.length ? "amber" : "green"}><div className="grid gap-3 md:grid-cols-2"><div>{result?.pending_info?.length > 0 && <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span>Falta uma configuração para fechar o preço.</span><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="font-semibold text-violet-700">Corrigir</button></div>}{result?.error ? <p className="text-sm text-red-600">Não foi possível calcular este cenário.</p> : result && <PricingPriceSummary r={result} />}</div><PricingDiagnostics result={result} /></div><details className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Custos e encargos <ChevronDown className="h-4 w-4 text-slate-400" /></summary>{result && <div className="border-t px-3 py-2"><PricingCostRows r={result} /></div>}</details><details className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Memória de cálculo <ChevronDown className="h-4 w-4 text-slate-400" /></summary><div className="border-t px-3 py-2 text-xs text-slate-500">Bases, taxas e margem aplicadas ao cenário atual.</div></details></CostAccordion>
+    <CostAccordion icon={DollarSign} title="Composição do preço" subtitle="Custos, taxas e margem" status={result?.pending_info?.length ? "Pendente" : "Configurado"} tone={result?.pending_info?.length ? "amber" : "green"}><div className="grid gap-3 md:grid-cols-2"><div>{result?.pending_info?.length > 0 && <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span>Falta uma configuração para fechar o preço.</span><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="font-semibold text-violet-700">Corrigir</button></div>}{result?.error ? <p className="text-sm text-red-600">Não foi possível calcular este cenário.</p> : result && <PricingPriceSummary r={result} />}</div><PricingDiagnostics result={result} /></div><PersistDetails persistKey="d3" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Custos e encargos <ChevronDown className="h-4 w-4 text-slate-400" /></summary>{result && <div className="border-t px-3 py-2"><PricingCostRows r={result} /></div>}</PersistDetails><PersistDetails persistKey="d4" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Memória de cálculo <ChevronDown className="h-4 w-4 text-slate-400" /></summary><div className="border-t px-3 py-2 text-xs text-slate-500">Bases, taxas e margem aplicadas ao cenário atual.</div></PersistDetails></CostAccordion>
     <CostAccordion icon={ListChecks} title="Simular cenário" subtitle="Teste variações e adicionais" status="Pronto para simular" tone="green"><div className="grid gap-3 md:grid-cols-2">{version.variations.map((va: any) => <Field key={va.id} label={va.name}><select className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm" value={sel.variation_option_keys.find((k: string) => va.options.some((o: any) => o.key === k)) ?? ""} onChange={(e) => setSel({ ...sel, variation_option_keys: [...sel.variation_option_keys.filter((k: string) => !va.options.some((o: any) => o.key === k)), e.target.value] })}>{va.options.map((o: any) => <option key={o.id} value={o.key}>{o.label}</option>)}</select></Field>)}<Field label="Adicionais"><div className="flex flex-wrap gap-2">{version.addons.map((a: any) => <CheckPill key={a.id} checked={sel.addon_keys.includes(a.key)} onChange={(checked) => setSel({ ...sel, addon_keys: checked ? [...sel.addon_keys, a.key] : sel.addon_keys.filter((k: string) => k !== a.key) })}>{a.name}</CheckPill>)}</div></Field><Field label="Quantidade de campanhas"><Input className="h-10" type="number" value={sel.quantity} onChange={(e) => setSel({ ...sel, quantity: Number(e.target.value) || 1 })} /></Field></div>{result && <PricingPriceSummary r={result} showCost />}<Button type="button" onClick={() => void run()} className="mt-3 w-full bg-violet-700 text-white hover:bg-fuchsia-700">Atualizar simulação</Button></CostAccordion>
     <CostAccordion icon={CalendarClock} title="Modalidades por período" subtitle="Entrega recorrente" status="Mensal" tone="green"><ProductPeriodsPanel productId={productId} act={act} /></CostAccordion>
     <CostAccordion icon={FileText} title="Regras comerciais" subtitle="Margem e impostos" status="Configurar" tone="violet"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-500">Margem, impostos e taxas são aplicados automaticamente à composição.</p><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white">Configurar regras comerciais</button></div></CostAccordion>
@@ -2281,7 +2577,7 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
           <div id="catalog2-price-pending" className={`mb-3 flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 ${ringOf("catalog2-price-pending")}`}><span className="font-semibold">Falta uma configuração para fechar o preço.</span><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="rounded-lg border border-violet-300 bg-white px-2 py-1 font-semibold text-violet-700">Configurar precificação</button></div>
         )}
         {result?.error ? <p className="text-sm text-red-600">Não foi possível calcular este cenário.</p> : result && <PricingPriceSummary r={result} />}
-        <details className="mt-3 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Custos e encargos <ChevronDown className="h-4 w-4 text-slate-400" /></summary>{result && <div className="border-t px-3 py-2"><PricingCostRows r={result} /></div>}</details><details className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Memória de cálculo <ChevronDown className="h-4 w-4 text-slate-400" /></summary><div className="border-t px-3 py-2 text-xs text-slate-500">Bases, taxas e margem aplicadas ao cenário atual.</div></details>
+        <PersistDetails persistKey="d5" className="mt-3 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Custos e encargos <ChevronDown className="h-4 w-4 text-slate-400" /></summary>{result && <div className="border-t px-3 py-2"><PricingCostRows r={result} /></div>}</PersistDetails><PersistDetails persistKey="d6" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Memória de cálculo <ChevronDown className="h-4 w-4 text-slate-400" /></summary><div className="border-t px-3 py-2 text-xs text-slate-500">Bases, taxas e margem aplicadas ao cenário atual.</div></PersistDetails>
       </section><PricingDiagnostics result={result} /></div>}
 
       {open === "scenario" && <section className="grid gap-3 md:grid-cols-2"><section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><div className="mb-3 flex items-center gap-2"><ListChecks className="h-5 w-5 text-violet-600" /><div><h3 className="font-semibold">Simular cenário</h3><p className="text-xs text-slate-500">Teste variações, adicionais e quantidade</p></div></div>
@@ -2311,7 +2607,7 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
   );
 }
 
-function CostAccordion({ icon: Icon, title, subtitle, status, tone, children }: any) { const tones: any = { amber: "bg-amber-100 text-amber-800", green: "bg-emerald-100 text-emerald-700", violet: "bg-violet-100 text-violet-700" }; return <details className="group rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[58px] cursor-pointer list-none items-center gap-3 px-3 [&::-webkit-details-marker]:hidden"><span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-100 text-violet-700"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block font-semibold text-slate-800 dark:text-slate-100">{title}</span><span className="block text-xs text-slate-500">{subtitle}</span></span><Badge className={`border-0 ${tones[tone]}`}>{status}</Badge><ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" /></summary><div className="border-t border-slate-100 px-3 py-3 dark:border-slate-800">{children}</div></details>; }
+function CostAccordion({ icon: Icon, title, subtitle, status, tone, children }: any) { const tones: any = { amber: "bg-amber-100 text-amber-800", green: "bg-emerald-100 text-emerald-700", violet: "bg-violet-100 text-violet-700" }; return <PersistDetails persistKey="d7" className="group rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[58px] cursor-pointer list-none items-center gap-3 px-3 [&::-webkit-details-marker]:hidden"><span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-100 text-violet-700"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block font-semibold text-slate-800 dark:text-slate-100">{title}</span><span className="block text-xs text-slate-500">{subtitle}</span></span><Badge className={`border-0 ${tones[tone]}`}>{status}</Badge><ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" /></summary><div className="border-t border-slate-100 px-3 py-3 dark:border-slate-800">{children}</div></PersistDetails>; }
 
 function PricingCostRows({ r }: { r: any }) { const money = (n: any) => n == null ? "—" : `${r.currency ?? "R$"} ${Number(n).toFixed(2).replace(".", ",")}`; return <div className="space-y-1 text-xs">{[r.lines?.human_cost, r.lines?.ia_cost, ...(r.lines?.taxes_and_margins ?? [])].filter(Boolean).map((line: any, i: number) => <div key={i} className="flex justify-between gap-3"><span className="text-slate-500">{line.label}</span><span>{money(line.amount)}</span></div>)}</div>; }
 function PricingPriceSummary({ r, showCost = false }: { r: any; showCost?: boolean }) { const price = r.lines?.commercial_final_price ?? r.lines?.final_price; const money = (n: any) => n == null ? "A definir" : `${r.currency ?? "R$"} ${Number(n).toFixed(2).replace(".", ",")}`; return <div className="mt-3 space-y-2"><div className="rounded-xl bg-violet-50 px-3 py-3"><span className="text-xs font-semibold text-violet-700">Preço comercial final</span><strong className="block text-2xl text-violet-800">{money(price?.amount)}</strong></div>{showCost && <div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Esforço estimado</span><strong>{r.deadline?.effort_days ?? "—"} dias</strong></div><div className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Prazo comercial</span><strong>{r.deadline?.commercial_deadline_days ?? "—"} dias</strong></div></div>}</div>; }
@@ -2694,7 +2990,7 @@ function PreviewTab({ version, readOnly, act, onResolveIssue }: any) {
   return <div className="mt-3 grid gap-3 md:grid-cols-[1.35fr_.9fr]">
     <ReviewSurface><div className="flex items-center gap-2"><span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-50 text-violet-700"><Eye className="h-4 w-4" /></span><div><h2 className="text-base font-semibold">Pronto para publicar?</h2><p className="text-[11px] text-slate-500">Resolva os itens que liberam a versão.</p></div><Badge className={issues.length ? "ml-auto shrink-0 border-0 bg-red-100 text-red-700" : "ml-auto shrink-0 border-0 bg-emerald-100 text-emerald-700"}>{issues.length ? `${issues.length} bloqueio${issues.length > 1 ? "s" : ""}` : "Sem bloqueios"}</Badge></div>
       <div className="mt-3 space-y-2">{issues.length === 0 ? <ReviewLine icon={<CheckCircle2 className="h-4 w-4" />} title="Versão pronta" text="Todas as configurações necessárias foram concluídas." tone="ok" /> : groups.map((group: any, index: number) => <ReviewLine key={group.issue} icon={index === 0 ? <DollarSign className="h-4 w-4" /> : index === 1 ? <Tag className="h-4 w-4" /> : <FileText className="h-4 w-4" />} title={group.title} text={group.text} tone="block" action={() => onResolveIssue(group.issue, validation.issue_details?.[index])} />)}</div>
-      {issues.length > 3 && <details className="mt-2 rounded-xl border border-slate-200"><summary className="cursor-pointer px-3 py-2 text-sm font-semibold">Ver detalhes dos bloqueios</summary><div className="border-t px-3 py-2 text-xs text-slate-600">Há mais {issues.length - 3} item(ns) a revisar.</div></details>}
+      {issues.length > 3 && <PersistDetails persistKey="d8" className="mt-2 rounded-xl border border-slate-200"><summary className="cursor-pointer px-3 py-2 text-sm font-semibold">Ver detalhes dos bloqueios</summary><div className="border-t px-3 py-2 text-xs text-slate-600">Há mais {issues.length - 3} item(ns) a revisar.</div></PersistDetails>}
     </ReviewSurface>
     <ReviewSurface><div className="flex items-center gap-2"><span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-50 text-violet-700"><FileText className="h-4 w-4" /></span><div><h2 className="text-base font-semibold">Resumo da versão</h2><p className="text-[11px] text-slate-500">Confira antes de publicar.</p></div></div><div className="mt-3 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-2.5 text-[11px]"><span className="min-w-0 text-slate-500">Produto<strong className="mt-0.5 block truncate text-xs text-slate-800">{version.title}</strong></span><span className="min-w-0 text-slate-500">Versão<strong className="mt-0.5 block truncate text-xs text-slate-800">v{version.version_number} — {version.state === "publicada" ? "Publicada" : "Rascunho"}</strong></span><span className="text-slate-500">Atualizada<strong className="mt-0.5 block text-slate-800">{new Date(version.updated_at).toLocaleDateString("pt-BR")}</strong></span><span className="text-slate-500">Por<strong className="mt-0.5 block truncate text-slate-800">Vinicius Guardia</strong></span></div><div className="mt-2 space-y-1">{done.map((label) => <ReviewLine key={label} icon={<CheckCircle2 className="h-4 w-4" />} title={label} text="Configurado" tone="ok" compact />)}</div><div className="mt-2"><PublishBtn versionId={version.id} canPublish={!!validation.ok} readOnly={readOnly} summary="" act={act} /></div>{!validation.ok && <p className="mt-1.5 text-[11px] text-slate-500">Disponível após resolver os bloqueios.</p>}</ReviewSurface>
   </div>;
@@ -2706,7 +3002,7 @@ function ReviewLine({ icon, title, text, tone = "neutral", action, compact = fal
 
 function CapabilityChip({ capability }: { capability: any }) { const icon = capability.icon_key === "globe" ? <Globe2 className="h-4 w-4" /> : capability.icon_key === "tag" ? <Tag className="h-4 w-4" /> : <Layers className="h-4 w-4" />; return <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-100 px-3 text-xs font-semibold text-slate-700">{capability.media_url ? <img className="h-5 w-5 rounded object-cover" src={capability.media_url} alt="" /> : <span className="text-violet-600">{icon}</span>}{capability.label}</span>; }
 
-function PreviewAccordion({ title, summary, children }: { title: string; summary: string; children: React.ReactNode }) { return <details className="group rounded-xl border border-slate-200"><summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm [&::-webkit-details-marker]:hidden"><span className="font-semibold">{title}</span><span className="ml-auto text-xs text-slate-500">{summary}</span><ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" /></summary><div className="border-t border-slate-100 px-3 py-2">{children}</div></details>; }
+function PreviewAccordion({ title, summary, children }: { title: string; summary: string; children: React.ReactNode }) { return <PersistDetails persistKey="d9" className="group rounded-xl border border-slate-200"><summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm [&::-webkit-details-marker]:hidden"><span className="font-semibold">{title}</span><span className="ml-auto text-xs text-slate-500">{summary}</span><ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" /></summary><div className="border-t border-slate-100 px-3 py-2">{children}</div></PersistDetails>; }
 
 // ── 9. Versões e histórico ─────────────────────────────────────────
 function HistoryTab({ version, product, readOnly, act, onResolveIssue }: any) {
@@ -2743,7 +3039,7 @@ function ReviewHistoryTab({ productId, version }: { productId: string; version: 
   useEffect(() => { apiClient.getCatalog2ProductHistory(productId, { page: 1, page_size: 8 }).then((result: any) => setEvents(result.data ?? [])).catch(() => setEvents([])); }, [productId]);
   const filtered = events.filter((event) => (!category || event.category === category) && (!query || `${event.description ?? ""} ${event.event_type ?? ""}`.toLowerCase().includes(query.toLowerCase())));
   const areas = [{ label: "Informações", value: 8, icon: <FileText className="h-5 w-5" />, tone: "text-violet-600 bg-violet-50" }, { label: "Entrega", value: 14, icon: <Layers className="h-5 w-5" />, tone: "text-emerald-600 bg-emerald-50" }, { label: "Classificação", value: 4, icon: <Tag className="h-5 w-5" />, tone: "text-fuchsia-600 bg-fuchsia-50" }, { label: "Custos", value: 3, icon: <DollarSign className="h-5 w-5" />, tone: "text-amber-600 bg-amber-50" }];
-  return <div className="mt-3 grid gap-3 md:grid-cols-[1.35fr_.9fr]"><ReviewSurface><h2 className="text-base font-semibold">Histórico da versão</h2><div className="mt-2 grid gap-2 sm:grid-cols-3"><label className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input className="h-9 pl-9 text-xs" placeholder="Buscar alteração…" value={query} onChange={(e) => setQuery(e.target.value)} /></label><select className="h-9 min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-xs" value={category} onChange={(e) => setCategory(e.target.value)}><option value="">Todos os eventos</option>{Object.entries(HISTORY_CATEGORY_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><Input className="h-9 text-xs" type="date" aria-label="Filtrar por data" /></div><div className="mt-2 divide-y divide-slate-100">{filtered.slice(0, 4).map((event, index) => <div key={event.id ?? index} className="flex min-w-0 gap-2 py-2"><span className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full ${index === 0 ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600"}`}>{index === 0 ? <Plus className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}</span><span className="min-w-0 flex-1"><strong className="block truncate text-xs">{event.event_type === "created" ? "Versão criada" : event.description || "Alteração registrada"}</strong><span className="block truncate text-[11px] text-slate-500">{event.description || "Configuração atualizada nesta versão."}</span><span className="mt-0.5 flex gap-2 text-[10px] text-slate-400"><span>{new Date(event.created_at).toLocaleDateString("pt-BR")}</span><span className="truncate">{HISTORY_ACTOR_LABEL[event.actor_kind] ?? "Vinicius Guardia"}</span></span></span><ChevronRight className="mt-1.5 h-3.5 w-3.5 shrink-0 text-slate-400" /></div>)}{!filtered.length && <p className="py-4 text-center text-xs text-slate-500">Nenhum evento encontrado.</p>}</div></ReviewSurface><div className="space-y-3"><ReviewSurface><h2 className="text-base font-semibold">Resumo das alterações</h2><div className="mt-2 grid grid-cols-2 gap-2">{areas.map((area) => <div key={area.label} className={`rounded-xl p-2 ${area.tone}`}><span>{area.icon}</span><span className="mt-1 block text-[11px] text-slate-600">{area.label}</span><strong className="text-base">{area.value}</strong></div>)}</div><details className="mt-2 rounded-xl border border-violet-100 bg-violet-50"><summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-violet-800">Ver alterações detalhadas</summary><p className="border-t border-violet-100 px-3 py-2 text-[11px] text-violet-700">Detalhes disponíveis na linha do tempo.</p></details></ReviewSurface><ReviewSurface><h3 className="text-sm font-semibold">Atividade da versão</h3><div className="mt-2 grid gap-1 text-xs"><Row k="Data de criação" v={new Date(version.created_at ?? version.updated_at).toLocaleDateString("pt-BR")} /><Row k="Última edição" v={new Date(version.updated_at).toLocaleDateString("pt-BR")} /><Row k="Criado por" v="Vinicius Guardia" /><Row k="Status atual" v={<Badge className={version.state === "publicada" ? "border-0 bg-emerald-100 text-emerald-700" : "border-0 bg-amber-100 text-amber-800"}>{version.state === "publicada" ? "Publicado" : "Rascunho"}</Badge>} /></div></ReviewSurface></div></div>;
+  return <div className="mt-3 grid gap-3 md:grid-cols-[1.35fr_.9fr]"><ReviewSurface><h2 className="text-base font-semibold">Histórico da versão</h2><div className="mt-2 grid gap-2 sm:grid-cols-3"><label className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input className="h-9 pl-9 text-xs" placeholder="Buscar alteração…" value={query} onChange={(e) => setQuery(e.target.value)} /></label><select className="h-9 min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-xs" value={category} onChange={(e) => setCategory(e.target.value)}><option value="">Todos os eventos</option>{Object.entries(HISTORY_CATEGORY_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><Input className="h-9 text-xs" type="date" aria-label="Filtrar por data" /></div><div className="mt-2 divide-y divide-slate-100">{filtered.slice(0, 4).map((event, index) => <div key={event.id ?? index} className="flex min-w-0 gap-2 py-2"><span className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full ${index === 0 ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-600"}`}>{index === 0 ? <Plus className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}</span><span className="min-w-0 flex-1"><strong className="block truncate text-xs">{event.event_type === "created" ? "Versão criada" : event.description || "Alteração registrada"}</strong><span className="block truncate text-[11px] text-slate-500">{event.description || "Configuração atualizada nesta versão."}</span><span className="mt-0.5 flex gap-2 text-[10px] text-slate-400"><span>{new Date(event.created_at).toLocaleDateString("pt-BR")}</span><span className="truncate">{HISTORY_ACTOR_LABEL[event.actor_kind] ?? "Vinicius Guardia"}</span></span></span><ChevronRight className="mt-1.5 h-3.5 w-3.5 shrink-0 text-slate-400" /></div>)}{!filtered.length && <p className="py-4 text-center text-xs text-slate-500">Nenhum evento encontrado.</p>}</div></ReviewSurface><div className="space-y-3"><ReviewSurface><h2 className="text-base font-semibold">Resumo das alterações</h2><div className="mt-2 grid grid-cols-2 gap-2">{areas.map((area) => <div key={area.label} className={`rounded-xl p-2 ${area.tone}`}><span>{area.icon}</span><span className="mt-1 block text-[11px] text-slate-600">{area.label}</span><strong className="text-base">{area.value}</strong></div>)}</div><PersistDetails persistKey="d10" className="mt-2 rounded-xl border border-violet-100 bg-violet-50"><summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-violet-800">Ver alterações detalhadas</summary><p className="border-t border-violet-100 px-3 py-2 text-[11px] text-violet-700">Detalhes disponíveis na linha do tempo.</p></PersistDetails></ReviewSurface><ReviewSurface><h3 className="text-sm font-semibold">Atividade da versão</h3><div className="mt-2 grid gap-1 text-xs"><Row k="Data de criação" v={new Date(version.created_at ?? version.updated_at).toLocaleDateString("pt-BR")} /><Row k="Última edição" v={new Date(version.updated_at).toLocaleDateString("pt-BR")} /><Row k="Criado por" v="Vinicius Guardia" /><Row k="Status atual" v={<Badge className={version.state === "publicada" ? "border-0 bg-emerald-100 text-emerald-700" : "border-0 bg-amber-100 text-amber-800"}>{version.state === "publicada" ? "Publicado" : "Rascunho"}</Badge>} /></div></ReviewSurface></div></div>;
 }
 
 // ── Histórico de alterações (Item 7, reunião 2026-09-14) ────────────
@@ -3088,7 +3384,7 @@ export const READINESS_ITEM_LABEL: Record<string, string> = {
   adicionais: "Adicionais",
   tarefas: "Tarefas",
   etapas: "Etapas",
-  esforco_tarefas: "Especialidade e horas das tarefas",
+  esforco_tarefas: "Especialidade e horas das etapas",
   preco: "Preço / base de custo",
   prazo: "Prazo comercial",
   validacao: "Pendências para publicar",
@@ -3146,7 +3442,7 @@ function readinessDetailLines(key: string, product: any, version: any, note?: st
         if (version?.base_commercial_deadline_days == null) out.push("Prazo comercial base (dias): não informado (passo 2, campo Prazo comercial base)");
       }
       if (tasks.length === 0) out.push("Cadastrar tarefas para formar a base de custo");
-      if (priceBlockedByTasks(note)) out.push("Concluir o ajuste separado: Especialidade e horas das tarefas");
+      if (priceBlockedByTasks(note)) out.push("Concluir o ajuste separado: Especialidade e horas das etapas");
       const m = /"A definir":\s*(.*)\.$/.exec(note ?? "");
       if (m) for (const part of m[1].split(";").map((x) => x.trim()).filter(Boolean)) if (!/prazo/i.test(part) && !/provis|tarefa/i.test(part)) out.push(`Configurar em Precificação: ${part}`);
       break;
@@ -3289,8 +3585,8 @@ const READINESS_HELP: Record<string, Partial<Record<"bloqueador" | "pendente", s
   },
   etapas: { bloqueador: "Toda tarefa precisa de ao menos uma etapa: é a etapa que tem a especialidade, as horas e o valor pago (nômade ou custo interno). Ex.: tarefa \"Criação de conteúdo\" → etapas \"Roteiro\", \"Redação\", \"Revisão\". Clique em Adicionar etapa dentro da tarefa." },
   tarefas: { pendente: "Cadastre pelo menos uma tarefa (o que será executado quando o produto for contratado). Sem tarefas não há operação nem base de custo para calcular o preço." },
-  esforco_tarefas: { pendente: "Cada tarefa precisa de especialidade e horas estimadas reais. Mesmo que já estejam preenchidas, se estiverem marcadas como PROVISÓRIAS (dado de teste) o item continua pendente até você revisar e confirmar os valores reais." },
-  preco: { bloqueador: "Resolva os ajustes listados acima. A base de custo usa as horas das tarefas e o valor/hora das especialidades; taxas e margens são configuradas em Custos e preço." },
+  esforco_tarefas: { pendente: "Cada tarefa precisa de especialidade e etapas com horas estimadas reais. Mesmo que já estejam preenchidas, se estiverem marcadas como PROVISÓRIAS (dado de teste) o item continua pendente até você revisar e confirmar os valores reais." },
+  preco: { bloqueador: "Resolva os ajustes listados acima. A base de custo usa as horas das etapas e o valor/hora das especialidades; taxas e margens são configuradas em Custos e preço." },
   prazo: { bloqueador: "O prazo que o cliente vê NÃO é a soma das tarefas: é o \"Prazo comercial base\" da versão, que ainda não foi informado. Preencha o campo em Custos e preço › Prazo comercial base (dias) e salve." },
   publicacao: { bloqueador: "O produto nunca foi publicado, então o cliente não o enxerga. Quando os outros bloqueios estiverem resolvidos, publique a versão em Revisão e publicação › Publicação e versões." },
 };
@@ -3498,8 +3794,24 @@ const SUB_TABS_LIST = "h-auto w-fit flex-wrap gap-1 rounded-xl border border-sla
 const SUB_TAB = "flex-none rounded-lg px-3.5 py-1.5 text-[13px] font-semibold text-slate-600 transition data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#2558FF] data-[state=active]:via-[#6E2C96] data-[state=active]:to-[#D92293] data-[state=active]:text-white data-[state=active]:shadow-md dark:text-slate-300";
 const TAB_CARD = "mt-3 rounded-2xl border border-white/70 bg-[#e8ecf9] p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900";
 
+// Estado aberto/fechado das seções: lembrado enquanto a página não é recarregada (trocar de aba do produto e voltar mantém como estava; F5 volta tudo fechado).
+const openStore = new Map<string, boolean>();
+const storeKey = (k: string) => `${typeof window !== "undefined" ? window.location.pathname : ""}|${k}`;
+const readOpen = (k: string, fallback: boolean) => openStore.get(storeKey(k)) ?? fallback;
+const writeOpen = (k: string, v: boolean) => { openStore.set(storeKey(k), v); };
+
+// Abas do produto ficam montadas (só escondidas) ao trocar de aba: tudo que estava aberto/digitado continua como estava; F5 reinicia.
+function KeepTabsContent({ className, ...props }: React.ComponentProps<typeof TabsContent>) {
+  return <TabsContent forceMount className={`${className ?? ""} data-[state=inactive]:hidden`} {...props} />;
+}
+
+function PersistDetails({ persistKey, open: _ignored, onToggle, children, ...rest }: React.DetailsHTMLAttributes<HTMLDetailsElement> & { persistKey: string }) {
+  return <details {...rest} open={readOpen(persistKey, false) || undefined} onToggle={(e) => { writeOpen(persistKey, (e.currentTarget as HTMLDetailsElement).open); onToggle?.(e); }}>{children}</details>;
+}
+
 function SectionCard({ icon: Icon, title, subtitle, help, headerAction, children, collapsible = true, defaultOpen = true, forceOpen = false }: { icon: React.ComponentType<{ className?: string }>; title: string; subtitle: string; help?: string; headerAction?: React.ReactNode; children: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean; forceOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpenRaw] = useState(() => readOpen("sec:" + title, defaultOpen));
+  const setOpen = (fn: (o: boolean) => boolean) => setOpenRaw((o) => { const v = fn(o); writeOpen("sec:" + title, v); return v; });
   const shown = !collapsible || open || forceOpen;
   const head = (
     <>
@@ -3519,15 +3831,13 @@ function SectionCard({ icon: Icon, title, subtitle, help, headerAction, children
   return card;
 }
 
-// Segundo nível de recolhimento: evita uma tela longa depois que o cartão
-// principal foi aberto, sem esconder o campo destacado por uma pendência.
-function FieldAccordion({ title, help, children, forceOpen = false }: { title: React.ReactNode; help?: string; children: React.ReactNode; forceOpen?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const shown = open || forceOpen;
-  const heading = <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={shown} className="flex w-full items-center gap-2 text-left text-[12px] font-semibold text-slate-700 dark:text-slate-200"><span className="flex-1">{title}</span>{shown ? <ChevronUp className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}</button>;
+// Somente os cartões principais recolhem. Ao abrir uma seção, seus campos
+// ficam todos visíveis e editáveis — sem um segundo nível de accordions.
+function FieldAccordion({ title, help, children }: { title: React.ReactNode; help?: string; children: React.ReactNode; forceOpen?: boolean }) {
+  const heading = <div className="flex w-full items-center gap-2 text-left text-[12px] font-semibold text-slate-700 dark:text-slate-200"><span className="flex-1">{title}</span></div>;
   const card = <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40">
     {help ? <TooltipProvider delayDuration={180}><Tooltip><TooltipTrigger asChild>{heading}</TooltipTrigger><TooltipContent side="bottom" sideOffset={6} className="max-w-xs bg-slate-950 px-3 py-2 text-xs leading-relaxed text-white shadow-lg">{help}</TooltipContent></Tooltip></TooltipProvider> : heading}
-    {shown && <div className="mt-2">{children}</div>}
+    <div className="mt-2">{children}</div>
   </div>;
   return card;
 }
@@ -3637,12 +3947,12 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
   const headerTitle = (selVersion?.title || "").trim() || product.internal_name;
   return (
     <div
-      className="flex h-[54px] shrink-0 items-center gap-1.5 overflow-hidden rounded-2xl px-3 py-1 shadow-lg ring-1 ring-white/15"
+      className="flex min-h-[54px] shrink-0 items-center gap-1.5 overflow-x-hidden rounded-2xl px-3 py-1 shadow-lg ring-1 ring-white/15"
       style={{ background: "radial-gradient(ellipse at 88% -20%, rgba(255,255,255,0.22), transparent 55%), linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.10)), var(--app-brand-gradient, var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)))" }}
     >
       <HeaderIconBtn label="Voltar" onClick={onBack} className="shrink-0 !p-1.5"><ArrowLeft className="h-5 w-5" /></HeaderIconBtn>
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        <h2 title={headerTitle !== product.internal_name ? `Nome interno: ${product.internal_name}` : undefined} className="min-w-0 flex-1 truncate text-sm font-bold leading-tight text-white">{headerTitle}</h2>
+        <h2 title={headerTitle !== product.internal_name ? `Nome interno: ${product.internal_name}` : undefined} className="min-w-0 flex-[2] whitespace-normal break-words text-sm font-bold leading-tight text-white">{headerTitle}</h2>
         <div className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap 2xl:flex">
           {isDraftView && <span className="inline-flex items-center gap-1 rounded-full bg-amber-300 px-2.5 py-0.5 text-xs font-bold text-amber-950 shadow-sm">Rascunho v{selVersion.version_number} · não publicado</span>}
           {isOldView && <span className="inline-flex items-center gap-1 rounded-full bg-slate-300 px-2.5 py-0.5 text-xs font-bold text-slate-800 shadow-sm">Versão antiga v{selVersion.version_number}</span>}

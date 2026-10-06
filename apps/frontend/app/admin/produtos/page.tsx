@@ -635,9 +635,9 @@ export default function AdminProdutosPage() {
   async function createProduct() {
     setMsg(null);
     try {
-      const name = window.prompt("Nome interno do produto:");
+      const name = window.prompt("Nome do produto:");
       if (!name) return;
-      const p = await apiClient.createCatalog2Product({ internal_name: name });
+      const p = await apiClient.createCatalog2Product({ internal_name: name, task_structure: "single" });
       await bootstrap();
       openProduct(p.id);
     } catch (e: any) {

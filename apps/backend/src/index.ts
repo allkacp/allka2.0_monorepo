@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { config } from "./config";
+import { attachSecureBrowserWs } from "./lib/secure-browser-ws";
 import app from "./app";
 import { prisma } from "./lib/prisma";
 import { cleanZeroDatetimes } from "./lib/clean-zero-datetimes";
@@ -8,6 +9,9 @@ import { ensureDefaultAIServices } from "./lib/ai-usage-tracker";
 import { isMetaIntegrationConfigured } from "./lib/meta-ads-client";
 import { runDailySyncForAllConnections } from "./lib/meta-ads-sync";
 import { ensureDefaultAlertStandardsAndRules, runAlertEngineOnceGuarded } from "./lib/alert-engine";
+import { sweepPlacOverdue } from "./lib/plac";
+import { sweepInternalTaskOverdue } from "./lib/internal-tasks";
+import { sweepBrowserSessions } from "./lib/secure-browser";
 import { runTaskRotationOnceGuarded } from "./lib/task-rotation-engine";
 import { runTaskReleaseSchedulerOnceGuarded } from "./lib/task-release-scheduler";
 import { runCommsSchedulerOnceGuarded } from "./lib/comms";
@@ -126,6 +130,17 @@ async function main() {
   }, config.ALERT_ENGINE_INTERVAL_MS).unref();
   console.log(`🔔 Motor de alertas automáticos ativo (intervalo: ${config.ALERT_ENGINE_INTERVAL_MS}ms).`);
 
+  // PLAC: avisa os responsáveis internos de passos vencidos (uma vez por passo). Registrado só aqui (desligado nos testes).
+  setInterval(() => {
+    sweepPlacOverdue(prisma).catch((err) => console.error("❌ Falha na varredura de passos PLAC atrasados:", err));
+    sweepInternalTaskOverdue(prisma).catch((err) => console.error("❌ Falha na varredura de tarefas internas atrasadas:", err));
+  }, 15 * 60 * 1000).unref();
+
+  // Navegador seguro: encerra sessões vencidas/ociosas (a cada minuto; o prazo também é conferido ao abrir/consultar sessões).
+  setInterval(() => {
+    sweepBrowserSessions(prisma).catch((err) => console.error("❌ Falha na varredura de sessões do navegador seguro:", err));
+  }, 60 * 1000).unref();
+
   // Motor do rodízio de ofertas de tarefa (ata 2026-08, bloco 4/5) — expira
   // ofertas vencidas e avança para o próximo Nômade / escala. Mesmo padrão
   // do motor de alertas: registrado só aqui, naturalmente desligado nos
@@ -243,10 +258,11 @@ async function main() {
   // Use process.env.PORT directly to support both TCP and Unix socket
   const port = process.env.PORT || config.PORT;
 
-  app.listen(port, () => {
+  const httpServer = app.listen(port, () => {
     console.log(`🚀 Servidor Allka rodando na porta/socket: ${port}`);
     console.log(`   Ambiente: ${config.NODE_ENV}`);
   });
+  attachSecureBrowserWs(httpServer);
 }
 
 main().catch((err) => {

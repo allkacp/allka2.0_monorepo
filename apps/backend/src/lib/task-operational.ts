@@ -2,7 +2,7 @@
 // instruções, entradas, saída esperada, critérios e evidências — filtrado pela visibilidade
 // definida no cadastro do produto. Nada aqui devolve campo que o perfil não pode ver.
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { normalizeStepOps, normalizeTaskOps, visibleStepGuide, visibleTaskGuide, type Visibility, type VisibleGuideItem } from "./catalog2-ops";
+import { normalizeStepOps, normalizeTaskOps, visibleChecklist, visibleStepGuide, visibleTaskGuide, type Visibility, type VisibleGuideItem } from "./catalog2-ops";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -50,7 +50,7 @@ export async function loadOperationalGuide(db: Db, taskId: string, viewer: Visib
       const cfg = parseJson(st.config_snapshot);
       const ops = st.catalog_step_ref ? normalizeStepOps(stageOpsMap[st.catalog_step_ref]) : null;
       const g = visibleStepGuide(ops, viewer, { description: st.descricao, completion_criteria: typeof cfg.completion_criteria === "string" ? cfg.completion_criteria : null });
-      return { stage_id: st.id, titulo: st.titulo, ordem: st.ordem, status: st.status, items: g.items, evidence_required: g.evidence_required || st.exige_anexo };
+      return { stage_id: st.id, titulo: st.titulo, ordem: st.ordem, status: st.status, items: g.items, evidence_required: g.evidence_required || st.exige_anexo, checklist: visibleChecklist(ops, viewer) };
     }),
   };
 }

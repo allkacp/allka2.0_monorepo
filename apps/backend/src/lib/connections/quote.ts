@@ -1,6 +1,6 @@
 // Conexões na CONTRATAÇÃO (antes do pagamento): o que será exigido, escolhas do cliente (rascunho) e a trava opcional do checkout.
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { ConnectionError, CONNECTION_STATE_LABEL, DEPENDENCY_KIND_LABEL, GRANT_SCOPES, HANDLINGS, OBLIGATION_LABEL, WHEN_NEEDED_LABEL, METHOD_MESSAGE, parseJsonArray, type ConnectionState } from "./catalog";
+import { ConnectionError, CONNECTION_STATE_LABEL, DEPENDENCY_KIND_LABEL, GRANT_SCOPES, HANDLINGS, OBLIGATION_LABEL, WHEN_NEEDED_LABEL, METHOD_MESSAGE, parseJsonArray, parseFieldDefs, type ConnectionState } from "./catalog";
 import { findReusableConnections, ownerMatches, type Owner } from "./core";
 import { assertNoSecretInPlainFields, safeText } from "./secrets";
 import { CONNECTION_METHOD_LABEL } from "./catalog";
@@ -44,7 +44,7 @@ export async function quoteRequirementsView(db: Db, quote: { id: string; version
       affected_activities: r.dependencies.map((d) => ({ task_key: d.task_key, task_name: taskName.get(d.task_key) ?? d.task_key, step_key: d.step_key, kind: d.kind, kind_label: DEPENDENCY_KIND_LABEL[d.kind as keyof typeof DEPENDENCY_KIND_LABEL] })),
       can_do_later: r.pending_behavior !== "block_checkout", pending_behavior: r.pending_behavior,
       instructions: [r.connection_type.default_instructions, r.instructions].filter(Boolean),
-      default_grant_scope: r.default_grant_scope, allowed_methods: parseJsonArray<string>(r.connection_type.allowed_methods_json), permission_levels: parseJsonArray<{ key: string; label: string }>(r.connection_type.permission_levels_json),
+      default_grant_scope: r.default_grant_scope, allowed_methods: parseJsonArray<string>(r.connection_type.allowed_methods_json), fields: parseFieldDefs(r.connection_type.fields_json), permission_levels: parseJsonArray<{ key: string; label: string }>(r.connection_type.permission_levels_json),
       reuse_candidates: await findReusableConnections(db, owner, r.connection_type_id, null),
       choice: choice ? { handling: choice.handling, connection_id: choice.connection_id, grant_scope: choice.grant_scope, responsible_user_id: choice.responsible_user_id, responsible_name: choice.responsible_name, invited_email: choice.invited_email } : null,
     });

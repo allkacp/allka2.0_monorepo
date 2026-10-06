@@ -73,12 +73,20 @@ export function CommercialFieldsCard({ version, readOnly, onSave, registerFlush,
   const [open, setOpen] = useState(false);
   const ref = useRef({ f, dirty });
   ref.current = { f, dirty };
-  useEffect(() => { setF(pick(version)); setDirty(false); setSaved(false); setError(null); }, [version.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Recarregamentos do editor chegam com o mesmo id de versão e um updated_at
+  // novo. Sincronizamos somente quando não há digitação pendente, para nunca
+  // apagar um campo que a pessoa acabou de preencher antes de salvar.
+  useEffect(() => {
+    if (dirty) return;
+    setF(pick(version)); setSaved(false); setError(null);
+  }, [version.id, version.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const body = (s: State) => {
     const b: Record<string, any> = { field_visibility: s.field_visibility };
     for (const x of COMMERCIAL_TEXT_FIELDS) b[x.key] = s[x.key] === "" ? null : s[x.key];
-    for (const x of COMMERCIAL_LIST_FIELDS) b[x.key] = s[x.key];
+    // Não persistir linhas vazias: ao remover ou cancelar um item personalizado,
+    // ele não volta depois de salvar/recarregar nem aparece entre as listas.
+    for (const x of COMMERCIAL_LIST_FIELDS) b[x.key] = (s[x.key] ?? []).map((item: unknown) => String(item ?? "").trim()).filter(Boolean);
     return b;
   };
   const flush = async () => {
@@ -102,24 +110,24 @@ export function CommercialFieldsCard({ version, readOnly, onSave, registerFlush,
       })}
     </span>
   );
-  const ListFields = ({ fields }: { fields: typeof COMMERCIAL_LIST_FIELDS }) => <>{fields.map((x) => {
+  const renderListFields = (fields: typeof COMMERCIAL_LIST_FIELDS) => <>{fields.map((x) => {
     const items: string[] = f[x.key] ?? [];
     const update = (next: string[]) => set({ [x.key]: next });
     const splitAt = Math.ceil(items.length / 2);
     const columns = [items.slice(0, splitAt), items.slice(splitAt)];
     const itemRow = (it: string, i: number) => <li key={i} className="min-w-0"><div className="relative"><Input className="h-9 min-w-0 w-full pr-28 text-xs" disabled={readOnly} maxLength={300} value={it} aria-label={`${x.label} ${i + 1}`} onChange={(e) => update(items.map((v, j) => j === i ? e.target.value : v))} /><span className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5"><CommercialAiButton label={x.label} value={it} context={{ name: version?.title, other_fields: { [x.label]: it } }} disabled={readOnly} onResult={(next) => update(items.map((v, j) => j === i ? next.slice(0, 300) : v))} />{!readOnly && <><button type="button" aria-label="Subir" title="Subir" disabled={i === 0} className="rounded p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => { const c = [...items]; [c[i - 1], c[i]] = [c[i], c[i - 1]]; update(c); }}><ChevronUp className="h-3.5 w-3.5" /></button><button type="button" aria-label="Descer" title="Descer" disabled={i === items.length - 1} className="rounded p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => { const c = [...items]; [c[i + 1], c[i]] = [c[i], c[i + 1]]; update(c); }}><ChevronDown className="h-3.5 w-3.5" /></button><button type="button" aria-label="Remover item" title="Remover item" className="rounded p-1 text-slate-400 hover:text-red-600" onClick={() => update(items.filter((_, j) => j !== i))}><Trash2 className="h-3.5 w-3.5" /></button></>}</span></div></li>;
     const shortLabel = x.key === "included_items" ? "Incluídos" : x.key === "excluded_items" ? "Não incluídos" : x.label;
-    return <details key={x.key} className="rounded-xl border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-900/40"><summary className="flex cursor-pointer list-none flex-wrap items-center gap-2"><span className="text-[13px] font-bold text-slate-800 dark:text-slate-100" title={x.hint}>{shortLabel}</span><span className="rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">{items.length}</span><span className="ml-auto" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}><VisPick k={x.key} /></span><ChevronDown className="h-3.5 w-3.5 text-slate-400" /></summary>
+    return <section key={x.key} className="rounded-xl border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-900/40"><div className="flex flex-wrap items-center gap-2"><span className="text-[13px] font-bold text-slate-800 dark:text-slate-100" title={x.hint}>{shortLabel}</span><span className="rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">{items.length}</span><span className="ml-auto"><VisPick k={x.key} /></span></div>
       <div className="mt-2 grid grid-cols-1 gap-x-3 gap-y-1 lg:grid-cols-2">{columns.map((column, columnIndex) => <ul key={columnIndex} className="space-y-1">{column.map((it, index) => itemRow(it, index + (columnIndex * splitAt)))}</ul>)}</div>
       {!readOnly && items.length < 50 && <Button type="button" size="sm" variant="outline" className="mt-2 h-8 gap-1 text-xs" onClick={() => update([...items, ""])}><Plus className="h-3.5 w-3.5" /> Adicionar item</Button>}
-    </details>;
+    </section>;
   })}</>;
-  const TextField = ({ x, collapsible = false }: { x: typeof COMMERCIAL_TEXT_FIELDS[number]; collapsible?: boolean }) => {
+  const renderTextField = (x: typeof COMMERCIAL_TEXT_FIELDS[number], collapsible = false) => {
     const value = String(f[x.key] ?? "");
     const over = value.length > x.max;
     const visibility = <VisPick k={x.key} locked={x.key === "internal_notes"} />;
     const editor = <div className="mt-2 space-y-1"><div className="relative"><Textarea id={`cf-${x.key}`} rows={x.rows} className="pr-16" disabled={readOnly} value={value} placeholder={x.hint} onChange={(e) => set({ [x.key]: e.target.value })} /><span className="absolute right-2 top-2"><CommercialAiButton label={x.label} value={value} context={{ name: version?.title, other_fields: { [x.label]: value } }} disabled={readOnly} onResult={(next) => set({ [x.key]: next.slice(0, x.max) })} /></span></div><span className={`block text-right text-xs ${over ? "text-red-600" : "text-slate-400"}`}>{value.length}/{x.max}</span></div>;
-    if (collapsible) return <details key={x.key} className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/40"><TooltipProvider delayDuration={180}><Tooltip><TooltipTrigger asChild><summary className="flex cursor-pointer list-none items-center gap-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200"><span className="flex-1">{x.label}</span><span onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>{visibility}</span><ChevronDown className="h-3.5 w-3.5 text-slate-400" /></summary></TooltipTrigger><TooltipContent side="bottom" sideOffset={6} className="max-w-xs bg-slate-950 px-3 py-2 text-xs leading-relaxed text-white shadow-lg">{x.hint}</TooltipContent></Tooltip></TooltipProvider>{editor}</details>;
+    if (collapsible) return <div key={x.key} className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/40"><TooltipProvider delayDuration={180}><Tooltip><TooltipTrigger asChild><div className="flex items-center gap-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200"><span className="flex-1">{x.label}</span>{visibility}</div></TooltipTrigger><TooltipContent side="bottom" sideOffset={6} className="max-w-xs bg-slate-950 px-3 py-2 text-xs leading-relaxed text-white shadow-lg">{x.hint}</TooltipContent></Tooltip></TooltipProvider>{editor}</div>;
     return <div key={x.key} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-900/40"><div className="flex items-center justify-between gap-2"><span className="text-[13px] font-semibold text-slate-800 dark:text-slate-100" title={x.hint}>{x.label}</span>{visibility}</div>{editor}</div>;
   };
 
@@ -134,17 +142,17 @@ export function CommercialFieldsCard({ version, readOnly, onSave, registerFlush,
         {open ? <ChevronUp className="ml-auto h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-slate-500" />}
       </button></TooltipTrigger><TooltipContent side="bottom" sideOffset={7} className="max-w-xs bg-slate-950 px-3 py-2 text-xs leading-relaxed text-white shadow-lg">Defina o que o cliente vê, o que é interno e como o produto deve ser apresentado comercialmente.</TooltipContent></Tooltip></TooltipProvider>
       {open && <div className="mt-2.5 space-y-3">
-      <div className="grid items-start gap-2 lg:grid-cols-2">{COMMERCIAL_TEXT_FIELDS.slice(0, 2).map((x) => <TextField key={x.key} x={x} collapsible />)}</div>
+      <div className="grid items-start gap-2 lg:grid-cols-2">{COMMERCIAL_TEXT_FIELDS.slice(0, 2).map((x) => renderTextField(x, true))}</div>
       <div className="grid items-start gap-2 lg:grid-cols-2">
-        {COMMERCIAL_TEXT_FIELDS.slice(2).map((x) => <div key={x.key} className={x.key === "internal_notes" ? "lg:col-span-2" : ""}><TextField x={x} collapsible /></div>)}
+        {COMMERCIAL_TEXT_FIELDS.slice(2).map((x) => <div key={x.key} className={x.key === "internal_notes" ? "lg:col-span-2" : ""}>{renderTextField(x, true)}</div>)}
       </div>
       </div>}
     </section>
     <section className="mt-3 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <details><summary className="flex cursor-pointer list-none items-center gap-2.5"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><ListChecks className="h-3.5 w-3.5" /></span><span className="flex-1 text-[13px] font-bold text-slate-900 dark:text-slate-100">Itens</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-2.5 space-y-2"><ListFields fields={COMMERCIAL_LIST_FIELDS.filter((x) => x.key === "included_items" || x.key === "excluded_items")} /></div></details>
+      <details open><summary className="flex cursor-default list-none items-center gap-2.5" onClick={(e) => e.preventDefault()}><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><ListChecks className="h-3.5 w-3.5" /></span><span className="flex-1 text-[13px] font-bold text-slate-900 dark:text-slate-100">Itens</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-2.5 space-y-2">{renderListFields(COMMERCIAL_LIST_FIELDS.filter((x) => x.key === "included_items" || x.key === "excluded_items"))}</div></details>
     </section>
     <section className="mt-3 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <details><summary className="flex cursor-pointer list-none items-center gap-2.5"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Info className="h-3.5 w-3.5" /></span><span className="flex-1 text-[13px] font-bold text-slate-900 dark:text-slate-100">Requisitos e resumo dos entregáveis</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-2.5"><ListFields fields={COMMERCIAL_LIST_FIELDS.filter((x) => x.key === "client_requirements" || x.key === "deliverables_summary")} /></div></details>
+      <details open><summary className="flex cursor-default list-none items-center gap-2.5" onClick={(e) => e.preventDefault()}><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Info className="h-3.5 w-3.5" /></span><span className="flex-1 text-[13px] font-bold text-slate-900 dark:text-slate-100">Requisitos e resumo dos entregáveis</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-2.5">{renderListFields(COMMERCIAL_LIST_FIELDS.filter((x) => x.key === "client_requirements" || x.key === "deliverables_summary"))}</div></details>
     </section>
     {!readOnly && <div className="mt-3 flex flex-wrap items-center gap-3">{tooLong && <span className="text-xs text-red-600">Algum campo passou do limite de caracteres.</span>}{saved && <span role="status" className="text-xs font-semibold text-emerald-700">✓ Informações comerciais salvas.</span>}{error && <span role="alert" className="text-xs text-red-600">{error}</span>}</div>}
   </>;

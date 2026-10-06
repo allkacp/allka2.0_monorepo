@@ -79,6 +79,7 @@ router.post(
   },
 );
 
+export const MIN_PALAVRAS_IA = 5;
 const improveProductFieldSchema = z.object({
   field_label: z.string().min(1),
   current_value: z.string().optional().default(""),
@@ -86,6 +87,12 @@ const improveProductFieldSchema = z.object({
   length: z.enum(["manter", "curto", "medio", "longo"]).optional().default("manter"),
   approach: z.enum(["melhorar", "recriar"]).optional().default("melhorar"),
   research: z.boolean().optional().default(false),
+  // Limites opcionais pedidos pelo usuário (reunião 2026-10-05).
+  max_words: z.number().int().min(1).max(5000).nullish(),
+  max_chars: z.number().int().min(1).max(50000).nullish(),
+  // Mínimos (2026-10-06): evita texto curto demais.
+  min_words: z.number().int().min(1).max(5000).nullish(),
+  min_chars: z.number().int().min(1).max(50000).nullish(),
   context: z
     .object({
       name: z.string().optional(),
@@ -105,9 +112,23 @@ router.post(
   validate(improveProductFieldSchema),
   async (req, res, next) => {
     try {
-      const { field_label, current_value, mode, length, approach, context, research } = req.body as z.infer<
+      const { field_label, current_value, mode, length, approach, context, research, max_words, max_chars, min_words, min_chars } = req.body as z.infer<
         typeof improveProductFieldSchema
       >;
+      // Regra (ajustada em 2026-10-06): basta o NOME do produto — com ele a IA pesquisa na internet e escreve o campo do zero.
+      // Sem nome e sem nenhum texto no campo, não há de onde partir.
+      const palavras = current_value.trim().split(/\s+/).filter(Boolean).length;
+      const temNome = !!context.name?.trim();
+      if (palavras < 1 && !temNome) {
+        res.status(422).json({ error: "Informe o nome do produto (ou escreva algo no campo) antes de usar a IA.", code: "ai_min_words" });
+        return;
+      }
+      if ((min_words && max_words && min_words > max_words) || (min_chars && max_chars && min_chars > max_chars)) {
+        res.status(422).json({ error: "O mínimo não pode ser maior que o máximo.", code: "ai_limits_invalid" });
+        return;
+      }
+      // Pouco texto no campo: a IA parte do nome e PESQUISA na internet para montar o conteúdo.
+      const pesquisar = research || palavras < MIN_PALAVRAS_IA;
       const improved_value = await improveProductField(
         field_label,
         current_value,
@@ -120,7 +141,8 @@ router.post(
         mode,
         length,
         approach,
-        research,
+        pesquisar,
+        { maxWords: max_words, maxChars: max_chars, minWords: min_words, minChars: min_chars },
       );
       res.json({ improved_value });
     } catch (err) {

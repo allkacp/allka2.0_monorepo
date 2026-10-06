@@ -44,6 +44,7 @@ import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { TaskRotationPanel } from "@/components/task-rotation-panel";
 import { TaskQualificationCard } from "@/components/task-qualification-card";
 import { TaskReviewCard } from "@/components/task-review-card";
+import { TaskStagesPanel } from "@/components/task-stages-panel";
 import { TaskDeliverablesCard } from "@/components/task-deliverables-card";
 import { TaskAICard } from "@/components/task-ai-card";
 import { TaskGuideCard } from "@/components/task-guide-card";
@@ -1839,6 +1840,7 @@ export function TarefaDetailDrawer({
                     <>
                       <TaskGuideCard taskId={tarefa.id} />
                       <TaskFlowCard taskId={tarefa.id} status={tarefa.status} onChanged={() => onStatusChange?.(tarefa, tarefa.status)} />
+                      <TaskStagesPanel taskId={tarefa.id} status={tarefa.status} onChanged={() => onStatusChange?.(tarefa, tarefa.status)} />
                       <TaskDependenciesCard taskId={tarefa.id} status={tarefa.status} />
                       <TaskConnectionsCard taskId={tarefa.id} status={tarefa.status} />
                       <TaskAssetsCard taskId={tarefa.id} status={tarefa.status} onChanged={() => onStatusChange?.(tarefa, tarefa.status)} />

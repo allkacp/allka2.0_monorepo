@@ -26,7 +26,7 @@
     "test:catalog2-task-models": "tsx scripts/run-db-tests.ts src/routes/catalog2-task-models.integration.test.ts",
     "test:catalog2-cycles-unit": "tsx --test src/lib/catalog2-cycles.test.ts",
     "test:catalog2-recurrence": "npm run test:catalog2-cycles-unit && npm run test:catalog2-task-models && tsx scripts/run-db-tests.ts src/routes/project-task-qualification.integration.test.ts && tsx scripts/run-db-tests.ts src/routes/catalog2-cycles.integration.test.ts && tsx scripts/run-db-tests.ts src/routes/catalog2-continuity.integration.test.ts && tsx scripts/run-db-tests.ts src/routes/client-assets.integration.test.ts && tsx scripts/run-db-tests.ts src/routes/catalog2-packages.integration.test.ts",
-    "test:product-feedback":"tsx scripts/run-db-tests.ts src/routes/product-feedback.integration.test.ts",
+    "test:product-feedback": "tsx scripts/run-db-tests.ts src/routes/product-feedback.integration.test.ts",
     "test:legacy-consultation": "tsx scripts/run-db-tests.ts src/routes/legacy-consultation.integration.test.ts",
     "test:legacy-snapshot": "tsx scripts/run-db-tests.ts src/routes/legacy-snapshot-oficial.integration.test.ts",
     "test:legacy-identity-orgs": "tsx scripts/run-db-tests.ts src/routes/legacy-identity-orgs.integration.test.ts",
@@ -112,6 +112,7 @@
     "pdf-parse": "^2.4.5",
     "prisma": "^5.22.0",
     "sanitize-html": "^2.17.7",
+    "ws": "^8.22.0",
     "xlsx": "^0.18.5",
     "zod": "^3.24.1"
   },
@@ -123,6 +124,7 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^22.10.0",
     "@types/node-cron": "^3.0.11",
+    "@types/ws": "^8.18.2",
     "mysql2": "^3.23.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

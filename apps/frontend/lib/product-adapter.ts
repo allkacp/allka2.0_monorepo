@@ -327,6 +327,7 @@ export function frontendToBackendProduct(p: Product): Record<string, any> {
     exige_aprovacao_cliente: p.exigeAprovacaoCliente ?? true,
     metadata: JSON.stringify(meta),
     variations: p.variations?.map((v) => ({
+      id: v.id && !v.id.startsWith("var-") ? v.id : undefined,
       name: v.name,
       description: v.description ?? undefined,
       price: v.price,
@@ -338,6 +339,7 @@ export function frontendToBackendProduct(p: Product): Record<string, any> {
       is_active: v.isActive ?? true,
     })),
     addons: p.addOns?.map((a) => ({
+      id: a.id && !a.id.startsWith("addon-") ? a.id : undefined,
       name: a.name,
       price: a.price,
       category: a.category,

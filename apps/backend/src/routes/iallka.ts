@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { loadAudienceViewer } from "../lib/catalog2-audience";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
@@ -191,6 +192,7 @@ router.post(
       // (Company/Agency/Partner), mesma regra de checkClientVisibility.
       const owner = await prisma.user.findUnique({ where: { id: session.user_id }, select: { account_type: true, role: true } });
       const ownerIsAdminMaster = await isAdminMaster(session.user_id);
+      const audienceViewer = ownerIsAdminMaster ? ({ kind: "internal" } as const) : await loadAudienceViewer(session.user_id);
 
       let projectBriefing: Awaited<ReturnType<typeof buildProjectBriefingText>> = null;
       if (project_id) {
@@ -209,7 +211,7 @@ router.post(
       // contexto (a Aura informa que não tem essa informação, nunca 403 —
       // troca de tela/produto sem contexto antigo não é um erro de acesso).
       const catalog2Product = product_id
-        ? await buildCatalog2ProductAuraContext(product_id, { isAdminMaster: ownerIsAdminMaster, clientVisibleOnly: !ownerIsAdminMaster })
+        ? await buildCatalog2ProductAuraContext(product_id, { isAdminMaster: ownerIsAdminMaster, clientVisibleOnly: !ownerIsAdminMaster, audienceViewer })
         : null;
       let catalog2Quote: Awaited<ReturnType<typeof resolveCatalog2QuoteAuraContext>>["content"] = null;
       if (quote_id) {
@@ -227,6 +229,7 @@ router.post(
         result = await sendIallkaTurn(history, message, req.user!.id, {
           isAdminMaster: ownerIsAdminMaster,
           clientVisibleOnly: !ownerIsAdminMaster,
+          audienceViewer,
           projectBriefing,
           catalog2Product,
           catalog2Quote,
@@ -260,7 +263,7 @@ router.post(
       // projeto/cotação automaticamente nem deixa um rascunho parecer oferta.
       result = {
         ...result,
-        catalog2_recommendations: await validateCatalog2Recommendations(result.catalog2_recommendations ?? []),
+        catalog2_recommendations: await validateCatalog2Recommendations(result.catalog2_recommendations ?? [], audienceViewer),
       };
 
       await prisma.iallkaMessage.create({

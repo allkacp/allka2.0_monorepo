@@ -137,7 +137,7 @@ export function ModelPickerDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden p-0">
+        <DialogContent className="max-h-[85vh] w-[95vw] max-w-3xl overflow-hidden p-0 sm:max-w-3xl">
           <div className="flex max-h-[85vh] flex-col gap-3 p-5">
             <DialogTitle>Selecionar {kind === "task" ? "modelo de tarefa" : "etapa"} existente</DialogTitle>
             <div className="flex flex-wrap items-center gap-2">
@@ -259,7 +259,7 @@ export function TaskModelInfoDialog({ id, onClose, kind = "task" }: { id: number
   }
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[85vh] w-[95vw] max-w-2xl overflow-y-auto sm:max-w-2xl">
         <DialogTitle>{kind === "task" ? "Modelo global de tarefa" : "Modelo global de etapa"}{m ? ` #${m.id}` : ""}</DialogTitle>
         {err && <p role="alert" className="text-sm text-red-600">{err}</p>}
         {!m && !err && <p className="flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>}

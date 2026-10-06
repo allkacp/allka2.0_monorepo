@@ -10,6 +10,7 @@ import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
 import { assertProductContractable } from "./product-contractability";
 import { checkClientVisibility } from "./catalog2-client";
+import { audienceAllows, type AudienceViewer } from "./catalog2-audience";
 import { recordAIUsage, usageFromGeminiResponse } from "./ai-usage-tracker";
 import {
   buildCatalog2KnowledgeText,
@@ -147,6 +148,8 @@ export interface IallkaTurnOpts {
   /** Company/Agency/Partner: só produtos catalog2 realmente visíveis pro
    * cliente entram no contexto — nunca um provisório, nunca "em preparação". */
   clientVisibleOnly?: boolean;
+  /** Público de quem pergunta (C7): produtos exclusivos de outro público ficam fora do contexto e das recomendações. */
+  audienceViewer?: AudienceViewer | null;
   /** Texto de briefing de um projeto específico — só deve chegar aqui
    * depois de validado que o projeto pertence à conta da sessão (ver
    * routes/iallka.ts). Nunca cacheado, nunca reaproveitado entre contas. */
@@ -174,6 +177,7 @@ export async function sendIallkaTurn(
   const catalog2 = await buildCatalog2KnowledgeText({
     includeProvisional: !!opts.isAdminMaster,
     clientVisibleOnly: !!opts.clientVisibleOnly,
+    audienceViewer: opts.audienceViewer ?? null,
   });
   const adminDocs = await buildAdminKnowledgeText();
 
@@ -292,6 +296,7 @@ ${opts.catalog2History.text}
  * e o próximo passo seguro para o usuário. */
 export async function validateCatalog2Recommendations(
   items: IallkaCatalog2Recommendation[],
+  viewer?: AudienceViewer | null,
 ): Promise<IallkaCatalog2Recommendation[]> {
   const valid: IallkaCatalog2Recommendation[] = [];
   for (const item of items) {
@@ -302,9 +307,11 @@ export async function validateCatalog2Recommendations(
         published_version_id: true,
         import_origin: { select: { pendencies_json: true } },
         inactivation_scheduled_at: true, inactivation_effective_at: true,
+        visibility_mode: true,
       },
     });
     if (!product || product.internal_name.startsWith("[TESTE LOCAL]")) continue;
+    if (viewer !== undefined && !audienceAllows(product, viewer)) continue; // produto de outro público (C7)
     const visibility = await checkClientVisibility(product);
     valid.push({
       product_id: product.id,

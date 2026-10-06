@@ -21,7 +21,7 @@ export const METHOD_MESSAGE = "Você não precisa compartilhar suas senhas. Util
 /** Ordem de preferência (a mais segura primeiro). */
 export const CONNECTION_METHODS = [
   "oauth", "account_link", "manager_account", "partner_business", "user_invite", "temporary_user",
-  "revocable_token", "app_password", "plugin", "protected_file", "manual_instruction", "other",
+  "revocable_token", "api_key", "secure_browser", "app_password", "plugin", "protected_file", "manual_instruction", "other",
 ] as const;
 export type ConnectionMethod = (typeof CONNECTION_METHODS)[number];
 export const CONNECTION_METHOD_LABEL: Record<ConnectionMethod, string> = {
@@ -32,6 +32,8 @@ export const CONNECTION_METHOD_LABEL: Record<ConnectionMethod, string> = {
   user_invite: "Convite de usuário corporativo da Allka",
   temporary_user: "Usuário temporário (permissão mínima)",
   revocable_token: "Token revogável",
+  api_key: "Chave de API / integração por API",
+  secure_browser: "Navegador seguro da Allka (login uma vez, uso por tempo autorizado)",
   app_password: "Senha de aplicação",
   plugin: "Integração por plugin",
   protected_file: "Arquivo protegido",
@@ -39,7 +41,53 @@ export const CONNECTION_METHOD_LABEL: Record<ConnectionMethod, string> = {
   other: "Outro método",
 };
 /** Métodos que exigem guardar um segredo (cofre cifrado). */
-export const SECRET_METHODS: ConnectionMethod[] = ["revocable_token", "app_password", "protected_file", "temporary_user"];
+export const SECRET_METHODS: ConnectionMethod[] = ["revocable_token", "api_key", "app_password", "protected_file", "temporary_user"];
+
+// ── Campos que o cliente preenche, definidos por tipo de acesso ──────────────
+export const FIELD_TYPES = ["text", "secret", "url", "email", "number", "textarea"] as const;
+export type FieldType = (typeof FIELD_TYPES)[number];
+export const FIELD_TYPE_LABEL: Record<FieldType, string> = { text: "Texto", secret: "Segredo (cofre cifrado)", url: "Endereço (URL)", email: "E-mail", number: "Número", textarea: "Texto longo" };
+export interface FieldDef { key: string; label: string; type: FieldType; required: boolean; help?: string | null }
+const SECRET_KEY_LIKE = /(senha|password|passwd|secret|token|api[_-]?key|credencial|authorization)/i;
+export function parseFieldDefs(json: string | null | undefined): FieldDef[] {
+  if (!json) return [];
+  try { const v = JSON.parse(json); return Array.isArray(v) ? v.filter((f) => f && typeof f.key === "string" && typeof f.label === "string") : []; } catch { return []; }
+}
+/** Valida a definição de campos de um tipo (cadastro pelo administrador). */
+export function validateFieldDefs(defs: FieldDef[]): string | null {
+  if (defs.length > 20) return "No máximo 20 campos por tipo de acesso.";
+  const seen = new Set<string>();
+  for (const f of defs) {
+    if (!/^[a-z0-9_]{2,40}$/.test(f.key)) return `Identificador de campo inválido ("${f.key}"): use letras minúsculas, números e _.`;
+    if (seen.has(f.key)) return `Campo repetido: ${f.key}.`;
+    seen.add(f.key);
+    if (!f.label?.trim()) return "Todo campo precisa de um nome.";
+    if (!(FIELD_TYPES as readonly string[]).includes(f.type)) return `Tipo de campo inválido em "${f.label}".`;
+    if (f.type !== "secret" && SECRET_KEY_LIKE.test(f.key)) return `O campo "${f.label}" parece guardar senha/token/chave: use o tipo "Segredo (cofre cifrado)".`;
+  }
+  return null;
+}
+/** Separa os valores informados pelo cliente: secretos (cofre) x comuns (guardados no cadastro). */
+export function splitFieldValues(defs: FieldDef[], input: { key: string; value: string }[] | null | undefined) {
+  const stored: Record<string, string> = {};
+  const secrets: [string, string][] = [];
+  for (const it of input ?? []) {
+    const d = defs.find((x) => x.key === it.key);
+    if (!d) throw new ConnectionError(`Campo desconhecido para este tipo de acesso: ${it.key}.`, 422, "connection_field_unknown");
+    const v = String(it.value ?? "").trim();
+    if (!v) continue;
+    if (d.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) throw new ConnectionError(`"${d.label}": e-mail inválido.`, 422, "connection_field_invalid");
+    if (d.type === "number" && !Number.isFinite(Number(v))) throw new ConnectionError(`"${d.label}": informe um número.`, 422, "connection_field_invalid");
+    if (d.type === "url") { try { new URL(v); } catch { throw new ConnectionError(`"${d.label}": endereço inválido (use https://…).`, 422, "connection_field_invalid"); } }
+    if (d.type === "secret") { secrets.push([d.key, v]); stored[d.key] = "__set__"; } else stored[d.key] = v;
+  }
+  return { stored, secrets, hasAny: Object.keys(stored).length > 0 };
+}
+export function missingRequiredFields(defs: FieldDef[], storedJson: string | null | undefined): string[] {
+  let stored: Record<string, string> = {};
+  try { stored = storedJson ? JSON.parse(storedJson) : {}; } catch { stored = {}; }
+  return defs.filter((d) => d.required && !stored[d.key]).map((d) => d.label);
+}
 
 export const CONNECTION_STATES = [
   "not_requested", "awaiting_submission", "submitted", "awaiting_validation", "valid", "incomplete", "invalid",
@@ -155,7 +203,9 @@ export const CONNECTION_TYPE_SEED: SeedType[] = [
 /** Garante o catálogo global (idempotente; nunca altera tipo já existente — preserva IDs e edições). */
 export async function ensureConnectionTypes(db: Db) {
   let created = 0;
+  const gone = new Set((await db.connectionTypeTombstone.findMany({ select: { key: true } })).map((x) => x.key));
   for (const [i, t] of CONNECTION_TYPE_SEED.entries()) {
+    if (gone.has(t.key)) continue; // excluído pelo Admin Master: não recria
     const found = await db.connectionType.findUnique({ where: { key: t.key }, select: { id: true } });
     if (found) continue;
     await db.connectionType.create({
@@ -180,6 +230,7 @@ export function serializeConnectionType(t: Prisma.ConnectionTypeGetPayload<objec
     id: t.id, key: t.key, name: t.name, description: t.description, icon: t.icon, provider: t.provider, integration_key: t.integration_key,
     allowed_methods: parseJsonArray<string>(t.allowed_methods_json), permission_levels: parseJsonArray<{ key: string; label: string }>(t.permission_levels_json),
     supports_auto_validation: t.supports_auto_validation, default_instructions: t.default_instructions, is_active: t.is_active, sort_order: t.sort_order,
+    fields: parseFieldDefs(t.fields_json),
   };
 }
 

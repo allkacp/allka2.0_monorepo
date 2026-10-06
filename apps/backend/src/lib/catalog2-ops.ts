@@ -83,7 +83,20 @@ export const STEP_OPS_DEFAULT_VISIBILITY: Record<StepOpsTextField | "completion_
 };
 const STEP_TEXT_MAX: Record<StepOpsTextField, number> = { instructions: 8000, evidence_hint: 1000 };
 
+/** Checklist da etapa (reunião 2026-10-05): itens de execução, de aprovação e de qualificação. */
+export const CHECKLIST_KINDS = ["execucao", "aprovacao", "qualificacao"] as const;
+export type ChecklistKind = (typeof CHECKLIST_KINDS)[number];
+export interface ChecklistItem { id: string; text: string; kind: ChecklistKind; required: boolean }
+export const CHECKLIST_MAX_ITEMS = 60;
+export const CHECKLIST_TEXT_MAX = 300;
+
+export const EVIDENCE_OWNERS = ["executor", "leader", "client"] as const;
+export type EvidenceOwner = (typeof EVIDENCE_OWNERS)[number];
+
 export interface StepOps {
+  checklist?: ChecklistItem[];
+  /** Quem envia/confere a evidência da etapa (padrão: o executor). */
+  evidence_owner?: EvidenceOwner;
   instructions?: string;
   /** A etapa só conclui depois de anexar uma evidência (usa o mesmo bloqueio já existente de "exige anexo"). */
   evidence_required?: boolean;
@@ -108,6 +121,8 @@ export const taskOpsSchema = z
   .nullish();
 export const stepOpsSchema = z
   .object({
+    checklist: z.array(z.object({ id: z.string().max(40).nullish(), text: z.string().max(CHECKLIST_TEXT_MAX), kind: z.enum(CHECKLIST_KINDS).nullish(), required: z.boolean().nullish() })).max(CHECKLIST_MAX_ITEMS).nullish(),
+    evidence_owner: z.enum(EVIDENCE_OWNERS).nullish(),
     instructions: text(STEP_TEXT_MAX.instructions),
     evidence_required: z.boolean().nullish(),
     evidence_hint: text(STEP_TEXT_MAX.evidence_hint),
@@ -148,6 +163,23 @@ export function normalizeStepOps(raw: unknown): StepOps | null {
     if (v) out[f] = v.slice(0, STEP_TEXT_MAX[f]);
   }
   if (r.evidence_required === true) out.evidence_required = true;
+  if ((EVIDENCE_OWNERS as readonly string[]).includes(r.evidence_owner as string) && r.evidence_owner !== "executor") out.evidence_owner = r.evidence_owner as EvidenceOwner;
+  if (Array.isArray(r.checklist)) {
+    const seen = new Set<string>();
+    const items: ChecklistItem[] = [];
+    for (const raw of r.checklist.slice(0, CHECKLIST_MAX_ITEMS)) {
+      if (!raw || typeof raw !== "object") continue;
+      const it = raw as Record<string, unknown>;
+      const t = typeof it.text === "string" ? it.text.trim().slice(0, CHECKLIST_TEXT_MAX) : "";
+      if (!t) continue;
+      let id = typeof it.id === "string" && it.id.trim() ? it.id.trim().slice(0, 40) : "";
+      if (!id || seen.has(id)) id = `i${items.length + 1}-${Math.random().toString(36).slice(2, 7)}`;
+      seen.add(id);
+      const kind = (CHECKLIST_KINDS as readonly string[]).includes(it.kind as string) ? (it.kind as ChecklistKind) : "execucao";
+      items.push({ id, text: t, kind, required: it.required !== false });
+    }
+    if (items.length) out.checklist = items;
+  }
   const vis = cleanVisibility(r.visibility, [...STEP_OPS_TEXT_FIELDS, "completion_criteria"] as const);
   if (vis) out.visibility = vis;
   return Object.keys(out).length ? out : null;
@@ -176,6 +208,19 @@ export function visibleTaskGuide(ops: TaskOps | null | undefined, viewer: Visibi
     if (canSee(viewer, vis)) items.push({ key: f, label: TASK_OPS_LABEL[f], value, visibility: vis });
   }
   return items;
+}
+/**
+ * Checklist da etapa visível para quem está olhando (execução do projeto): o de EXECUÇÃO é de quem faz (executor, líder, equipe interna);
+ * o de QUALIFICAÇÃO é de quem qualifica (líder, equipe interna); o de APROVAÇÃO é de quem aprova, e todos podem ver o que será conferido.
+ */
+export function visibleChecklist(ops: StepOps | null | undefined, viewer: Visibility): ChecklistItem[] {
+  const all = ops?.checklist ?? [];
+  const sees: Record<ChecklistKind, Visibility[]> = {
+    execucao: ["internal", "leader", "executor"],
+    qualificacao: ["internal", "leader"],
+    aprovacao: ["internal", "leader", "executor", "agency", "client"],
+  };
+  return all.filter((c) => sees[c.kind ?? "execucao"]?.includes(viewer));
 }
 export function visibleStepGuide(ops: StepOps | null | undefined, viewer: Visibility, extra?: { description?: string | null; completion_criteria?: string | null }): { items: VisibleGuideItem[]; evidence_required: boolean } {
   const items: VisibleGuideItem[] = [];

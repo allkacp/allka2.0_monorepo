@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Award, DollarSign, Info, Percent, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Award, DollarSign, Info, Percent, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -46,14 +46,14 @@ function buildRows(s: any): Row[] {
   return rows.map((r, i) => ({ r, i })).sort((a, b) => pos(a.r.key) - pos(b.r.key) || a.i - b.i).map((x) => x.r);
 }
 
-function PrecificacaoPage() {
+function PrecificacaoPage({ returnAfterSave = false, onSaveComplete, onClose }: { returnAfterSave?: boolean; onSaveComplete?: () => void; onClose?: () => void }) {
   const [settings, setSettings] = useState<any>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [review, setReview] = useState("");
   const [specialties, setSpecialties] = useState<any[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [newComp, setNewComp] = useState({ label: "", percent: "" });
-  const [newSpec, setNewSpec] = useState({ key: "", name: "", rate: "" });
+  const [newSpec, setNewSpec] = useState({ key: "", name: "", rate: "", kind: "humano" });
   const [confirmSave, setConfirmSave] = useState(false);
   const [removeRow, setRemoveRow] = useState<Row | null>(null);
 
@@ -66,9 +66,29 @@ function PrecificacaoPage() {
   }, []);
   useEffect(() => { load().catch((e) => setMsg({ ok: false, text: e?.message ?? "Não foi possível carregar." })); }, [load]);
 
+  // Excluir especialidade: confirma; se só modelos globais a citam, pede uma segunda confirmação explícita.
+  const deleteSpecialty = async (s: any, detach = false): Promise<void> => {
+    if (!detach && !window.confirm(`Excluir a especialidade "${s.name}"? Só é possível se nenhuma tarefa ou etapa a estiver usando.`)) return;
+    setMsg(null);
+    try {
+      await apiClient.deleteCatalog2Specialty(s.id, detach);
+      await load();
+      setMsg({ ok: true, text: `Especialidade "${s.name}" excluída.` });
+    } catch (e: any) {
+      if (e?.code === "specialty_in_models" && window.confirm(`${e.message}\n\nExcluir mesmo assim?`)) return deleteSpecialty(s, true);
+      setMsg({ ok: false, text: e?.message ?? "Não foi possível excluir." });
+    }
+  };
   const run = async (fn: () => Promise<any>, ok: string) => {
     setMsg(null);
-    try { await fn(); await load(); setMsg({ ok: true, text: ok }); }
+    try {
+      await fn();
+      await load();
+      setMsg({ ok: true, text: ok });
+      // Quando a precificação foi aberta a partir de uma tarefa, concluir uma
+      // alteração devolve imediatamente a pessoa para o mesmo rascunho.
+      if (returnAfterSave) window.setTimeout(() => onSaveComplete?.(), 250);
+    }
     catch (e: any) { setMsg({ ok: false, text: e?.message ?? "Falha na operação." }); }
   };
 
@@ -98,8 +118,8 @@ function PrecificacaoPage() {
 
   const addSpecialty = () => run(async () => {
     if (!newSpec.key.trim() || !newSpec.name.trim()) throw new Error("Informe a chave e o nome da especialidade.");
-    await apiClient.addCatalog2Specialty({ key: newSpec.key.trim(), name: newSpec.name.trim(), max_hourly_rate: num(newSpec.rate) });
-    setNewSpec({ key: "", name: "", rate: "" });
+    await apiClient.addCatalog2Specialty({ key: newSpec.key.trim(), name: newSpec.name.trim(), max_hourly_rate: num(newSpec.rate), execution_kind: newSpec.kind });
+    setNewSpec({ key: "", name: "", rate: "", kind: "humano" });
   }, "Especialidade criada. Já aparece para escolher nas etapas dos produtos.");
 
   const pending = useMemo(() => rows.filter((r) => r.active && r.percent.trim() === "").length + (review.trim() === "" ? 1 : 0) + specialties.filter((s) => s.is_active !== false && s.max_hourly_rate == null).length, [rows, review, specialties]);
@@ -113,7 +133,7 @@ function PrecificacaoPage() {
             title="Precificação"
             description="Valor/hora das especialidades, impostos, comissão, taxas e margem — valem para todos os produtos"
             contentClassName="lg:h-[65px]"
-            actions={<PinToTrayButton id="page-precificacao" label="Precificação" icon={DollarSign} path="/admin/precificacao" />}
+            actions={<><PinToTrayButton id="page-precificacao" label="Precificação" icon={DollarSign} path="/admin/precificacao" />{onClose && <button type="button" onClick={onClose} aria-label="Fechar precificação e voltar à tarefa" title="Fechar e voltar à tarefa" className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/25 bg-white/10 text-white transition hover:bg-white/20"><X className="h-4 w-4" /></button>}</>}
           />
         </div>
 
@@ -146,13 +166,14 @@ function PrecificacaoPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                {specialties.map((s) => <SpecialtyLine key={s.id} s={s} onSave={(rate) => run(() => apiClient.updateCatalog2Specialty(s.id, { max_hourly_rate: rate }), `Valor/hora de ${s.name} salvo.`)} />)}
+                {specialties.map((s) => <SpecialtyLine key={s.id} s={s} onSave={(rate) => run(() => apiClient.updateCatalog2Specialty(s.id, { max_hourly_rate: rate }), `Valor/hora de ${s.name} salvo.`)} onKind={(kind) => run(() => apiClient.updateCatalog2Specialty(s.id, { execution_kind: kind }), `Tipo de ${s.name} salvo.`)} onDelete={() => void deleteSpecialty(s)} />)}
                 {specialties.length === 0 && <p className="text-sm text-slate-500">Nenhuma especialidade cadastrada.</p>}
               </div>
               <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-slate-200 pt-4 dark:border-slate-700">
                 <label className="text-xs">Chave<Input className="mt-1 w-36" value={newSpec.key} onChange={(e) => setNewSpec({ ...newSpec, key: e.target.value })} placeholder="ex.: designer-senior" /></label>
                 <label className="text-xs">Nome<Input className="mt-1 w-48" value={newSpec.name} onChange={(e) => setNewSpec({ ...newSpec, name: e.target.value })} placeholder="ex.: Designer sênior" /></label>
                 <label className="text-xs">Valor/hora (R$)<Input className="mt-1 w-28" type="number" value={newSpec.rate} onChange={(e) => setNewSpec({ ...newSpec, rate: e.target.value })} /></label>
+                <label className="text-xs">Tipo<select aria-label="Tipo da nova especialidade" className="mt-1 h-9 w-40 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900" value={newSpec.kind} onChange={(e) => setNewSpec({ ...newSpec, kind: e.target.value })}><option value="humano">Humano</option><option value="ia">IA</option><option value="hibrido">Humano ou IA</option></select></label>
                 <Button size="sm" onClick={addSpecialty}><Plus className="h-4 w-4" /> Nova especialidade</Button>
               </div>
             </section>
@@ -243,18 +264,22 @@ function PrecificacaoPage() {
   );
 }
 
-function SpecialtyLine({ s, onSave }: { s: any; onSave: (rate: number | null) => void }) {
+function SpecialtyLine({ s, onSave, onKind, onDelete }: { s: any; onSave: (rate: number | null) => void; onKind: (kind: string) => void; onDelete: () => void }) {
   const [v, setV] = useState(s.max_hourly_rate == null ? "" : String(s.max_hourly_rate));
   useEffect(() => setV(s.max_hourly_rate == null ? "" : String(s.max_hourly_rate)), [s.id, s.max_hourly_rate]);
   const changed = v !== (s.max_hourly_rate == null ? "" : String(s.max_hourly_rate));
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
       <span className="min-w-[10rem] flex-1 text-sm font-medium">{s.name}</span>
+      <label className="flex items-center gap-1 text-xs" title="Define em quais etapas esta especialidade aparece: humano, IA ou humano ou IA.">Tipo
+        <select aria-label={`Tipo: ${s.name}`} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900" value={s.execution_kind ?? "humano"} onChange={(e) => onKind(e.target.value)}><option value="humano">Humano</option><option value="ia">IA</option><option value="hibrido">Humano ou IA</option></select>
+      </label>
       <label className="flex items-center gap-1 text-xs">R$
         <Input aria-label={`Valor/hora: ${s.name}`} className="w-28" type="number" value={v} onChange={(e) => setV(e.target.value)} /> /hora
       </label>
       <Button size="sm" variant="outline" disabled={!changed} onClick={() => onSave(v.trim() === "" ? null : Number(v))}>Salvar</Button>
       {s.max_hourly_rate == null && <span className="text-[11px] text-amber-600">aguardando definição</span>}
+      <button type="button" className="text-red-500 hover:text-red-700" aria-label={`Excluir especialidade ${s.name}`} title="Excluir (só se nada a usa)" onClick={onDelete}><Trash2 className="h-4 w-4" /></button>
     </div>
   );
 }

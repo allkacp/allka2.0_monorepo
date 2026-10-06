@@ -35,6 +35,10 @@ services:
       # ausente/errada → as rotas /api/admin/legacy respondem 503.
       LEGACY_DATABASE_URL: mysql://allka_legacy_ro:legacy_ro_dev@mysql:3306/allka_legacy
       JWT_SECRET: local-development-secret
+      # Cofre de segredos (APENAS desenvolvimento local; em produção a chave é outra e fica fora do repositório).
+      META_TOKEN_ENCRYPTION_KEY: 00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff
+      SECURE_BROWSER_RUNNER_URL: http://browser-runner:7000
+      SECURE_BROWSER_RUNNER_SECRET: dev-runner-secret-local
       CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: "300"
     ports:
@@ -47,6 +51,23 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      browser-runner:
+        condition: service_started
+
+  # Navegador seguro (D3): Chromium real isolado. Sem porta publicada: só o backend o alcança.
+  browser-runner:
+    build:
+      context: .
+      dockerfile: docker/browser-runner/Dockerfile
+    restart: unless-stopped
+    environment:
+      RUNNER_SECRET: dev-runner-secret-local
+      MAX_SESSIONS: "5"
+    mem_limit: 3g
+    cpus: 2
+    shm_size: 1gb
+    ports:
+      - "127.0.0.1:7000:7000"   # só loopback, para os testes locais; em produção não se publica
 
   frontend:
     build:

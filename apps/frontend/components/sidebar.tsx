@@ -413,6 +413,18 @@ const navigationConfig = {
           icon: CheckSquare,
           current: false,
         },
+        {
+          name: "Tarefas internas",
+          href: "/admin/tarefas-internas",
+          icon: ClipboardList,
+          current: false,
+        },
+        {
+          name: "Navegador seguro",
+          href: "/admin/navegador-seguro",
+          icon: Lock,
+          current: false,
+        },
       ],
     },
     {
@@ -1127,8 +1139,29 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
     );
   };
 
+  // D2: "Tarefas internas" só aparece para quem a administração liberou (agência / empresa).
+  const [internalTasksAllowed, setInternalTasksAllowed] = useState(false);
+  useEffect(() => {
+    if (accountType !== "agencias" && accountType !== "empresas") return;
+    let live = true;
+    try { void Promise.resolve(apiClient.getInternalTaskSettings?.()).then((r: any) => { if (live) setInternalTasksAllowed(!!r?.can_use); }).catch(() => {}); } catch { /* sem acesso ao módulo */ }
+    return () => { live = false; };
+  }, [accountType]);
+
   const navigation = (() => {
-    const resolvedItems = getNavigationItems();
+    const baseResolved = getNavigationItems();
+    const internalTasksItem = accountType === "agencias"
+      ? { name: "Tarefas internas", href: "/agency/tarefas-internas", icon: ClipboardList, current: false }
+      : accountType === "empresas" ? { name: "Tarefas internas", href: "/company/tarefas-internas", icon: ClipboardList, current: false } : null;
+    const secureBrowserHref = accountType === "agencias" ? "/agency/navegador-seguro" : accountType === "empresas" ? "/company/navegador-seguro" : accountType === "nomades" ? "/nomades/navegador-seguro" : accountType === "lider" ? "/leader/navegador-seguro" : null;
+    const secureBrowserItem = secureBrowserHref ? { name: "Navegador seguro", href: secureBrowserHref, icon: Lock, current: false } : null;
+    // Ficam logo abaixo de "Tarefas" (perto de projetos e tarefas), não no fim do menu.
+    const insertAfterTasks = (list: any[], item: any) => {
+      const at = list.reduce((acc, it, i) => (["Tarefas", "Tarefas internas", "Minhas Tarefas", "Em Execução"].includes(it.name) ? i : acc), -1);
+      return at < 0 ? [...list, item] : [...list.slice(0, at + 1), item, ...list.slice(at + 1)];
+    };
+    const withInternal = internalTasksAllowed && internalTasksItem ? insertAfterTasks(baseResolved, internalTasksItem) : baseResolved;
+    const resolvedItems = secureBrowserItem ? insertAfterTasks(withInternal, secureBrowserItem) : withInternal;
     // Appended after whichever menu the current account_type already
     // resolves to — never inside a single account_type's own array — so
     // its visibility depends only on canOpenRoadmapPanelState, never on

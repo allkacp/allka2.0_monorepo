@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { isAdminUser, projectVisibleToUser } from "../lib/project-scope";
-import { CONNECTION_METHODS, ConnectionError, GRANT_SCOPES, HANDLINGS, parseJsonArray, serializeConnectionType, ensureConnectionTypes, CONNECTION_STATE_LABEL, WHEN_NEEDED_LABEL, type ConnectionState } from "../lib/connections/catalog";
+import { CONNECTION_METHODS, ConnectionError, GRANT_SCOPES, HANDLINGS, parseJsonArray, parseFieldDefs, serializeConnectionType, ensureConnectionTypes, CONNECTION_STATE_LABEL, WHEN_NEEDED_LABEL, type ConnectionState } from "../lib/connections/catalog";
 import {
   completeOAuth, createConnection, findReusableConnections, grantConnection, listEvents, logConnection, markSubmitted, ownerOfProject, recordValidation, requestManagerLink, revokeConnection, revokeGrants,
   runAutoValidation, serializeConnection, startOAuth, updateConnection, usageOf, type Actor,
@@ -112,6 +112,7 @@ const createSchema = z.object({
   company_id: z.string().optional(), agency_id: z.string().optional(), connection_type_id: z.number().int().optional(), connection_type_key: z.string().optional(), method: z.enum(CONNECTION_METHODS).optional(),
   label: z.string().trim().max(191).optional(), account_label: z.string().trim().max(191).nullish(), external_id: z.string().trim().max(500).nullish(), permission_level: z.string().max(60).nullish(),
   scopes: z.array(z.string()).optional(), owner_user_id: z.string().nullish(), provided_by_user_id: z.string().nullish(), secret_value: z.string().max(4000).nullish(),
+  fields: z.array(z.object({ key: z.string().max(60), value: z.string().max(4000) })).max(30).optional(),
   expires_at: z.string().datetime({ offset: true }).nullish(),
 });
 router.post("/", async (req, res, next) => {
@@ -136,7 +137,7 @@ router.get("/:id", async (req, res, next) => {
 router.patch("/:id", async (req, res, next) => {
   try {
     const c = await loadConn(req);
-    const d = z.object({ label: z.string().trim().max(191).optional(), account_label: z.string().trim().max(191).nullish(), external_id: z.string().trim().max(500).nullish(), permission_level: z.string().max(60).nullish(), secret_value: z.string().max(4000).nullish(), expires_at: z.string().datetime({ offset: true }).nullish() }).parse(req.body);
+    const d = z.object({ label: z.string().trim().max(191).optional(), account_label: z.string().trim().max(191).nullish(), external_id: z.string().trim().max(500).nullish(), permission_level: z.string().max(60).nullish(), secret_value: z.string().max(4000).nullish(), fields: z.array(z.object({ key: z.string().max(60), value: z.string().max(4000) })).max(30).optional(), expires_at: z.string().datetime({ offset: true }).nullish() }).parse(req.body);
     await prisma.$transaction((tx) => updateConnection(tx, actorOf(req), c.id, { ...d, expires_at: d.expires_at === undefined ? undefined : d.expires_at ? new Date(d.expires_at) : null }));
     await recalcConnection(prisma, c.id, actorOf(req));
     res.json(await serializeConnection(prisma, c.id));
@@ -250,6 +251,7 @@ router.get("/requirements/:pcrId", async (req, res, next) => {
       reuse_candidates: await findReusableConnections(prisma, ownerP, pcr.connection_type_id, pcr.project_id),
       allowed_methods: parseJsonArray<string>(def?.connection_type.allowed_methods_json),
       permission_levels: parseJsonArray<{ key: string; label: string }>(def?.connection_type.permission_levels_json),
+      fields: parseFieldDefs(def?.connection_type.fields_json),
       reminders: await reminderHistory(prisma, pcr.id), events: await listEvents(prisma, { pcrId: pcr.id }, 100),
     });
   } catch (e) { handle(e, res, next); }

@@ -117,7 +117,7 @@ function ItemCard({ item, role, onChanged }: { item: any; role: HubRole; onChang
           {detail?.instructions?.length > 0 && <p className="rounded bg-slate-50 px-2 py-1 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">{detail.instructions.join(" ")}</p>}
 
           {panel === "connect" && detail && (
-            <ConnectForm allowedMethods={detail.allowed_methods} permissionLevels={detail.permission_levels} defaultPermission={item.permission_level} tasks={tasks} onCancel={() => setPanel("")}
+            <ConnectForm fields={detail.fields ?? []} allowedMethods={detail.allowed_methods} permissionLevels={detail.permission_levels} defaultPermission={item.permission_level} tasks={tasks} onCancel={() => setPanel("")}
               onSubmit={async (b) => {
                 const r = await apiClient.createAndLinkConnection(item.id, { ...b });
                 if (b.method === "oauth") {

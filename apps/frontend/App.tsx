@@ -101,6 +101,11 @@ const AdminCombosPage = React.lazy(() => import("@/app/admin/combos/page"));
 const AdminPacotesPage = React.lazy(() => import("@/app/admin/pacotes/page"));
 const AdminCommercialRequestsPage = React.lazy(() => import("@/app/admin/pedidos-comerciais/page"));
 const AgencyCombosPage = React.lazy(() => import("@/app/agency/combos/page"));
+const AgencyInternalTasksPage = React.lazy(() => import("@/app/agency/tarefas-internas/page"));
+const CompanyInternalTasksPage = React.lazy(() => import("@/app/company/tarefas-internas/page"));
+const AdminInternalTasksPage = React.lazy(() => import("@/app/admin/tarefas-internas/page"));
+const SecureBrowserPage = React.lazy(() => import("@/app/navegador-seguro/page").then((m) => ({ default: m.SecureBrowserPage })));
+const AdminSecureBrowserPage = React.lazy(() => import("@/app/navegador-seguro/page").then((m) => ({ default: m.AdminSecureBrowserPage })));
 const AdminTarefasPage = React.lazy(() => import("@/app/admin/tarefas/page"));
 const ConexoesCompanyPage = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesCompanyPage })));
 const ConexoesAgencyPage = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesAgencyPage })));
@@ -906,6 +911,12 @@ export default function App() {
                     element={<AdminPrecificacaoPage />}
                   />
                   <Route path="/admin/combos" element={<AdminCombosPage />} />
+                  <Route path="/admin/tarefas-internas" element={<AdminInternalTasksPage />} />
+                  <Route path="/admin/navegador-seguro" element={<AdminSecureBrowserPage />} />
+                  <Route path="/nomades/navegador-seguro" element={<SecureBrowserPage canCreate={false} />} />
+                  <Route path="/leader/navegador-seguro" element={<SecureBrowserPage canCreate={false} />} />
+                  <Route path="/agency/navegador-seguro" element={<SecureBrowserPage />} />
+                  <Route path="/company/navegador-seguro" element={<SecureBrowserPage />} />
                   <Route path="/admin/pacotes" element={<AdminPacotesPage />} />
                   <Route path="/admin/pedidos-comerciais" element={<AdminCommercialRequestsPage />} />
                   <Route path="/admin/tarefas" element={<AdminTarefasPage />} />
@@ -1256,6 +1267,8 @@ export default function App() {
                     path="/agency/combos"
                     element={<AgencyCombosPage />}
                   />
+                  <Route path="/agency/tarefas-internas" element={<AgencyInternalTasksPage />} />
+                  <Route path="/company/tarefas-internas" element={<CompanyInternalTasksPage />} />
                   <Route
                     path="/agency/financeiro"
                     element={<AgencyFinanceiroPage />}

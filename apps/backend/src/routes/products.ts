@@ -9,6 +9,7 @@ import { generateNextProductCode } from "../lib/product-code";
 const router = Router();
 
 const variationSchema = z.object({
+  id: z.string().optional(),
   name: z.string().min(1),
   description: z.string().optional(),
   // Preço absoluto da variação — faltava aqui, então toda variação nova
@@ -26,6 +27,7 @@ const variationSchema = z.object({
 });
 
 const addonSchema = z.object({
+  id: z.string().optional(),
   name: z.string().min(1),
   description: z.string().optional(),
   price: z.number().min(0),
@@ -224,11 +226,7 @@ router.put(
   validate(updateSchema),
   async (req, res, next) => {
     try {
-      const {
-        variations: _v,
-        addons: _a,
-        ...rest
-      } = req.body as Record<string, unknown>;
+      const { variations, addons, ...rest } = req.body as Record<string, any>;
 
       // Snapshot do estado ANTES de aplicar o update — permite reverter
       // depois (ver GET/POST /:id/versions abaixo). Não bloqueia o
@@ -259,17 +257,30 @@ router.put(
         });
       }
 
-      const product = await prisma.product.update({
-        where: { id: req.params.id as string as string as string },
-        data: rest as Parameters<typeof prisma.product.update>[0]["data"],
-        include: {
-          variations: true,
-          addons: true,
-          task_links: {
-            where: { catalog_task: { is_active: true } },
-            include: { catalog_task: true },
-          },
-        },
+      const product = await prisma.$transaction(async (tx) => {
+        const productId = req.params.id as string;
+        const current = await tx.product.findUniqueOrThrow({ where: { id: productId }, select: { variations: { select: { id: true } }, addons: { select: { id: true } } } });
+        if (Array.isArray(variations)) {
+          const received = new Set(variations.map((v) => v.id).filter(Boolean));
+          const removed = current.variations.map((v) => v.id).filter((id) => !received.has(id));
+          if (removed.length) await tx.productVariation.deleteMany({ where: { id: { in: removed }, product_id: productId } });
+          for (const variation of variations) {
+            const { id, ...data } = variation;
+            if (id && current.variations.some((v) => v.id === id)) await tx.productVariation.update({ where: { id }, data });
+            else await tx.productVariation.create({ data: { ...data, product_id: productId } });
+          }
+        }
+        if (Array.isArray(addons)) {
+          const received = new Set(addons.map((a) => a.id).filter(Boolean));
+          const removed = current.addons.map((a) => a.id).filter((id) => !received.has(id));
+          if (removed.length) await tx.productAddon.deleteMany({ where: { id: { in: removed }, product_id: productId } });
+          for (const addon of addons) {
+            const { id, ...data } = addon;
+            if (id && current.addons.some((a) => a.id === id)) await tx.productAddon.update({ where: { id }, data });
+            else await tx.productAddon.create({ data: { ...data, product_id: productId } });
+          }
+        }
+        return tx.product.update({ where: { id: productId }, data: rest as Parameters<typeof tx.product.update>[0]["data"], include: { variations: true, addons: true, task_links: { where: { catalog_task: { is_active: true } }, include: { catalog_task: true } } } });
       });
       res.json({
         ...product,

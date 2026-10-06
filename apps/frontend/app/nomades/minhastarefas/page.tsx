@@ -22,6 +22,7 @@ import {
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { TaskGuideCard } from "@/components/task-guide-card";
+import { TaskBriefingCard } from "@/components/task-briefing-card";
 import { TaskDeliverablesCard } from "@/components/task-deliverables-card";
 import { TaskStatusPanel } from "@/components/task-status-panel";
 import { TaskAICard } from "@/components/task-ai-card";
@@ -617,6 +618,7 @@ export default function MinhasTarefasPage() {
               </div>
             </div>
             <TaskGuideCard taskId={selectedTask.id} defaultOpen />
+            <TaskBriefingCard taskId={selectedTask.id} />
             <TaskDeliverablesCard taskId={selectedTask.id} status={selectedTask.status} />
             <TaskStatusPanel taskId={selectedTask.id} status={selectedTask.status} />
             <TaskAICard taskId={selectedTask.id} status={selectedTask.status} />

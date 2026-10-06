@@ -16,10 +16,11 @@ import type { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import { verifyToken, evaluateAdminMasterAccess } from "../middleware/auth";
+import { verifyToken, evaluateAdminMasterAccess, requireAdminMaster } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { logCommercialChangeEvent } from "../lib/catalog2-commercial-change-log";
 import { CATALOG2_PERIODS, isCatalog2Period, isCurrentlyContractablePeriod, listPeriodsForAdmin } from "../lib/catalog2-periods";
+import { stepPerformance } from "../lib/step-performance";
 import { recordCatalog2ProductHistory, listCatalog2ProductHistory } from "../lib/catalog2-product-history";
 import { CONTINUITY_MODES } from "../lib/catalog2-continuity";
 import { deliverableInputSchema, copyTaskDeliverables } from "../lib/task-deliverables";
@@ -56,6 +57,9 @@ import {
   cancelScheduledInactivation,
   buildEffectCtx,
   createProduct,
+  cleanStepFlowRefs,
+  assertCanAddBaseTask,
+  setProductTaskStructure,
   renameProductInternalName,
   getProductDetail,
   newDraftVersion,
@@ -64,6 +68,9 @@ import {
   validateConditionShape,
   validateVersionForPublish,
 } from "../lib/catalog2-service";
+import { serializeAudiences, validateAudiences } from "../lib/catalog2-audience";
+import { EMERGENCY_EXTRA_KINDS, validateEmergencyStepInput } from "../lib/catalog2-emergency";
+import { EXECUTOR_KINDS, EXECUTOR_POLICIES, isRefPolicy, LEADER_MODES, parseDepends, validateStepExecutor, validateStepFlow } from "../lib/step-flow";
 import { computePricing, defaultSelection, CHARGE_SCOPES, PRICING_MODES } from "../lib/catalog2-pricing";
 import { type ClientContext, configureProduct, createQuote } from "../lib/catalog2-client";
 import { createProjectWithSequentialCode } from "../lib/create-project";
@@ -78,7 +85,7 @@ import { validateEffortEffect } from "../lib/catalog2-effort";
 import { GATE_POSITIONS, APPROVER_KINDS, GROUP_MODES, GATE_POSITION_LABEL, APPROVER_KIND_LABEL, validateGateInput } from "../lib/approval-gates";
 import { SLA_SCOPES, SLA_UNITS, SLA_ANCHORS, SLA_MODALITIES, SLA_SCOPE_LABEL, SLA_UNIT_LABEL, SLA_ANCHOR_LABEL, SLA_PAUSE_REASONS, validateSlaRuleInput } from "../lib/sla";
 import {
-  ASSET_RULES_CONN, CONNECTION_METHODS, CONNECTION_METHOD_LABEL, CONNECTION_STATES, CONNECTION_STATE_LABEL, ConnectionError, DEPENDENCY_KINDS, DEPENDENCY_KIND_LABEL, GRANT_SCOPES, GRANT_SCOPE_LABEL,
+  ASSET_RULES_CONN, FIELD_TYPES, validateFieldDefs, type FieldDef, CONNECTION_METHODS, CONNECTION_METHOD_LABEL, CONNECTION_STATES, CONNECTION_STATE_LABEL, ConnectionError, DEPENDENCY_KINDS, DEPENDENCY_KIND_LABEL, GRANT_SCOPES, GRANT_SCOPE_LABEL,
   OBLIGATIONS, OBLIGATION_LABEL, PENDING_BEHAVIORS, PENDING_BEHAVIOR_LABEL, VALIDATION_MODES, WHEN_NEEDED, WHEN_NEEDED_LABEL, ensureConnectionTypes, serializeConnectionType,
 } from "../lib/connections/catalog";
 import { connectionsReadinessItem, createRequirement, deleteRequirement, moduleState, serializeRequirement, setModuleFlag, updateRequirement } from "../lib/connections/requirements";
@@ -248,13 +255,37 @@ router.get("/specialties", async (_req, res, next) => {
 });
 router.post("/specialties", async (req, res, next) => {
   try {
-    const d = classCreate.extend({ max_hourly_rate: z.number().nonnegative().nullish(), hourly_rate_note: z.string().max(500).nullish() }).parse(req.body);
-    res.status(201).json(await prisma.catalog2Specialty.create({ data: { key: d.key, name: d.name, sort_order: d.sort_order ?? 99, max_hourly_rate: d.max_hourly_rate ?? null, hourly_rate_note: d.hourly_rate_note ?? null } }));
+    const d = classCreate.extend({ max_hourly_rate: z.number().nonnegative().nullish(), hourly_rate_note: z.string().max(500).nullish(), execution_kind: z.enum(CATALOG2_EXECUTION_MODES).optional() }).parse(req.body);
+    res.status(201).json(await prisma.catalog2Specialty.create({ data: { key: d.key, name: d.name, sort_order: d.sort_order ?? 99, max_hourly_rate: d.max_hourly_rate ?? null, hourly_rate_note: d.hourly_rate_note ?? null, execution_kind: d.execution_kind ?? "humano" } }));
+  } catch (e) { handle(e, res, next); }
+});
+// Excluir especialidade: só quando NADA a usa (tarefas, etapas, modelos globais). Em uso, a exclusão é recusada e explica onde.
+router.delete("/specialties/:id", async (req, res, next) => {
+  try {
+    const id = req.params.id as string;
+    const sp = await prisma.catalog2Specialty.findUnique({ where: { id }, select: { id: true, name: true } });
+    if (!sp) throw new Catalog2Error("Especialidade não encontrada.", 404);
+    const [tasks, steps, taskModels, stepModels, reviewTasks, quals] = await Promise.all([
+      prisma.catalog2Task.count({ where: { specialty_id: id } }),
+      prisma.catalog2TaskStep.count({ where: { specialty_id: id } }),
+      prisma.catalog2TaskModel.count({ where: { specialty_id: id } }),
+      prisma.catalog2StepModel.count({ where: { specialty_id: id } }),
+      prisma.catalog2Task.count({ where: { review_specialty_id: id } }),
+      prisma.catalog2Task.count({ where: { qualification_specialty_id: id } }),
+    ]);
+    const inUse = [tasks && `${tasks} tarefa(s)`, steps && `${steps} etapa(s)`, reviewTasks && `${reviewTasks} revisão(ões)`, quals && `${quals} qualificação(ões)`].filter(Boolean);
+    if (inUse.length) throw new Catalog2Error(`"${sp.name}" está em uso (${inUse.join(", ")}). Troque a especialidade nesses lugares antes de excluir.`, 409, "specialty_in_use");
+    // Modelos globais (biblioteca permanente) que citam a especialidade: só saem com confirmação explícita; ficam SEM especialidade (ids e conteúdo preservados).
+    const inModels = [taskModels && `${taskModels} modelo(s) global(is) de tarefa`, stepModels && `${stepModels} modelo(s) global(is) de etapa`].filter(Boolean);
+    if (inModels.length && req.query.detach_models !== "1") throw new Catalog2Error(`"${sp.name}" aparece em ${inModels.join(" e ")} do catálogo. Se excluir, esses modelos ficam sem especialidade (o resto deles não muda).`, 409, "specialty_in_models");
+    await prisma.catalog2Specialty.delete({ where: { id } });
+    await audit(req, "specialty_deleted", { id, name: sp.name });
+    res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
 router.put("/specialties/:id", async (req, res, next) => {
   try {
-    const d = z.object({ name: z.string().min(1).max(120).optional(), max_hourly_rate: z.number().nonnegative().nullish(), hourly_rate_note: z.string().max(500).nullish() }).parse(req.body);
+    const d = z.object({ name: z.string().min(1).max(120).optional(), max_hourly_rate: z.number().nonnegative().nullish(), hourly_rate_note: z.string().max(500).nullish(), execution_kind: z.enum(CATALOG2_EXECUTION_MODES).optional() }).parse(req.body);
     const before = await prisma.catalog2Specialty.findUnique({ where: { id: req.params.id as string }, select: { max_hourly_rate: true } });
     const updated = await prisma.$transaction(async (tx) => {
       const u = await tx.catalog2Specialty.update({
@@ -263,6 +294,7 @@ router.put("/specialties/:id", async (req, res, next) => {
           ...(d.name !== undefined ? { name: d.name } : {}),
           ...(d.max_hourly_rate !== undefined ? { max_hourly_rate: d.max_hourly_rate } : {}),
           ...(d.hourly_rate_note !== undefined ? { hourly_rate_note: d.hourly_rate_note } : {}),
+          ...(d.execution_kind !== undefined ? { execution_kind: d.execution_kind } : {}),
         },
       });
       // Item 4.1 (reunião 2026-09-14): valor/hora afeta o custo humano de
@@ -1049,6 +1081,7 @@ const createSchema = z.object({
   pillar_id: z.string().nullish(),
   category_id: z.string().nullish(),
   origin: z.enum(["existente", "novo", "reativado"]).nullish(),
+  task_structure: z.enum(["single", "multiple"]).optional(),
   four_f_ids: z.array(z.string()).max(4).optional(),
 });
 router.post("/products", async (req, res, next) => {
@@ -1061,6 +1094,31 @@ router.post("/products", async (req, res, next) => {
 });
 
 // Nome interno EDITÁVEL (2026-10-02): rota oficial, só administrador, com histórico antes/depois. Não altera título comercial nem slug (sem confirmação).
+router.patch("/products/:id/task-structure", async (req, res, next) => {
+  try {
+    const d = z.object({ task_structure: z.enum(["single", "multiple"]) }).parse(req.body);
+    const r = await setProductTaskStructure(req.params.id as string, d.task_structure, req.user!.id);
+    if (r.changed) await audit(req, "product_task_structure_updated", { id: req.params.id, task_structure: r.task_structure });
+    res.json({ ok: true, ...r });
+  } catch (e) { handle(e, res, next); }
+});
+// Público do produto (C7): lista de marcação — todos, ou qualquer combinação de Company / Agency / Agency Partner, ou só equipe interna.
+router.patch("/products/:id/visibility", async (req, res, next) => {
+  try {
+    const d = z.object({ audiences: z.array(z.string().max(30)).max(10) }).parse(req.body);
+    const err = validateAudiences(d.audiences);
+    if (err) throw new Catalog2Error(err, 422, "invalid_audience");
+    const value = serializeAudiences(d.audiences);
+    const before = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true, visibility_mode: true } });
+    if (!before) throw new Catalog2Error("Produto não encontrado.", 404);
+    const changed = before.visibility_mode !== value;
+    if (changed) {
+      await prisma.catalog2Product.update({ where: { id: before.id }, data: { visibility_mode: value, visibility_min_partner_level: null } });
+      await audit(req, "product_visibility_updated", { id: before.id, from: before.visibility_mode, to: value });
+    }
+    res.json({ ok: true, changed, visibility_mode: value });
+  } catch (e) { handle(e, res, next); }
+});
 router.patch("/products/:id/internal-name", async (req, res, next) => {
   try {
     const d = z.object({ internal_name: z.string().min(1).max(200), slug: z.string().max(90).nullish(), confirm_slug_change: z.boolean().optional() }).parse(req.body);
@@ -1093,6 +1151,9 @@ router.put("/versions/:id", async (req, res, next) => {
       field_visibility: z.record(z.string()).nullish(),
       change_summary: z.string().max(2000).nullish(),
       base_commercial_deadline_days: z.number().int().min(1).max(3650).nullish(),
+      base_commercial_deadline_hours: z.number().int().min(1).max(87600).nullish(),
+      // Entrega emergencial (B3): oferecer ou não prazo menor por adicional (por etapa).
+      emergency_enabled: z.boolean().optional(),
       // Modalidades de contratação (Pedido 2)
       accepts_one_time: z.boolean().optional(),
       accepts_recurring: z.boolean().optional(),
@@ -1108,11 +1169,26 @@ router.put("/versions/:id", async (req, res, next) => {
     }).parse(req.body);
     const before = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: req.params.id as string } });
     const data: Record<string, unknown> = { updated_by_user_id: req.user!.id };
-    for (const k of ["title", "summary", "full_description", "change_summary", "base_commercial_deadline_days", "accepts_one_time", "accepts_recurring", "has_initial_implementation", "implementation_rule", "implementation_blocks_operation", "sell_mode", "show_executor_name", "pricing_mode", "manual_price", "manual_deadline_days"] as const) if (d[k] !== undefined) data[k] = d[k];
+    for (const k of ["title", "summary", "full_description", "change_summary", "base_commercial_deadline_days", "emergency_enabled", "accepts_one_time", "accepts_recurring", "has_initial_implementation", "implementation_rule", "implementation_blocks_operation", "sell_mode", "show_executor_name", "pricing_mode", "manual_price", "manual_deadline_days"] as const) if (d[k] !== undefined) data[k] = d[k];
+    // Prazo em horas úteis: guarda as horas e o reflexo em dias úteis (calendário da plataforma). Informar só dias zera as horas.
+    if (d.base_commercial_deadline_hours !== undefined) {
+      if (d.base_commercial_deadline_hours === null) { data.base_commercial_deadline_hours = null; data.base_commercial_deadline_days = null; }
+      else {
+        // 24 horas = 1 dia (dia corrido de 24 h). O campo em dias guarda o inteiro (arredondado para cima, mínimo 1) usado pelo restante do sistema.
+        data.base_commercial_deadline_hours = d.base_commercial_deadline_hours;
+        data.base_commercial_deadline_days = Math.max(1, Math.ceil(d.base_commercial_deadline_hours / 24));
+      }
+    } else if (d.base_commercial_deadline_days !== undefined) {
+      data.base_commercial_deadline_hours = null;
+    }
     // Campos comerciais estruturados: persistem de verdade (nada é aceito e descartado em silêncio).
     const commercial = buildCommercialUpdate(d as CommercialInput, before as unknown as Record<string, unknown>);
     Object.assign(data, commercial.data);
     const updated = await prisma.catalog2ProductVersion.update({ where: { id: req.params.id as string }, data });
+    // O nome do produto é um só (externo = interno): o título comercial atualiza o nome interno (o endereço/slug não muda).
+    if (typeof d.title === "string" && d.title.trim()) {
+      await prisma.catalog2Product.updateMany({ where: { id: updated.product_id, NOT: { internal_name: d.title.trim() } }, data: { internal_name: d.title.trim() } });
+    }
     // Item 7 (reunião 2026-09-14): descrição legível com o que realmente
     // mudou — reaproveita o MESMO Catalog2VersionEvent já escrito aqui
     // (nunca um segundo mecanismo paralelo pro mesmo evento); só enriquece
@@ -2063,6 +2139,8 @@ const taskSchema = z.object({
   key: z.string().min(1).max(60).optional(), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), objective: z.string().max(4000).nullish(),
   sort_order: z.number().int().optional(), specialty_id: z.string().nullish(),
   execution_mode: z.enum(CATALOG2_EXECUTION_MODES).optional(),
+  stage_execution: z.enum(["task", "stage"]).optional(),
+  stage_payout_mode: z.enum(["at_end", "per_stage"]).optional(),
   estimated_minutes: z.number().int().nonnegative().nullish(),
   requires_review: z.boolean().optional(), requires_client_approval: z.boolean().optional(), is_conditional: z.boolean().optional(),
   requires_qualification: z.boolean().optional(),
@@ -2125,6 +2203,7 @@ router.post("/versions/:id/tasks", async (req, res, next) => {
   try {
     const version = await editableVersionOrThrow(req.params.id as string);
     const d = taskSchema.parse(req.body);
+    await assertCanAddBaseTask(prisma, version.id, { conditional: !!d.is_conditional });
     const gin = guardInput(req, d.key ?? null);
     let replayedTask: unknown = null;
     const created = await prisma.$transaction(async (tx) => {
@@ -2281,13 +2360,15 @@ router.delete("/deliverables/:id", async (req, res, next) => {
 
 router.post("/tasks/:id/duplicate", async (req, res, next) => {
   try {
-    await versionOfTask(req.params.id as string);
+    const dupVersion = await versionOfTask(req.params.id as string);
     const src = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string }, include: { steps: true, ai: true, deliverables: true } });
+    await assertCanAddBaseTask(prisma, src.version_id, { conditional: src.is_conditional });
+    void dupVersion;
     const dup = await prisma.$transaction(async (tx) => {
       const dupModel = await findOrCreateTaskModel(tx, { name: `${src.name} (cópia)`, description: src.description, execution_mode: src.execution_mode, specialty_id: src.specialty_id, estimated_minutes: src.estimated_minutes, questionnaire_id: src.questionnaire_id, is_conditional: src.is_conditional, requires_client_approval: src.requires_client_approval });
       const t = await tx.catalog2Task.create({
         data: {
-          task_model_id: dupModel.id, task_model_revision: dupModel.revision, requires_qualification: src.requires_qualification, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
+          task_model_id: dupModel.id, task_model_revision: dupModel.revision, requires_qualification: src.requires_qualification, stage_execution: src.stage_execution, stage_payout_mode: src.stage_payout_mode, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
           qualifier_user_id: src.qualifier_user_id, qualification_mode: src.qualification_mode, qualification_min_approvals: src.qualification_min_approvals, qualification_cost_mode: src.qualification_cost_mode, qualification_specialty_id: src.qualification_specialty_id, qualification_hourly_rate: src.qualification_hourly_rate, qualification_minutes: src.qualification_minutes, qualification_percent: src.qualification_percent, qualification_fixed_amount: src.qualification_fixed_amount, qualifier_kind: src.qualifier_kind,
           reviewer_user_id: src.reviewer_user_id, review_minutes: src.review_minutes, review_specialty_id: src.review_specialty_id,
           ops: (src.ops ?? undefined) as Prisma.InputJsonValue | undefined,
@@ -2297,7 +2378,7 @@ router.post("/tasks/:id/duplicate", async (req, res, next) => {
           requires_review: src.requires_review, requires_client_approval: src.requires_client_approval, is_conditional: src.is_conditional,
         },
       });
-      for (const s of src.steps) await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined, first_execution_only: s.first_execution_only, skip_when_same_executor: s.skip_when_same_executor, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
+      for (const s of src.steps) await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined, first_execution_only: s.first_execution_only, skip_when_same_executor: s.skip_when_same_executor, depends_on_json: s.depends_on_json, executor_policy: s.executor_policy, executor_same_as_key: s.executor_same_as_key, executor_kind: s.executor_kind, leader_mode: s.leader_mode, leader_user_id: s.leader_user_id, internal_step: s.internal_step, requires_qualification: s.requires_qualification, release_next_auto: s.release_next_auto, emergency_reduction_minutes: s.emergency_reduction_minutes, emergency_extra_kind: s.emergency_extra_kind, emergency_extra_value: s.emergency_extra_value, approval_hours: s.approval_hours, rework_hours: s.rework_hours, executor_accept_hours: s.executor_accept_hours, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
       await copyTaskDeliverables(tx, src, t.id);
       if (src.ai) await tx.catalog2TaskAI.create({ data: { task_id: t.id, ...aiCopyData(src.ai) } });
       return t;
@@ -2316,6 +2397,7 @@ router.post("/versions/:id/tasks/import", async (req, res, next) => {
   try {
     const destVersionId = req.params.id as string;
     const destVersion = await editableVersionOrThrow(destVersionId);
+    await assertCanAddBaseTask(prisma, destVersionId);
     const sourceTaskId = z.string().min(1).parse(req.body?.source_task_id);
     const src = await prisma.catalog2Task.findUnique({ where: { id: sourceTaskId }, include: { steps: true, ai: true, deliverables: true } });
     if (!src) throw new Catalog2Error("Tarefa de origem não encontrada.", 404);
@@ -2331,7 +2413,7 @@ router.post("/versions/:id/tasks/import", async (req, res, next) => {
     const imported = await prisma.$transaction(async (tx) => {
       const t = await tx.catalog2Task.create({
         data: {
-          task_model_id: src.task_model_id, task_model_revision: src.task_model_revision, requires_qualification: src.requires_qualification, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
+          task_model_id: src.task_model_id, task_model_revision: src.task_model_revision, requires_qualification: src.requires_qualification, stage_execution: src.stage_execution, stage_payout_mode: src.stage_payout_mode, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
           qualifier_user_id: src.qualifier_user_id, qualification_mode: src.qualification_mode, qualification_min_approvals: src.qualification_min_approvals, qualification_cost_mode: src.qualification_cost_mode, qualification_specialty_id: src.qualification_specialty_id, qualification_hourly_rate: src.qualification_hourly_rate, qualification_minutes: src.qualification_minutes, qualification_percent: src.qualification_percent, qualification_fixed_amount: src.qualification_fixed_amount, qualifier_kind: src.qualifier_kind,
           reviewer_user_id: src.reviewer_user_id, review_minutes: src.review_minutes, review_specialty_id: src.review_specialty_id,
           ops: (src.ops ?? undefined) as Prisma.InputJsonValue | undefined,
@@ -2348,7 +2430,7 @@ router.post("/versions/:id/tasks/import", async (req, res, next) => {
         },
       });
       for (const s of src.steps) {
-        await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined, first_execution_only: s.first_execution_only, skip_when_same_executor: s.skip_when_same_executor, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
+        await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined, first_execution_only: s.first_execution_only, skip_when_same_executor: s.skip_when_same_executor, depends_on_json: s.depends_on_json, executor_policy: s.executor_policy, executor_same_as_key: s.executor_same_as_key, executor_kind: s.executor_kind, leader_mode: s.leader_mode, leader_user_id: s.leader_user_id, internal_step: s.internal_step, requires_qualification: s.requires_qualification, release_next_auto: s.release_next_auto, emergency_reduction_minutes: s.emergency_reduction_minutes, emergency_extra_kind: s.emergency_extra_kind, emergency_extra_value: s.emergency_extra_value, approval_hours: s.approval_hours, rework_hours: s.rework_hours, executor_accept_hours: s.executor_accept_hours, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
       }
       await copyTaskDeliverables(tx, src, t.id);
       if (src.ai) {
@@ -2377,7 +2459,7 @@ router.put("/versions/:id/tasks/order", async (req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 
-const stepSchema = z.object({ key: z.string().min(1).max(60).optional(), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), sort_order: z.number().int().optional(), estimated_minutes: z.number().int().nonnegative().nullish(), is_conditional: z.boolean().optional(), specialty_id: z.string().nullish(), purpose: z.enum(STEP_PURPOSES).nullish(), execution_mode: z.enum(CATALOG2_EXECUTION_MODES).nullish(), completion_criteria: z.string().max(4000).nullish(), ops: stepOpsSchema, first_execution_only: z.boolean().optional(), skip_when_same_executor: z.boolean().optional() });
+const stepSchema = z.object({ key: z.string().min(1).max(60).optional(), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), sort_order: z.number().int().optional(), estimated_minutes: z.number().int().nonnegative().nullish(), is_conditional: z.boolean().optional(), specialty_id: z.string().nullish(), purpose: z.enum(STEP_PURPOSES).nullish(), execution_mode: z.enum(CATALOG2_EXECUTION_MODES).nullish(), completion_criteria: z.string().max(4000).nullish(), ops: stepOpsSchema, first_execution_only: z.boolean().optional(), skip_when_same_executor: z.boolean().optional(), executor_kind: z.enum(EXECUTOR_KINDS).optional(), leader_mode: z.enum(LEADER_MODES).optional(), leader_user_id: z.string().max(191).nullish(), internal_step: z.boolean().optional(), requires_qualification: z.boolean().optional(), release_next_auto: z.boolean().optional(), emergency_reduction_minutes: z.number().int().min(0).max(100000).nullish(), emergency_extra_kind: z.enum(EMERGENCY_EXTRA_KINDS).nullish(), emergency_extra_value: z.number().min(0).max(100000000).nullish(), executor_accept_hours: z.number().int().min(1).max(720).nullish(), approval_hours: z.number().int().min(1).max(100000).nullish(), rework_hours: z.number().int().min(1).max(100000).nullish() });
 const STEP_MODEL_FIELDS = ["name", "description", "estimated_minutes", "specialty_id", "purpose", "execution_mode", "completion_criteria", "first_execution_only", "skip_when_same_executor", "ops"] as const;
 // Item 7.1: "etapas" — o Item 7 nunca instrumentou etapas (só tarefas) —
 // fechado aqui (add/update/remove; reordenar segue o mesmo padrão de baixo
@@ -2691,6 +2773,7 @@ router.post("/tasks/:id/steps/access-validation", async (req, res, next) => {
 router.post("/versions/:id/tasks/from-model", async (req, res, next) => {
   try {
     const version = await editableVersionOrThrow(req.params.id as string);
+    await assertCanAddBaseTask(prisma, version.id);
     const modelId = z.object({ model_id: z.number().int().min(1) }).parse(req.body).model_id;
     const model = await prisma.catalog2TaskModel.findUnique({ where: { id: modelId } });
     if (!model) throw new Catalog2Error("Modelo de tarefa não encontrado.", 404);
@@ -2770,12 +2853,41 @@ async function versionOfStep(stepId: string) {
   const version = await editableVersionOrThrow(s.task.version_id);
   return { step: s, taskName: s.task.name, version };
 }
+// Histórico real da etapa: o que já foi executado em projetos (tempo real x estimado, atrasos, refações, custo, IA), por tipo de execução.
+router.get("/steps/:id/performance", async (req, res, next) => {
+  try {
+    const out = await stepPerformance(prisma, req.params.id as string);
+    if (!out) throw new Catalog2Error("Etapa não encontrada.", 404);
+    res.json(out);
+  } catch (e) { handle(e, res, next); }
+});
 router.put("/steps/:id", async (req, res, next) => {
   try {
     const { step: before, taskName, version } = await versionOfStep(req.params.id as string);
     const d = stepSchema.partial().parse(req.body);
     const scope: "product" | "model" = req.body?.scope === "model" ? "model" : "product";
     if (scope === "model" && before.step_model_id != null) await assertModelUpdateConfirmed("step", before.step_model_id, req.body?.confirm_model_update === true);
+    if ("emergency_reduction_minutes" in d || "emergency_extra_kind" in d || "emergency_extra_value" in d) {
+      const merged = {
+        reduction_minutes: "emergency_reduction_minutes" in d ? d.emergency_reduction_minutes : before.emergency_reduction_minutes,
+        extra_kind: "emergency_extra_kind" in d ? d.emergency_extra_kind : before.emergency_extra_kind,
+        extra_value: "emergency_extra_value" in d ? d.emergency_extra_value : before.emergency_extra_value,
+        estimated_minutes: "estimated_minutes" in d ? d.estimated_minutes : before.estimated_minutes,
+      };
+      const err = validateEmergencyStepInput(merged);
+      if (err) throw new Catalog2Error(err, 422, "invalid_emergency_step");
+    }
+    if ("executor_kind" in d || "leader_mode" in d || "leader_user_id" in d) {
+      const merged = { name: before.name, executor_kind: d.executor_kind ?? before.executor_kind, leader_mode: d.leader_mode ?? before.leader_mode, leader_user_id: "leader_user_id" in d ? d.leader_user_id : before.leader_user_id };
+      const err = validateStepExecutor(merged);
+      if (err) throw new Catalog2Error(err, 422, "invalid_step_executor");
+      if (merged.executor_kind === "leader" && merged.leader_mode === "specific") {
+        const u = await prisma.user.findUnique({ where: { id: merged.leader_user_id as string }, select: { is_active: true, role: true } });
+        if (!u || !u.is_active || !["lider", "admin"].includes(u.role)) throw new Catalog2Error("O líder escolhido não existe, está inativo ou não é líder.", 422, "invalid_step_leader");
+      }
+      d.executor_kind = merged.executor_kind as typeof d.executor_kind;
+      if (merged.executor_kind !== "leader") { d.leader_mode = "auto"; d.leader_user_id = null; } else if (merged.leader_mode !== "specific") d.leader_user_id = null;
+    }
     const updated = await prisma.$transaction(async (tx) => {
       const stepData: Record<string, unknown> = { ...d };
       if ("ops" in d) stepData.ops = stepOpsValue(d.ops);
@@ -2815,11 +2927,47 @@ router.put("/steps/:id", async (req, res, next) => {
     res.json(updated);
   } catch (e) { handle(e, res, next); }
 });
+// Fluxo das etapas (A8): sequência, paralelo, dependências e regra de executor — salvo de uma vez e validado como um todo.
+const flowSchema = z.object({
+  steps: z.array(z.object({
+    step_id: z.string().min(1),
+    depends_on: z.array(z.string().max(60)).max(200).nullable().optional(),
+    executor_policy: z.enum(EXECUTOR_POLICIES).optional(),
+    executor_same_as_key: z.string().max(60).nullish(),
+  })).min(1).max(300),
+});
+router.put("/tasks/:id/steps/flow", async (req, res, next) => {
+  try {
+    const version = await versionOfTask(req.params.id as string);
+    const d = flowSchema.parse(req.body);
+    const task = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string }, include: { steps: { orderBy: { sort_order: "asc" } } } });
+    const byId = new Map(task.steps.map((s) => [s.id, s]));
+    for (const x of d.steps) if (!byId.has(x.step_id)) throw new Catalog2Error("Uma das etapas informadas não pertence a esta tarefa.", 422, "invalid_flow_step");
+    const patchById = new Map(d.steps.map((x) => [x.step_id, x]));
+    const merged = task.steps.map((s) => {
+      const p = patchById.get(s.id);
+      const dep = p && p.depends_on !== undefined ? p.depends_on : parseDepends(s.depends_on_json);
+      const pol = p?.executor_policy ?? s.executor_policy ?? "auto";
+      return { key: s.key, name: s.name, sort_order: s.sort_order, depends_on: dep, executor_policy: pol, executor_same_as_key: isRefPolicy(pol) ? (p && p.executor_same_as_key !== undefined ? p.executor_same_as_key : s.executor_same_as_key) ?? null : null };
+    });
+    const errs = validateStepFlow(merged);
+    if (errs.length) throw new Catalog2Error(errs.join(" "), 422, "invalid_step_flow");
+    await prisma.$transaction(async (tx) => {
+      for (const m of merged) {
+        const s = task.steps.find((x) => x.key === m.key)!;
+        await tx.catalog2TaskStep.update({ where: { id: s.id }, data: { depends_on_json: m.depends_on == null ? null : JSON.stringify(m.depends_on), executor_policy: m.executor_policy, executor_same_as_key: m.executor_same_as_key } });
+      }
+      await recordCatalog2ProductHistory(tx, { productId: version.product_id, versionId: version.id, eventType: "step_flow_updated", description: `Fluxo das etapas da tarefa "${task.name}" atualizado (${merged.filter((m) => m.depends_on !== null).length} etapa(s) com dependência configurada).`, actorUserId: req.user!.id });
+    });
+    res.json({ ok: true, flow: merged.map((m) => ({ key: m.key, depends_on: m.depends_on, executor_policy: m.executor_policy, executor_same_as_key: m.executor_same_as_key })) });
+  } catch (e) { handle(e, res, next); }
+});
 router.delete("/steps/:id", async (req, res, next) => {
   try {
     const { step: before, taskName, version } = await versionOfStep(req.params.id as string);
     await prisma.$transaction(async (tx) => {
       await tx.catalog2TaskStep.delete({ where: { id: req.params.id as string } });
+      await cleanStepFlowRefs(tx, before.task_id, before.key);
       await recordCatalog2ProductHistory(tx, {
         productId: version.product_id, versionId: version.id, eventType: "step_removed",
         description: `Etapa "${before.name}" removida da tarefa "${taskName}".`, before: { key: before.key, name: before.name },
@@ -3359,6 +3507,7 @@ const selectionSchema = z.object({
   addon_selections: z.record(z.string(), z.object({ quantity: z.number().int().min(0).max(100000).optional(), value: z.number().max(1e12).optional(), choice_keys: z.array(z.string().max(60)).max(50).optional() })).optional(),
   quantity: z.number().int().positive().max(100000).optional(),
   answers: z.record(z.string()).optional(),
+  emergency: z.boolean().optional(),
 });
 router.post("/versions/:id/simulate", async (req, res, next) => {
   try {
@@ -4292,10 +4441,14 @@ const connTypeSchema = z.object({
   provider: z.string().max(60).nullish(), integration_key: z.string().max(60).nullish(),
   allowed_methods: z.array(z.enum(CONNECTION_METHODS)).min(1), permission_levels: z.array(z.object({ key: z.string().min(1).max(60), label: z.string().min(1).max(120) })).min(1),
   supports_auto_validation: z.boolean().optional(), default_instructions: z.string().max(4000).nullish(), is_active: z.boolean().optional(), sort_order: z.number().int().optional(),
+  // Campos que o cliente preenche para este tipo (ex.: ID da loja, usuário, chave de API).
+  fields: z.array(z.object({ key: z.string().max(40), label: z.string().max(120), type: z.enum(FIELD_TYPES), required: z.boolean().optional().default(false), help: z.string().max(500).nullish() })).max(20).optional(),
 });
 router.post("/connection-types", async (req, res, next) => {
   try {
     const d = connTypeSchema.parse(req.body);
+    const fieldErr = validateFieldDefs((d.fields ?? []) as FieldDef[]);
+    if (fieldErr) throw new ConnectionError(fieldErr, 422, "connection_fields_invalid");
     if (await prisma.connectionType.findUnique({ where: { key: d.key } })) throw new ConnectionError("Já existe um tipo com esta chave.", 409, "connection_type_exists");
     const max = await prisma.connectionType.aggregate({ _max: { sort_order: true } });
     const row = await prisma.connectionType.create({
@@ -4303,8 +4456,11 @@ router.post("/connection-types", async (req, res, next) => {
         key: d.key, name: d.name, description: d.description ?? null, icon: d.icon ?? null, provider: d.provider ?? null, integration_key: d.integration_key ?? null,
         allowed_methods_json: JSON.stringify(d.allowed_methods), permission_levels_json: JSON.stringify(d.permission_levels), supports_auto_validation: !!d.supports_auto_validation,
         default_instructions: d.default_instructions ?? null, is_active: d.is_active !== false, sort_order: d.sort_order ?? (max._max.sort_order ?? 0) + 1,
+        fields_json: d.fields?.length ? JSON.stringify(d.fields.map((f) => ({ key: f.key, label: f.label.trim(), type: f.type, required: !!f.required, help: f.help ?? null }))) : null,
       },
     });
+    // Tipo recriado com a mesma chave depois de excluído: limpa o marcador de exclusão.
+    await prisma.connectionTypeTombstone.deleteMany({ where: { key: row.key } });
     await audit(req, "connection_type_created", { id: row.id, key: row.key });
     res.status(201).json(serializeConnectionType(row));
   } catch (e) { handle(e, res, next); }
@@ -4315,6 +4471,7 @@ router.put("/connection-types/:id", async (req, res, next) => {
     const d = connTypeSchema.partial().omit({ key: true }).parse(req.body);
     const cur = await prisma.connectionType.findUnique({ where: { id } });
     if (!cur) throw new ConnectionError("Tipo não encontrado.", 404, "connection_type_not_found");
+    if (d.fields) { const fe = validateFieldDefs(d.fields as FieldDef[]); if (fe) throw new ConnectionError(fe, 422, "connection_fields_invalid"); }
     const row = await prisma.connectionType.update({
       where: { id },
       data: {
@@ -4322,10 +4479,31 @@ router.put("/connection-types/:id", async (req, res, next) => {
         ...(d.integration_key !== undefined ? { integration_key: d.integration_key } : {}), ...(d.allowed_methods ? { allowed_methods_json: JSON.stringify(d.allowed_methods) } : {}),
         ...(d.permission_levels ? { permission_levels_json: JSON.stringify(d.permission_levels) } : {}), ...(d.supports_auto_validation !== undefined ? { supports_auto_validation: d.supports_auto_validation } : {}),
         ...(d.default_instructions !== undefined ? { default_instructions: d.default_instructions } : {}), ...(d.is_active !== undefined ? { is_active: d.is_active } : {}), ...(d.sort_order !== undefined ? { sort_order: d.sort_order } : {}),
+        ...(d.fields ? { fields_json: d.fields.length ? JSON.stringify(d.fields.map((f) => ({ key: f.key, label: f.label.trim(), type: f.type, required: !!f.required, help: f.help ?? null }))) : null } : {}),
       },
     });
     await audit(req, "connection_type_updated", { id });
     res.json(serializeConnectionType(row));
+  } catch (e) { handle(e, res, next); }
+});
+// Exclusão: só Admin Master e só se nenhum produto/projeto/conexão de cliente usa o tipo (senão, desative). Não volta com a semente padrão.
+router.delete("/connection-types/:id", requireAdminMaster, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const cur = await prisma.connectionType.findUnique({ where: { id } });
+    if (!cur) throw new ConnectionError("Tipo não encontrado.", 404, "connection_type_not_found");
+    const [reqs, projectReqs, conns] = await Promise.all([
+      prisma.catalog2ConnectionRequirement.count({ where: { connection_type_id: id } }),
+      prisma.projectConnectionRequirement.count({ where: { connection_type_id: id } }),
+      prisma.clientConnection.count({ where: { connection_type_id: id } }),
+    ]);
+    if (reqs + projectReqs + conns > 0) throw new ConnectionError(`Este tipo está em uso (${reqs} exigência(s) de produto, ${projectReqs} de projeto e ${conns} conexão(ões) de clientes). Remova esses usos ou apenas desative o tipo.`, 409, "connection_type_in_use", { requirements: reqs, project_requirements: projectReqs, connections: conns });
+    await prisma.$transaction([
+      prisma.connectionType.delete({ where: { id } }),
+      prisma.connectionTypeTombstone.upsert({ where: { key: cur.key }, create: { key: cur.key, deleted_by_user_id: req.user!.id }, update: { deleted_at: new Date(), deleted_by_user_id: req.user!.id } }),
+    ]);
+    await audit(req, "connection_type_deleted", { id, key: cur.key });
+    res.json({ ok: true });
   } catch (e) { handle(e, res, next); }
 });
 router.get("/versions/:id/connections", async (req, res, next) => {

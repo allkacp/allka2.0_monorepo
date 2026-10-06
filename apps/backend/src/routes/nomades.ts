@@ -1,8 +1,9 @@
 import { Router } from "express";
+import { pagarEtapasConcluidas } from "../lib/stage-payout";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
-import { concluirEtapa, atribuirExecutorDaEtapa, garantirQualificador, garantirRevisor } from "../lib/stage-engine";
+import { concluirEtapa, atribuirExecutorDaEtapa, atribuirExecutoresPendentes, garantirQualificador, garantirRevisor } from "../lib/stage-engine";
 import { kickDependenciesForTask } from "../lib/project-dependencies";
 import { validate, parsePagination } from "../middleware/validate";
 import { writeAccessAudit } from "../lib/product-feedback-service";
@@ -456,11 +457,8 @@ router.patch("/me/etapas/:stageId/concluir", verifyToken, async (req, res, next)
     const resultado = await prisma.$transaction((tx) =>
       concluirEtapa(tx, etapa.id, { userId: req.user!.id }),
     );
-    if (resultado.proxima?.status === "AGUARDANDO_EXECUTOR") {
-      atribuirExecutorDaEtapa(resultado.proxima.stageId).catch((err) =>
-        console.error("[stage-engine] atribuir executor:", err),
-      );
-    }
+    await pagarEtapasConcluidas(resultado.tarefaId, req.user!.id).catch((err) => console.error("[stage-payout]", err));
+    atribuirExecutoresPendentes(resultado.tarefaId).catch((err) => console.error("[stage-engine] atribuir executor:", err));
     kickDependenciesForTask(resultado.tarefaId);
     if (resultado.enviadaParaQualificacao) {
       garantirQualificador(resultado.tarefaId).catch((err) =>
@@ -724,6 +722,11 @@ router.get("/me/disponiveis", verifyToken, async (req, res, next) => {
         executor_type: "nomad",
         nomade_id: null,
         project_task: { status: { notIn: ["CANCELADA", "CONCLUIDA"] } },
+        // A8b-3: reservada ao nômade preferido até o prazo de aceite; e "nunca o mesmo" fica de fora da vaga.
+        AND: [
+          { OR: [{ nomade_excluido_id: null }, { nomade_excluido_id: { not: nomade.id } }] },
+          { OR: [{ reservada_ate: null }, { reservada_ate: { lte: new Date() } }, { nomade_preferido_id: nomade.id }] },
+        ],
       },
       orderBy: [{ prazo_execucao: "asc" }, { created_at: "asc" }],
       take: 100,
@@ -801,10 +804,21 @@ router.patch("/me/etapas/:stageId/aceitar", verifyToken, async (req, res, next) 
     // nômades aceitando a mesma etapa: o segundo encontra 0 linhas em vez de
     // sobrescrever o primeiro.
     const r = await prisma.projectTaskStage.updateMany({
-      where: { id: req.params.stageId as string, status: "AGUARDANDO_EXECUTOR", nomade_id: null },
+      where: {
+        id: req.params.stageId as string, status: "AGUARDANDO_EXECUTOR", nomade_id: null,
+        AND: [
+          { OR: [{ nomade_excluido_id: null }, { nomade_excluido_id: { not: nomade.id } }] },
+          { OR: [{ reservada_ate: null }, { reservada_ate: { lte: new Date() } }, { nomade_preferido_id: nomade.id }] },
+        ],
+      },
       data: { nomade_id: nomade.id, status: "EM_ANDAMENTO", iniciada_em: new Date() },
     });
     if (r.count === 0) {
+      const alvo = await prisma.projectTaskStage.findUnique({ where: { id: req.params.stageId as string }, select: { status: true, nomade_id: true, nomade_excluido_id: true, reservada_ate: true, nomade_preferido_id: true } });
+      if (alvo && alvo.status === "AGUARDANDO_EXECUTOR" && !alvo.nomade_id) {
+        if (alvo.nomade_excluido_id === nomade.id) { res.status(403).json({ error: "Esta etapa não pode ser assumida por quem executou a etapa anterior indicada no cadastro." }); return; }
+        if (alvo.reservada_ate && alvo.reservada_ate > new Date() && alvo.nomade_preferido_id !== nomade.id) { res.status(403).json({ error: "Esta etapa está reservada a outro profissional até o prazo de aceite dele." }); return; }
+      }
       res.status(409).json({ error: "Esta etapa já foi assumida por outra pessoa." });
       return;
     }

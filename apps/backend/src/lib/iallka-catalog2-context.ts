@@ -23,6 +23,7 @@ import { computeInactivationState, CATALOG2_INACTIVATION_NOTICE_DAYS } from "./c
 import { listPeriodsForAdmin } from "./catalog2-periods";
 import { listCatalog2ProductHistory } from "./catalog2-product-history";
 import type { KnowledgeSource } from "./iallka-knowledge";
+import { audienceAllows, type AudienceViewer } from "./catalog2-audience";
 
 export interface Catalog2ProductAuraOpts {
   /** Admin Master: vê rascunho + publicada, pendências, dados provisórios.
@@ -32,6 +33,8 @@ export interface Catalog2ProductAuraOpts {
    * catálogo do cliente) — nunca revela um produto "em preparação" pra
    * quem não é Admin Master. */
   clientVisibleOnly: boolean;
+  /** Público de quem pergunta (C7). */
+  audienceViewer?: AudienceViewer | null;
 }
 
 /**
@@ -71,6 +74,7 @@ export async function buildCatalog2ProductAuraContext(
 
   const vis = await checkClientVisibility(product);
   if (opts.clientVisibleOnly && !vis.visible) return null;
+  if (opts.clientVisibleOnly && !audienceAllows(product, opts.audienceViewer)) return null;
 
   const published = product.versions.find((v) => v.id === product.published_version_id) ?? null;
   // Admin Master pode estar olhando um rascunho ainda não publicado; conta

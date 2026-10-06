@@ -471,6 +471,9 @@ async function main() {
             internal_name: p.internal_name,
             origin: p.origin,
             delivery_recurrence: p.delivery_recurrence,
+            task_structure: (p as any).task_structure ?? "multiple",
+            visibility_mode: (p as any).visibility_mode ?? "all",
+            visibility_min_partner_level: (p as any).visibility_min_partner_level ?? null,
             status: "em_preparacao", // NUNCA nasce em status contratável por esta transferência
           },
         });
@@ -485,6 +488,9 @@ async function main() {
             data: {
               internal_name: p.internal_name,
               delivery_recurrence: p.delivery_recurrence,
+              task_structure: (p as any).task_structure ?? "multiple",
+              visibility_mode: (p as any).visibility_mode ?? "all",
+              visibility_min_partner_level: (p as any).visibility_min_partner_level ?? null,
               // A sincronização espelho local nunca mantém uma publicação,
               // categoria ou classificação que já não exista no pacote.
               status: "em_preparacao",
@@ -536,6 +542,8 @@ async function main() {
         summary: v.summary,
         full_description: v.full_description,
         base_commercial_deadline_days: v.base_commercial_deadline_days,
+        base_commercial_deadline_hours: (v as any).base_commercial_deadline_hours ?? null,
+        emergency_enabled: (v as any).emergency_enabled ?? false,
         accepts_one_time: (v as any).accepts_one_time ?? undefined,
         accepts_recurring: (v as any).accepts_recurring ?? undefined,
         has_initial_implementation: (v as any).has_initial_implementation ?? undefined,
@@ -633,6 +641,8 @@ async function main() {
           asset_rule: (t as any).asset_rule ?? "first_only",
           asset_revalidate_days: (t as any).asset_revalidate_days ?? null,
           review_minutes: (t as any).review_minutes ?? null,
+          stage_execution: (t as any).stage_execution ?? "task",
+          stage_payout_mode: (t as any).stage_payout_mode ?? "at_end",
           // Campos operacionais (Pedido 3) acompanham a tarefa no pacote.
           ops: ((t as any).ops ?? Prisma.DbNull) as Prisma.InputJsonValue,
           effort_is_provisional: t.effort_is_provisional,
@@ -648,7 +658,7 @@ async function main() {
           line.tasks.created++;
         } else {
           taskId = existingTask.id;
-          const changed = existingTask.name !== t.name || existingTask.estimated_minutes !== t.estimated_minutes || existingTask.questionnaire_id !== dstQuestionnaireId || !opsEqual(existingTask.ops, (t as any).ops);
+          const changed = existingTask.name !== t.name || existingTask.estimated_minutes !== t.estimated_minutes || existingTask.questionnaire_id !== dstQuestionnaireId || !opsEqual(existingTask.ops, (t as any).ops) || existingTask.stage_execution !== taskData.stage_execution || existingTask.stage_payout_mode !== taskData.stage_payout_mode;
           if (changed) { await tx.catalog2Task.update({ where: { id: taskId }, data: { ...taskData, ...taskModelLink } }); line.tasks.updated++; }
           else if (taskModel && existingTask.task_model_id == null) { await tx.catalog2Task.update({ where: { id: taskId }, data: taskModelLink }); line.tasks.unchanged++; }
           else line.tasks.unchanged++;
@@ -659,10 +669,18 @@ async function main() {
           const stepModelLink = stepModel ? { step_model_id: stepModel.id, step_model_revision: stepModel.revision } : {};
           const existingStep = await tx.catalog2TaskStep.findFirst({ where: { task_id: taskId, key: s.key } });
           const stepSpec = (s as any).specialty?.key ? await tx.catalog2Specialty.findUnique({ where: { key: (s as any).specialty.key } }) : null;
-          const stepData = { name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: stepSpec?.id ?? null, purpose: (s as any).purpose ?? null, execution_mode: (s as any).execution_mode ?? null, completion_criteria: (s as any).completion_criteria ?? null, first_execution_only: (s as any).first_execution_only ?? false, skip_when_same_executor: (s as any).skip_when_same_executor ?? false, ops: ((s as any).ops ?? Prisma.DbNull) as Prisma.InputJsonValue };
+          // Estrutura nova das etapas (fluxo, executor, checklist por etapa, prazos em horas, entrega emergencial): acompanha o pacote; sem o campo, valor padrão.
+          const newStepFields = {
+            depends_on_json: (s as any).depends_on_json ?? null, executor_policy: (s as any).executor_policy ?? "auto", executor_same_as_key: (s as any).executor_same_as_key ?? null,
+            executor_kind: (s as any).executor_kind ?? "nomad", leader_mode: (s as any).leader_mode ?? "auto", leader_user_id: (s as any).leader_user_id ?? null,
+            internal_step: (s as any).internal_step ?? false, requires_qualification: (s as any).requires_qualification ?? true, release_next_auto: (s as any).release_next_auto ?? true,
+            emergency_reduction_minutes: (s as any).emergency_reduction_minutes ?? null, emergency_extra_kind: (s as any).emergency_extra_kind ?? null, emergency_extra_value: (s as any).emergency_extra_value ?? null,
+            approval_hours: (s as any).approval_hours ?? null, rework_hours: (s as any).rework_hours ?? null, executor_accept_hours: (s as any).executor_accept_hours ?? null,
+          };
+          const stepData = { name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: stepSpec?.id ?? null, purpose: (s as any).purpose ?? null, execution_mode: (s as any).execution_mode ?? null, completion_criteria: (s as any).completion_criteria ?? null, first_execution_only: (s as any).first_execution_only ?? false, skip_when_same_executor: (s as any).skip_when_same_executor ?? false, ops: ((s as any).ops ?? Prisma.DbNull) as Prisma.InputJsonValue, ...newStepFields };
           if (!existingStep) { await tx.catalog2TaskStep.create({ data: { task_id: taskId, key: s.key, ...stepData, ...stepModelLink } }); line.steps.created++; }
           else {
-            const changed = existingStep.name !== s.name || existingStep.estimated_minutes !== s.estimated_minutes || !opsEqual(existingStep.ops, (s as any).ops);
+            const changed = existingStep.name !== s.name || existingStep.estimated_minutes !== s.estimated_minutes || !opsEqual(existingStep.ops, (s as any).ops) || Object.entries(newStepFields).some(([k, val]) => (existingStep as any)[k] !== val);
             if (changed) { await tx.catalog2TaskStep.update({ where: { id: existingStep.id }, data: { ...stepData, ...stepModelLink } }); line.steps.updated++; }
             else if (stepModel && existingStep.step_model_id == null) { await tx.catalog2TaskStep.update({ where: { id: existingStep.id }, data: stepModelLink }); line.steps.unchanged++; }
             else line.steps.unchanged++;

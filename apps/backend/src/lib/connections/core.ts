@@ -2,10 +2,10 @@
 // A conexão pertence à EMPRESA; o uso é autorizado por projeto/tarefa. Nunca duplica credencial.
 import type { Prisma, PrismaClient } from "@prisma/client";
 import {
-  CONNECTION_METHODS, CONNECTION_STATE_LABEL, GRANT_SCOPES, SECRET_METHODS, ConnectionError, connectionSatisfies, parseJsonArray,
+  CONNECTION_METHODS, CONNECTION_STATE_LABEL, GRANT_SCOPES, SECRET_METHODS, ConnectionError, connectionSatisfies, parseJsonArray, parseFieldDefs, splitFieldValues, missingRequiredFields,
   type ConnectionState, type GrantScope,
 } from "./catalog";
-import { assertNoSecretInPlainFields, hasSecret, revokeSecret, safeText, storeSecret } from "./secrets";
+import { assertNoSecretInPlainFields, hasSecret, readSecretForConnector, revokeSecret, safeText, storeSecret } from "./secrets";
 import { getConnector, oauthRedirectUri, signOAuthState, verifyOAuthState, connectorStatus, type VerifyResult } from "./connectors";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -28,6 +28,8 @@ export async function logConnection(
 }
 
 /** Visão segura de uma conexão (NUNCA inclui segredo; só diz se existe um guardado). */
+function parseStored(json: string | null | undefined): Record<string, string> { try { const v = json ? JSON.parse(json) : {}; return v && typeof v === "object" ? v : {}; } catch { return {}; } }
+
 export async function serializeConnection(db: Db, id: string) {
   const c = await db.clientConnection.findUnique({
     where: { id },
@@ -44,6 +46,8 @@ export async function serializeConnection(db: Db, id: string) {
     last_validated_at: c.last_validated_at, next_revalidation_at: c.next_revalidation_at, expires_at: c.expires_at, revoked_at: c.revoked_at,
     last_problem: c.last_problem, correction_needed: c.correction_needed, evidence: c.evidence,
     has_secret: await hasSecret(db, c.id),
+    field_values: Object.fromEntries(Object.entries(parseStored(c.field_values_json)).filter(([, v]) => v !== "__set__")),
+    secret_fields_set: Object.entries(parseStored(c.field_values_json)).filter(([, v]) => v === "__set__").map(([k]) => k),
     grants: c.grants.map((g) => ({ id: g.id, project_id: g.project_id, scope: g.scope, project_task_id: g.project_task_id, executor_user_id: g.executor_user_id, created_at: g.created_at })),
     created_at: c.created_at, updated_at: c.updated_at,
   };
@@ -58,6 +62,8 @@ export interface CreateConnectionInput {
   permission_level?: string | null; scopes?: string[];
   owner_user_id?: string | null; provided_by_user_id?: string | null;
   secret_value?: string | null;
+  /** Valores dos campos definidos no tipo ([{ key, value }]); os de tipo "segredo" vão para o cofre. */
+  fields?: { key: string; value: string }[];
   expires_at?: Date | null;
 }
 
@@ -77,31 +83,35 @@ export async function createConnection(db: Db, actor: Actor, input: CreateConnec
   if (!input.company_id && !input.agency_id) throw new ConnectionError("Informe a empresa (ou a agência) dona da conexão.", 400, "owner_required");
   if (input.company_id) { if (!(await db.company.findUnique({ where: { id: input.company_id }, select: { id: true } }))) throw new ConnectionError("Empresa não encontrada.", 404, "company_not_found"); }
   else if (!(await db.agency.findUnique({ where: { id: input.agency_id! }, select: { id: true } }))) throw new ConnectionError("Agência não encontrada.", 404, "agency_not_found");
-  const hasData = !!(input.external_id || input.account_label || secret_value);
+  const fieldSplit = splitFieldValues(parseFieldDefs(type.fields_json), input.fields);
+  const hasData = !!(input.external_id || input.account_label || secret_value || fieldSplit.hasAny);
   const conn = await db.clientConnection.create({
     data: {
       company_id: input.company_id ?? null, agency_id: input.company_id ? null : input.agency_id ?? null, connection_type_id: type.id, provider: type.provider, method, label: (input.label?.trim() || type.name).slice(0, 191),
       account_label: input.account_label ?? null, external_id: input.external_id ?? null, permission_level: input.permission_level ?? levels[0] ?? null,
+      field_values_json: fieldSplit.hasAny ? JSON.stringify(fieldSplit.stored) : null,
       scopes_json: input.scopes ? JSON.stringify(input.scopes) : null,
       status: hasData ? "submitted" : "awaiting_submission",
       owner_user_id: input.owner_user_id ?? null, provided_by_user_id: input.provided_by_user_id ?? actor.id, connected_by_user_id: actor.id,
       expires_at: input.expires_at ?? null,
     },
   });
-  if (secret_value) await storeSecret(db, conn.id, secret_value);
+  if (fieldSplit.secrets.length) await storeSecret(db, conn.id, JSON.stringify({ __fields: Object.fromEntries(fieldSplit.secrets), value: secret_value ?? null }));
+  else if (secret_value) await storeSecret(db, conn.id, secret_value);
   await logConnection(db, { kind: "created", message: `Conexão "${conn.label}" criada (${method}).`, connectionId: conn.id, companyId: conn.company_id, actor, detail: { type: type.key, method, has_secret: !!secret_value } });
   return conn;
 }
 
-export async function updateConnection(db: Db, actor: Actor, id: string, patch: { label?: string; account_label?: string | null; external_id?: string | null; permission_level?: string | null; secret_value?: string | null; expires_at?: Date | null }) {
+export async function updateConnection(db: Db, actor: Actor, id: string, patch: { label?: string; account_label?: string | null; external_id?: string | null; permission_level?: string | null; secret_value?: string | null; fields?: { key: string; value: string }[]; expires_at?: Date | null }) {
   const { secret_value, ...plain } = patch;
   assertNoSecretInPlainFields(plain);
   const conn = await db.clientConnection.findUnique({ where: { id }, include: { connection_type: true } });
   if (!conn) throw new ConnectionError("Conexão não encontrada.", 404, "connection_not_found");
   if (["revoked", "removed"].includes(conn.status)) throw new ConnectionError("Conexão revogada/removida: crie uma nova.", 409, "connection_closed");
   if (secret_value && !SECRET_METHODS.includes(conn.method as never)) throw new ConnectionError("Este método não usa segredo.", 422, "secret_not_allowed_for_method");
+  const fieldSplit = splitFieldValues(parseFieldDefs(conn.connection_type.fields_json), patch.fields);
   const changed = Object.keys(plain).filter((k) => (plain as Record<string, unknown>)[k] !== undefined);
-  const needsRevalidation = changed.some((k) => ["external_id", "account_label", "permission_level"].includes(k)) || !!secret_value;
+  const needsRevalidation = changed.some((k) => ["external_id", "account_label", "permission_level"].includes(k)) || !!secret_value || fieldSplit.hasAny;
   await db.clientConnection.update({
     where: { id },
     data: {
@@ -110,19 +120,26 @@ export async function updateConnection(db: Db, actor: Actor, id: string, patch: 
       ...(patch.external_id !== undefined ? { external_id: patch.external_id } : {}),
       ...(patch.permission_level !== undefined ? { permission_level: patch.permission_level } : {}),
       ...(patch.expires_at !== undefined ? { expires_at: patch.expires_at } : {}),
+      ...(fieldSplit.hasAny ? { field_values_json: JSON.stringify({ ...parseStored(conn.field_values_json), ...fieldSplit.stored }) } : {}),
       ...(needsRevalidation && conn.status === "valid" ? { status: "awaiting_validation" } : {}),
       ...(needsRevalidation && ["needs_correction", "incomplete", "invalid", "awaiting_submission"].includes(conn.status) ? { status: "submitted", last_problem: null, correction_needed: null } : {}),
     },
   });
-  if (secret_value) await storeSecret(db, id, secret_value);
+  if (fieldSplit.secrets.length) {
+    let prev: { __fields?: Record<string, string>; value?: string | null } = {};
+    try { const raw = await readSecretForConnector(db, id); const j = raw ? JSON.parse(raw) : null; if (j && typeof j === "object" && j.__fields) prev = j; else if (raw) prev = { value: raw }; } catch { prev = {}; }
+    await storeSecret(db, id, JSON.stringify({ __fields: { ...(prev.__fields ?? {}), ...Object.fromEntries(fieldSplit.secrets) }, value: secret_value ?? prev.value ?? null }));
+  } else if (secret_value) await storeSecret(db, id, secret_value);
   await logConnection(db, { kind: "changed", message: `Conexão "${conn.label}" alterada (${changed.concat(secret_value ? ["segredo"] : []).join(", ") || "sem mudanças"}).`, connectionId: id, companyId: conn.company_id, actor, detail: { fields: changed, secret_rotated: !!secret_value } });
   return db.clientConnection.findUniqueOrThrow({ where: { id } });
 }
 
 /** Cliente informa que enviou os dados/convite: passa a aguardar validação. */
 export async function markSubmitted(db: Db, actor: Actor, id: string) {
-  const c = await db.clientConnection.findUnique({ where: { id } });
+  const c = await db.clientConnection.findUnique({ where: { id }, include: { connection_type: true } });
   if (!c) throw new ConnectionError("Conexão não encontrada.", 404, "connection_not_found");
+  const missing = missingRequiredFields(parseFieldDefs(c.connection_type.fields_json), c.field_values_json);
+  if (missing.length) throw new ConnectionError(`Preencha os campos obrigatórios: ${missing.join(", ")}.`, 422, "connection_fields_missing", { missing });
   if (["valid", "revoked", "removed", "expired"].includes(c.status) && c.status !== "expired") throw new ConnectionError(`Conexão já está ${CONNECTION_STATE_LABEL[c.status as ConnectionState].toLowerCase()}.`, 409, "invalid_transition");
   await db.clientConnection.update({ where: { id }, data: { status: "awaiting_validation", last_problem: null, correction_needed: null } });
   await logConnection(db, { kind: "changed", message: `Conexão "${c.label}" enviada para validação.`, connectionId: id, companyId: c.company_id, actor });
