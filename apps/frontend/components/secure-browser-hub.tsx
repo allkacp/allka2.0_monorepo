@@ -20,16 +20,32 @@ export function securityNotes(session: any, hosts: string[] = []) {
   return ["Sessão protegida", "Senha e cookies ficam no servidor", "Copiar, colar e baixar bloqueados", ...(setup ? [] : ["Sair da conta e trocar de conta bloqueados"]), ...(!setup && hosts.length ? [`Sites: ${hosts.join(", ")}`] : []), "Uso registrado com o seu nome", `sessão ${String(session.id).slice(-6)}`]
 }
 
-export function SessionViewer({ session, url, onClose, startUrl = "", hosts = [] }: { session: any; url: string; onClose: () => void; startUrl?: string; hosts?: string[] }) {
+export function SessionViewer({ session, url, onClose, startUrl = "", hosts = [], windowed = false, onPopout }: { session: any; url: string; onClose: () => void; startUrl?: string; hosts?: string[]; windowed?: boolean; onPopout?: (win: Window) => void }) {
   const root = useRef<HTMLDivElement>(null)
-  const [full, setFull] = useState(false)
+  const [fs, setFs] = useState(false)
+  const full = fs || windowed
   useEffect(() => {
-    const onFs = () => setFull(!!document.fullscreenElement && document.fullscreenElement === root.current)
+    const onFs = () => setFs(!!document.fullscreenElement && document.fullscreenElement === root.current)
     document.addEventListener("fullscreenchange", onFs)
     return () => document.removeEventListener("fullscreenchange", onFs)
   }, [])
-  // Tela cheia do navegador (como o F11 do Chrome); Esc sai.
-  const toggleFull = () => { try { if (document.fullscreenElement) void document.exitFullscreen(); else void root.current?.requestFullscreen() } catch { /* sem suporte */ } }
+  // "Tela cheia" = janela grande do navegador no tamanho útil da tela (a barra do Windows/Mac continua visível). Se o navegador bloquear
+  // janelas extras, cai para a tela cheia do próprio navegador (F11), que esconde a barra do sistema.
+  const toggleFull = () => {
+    if (windowed) { window.close(); return }
+    try {
+      if (document.fullscreenElement) { void document.exitFullscreen(); return }
+      if (onPopout) {
+        const key = Math.random().toString(36).slice(2)
+        window.localStorage.setItem(`allka_sb_win_${key}`, JSON.stringify({ session, url, startUrl, hosts }))
+        const sc: any = window.screen
+        const win = window.open(`/navegador-seguro-janela?k=${key}`, `allka_sb_${session.id}`, `popup=yes,left=${sc.availLeft ?? 0},top=${sc.availTop ?? 0},width=${sc.availWidth},height=${sc.availHeight}`)
+        if (win) { onPopout(win); return }
+        window.localStorage.removeItem(`allka_sb_win_${key}`)
+      }
+      void root.current?.requestFullscreen()
+    } catch { /* sem suporte */ }
+  }
   const [remaining, setRemaining] = useState<number>(session.remaining_seconds)
   const [status, setStatus] = useState<string>("active")
   const ended = useRef(false)
@@ -40,12 +56,13 @@ export function SessionViewer({ session, url, onClose, startUrl = "", hosts = []
   }, [session.id])
   useEffect(() => { if (remaining === 0 && !ended.current) { ended.current = true; setStatus("expired") } }, [remaining])
   const end = async () => { try { await apiClient.endSecureBrowserSession(session.id) } catch { /* já encerrada */ } onClose() }
+  useEffect(() => { if (windowed) document.title = "Navegador seguro — Allka" }, [windowed])
   const over = status !== "active"
   const setup = session.mode === "setup"
   const save = setup && !over ? async () => { try { await apiClient.saveSecureBrowserState(session.id); onClose() } catch (e: any) { window.alert(e?.message ?? "Não foi possível guardar a sessão.") } } : null
   const countdown = <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${remaining < 120 ? "bg-red-500 text-white" : full ? "bg-white/15 text-white" : "bg-emerald-100 text-emerald-800"}`} data-testid="countdown"><Clock className="h-3.5 w-3.5" />{over ? "Encerrada" : fmtRemaining(remaining)}</span>
   return (
-    <div ref={root} className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm" data-testid="session-viewer">
+    <div ref={root} className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-white ${full ? "h-screen w-screen" : "h-full rounded-xl border border-slate-200 shadow-sm"}`} style={full ? { width: "100vw", height: "100vh" } : undefined} data-testid="session-viewer">
       {full ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-white" style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }} data-testid="viewer-header">
           <img src="/logo-allka-full.png" alt="Allka" className="h-6 shrink-0 object-contain" />
@@ -153,6 +170,18 @@ export function SecureBrowserHub({ canCreate = true, adminScope, isAdmin = false
   const [err, setErr] = useState<string | null>(null)
   const [viewer, setViewer] = useState<{ session: any; url: string; startUrl?: string; hosts?: string[] } | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [popout, setPopout] = useState<Window | null>(null)
+  useEffect(() => {
+    if (!popout) return
+    const t = setInterval(() => {
+      if (!popout.closed) return
+      setPopout(null); load()
+      // se a sessão foi encerrada na outra janela, não volta para esta tela
+      if (viewer) void Promise.resolve(apiClient.heartbeatSecureBrowserSession(viewer.session.id)).then((r: any) => { if (r?.status !== "active") setViewer(null) }).catch(() => setViewer(null))
+    }, 800)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [popout])
   useEffect(() => { onExpandedChange?.(!!viewer && expanded) }, [viewer, expanded, onExpandedChange])
   useEffect(() => { onViewerOpenChange?.(!!viewer) }, [viewer, onViewerOpenChange])
   useEffect(() => { onViewerInfo?.(viewer ? securityNotes(viewer.session, viewer.hosts ?? []).join(" · ") : null) }, [viewer, onViewerInfo])
@@ -163,7 +192,14 @@ export function SecureBrowserHub({ canCreate = true, adminScope, isAdmin = false
     setErr(null)
     try { const created: any = await apiClient.createSecureBrowserProfile({ label: form.label.trim() || (() => { try { return new URL(form.start_url.trim()).hostname } catch { return "Navegador Allka" } })(), start_url: form.start_url.trim(), provider_hint: form.provider_hint.trim() || null, max_session_minutes: Number(form.max) || 60, consent: true, ...(adminScope ?? {}) }); const startUrl = form.start_url.trim(); setAdding(false); setForm({ label: "", start_url: "https://", provider_hint: "", max: "60", ok: false }); load(); if (openAfter && created?.id) { const r: any = await apiClient.openSecureBrowserSession(created.id, "setup"); setViewer({ ...r, startUrl, hosts: created.allowed_hosts ?? [] }) } } catch (e: any) { setErr(e?.message ?? "Não foi possível guardar a conta.") }
   }
-  if (viewer) return <div className="flex h-full min-h-0 flex-col" data-testid="secure-browser-hub"><SessionViewer session={viewer.session} url={viewer.url} startUrl={viewer.startUrl} hosts={viewer.hosts} onClose={() => { setViewer(null); setExpanded(false); load() }} /></div>
+  if (viewer && popout) return (
+    <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600" data-testid="popout-placeholder">
+      <p className="font-semibold text-slate-800">O navegador está aberto em outra janela.</p>
+      <p className="text-xs">Quando você fechar aquela janela, ele volta para esta tela.</p>
+      <Button size="sm" variant="outline" onClick={() => { try { popout.close() } catch { /* já fechada */ } setPopout(null) }}>Trazer de volta para esta tela</Button>
+    </div>
+  )
+  if (viewer) return <div className="flex h-full min-h-0 flex-col" data-testid="secure-browser-hub"><SessionViewer session={viewer.session} url={viewer.url} startUrl={viewer.startUrl} hosts={viewer.hosts} onPopout={(w) => setPopout(w)} onClose={() => { setViewer(null); setExpanded(false); load() }} /></div>
   const mine = (profiles ?? []).filter((p) => p.access === "owner")
   const granted = (profiles ?? []).filter((p) => p.access === "grant")
   return (

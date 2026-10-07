@@ -17,10 +17,11 @@ type Tab = { id: string; title: string; url: string; active: boolean }
 
 export function RemoteBrowserCanvas({ url, watermark, onClosed, canNavigate = false, startUrl = "", expanded = false, onToggleExpand }: { url: string; watermark: string; onClosed?: (reason: string) => void; canNavigate?: boolean; startUrl?: string; expanded?: boolean; onToggleExpand?: () => void }) {
   const [notice, setNotice] = useState<string | null>(null)
-  const [zoom, setZoomState] = useState<number>(() => { try { const v = Number(window.localStorage.getItem("allka_sb_zoom")); return v >= 0.5 && v <= 1.5 ? v : 1 } catch { return 1 } })
+  const [zoom, setZoomState] = useState<number>(() => { try { const v = Number(window.localStorage.getItem("allka_sb_zoom_v2")); return v >= 0.5 && v <= 1.5 ? v : 0.75 } catch { return 1 } })
   const zoomRef = useRef(zoom)
+  // ao pedir o tamanho, o servidor devolve a imagem já com os pixels da sua tela (zoom aplicado lá, como no Chrome)
   const resendRef = useRef<() => void>(() => {})
-  const setZoom = (v: number) => { zoomRef.current = v; setZoomState(v); try { window.localStorage.setItem("allka_sb_zoom", String(v)) } catch { /* sem armazenamento */ } setTimeout(() => resendRef.current(), 0) }
+  const setZoom = (v: number) => { zoomRef.current = v; setZoomState(v); try { window.localStorage.setItem("allka_sb_zoom_v2", String(v)) } catch { /* sem armazenamento */ } setTimeout(() => resendRef.current(), 0) }
   const [address, setAddress] = useState(startUrl)
   const box = useRef<HTMLDivElement>(null)
   const area = useRef<HTMLDivElement>(null)
@@ -38,40 +39,71 @@ export function RemoteBrowserCanvas({ url, watermark, onClosed, canNavigate = fa
     sock.binaryType = "blob"
     ws.current = sock
     let last: ImageBitmap | null = null
+    let synced = false // só mostramos imagem depois que o servidor confirmou o nosso tamanho (evita o "pisca" ao abrir)
+    let pendingBlob: Blob | null = null
+    let decoding = false
     const draw = () => {
       const c = canvas.current; const g = c?.getContext("2d"); if (!c || !g) return
       g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high"
       if (last) g.drawImage(last, 0, 0, c.width, c.height)
     }
-    const setSize = (w: number, h: number, dpr = 1) => { size.current = { w, h }; if (canvas.current) { canvas.current.width = Math.round(w * dpr); canvas.current.height = Math.round(h * dpr) } }
+    const setSize = (w: number, h: number, dpr = 1) => {
+      size.current = { w, h }
+      const c = canvas.current
+      const nw = Math.round(w * dpr), nh = Math.round(h * dpr)
+      if (c && (c.width !== nw || c.height !== nh)) { c.width = nw; c.height = nh; draw() } // mudar o tamanho apaga o quadro: redesenha na hora
+    }
+    // decodifica só o quadro mais recente (se chegarem vários enquanto decodifica, os antigos são descartados)
+    const pump = async () => {
+      if (decoding) return
+      decoding = true
+      try {
+        while (pendingBlob) {
+          const blob = pendingBlob; pendingBlob = null
+          try { const bmp = await createImageBitmap(blob); if (disposed) { bmp.close(); return } last?.close(); last = bmp; if (synced) { draw(); setState((st) => (st === "closed" ? st : "live")) } } catch { /* quadro corrompido */ }
+        }
+      } finally { decoding = false }
+    }
     // zoom: o navegador do servidor é aberto num tamanho (área ÷ zoom) e a imagem é encaixada na área — 67% mostra mais coisas, menores.
-    const sendSize = () => { const r = area.current?.getBoundingClientRect(); if (r && sock.readyState === 1) sock.send(JSON.stringify({ type: "resize", width: Math.round(r.width / zoomRef.current), height: Math.round(r.height / zoomRef.current), dpr: Math.min(2, window.devicePixelRatio || 1) })) }
+    const sendSize = () => { const r = area.current?.getBoundingClientRect(); if (r && r.width > 0 && sock.readyState === 1) sock.send(JSON.stringify({ type: "resize", width: Math.round(r.width), height: Math.round(r.height), dpr: Math.min(2.5, window.devicePixelRatio || 1), zoom: zoomRef.current })) }
     resendRef.current = sendSize
-    sock.onopen = () => sendSize()
+    sock.onopen = () => { sendSize(); setTimeout(() => { if (!disposed && !synced) { synced = true; draw() } }, 2000) } // segurança: não fica escondido para sempre
     sock.onmessage = async (ev) => {
       if (disposed) return
       if (typeof ev.data === "string") {
         try {
           const m = JSON.parse(ev.data)
-          if (m.type === "hello" || m.type === "size") { setSize(m.width, m.height, m.dpr || 1); setState("live") }
+          if (m.type === "hello") setSize(m.width, m.height, m.dpr || 1)
+          else if (m.type === "size") { setSize(m.width, m.height, m.dpr || 1); synced = true; draw() }
           else if (m.type === "tabs") setTabs(m.tabs)
           else if (m.type === "notice") { setNotice(m.text); setTimeout(() => setNotice(null), 5000) }
         } catch { /* ignora */ }
         return
       }
-      try { const bmp = await createImageBitmap(ev.data as Blob); if (disposed) { bmp.close(); return } last?.close(); last = bmp; draw() } catch { /* quadro corrompido */ }
+      pendingBlob = ev.data as Blob
+      void pump()
     }
     sock.onclose = (ev) => { if (disposed) return; setState("closed"); onClosed?.(ev.reason || "") }
     sock.onerror = () => { if (!disposed) setState("closed") }
     // acompanha o tamanho disponível (tela cheia, janela redimensionada) e pede ao servidor um navegador desse tamanho
     let timer: ReturnType<typeof setTimeout> | undefined
-    const ro = typeof ResizeObserver !== "undefined" && area.current ? new ResizeObserver(() => { clearTimeout(timer); timer = setTimeout(sendSize, 250) }) : null
+    const ro = typeof ResizeObserver !== "undefined" && area.current ? new ResizeObserver(() => { clearTimeout(timer); timer = setTimeout(sendSize, 300) }) : null
     if (ro && area.current) ro.observe(area.current)
     return () => { disposed = true; clearTimeout(timer); ro?.disconnect(); try { sock.close() } catch { /* */ } last?.close() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, watermark, attempt])
 
 
+  const moveRaf = useRef<number | null>(null)
+  const lastMove = useRef<{ x: number; y: number } | null>(null)
+  const wheelAcc = useRef({ dx: 0, dy: 0, x: 0, y: 0 })
+  const flushPointer = () => {
+    moveRaf.current = null
+    if (lastMove.current) { send({ type: "mouse", action: "move", ...lastMove.current }); lastMove.current = null }
+    const w = wheelAcc.current
+    if (w.dx || w.dy) { send({ type: "mouse", action: "wheel", dx: w.dx, dy: w.dy, x: w.x, y: w.y }); wheelAcc.current = { dx: 0, dy: 0, x: 0, y: 0 } }
+  }
+  const schedulePointer = () => { if (moveRaf.current == null) moveRaf.current = requestAnimationFrame(flushPointer) }
   const send = useCallback((m: Record<string, unknown>) => { if (ws.current?.readyState === 1) ws.current.send(JSON.stringify(m)) }, [])
   const pos = (e: { clientX: number; clientY: number }) => {
     const r = canvas.current!.getBoundingClientRect()
@@ -115,13 +147,14 @@ export function RemoteBrowserCanvas({ url, watermark, onClosed, canNavigate = fa
         <canvas
           ref={canvas} width={1280} height={720} tabIndex={0} data-testid="remote-canvas"
           className="absolute inset-0 h-full w-full outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500"
-          onMouseMove={(e) => send({ type: "mouse", action: "move", ...pos(e) })}
+          onMouseMove={(e) => { lastMove.current = pos(e); schedulePointer() }}
           onMouseDown={(e) => { e.currentTarget.focus(); send({ type: "mouse", action: "down", button: e.button, ...pos(e) }) }}
           onMouseUp={(e) => send({ type: "mouse", action: "up", button: e.button, ...pos(e) })}
-          onWheel={(e) => send({ type: "mouse", action: "wheel", dx: e.deltaX, dy: e.deltaY, ...pos(e) })}
+          onWheel={(e) => { const p = pos(e); const w = wheelAcc.current; wheelAcc.current = { dx: w.dx + e.deltaX, dy: w.dy + e.deltaY, ...p }; schedulePointer() }}
           onContextMenu={(e) => e.preventDefault()} onCopy={(e) => e.preventDefault()} onPaste={(e) => e.preventDefault()} onCut={(e) => e.preventDefault()}
           onKeyDown={key("down")} onKeyUp={key("up")}
         />
+        {state === "connecting" && <div className="absolute inset-0 z-[5] flex items-center justify-center bg-white text-sm text-slate-500">Conectando ao navegador…</div>}
         {notice && <div role="status" className="absolute inset-x-0 top-0 z-10 bg-amber-100 px-3 py-1.5 text-center text-xs font-semibold text-amber-900">{notice}</div>}
         {state === "closed" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/85 text-sm text-slate-700">

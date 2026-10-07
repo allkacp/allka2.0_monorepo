@@ -42,6 +42,6 @@ describe("Navegador seguro real (visualizador)", () => {
     const sel = screen.getByLabelText("Zoom da página") as HTMLSelectElement;
     expect(Array.from(sel.options).map((o) => o.textContent)).toContain("67%");
     fireEvent.change(sel, { target: { value: "0.5" } });
-    expect(window.localStorage.getItem("allka_sb_zoom")).toBe("0.5");
+    expect(window.localStorage.getItem("allka_sb_zoom_v2")).toBe("0.5");
   });
 });

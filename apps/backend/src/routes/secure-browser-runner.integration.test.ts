@@ -117,8 +117,9 @@ describe("D3 · Navegador seguro real (runner)", () => {
     assert.ok(await wait(() => msgs.some((m) => m.type === "notice" && /só abre/.test(m.text))), "site fora da lista é bloqueado com aviso");
     ws.send(JSON.stringify({ type: "nav", action: "goto", url: "https://example.com/accounts/logout/", allow_goto: true }));
     assert.ok(await wait(() => msgs.some((m) => m.type === "notice" && /Sair da conta/.test(m.text))), "sair da conta é bloqueado");
-    const u = await (await fetch(`${RUNNER}/sessions/${id}/url`, { headers: H })).json() as any;
-    assert.ok(u.url.startsWith("https://example.com"), "continua no site da conta: " + u.url);
+    let cur = "";
+    for (let i = 0; i < 40 && !cur.startsWith("https://example.com"); i++) { await new Promise((x) => setTimeout(x, 250)); cur = ((await (await fetch(`${RUNNER}/sessions/${id}/url`, { headers: H })).json()) as any).url; }
+    assert.ok(cur.startsWith("https://example.com"), "volta para o site da conta: " + cur);
     ws.close();
     await fetch(`${RUNNER}/sessions/${id}`, { method: "DELETE", headers: H });
   });

@@ -104,6 +104,7 @@ const AgencyCombosPage = React.lazy(() => import("@/app/agency/combos/page"));
 const AgencyInternalTasksPage = React.lazy(() => import("@/app/agency/tarefas-internas/page"));
 const CompanyInternalTasksPage = React.lazy(() => import("@/app/company/tarefas-internas/page"));
 const AdminInternalTasksPage = React.lazy(() => import("@/app/admin/tarefas-internas/page"));
+const SecureBrowserWindowPage = React.lazy(() => import("@/app/navegador-seguro/janela"));
 const SecureBrowserPage = React.lazy(() => import("@/app/navegador-seguro/page").then((m) => ({ default: m.SecureBrowserPage })));
 const AdminSecureBrowserPage = React.lazy(() => import("@/app/navegador-seguro/page").then((m) => ({ default: m.AdminSecureBrowserPage })));
 const AdminTarefasPage = React.lazy(() => import("@/app/admin/tarefas/page"));
@@ -815,6 +816,18 @@ export default function App() {
             <Suspense fallback={<PageLoader />}>
               <DashboardSharePage />
             </Suspense>
+          }
+        />
+
+        {/* Janela grande do navegador seguro: logada, mas sem o menu da plataforma */}
+        <Route
+          path="/navegador-seguro-janela"
+          element={
+            <RequireAuth>
+              <Suspense fallback={<PageLoader />}>
+                <SecureBrowserWindowPage />
+              </Suspense>
+            </RequireAuth>
           }
         />
 

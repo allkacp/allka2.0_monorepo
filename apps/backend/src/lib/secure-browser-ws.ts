@@ -16,7 +16,7 @@ export function sanitizeInput(raw: string, mode: string): string | null {
   if (!m || typeof m !== "object") return null;
   if (m.type === "mouse" && ["move", "down", "up", "wheel"].includes(m.action)) return JSON.stringify({ type: "mouse", action: m.action, x: Number(m.x) || 0, y: Number(m.y) || 0, button: Number(m.button) || 0, dx: Number(m.dx) || 0, dy: Number(m.dy) || 0 });
   if (m.type === "key" && ["down", "up"].includes(m.action) && typeof m.key === "string" && m.key.length <= 32) return JSON.stringify({ type: "key", action: m.action, key: m.key, ctrl: !!m.ctrl, meta: !!m.meta });
-  if (m.type === "resize") return JSON.stringify({ type: "resize", width: Number(m.width) || 1280, height: Number(m.height) || 720, dpr: Number(m.dpr) || 1 });
+  if (m.type === "resize") return JSON.stringify({ type: "resize", width: Number(m.width) || 1280, height: Number(m.height) || 720, dpr: Number(m.dpr) || 1, zoom: Number(m.zoom) || 1 });
   if (m.type === "tab" && ["switch", "close", "new"].includes(m.action)) return JSON.stringify({ type: "tab", action: m.action, id: String(m.id ?? "").slice(0, 8), url: typeof m.url === "string" ? m.url.slice(0, 2000) : "", allow_goto: mode === "setup" });
   if (m.type === "nav" && ["back", "forward", "reload", "goto"].includes(m.action)) return JSON.stringify({ type: "nav", action: m.action, url: typeof m.url === "string" ? m.url.slice(0, 2000) : "", allow_goto: mode === "setup" });
   return null;

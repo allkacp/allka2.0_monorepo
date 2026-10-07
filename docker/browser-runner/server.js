@@ -50,20 +50,22 @@ async function urlAllowed(raw) {
 
 const MAX_TABS = 8;
 // Qualidade da imagem: JPEG 80 e resolução física da tela de quem assiste (dpr), para o texto ficar nítido.
-const SHOT_QUALITY = Number(process.env.SHOT_QUALITY || 80);
-const shotOpts = (s) => ({ format: "jpeg", quality: SHOT_QUALITY, maxWidth: s.vw, maxHeight: s.vh, everyNthFrame: 1 });
+const SHOT_QUALITY = Number(process.env.SHOT_QUALITY || 70); // quadros em movimento
+const CRISP_QUALITY = Number(process.env.CRISP_QUALITY || 90); // quadro final, parado
+const shotOpts = (s) => ({ format: "jpeg", quality: SHOT_QUALITY, maxWidth: s.pxW, maxHeight: s.pxH, everyNthFrame: 1 });
 // O screencast só entrega a imagem no tamanho "CSS" da página (borrada em telas de alta densidade). Por isso, quando a imagem para de mudar
 // (350 ms), tiramos uma captura nítida na resolução física de quem assiste (dpr) e enviamos por cima.
+const applyMetrics = (s, tab) => tab.cdp.send("Emulation.setDeviceMetricsOverride", { width: s.vw, height: s.vh, deviceScaleFactor: s.dsf, mobile: false }).catch(() => {});
 function scheduleSettle(s, tab) {
   clearTimeout(s.settleTimer);
   s.settleTimer = setTimeout(async () => {
     if (s.active !== tab.id || !s.sockets.size) return;
     try {
-      const r = await tab.cdp.send("Page.captureScreenshot", { format: "jpeg", quality: 90, clip: { x: 0, y: 0, width: s.vw, height: s.vh, scale: s.dpr } });
+      const r = await tab.cdp.send("Page.captureScreenshot", { format: "jpeg", quality: CRISP_QUALITY });
       const buf = Buffer.from(r.data, "base64");
       if (s.active === tab.id) for (const ws of s.sockets) if (ws.readyState === 1 && ws.bufferedAmount < 4_000_000) ws.send(buf, { binary: true });
     } catch { /* aba fechando ou carregando */ }
-  }, 350);
+  }, 220);
 }
 const clampW = (n) => Math.min(Math.max(Number(n) || 1280, 480), 2560), clampH = (n) => Math.min(Math.max(Number(n) || 720, 300), 1440);
 const sendAll = (s, payload) => { const data = typeof payload === "string" ? payload : JSON.stringify(payload); for (const ws of s.sockets) if (ws.readyState === 1) ws.send(data); };
@@ -87,7 +89,7 @@ async function openSession({ id, start_url, storage_state, ttl_seconds, width, h
   const browser = await getBrowser();
   const vw = clampW(width), vh = clampH(height);
   const context = await browser.newContext({
-    viewport: { width: vw, height: vh }, acceptDownloads: false, permissions: [], serviceWorkers: "block", locale: "pt-BR", timezoneId: "America/Sao_Paulo",
+    viewport: null, acceptDownloads: false, permissions: [], serviceWorkers: "block", locale: "pt-BR", timezoneId: "America/Sao_Paulo",
     ...(storage_state ? { storageState: storage_state } : {}),
   });
   const hosts = Array.isArray(allowed_hosts) ? allowed_hosts.map((h) => String(h).toLowerCase()) : [];
@@ -105,7 +107,7 @@ async function openSession({ id, start_url, storage_state, ttl_seconds, width, h
     }
     return route.continue();
   });
-  const s = { id, context, pages: new Map(), active: null, nextTab: 1, sockets: new Set(), vw, vh, dpr: 1, settleTimer: null, timer: null, streaming: false, tabsTimer: null };
+  const s = { id, context, pages: new Map(), active: null, nextTab: 1, sockets: new Set(), vw, vh, dsf: 1, pxW: vw, pxH: vh, queue: [], draining: false, settleTimer: null, timer: null, streaming: false, tabsTimer: null };
   // Várias abas: popups/links "nova aba" viram abas do nosso navegador (até MAX_TABS).
   context.on("page", (p) => { void addTab(s, p, true); });
   s.timer = setTimeout(() => closeSession(id).catch(() => {}), Math.max(30, Number(ttl_seconds) || 3600) * 1000);
@@ -123,7 +125,7 @@ async function addTab(s, page, activate) {
   s.pages.set(tid, tab);
   page.on("download", (d) => d.cancel().catch(() => {}));
   page.on("dialog", (d) => d.dismiss().catch(() => {}));
-  page.on("framenavigated", (fr) => { if (fr === page.mainFrame()) { const u = fr.url(); if (/^https?:/.test(u)) lastGood.set(page, u); } scheduleTabs(s); });
+  page.on("framenavigated", (fr) => { if (fr === page.mainFrame()) { void applyMetrics(s, tab); const u = fr.url(); if (/^https?:/.test(u)) lastGood.set(page, u); } scheduleTabs(s); });
   page.on("domcontentloaded", () => scheduleTabs(s));
   page.on("close", () => { s.pages.delete(tid); if (s.active === tid) { const next = [...s.pages.keys()].pop(); if (next) void activateTab(s, next); else s.active = null; } scheduleTabs(s); });
   cdp.on("Page.screencastFrame", (f) => {
@@ -132,6 +134,7 @@ async function addTab(s, page, activate) {
     cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => {});
     if (s.active === tid) scheduleSettle(s, tab);
   });
+  await applyMetrics(s, tab); // depois dos ouvintes: a navegação inicial não pode passar despercebida
   if (activate || !s.active) await activateTab(s, tid); else scheduleTabs(s);
   return tab;
 }
@@ -151,14 +154,21 @@ async function tabsPayload(s) {
   return { type: "tabs", tabs };
 }
 async function broadcastTabs(s) { if (s.sockets.size) sendAll(s, await tabsPayload(s)); }
-async function resizeSession(s, w, h, dprIn) {
-  const vw = clampW(w), vh = clampH(h), dpr = Math.min(2, Math.max(1, Number(dprIn) || 1));
-  if (vw === s.vw && vh === s.vh && dpr === s.dpr) return;
-  s.vw = vw; s.vh = vh; s.dpr = dpr;
-  for (const t of s.pages.values()) await t.page.setViewportSize({ width: vw, height: vh }).catch(() => {});
-  const a = s.pages.get(s.active);
-  if (a && s.streaming) { await a.cdp.send("Page.stopScreencast").catch(() => {}); await a.cdp.send("Page.startScreencast", shotOpts(s)).catch(() => {}); }
-  sendAll(s, { type: "size", width: vw, height: vh, dpr });
+async function resizeSession(s, w, h, dprIn, zoomIn) {
+  const z = Math.min(2, Math.max(0.25, Number(zoomIn) || 1));
+  let d = Math.min(2.5, Math.max(1, Number(dprIn) || 1));
+  const aw = Math.min(3840, Math.max(300, Math.round(Number(w) || 1280))), ah = Math.min(2160, Math.max(200, Math.round(Number(h) || 720)));
+  if (aw * d > 2560) d = Math.max(1, 2560 / aw); // limita o peso da imagem
+  const vw = Math.min(3840, Math.max(320, Math.round(aw / z))), vh = Math.min(2160, Math.max(240, Math.round(ah / z)));
+  const dsf = Math.min(3, Math.max(0.25, (aw * d) / vw));
+  const changed = vw !== s.vw || vh !== s.vh || Math.abs(dsf - s.dsf) > 0.001;
+  s.vw = vw; s.vh = vh; s.dsf = dsf; s.pxW = Math.round(vw * dsf); s.pxH = Math.round(vh * dsf);
+  if (changed) {
+    for (const t of s.pages.values()) await applyMetrics(s, t);
+    const act = s.pages.get(s.active);
+    if (act && s.streaming) { await act.cdp.send("Page.stopScreencast").catch(() => {}); await act.cdp.send("Page.startScreencast", shotOpts(s)).catch(() => {}); scheduleSettle(s, act); }
+  }
+  sendAll(s, { type: "size", width: vw, height: vh, dpr: dsf }); // responde sempre: a tela só mostra imagem depois de acertar o tamanho
 }
 async function closeSession(id) {
   const s = sessions.get(id); if (!s) return false;
@@ -174,10 +184,23 @@ async function startStream(s) {
   await a.cdp.send("Page.startScreencast", shotOpts(s)).catch(() => {});
   scheduleTabs(s);
 }
+// Entrada do usuário em fila (ordem preservada); só o último "mover mouse" pendente vale, para não acumular atraso.
+function pushInput(s, m) {
+  const last = s.queue[s.queue.length - 1];
+  if (m.type === "mouse" && m.action === "move" && last && last.type === "mouse" && last.action === "move") s.queue[s.queue.length - 1] = m;
+  else if (m.type === "resize" && last && last.type === "resize") s.queue[s.queue.length - 1] = m;
+  else s.queue.push(m);
+  if (s.queue.length > 400) s.queue.splice(0, s.queue.length - 400);
+  if (!s.draining) void drain(s);
+}
+async function drain(s) {
+  s.draining = true;
+  try { while (s.queue.length) await handleInput(s, s.queue.shift()); } finally { s.draining = false; }
+}
 const BUTTONS = { 0: "left", 1: "middle", 2: "right" };
 async function handleInput(s, m) {
   const cur = s.pages.get(s.active);
-  if (m.type === "resize") return resizeSession(s, m.width, m.height, m.dpr);
+  if (m.type === "resize") return resizeSession(s, m.width, m.height, m.dpr, m.zoom);
   if (m.type === "tab") {
     if (m.action === "switch") return activateTab(s, String(m.id));
     if (m.action === "close") { const t = s.pages.get(String(m.id)); if (t && s.pages.size > 1) await t.page.close().catch(() => {}); return; }
@@ -232,10 +255,10 @@ server.on("upgrade", (req, socket, head) => {
   if (!m || u.searchParams.get("secret") !== SECRET || !s) { socket.destroy(); return; }
   wss.handleUpgrade(req, socket, head, (ws) => {
     s.sockets.add(ws);
-    ws.send(JSON.stringify({ type: "hello", width: s.vw, height: s.vh, dpr: s.dpr }));
+    ws.send(JSON.stringify({ type: "hello", width: s.vw, height: s.vh, dpr: s.dsf }));
     tabsPayload(s).then((t) => ws.readyState === 1 && ws.send(JSON.stringify(t))).catch(() => {});
     startStream(s).catch(() => {});
-    ws.on("message", (data, isBinary) => { if (isBinary) return; try { const msg = JSON.parse(String(data)); handleInput(s, msg); } catch { /* ignora */ } });
+    ws.on("message", (data, isBinary) => { if (isBinary) return; try { const msg = JSON.parse(String(data)); pushInput(s, msg); } catch { /* ignora */ } });
     ws.on("close", () => s.sockets.delete(ws));
   });
 });
