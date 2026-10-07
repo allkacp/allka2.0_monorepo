@@ -63,8 +63,8 @@ services:
     environment:
       RUNNER_SECRET: dev-runner-secret-local
       MAX_SESSIONS: "5"
-    mem_limit: 3g
-    cpus: 2
+    mem_limit: 4g
+    cpus: 4
     shm_size: 1gb
     ports:
       - "127.0.0.1:7000:7000"   # só loopback, para os testes locais; em produção não se publica

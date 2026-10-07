@@ -7,6 +7,7 @@
 const http = require("node:http");
 const dns = require("node:dns").promises;
 const net = require("node:net");
+const crypto = require("node:crypto");
 const { chromium } = require("playwright-core");
 const { WebSocketServer } = require("ws");
 
@@ -50,22 +51,31 @@ async function urlAllowed(raw) {
 
 const MAX_TABS = 8;
 // Qualidade da imagem: JPEG 80 e resolução física da tela de quem assiste (dpr), para o texto ficar nítido.
-const SHOT_QUALITY = Number(process.env.SHOT_QUALITY || 70); // quadros em movimento
-const CRISP_QUALITY = Number(process.env.CRISP_QUALITY || 90); // quadro final, parado
-const shotOpts = (s) => ({ format: "jpeg", quality: SHOT_QUALITY, maxWidth: s.pxW, maxHeight: s.pxH, everyNthFrame: 1 });
+const CAPTURE_QUALITY = Number(process.env.CAPTURE_QUALITY || 85); // qualidade da imagem enviada (JPEG, resolução física da tela de quem assiste)
+const MIN_GAP_MS = Number(process.env.MIN_GAP_MS || 40);
+// O screencast do Chromium ignora o zoom/escala e entrega imagem reamostrada (borrada). Por isso ele só serve de AVISO de que a tela mudou
+// (quadros minúsculos); a imagem que o usuário vê vem de captureScreenshot, que desenha nativamente na resolução física.
+const shotOpts = () => ({ format: "jpeg", quality: 40, maxWidth: 640, maxHeight: 640, everyNthFrame: 1 });
 // O screencast só entrega a imagem no tamanho "CSS" da página (borrada em telas de alta densidade). Por isso, quando a imagem para de mudar
 // (350 ms), tiramos uma captura nítida na resolução física de quem assiste (dpr) e enviamos por cima.
 const applyMetrics = (s, tab) => tab.cdp.send("Emulation.setDeviceMetricsOverride", { width: s.vw, height: s.vh, deviceScaleFactor: s.dsf, mobile: false }).catch(() => {});
-function scheduleSettle(s, tab) {
-  clearTimeout(s.settleTimer);
-  s.settleTimer = setTimeout(async () => {
-    if (s.active !== tab.id || !s.sockets.size) return;
-    try {
-      const r = await tab.cdp.send("Page.captureScreenshot", { format: "jpeg", quality: CRISP_QUALITY });
-      const buf = Buffer.from(r.data, "base64");
-      if (s.active === tab.id) for (const ws of s.sockets) if (ws.readyState === 1 && ws.bufferedAmount < 4_000_000) ws.send(buf, { binary: true });
-    } catch { /* aba fechando ou carregando */ }
-  }, 220);
+function scheduleSettle(s) { s.dirty = true; if (!s.capturing) void captureLoop(s); }
+async function captureLoop(s) {
+  s.capturing = true;
+  try {
+    while (s.dirty && s.sockets.size) {
+      s.dirty = false;
+      const wait = MIN_GAP_MS - (Date.now() - (s.lastCapture || 0));
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      const tab = s.pages.get(s.active); if (!tab) break;
+      try {
+        const r = await tab.cdp.send("Page.captureScreenshot", { format: "jpeg", quality: CAPTURE_QUALITY });
+        const buf = Buffer.from(r.data, "base64");
+        s.lastCapture = Date.now();
+        if (s.active === tab.id) for (const ws of s.sockets) if (ws.readyState === 1 && ws.bufferedAmount < 4_000_000) ws.send(buf, { binary: true });
+      } catch { /* aba fechando ou carregando */ }
+    }
+  } finally { s.capturing = false; }
 }
 const clampW = (n) => Math.min(Math.max(Number(n) || 1280, 480), 2560), clampH = (n) => Math.min(Math.max(Number(n) || 720, 300), 1440);
 const sendAll = (s, payload) => { const data = typeof payload === "string" ? payload : JSON.stringify(payload); for (const ws of s.sockets) if (ws.readyState === 1) ws.send(data); };
@@ -107,7 +117,7 @@ async function openSession({ id, start_url, storage_state, ttl_seconds, width, h
     }
     return route.continue();
   });
-  const s = { id, context, pages: new Map(), active: null, nextTab: 1, sockets: new Set(), vw, vh, dsf: 1, pxW: vw, pxH: vh, queue: [], draining: false, settleTimer: null, timer: null, streaming: false, tabsTimer: null };
+  const s = { id, context, pages: new Map(), active: null, nextTab: 1, sockets: new Set(), dirty: false, capturing: false, lastCapture: 0, vw, vh, dsf: 1, pxW: vw, pxH: vh, queue: [], draining: false, settleTimer: null, timer: null, streaming: false, tabsTimer: null };
   // Várias abas: popups/links "nova aba" viram abas do nosso navegador (até MAX_TABS).
   context.on("page", (p) => { void addTab(s, p, true); });
   s.timer = setTimeout(() => closeSession(id).catch(() => {}), Math.max(30, Number(ttl_seconds) || 3600) * 1000);
@@ -129,10 +139,13 @@ async function addTab(s, page, activate) {
   page.on("domcontentloaded", () => scheduleTabs(s));
   page.on("close", () => { s.pages.delete(tid); if (s.active === tid) { const next = [...s.pages.keys()].pop(); if (next) void activateTab(s, next); else s.active = null; } scheduleTabs(s); });
   cdp.on("Page.screencastFrame", (f) => {
-    const buf = Buffer.from(f.data, "base64");
-    if (s.active === tid) for (const ws of s.sockets) if (ws.readyState === 1 && ws.bufferedAmount < 2_000_000) ws.send(buf, { binary: true });
+    // A própria captura nítida provoca um "repintar" idêntico: quadros iguais ao anterior são descartados (senão a imagem nítida
+    // seria trocada por uma versão leve e borrada, e o ciclo se repetiria).
+    const h = crypto.createHash("md5").update(f.data).digest("hex");
+    if (h === tab.lastHash) { cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => {}); return; }
+    tab.lastHash = h;
     cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => {});
-    if (s.active === tid) scheduleSettle(s, tab);
+    if (s.active === tid) scheduleSettle(s);
   });
   await applyMetrics(s, tab); // depois dos ouvintes: a navegação inicial não pode passar despercebida
   if (activate || !s.active) await activateTab(s, tid); else scheduleTabs(s);
@@ -144,7 +157,7 @@ async function activateTab(s, tid) {
   s.active = tid;
   if (prev && prev !== tab) await prev.cdp.send("Page.stopScreencast").catch(() => {});
   await tab.page.bringToFront().catch(() => {});
-  if (s.streaming || s.sockets.size > 0) { s.streaming = true; await tab.cdp.send("Page.stopScreencast").catch(() => {}); await tab.cdp.send("Page.startScreencast", shotOpts(s)).catch(() => {}); }
+  if (s.streaming || s.sockets.size > 0) { s.streaming = true; await tab.cdp.send("Page.stopScreencast").catch(() => {}); await tab.cdp.send("Page.startScreencast", shotOpts()).catch(() => {}); }
   scheduleTabs(s);
 }
 function scheduleTabs(s) { clearTimeout(s.tabsTimer); s.tabsTimer = setTimeout(() => { broadcastTabs(s).catch(() => {}); }, 150); }
@@ -166,7 +179,7 @@ async function resizeSession(s, w, h, dprIn, zoomIn) {
   if (changed) {
     for (const t of s.pages.values()) await applyMetrics(s, t);
     const act = s.pages.get(s.active);
-    if (act && s.streaming) { await act.cdp.send("Page.stopScreencast").catch(() => {}); await act.cdp.send("Page.startScreencast", shotOpts(s)).catch(() => {}); scheduleSettle(s, act); }
+    if (act && s.streaming) { await act.cdp.send("Page.stopScreencast").catch(() => {}); await act.cdp.send("Page.startScreencast", shotOpts()).catch(() => {}); scheduleSettle(s); }
   }
   sendAll(s, { type: "size", width: vw, height: vh, dpr: dsf }); // responde sempre: a tela só mostra imagem depois de acertar o tamanho
 }
@@ -181,7 +194,8 @@ async function startStream(s) {
   const a = s.pages.get(s.active); if (!a) return;
   s.streaming = true; // novo espectador: reinicia para receber um quadro atual imediatamente
   await a.cdp.send("Page.stopScreencast").catch(() => {});
-  await a.cdp.send("Page.startScreencast", shotOpts(s)).catch(() => {});
+  await a.cdp.send("Page.startScreencast", shotOpts()).catch(() => {});
+  scheduleSettle(s); // manda já uma imagem completa
   scheduleTabs(s);
 }
 // Entrada do usuário em fila (ordem preservada); só o último "mover mouse" pendente vale, para não acumular atraso.

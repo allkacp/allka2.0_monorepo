@@ -119,8 +119,8 @@ export function RemoteBrowserCanvas({ url, watermark, onClosed, canNavigate = fa
   useEffect(() => { if (activeUrl && canNavigate) setAddress(activeUrl) }, [activeUrl, canNavigate])
 
   return (
-    <div ref={box} className="flex min-h-0 flex-1 flex-col gap-1" data-testid="remote-browser">
-      <div className="flex items-center gap-1 overflow-x-auto" role="tablist" aria-label="Abas do navegador">
+    <div ref={box} className={`flex min-h-0 flex-1 flex-col ${expanded ? "gap-0.5 bg-white" : "gap-1"}`} data-testid="remote-browser">
+      <div className={`flex items-center gap-1 overflow-x-auto ${expanded ? "px-2 pt-1" : ""}`} role="tablist" aria-label="Abas do navegador">
         {tabs.map((t) => (
           <div key={t.id} role="tab" aria-selected={t.active} className={`group flex max-w-[190px] shrink-0 items-center gap-1 rounded-t-md border px-2 py-1 text-[11px] ${t.active ? "border-slate-300 bg-white font-semibold text-slate-800" : "border-transparent bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
             <button type="button" className="min-w-0 flex-1 truncate text-left" title={t.url} onClick={() => send({ type: "tab", action: "switch", id: t.id })}>{t.title || t.url || "Nova aba"}</button>
@@ -129,7 +129,7 @@ export function RemoteBrowserCanvas({ url, watermark, onClosed, canNavigate = fa
         ))}
         {canNavigate && tabs.length < 8 && <button type="button" aria-label="Nova aba" className="shrink-0 rounded p-1 text-slate-600 hover:bg-slate-100" onClick={() => send({ type: "tab", action: "new", url: "https://www.google.com" })}><Plus className="h-4 w-4" /></button>}
       </div>
-      <div className="flex items-center gap-1 text-slate-600">
+      <div className={`flex items-center gap-1 text-slate-600 ${expanded ? "px-2 pb-1" : ""}`}>
         <button type="button" aria-label="Voltar" className="rounded p-1 hover:bg-slate-100" onClick={() => send({ type: "nav", action: "back" })}><ArrowLeft className="h-4 w-4" /></button>
         <button type="button" aria-label="Avançar" className="rounded p-1 hover:bg-slate-100" onClick={() => send({ type: "nav", action: "forward" })}><ArrowRight className="h-4 w-4" /></button>
         <button type="button" aria-label="Recarregar" className="rounded p-1 hover:bg-slate-100" onClick={() => send({ type: "nav", action: "reload" })}><RotateCw className="h-4 w-4" /></button>
@@ -143,7 +143,7 @@ export function RemoteBrowserCanvas({ url, watermark, onClosed, canNavigate = fa
         <select aria-label="Zoom da página" title="Tamanho da página" className="h-7 rounded-md border border-slate-300 bg-white px-1 text-xs text-slate-700" value={String(zoom)} onChange={(e) => setZoom(Number(e.target.value))}>{[0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5].map((z) => <option key={z} value={String(z)}>{Math.round(z * 100)}%</option>)}</select>
         <button type="button" aria-label={expanded ? "Sair da tela cheia" : "Tela cheia"} title={expanded ? "Sair da tela cheia" : "Tela cheia"} className="rounded p-1 hover:bg-slate-100" onClick={() => onToggleExpand?.()}>{expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</button>
       </div>
-      <div ref={area} className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-slate-300 bg-white">
+      <div ref={area} className={`relative min-h-0 flex-1 overflow-hidden bg-white ${expanded ? "" : "rounded-lg border border-slate-300"}`}>
         <canvas
           ref={canvas} width={1280} height={720} tabIndex={0} data-testid="remote-canvas"
           className="absolute inset-0 h-full w-full outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500"

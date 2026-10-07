@@ -85,7 +85,7 @@ export function SessionViewer({ session, url, onClose, startUrl = "", hosts = []
           <Button size="sm" variant="outline" className="h-8" onClick={() => void end()}>Encerrar</Button>
         </div>
       )}
-      <div className="flex min-h-0 flex-1 flex-col bg-white p-2">
+      <div className={`flex min-h-0 flex-1 flex-col bg-white ${full ? "" : "p-2"}`}>
         {over ? <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">A sessão terminou. Abra outra, se ainda tiver autorização.</p> : session.driver === "runner" ? <RemoteBrowserCanvas expanded={full} onToggleExpand={toggleFull} canNavigate={session.mode === "setup"} startUrl={startUrl} url={url} watermark={`Allka · ${session.id.slice(-6)} · ${new Date().toLocaleDateString("pt-BR")}`} onClosed={(why) => { if (why === "session_over" || why === "session_closed") setStatus((s) => (s === "active" ? "expired" : s)) }} /> : <iframe title="Navegador seguro" src={url} className="min-h-0 flex-1 rounded-lg border border-slate-300 bg-white" sandbox="allow-scripts allow-forms allow-same-origin" />}
       </div>
     </div>
