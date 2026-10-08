@@ -1,0 +1,140 @@
+name: Espelhar banco local no QA (manual)
+
+# O QA (allka.store) é só para testes: o usuário decidiu (08/10/2026) que, quando pedir, o banco do servidor passa a ser CÓPIA EXATA do banco local
+# (usuários, empresas, projetos, produtos, saldos...). O que existir no servidor é substituído. A tabela de controle das migrations NÃO é tocada.
+# O dump trafega cifrado (AES-256-GCM) por um release temporário; a chave fica só no secret MIRROR_BUNDLE_KEY. Antes de gravar, o workflow faz um
+# backup completo do banco do servidor. Release e secret devem ser apagados depois da conferência. NUNCA usar este fluxo no link final de produção.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Digite exatamente: ESPELHAR LOCAL NO QA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      RELEASE_TAG: local-mirror-2026-10-08
+      ASSET_NAME: local-mirror-20261008.enc
+      MIRROR_SHA256: 1114ad5a2e6296df2077fdba3d6ec950c35861d670db2586d2ed3d530ac5cf28
+    steps:
+      - name: Validate inputs and secrets
+        shell: bash
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          MIRROR_BUNDLE_KEY: ${{ secrets.MIRROR_BUNDLE_KEY }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [ "$CONFIRM" = "ESPELHAR LOCAL NO QA" ] || { echo "::error::Frase de confirmação incorreta."; exit 1; }
+          : "${MIRROR_BUNDLE_KEY:?Configure o secret MIRROR_BUNDLE_KEY}"
+          : "${VPS_HOST:?Configure VPS_HOST}"
+          : "${VPS_USER:?Configure VPS_USER}"
+          : "${VPS_SSH_PORT:?Configure VPS_SSH_PORT}"
+          : "${VPS_SSH_KEY:?Configure VPS_SSH_KEY}"
+
+      - name: Download and decrypt the dump
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIRROR_BUNDLE_KEY: ${{ secrets.MIRROR_BUNDLE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p .transfer
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ASSET_NAME" --dir .transfer
+          node <<'NODE'
+          const crypto = require('crypto');
+          const fs = require('fs');
+          const input = fs.readFileSync(`.transfer/${process.env.ASSET_NAME}`);
+          const magic = Buffer.from('ALLKA-MIRROR-1', 'utf8');
+          if (input.length <= magic.length + 28 || !input.subarray(0, magic.length).equals(magic)) throw new Error('Envelope cifrado inválido.');
+          const key = Buffer.from(process.env.MIRROR_BUNDLE_KEY, 'base64');
+          if (key.length !== 32) throw new Error('Chave inválida.');
+          const iv = input.subarray(magic.length, magic.length + 12);
+          const tag = input.subarray(magic.length + 12, magic.length + 28);
+          const d = crypto.createDecipheriv('aes-256-gcm', key, iv);
+          d.setAuthTag(tag);
+          fs.writeFileSync('.transfer/mirror.sql', Buffer.concat([d.update(input.subarray(magic.length + 28)), d.final()]), { mode: 0o600 });
+          NODE
+          actual="$(sha256sum .transfer/mirror.sql | awk '{print $1}')"
+          test "$actual" = "$MIRROR_SHA256" || { echo "::error::Checksum do dump divergente; nada será enviado ao servidor."; exit 1; }
+          test "$(grep -c '^CREATE TABLE' .transfer/mirror.sql)" -ge 200 || { echo "::error::Dump com tabelas de menos."; exit 1; }
+          echo "Dump validado: checksum conferido."
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/allka_mirror_key
+          chmod 600 ~/.ssh/allka_mirror_key
+          : > ~/.ssh/known_hosts
+
+      - name: Backup, restore and verify on the server
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH || '/opt/allka-2026' }}
+        run: |
+          set -euo pipefail
+          remote="${VPS_USER}@${VPS_HOST}"
+          ssh_opts=(-i "$HOME/.ssh/allka_mirror_key" -p "$VPS_SSH_PORT" -o ConnectTimeout=20 -o ConnectionAttempts=2 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts")
+          remote_dir="/tmp/allka-mirror-${GITHUB_RUN_ID}"
+          ssh "${ssh_opts[@]}" "$remote" "install -d -m 700 '$remote_dir'"
+          scp -i "$HOME/.ssh/allka_mirror_key" -P "$VPS_SSH_PORT" -o ConnectTimeout=20 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" .transfer/mirror.sql "$remote:$remote_dir/mirror.sql"
+          cat > .transfer/remote-mirror.sh <<'SCRIPT'
+          set -euo pipefail
+          deploy_path="$1"
+          remote_dir="$2"
+          cleanup() { rm -rf -- "$remote_dir"; }
+          trap cleanup EXIT
+          cd "$deploy_path"
+          dc() { docker compose --env-file .env -f docker-compose.yml "$@"; }
+          backup_dir="$deploy_path/backups"
+          install -d -m 700 "$backup_dir"
+          backup_path="$backup_dir/allka-before-mirror-$(date -u +%Y%m%dT%H%M%SZ).sql.gz"
+          dc exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysqldump -uroot --single-transaction --routines --events "$MYSQL_DATABASE"' | gzip -c > "$backup_path"
+          test -s "$backup_path" || { echo 'ERRO: backup vazio; abortando antes da escrita.' >&2; exit 1; }
+          echo "backup_pre_espelho=$(basename "$backup_path") sha256=$(sha256sum "$backup_path" | awk '{print $1}')"
+          dc stop backend
+          restore_ok=1
+          dc exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot "$MYSQL_DATABASE"' < "$remote_dir/mirror.sql" || restore_ok=0
+          dc start backend
+          if [ "$restore_ok" != 1 ]; then echo 'ERRO: a restauração falhou. Restaure o backup acima.' >&2; exit 1; fi
+          dc exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -N -uroot "$MYSQL_DATABASE" -e "select \"usuarios\",count(*) from users union all select \"empresas\",count(*) from companies union all select \"projetos\",count(*) from projects union all select \"produtos\",count(*) from catalog2_products union all select \"movimentos_carteira\",count(*) from wallet_ledger"'
+          SCRIPT
+          scp -i "$HOME/.ssh/allka_mirror_key" -P "$VPS_SSH_PORT" -o ConnectTimeout=20 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$HOME/.ssh/known_hosts" .transfer/remote-mirror.sh "$remote:/tmp/allka-remote-mirror-${GITHUB_RUN_ID}.sh"
+          ssh "${ssh_opts[@]}" "$remote" "bash /tmp/allka-remote-mirror-${GITHUB_RUN_ID}.sh '$VPS_DEPLOY_PATH' '$remote_dir'; rc=\$?; rm -f /tmp/allka-remote-mirror-${GITHUB_RUN_ID}.sh; exit \$rc"
+
+      - name: Wait for the API
+        shell: bash
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS -m 10 https://api.allka.store/api/health | grep -q '"ok"'; then echo "API no ar."; exit 0; fi
+            sleep 10
+          done
+          echo "::error::A API não voltou em 5 minutos."; exit 1
+
+      - name: Remove plaintext from runner
+        if: always()
+        shell: bash
+        run: |
+          chmod -R u+w .transfer 2>/dev/null || true
+          rm -rf .transfer || true

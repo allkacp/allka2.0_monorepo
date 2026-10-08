@@ -2,6 +2,9 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
+## Envio de produtos 2026-10-08 (local → allka.store, ambiente de QA)
+Usuário autorizou espelhar os produtos do LOCAL no servidor (QA). Pacote cifrado com 36 produtos / 0 imagens. Simulação: destino=36, esperado=36, extras=0, numeração divergente=0, nenhum conflito. **Aplicado** (run 37845570905) com substituição dos campos divergentes. **Backup antes:** allka-before-catalog2-apply-20261008T211628Z.sql.gz. Release temporário e secret CATALOG2_TRANSFER_BUNDLE_KEY removidos; pacote local apagado. Não foram enviados usuários/empresas/projetos/saldos (o procedimento nunca os leva).
+
 ## deploy-2026-10-08-1 — reuniões 05/10 a 08/10 (no ar em allka.store / api.allka.store após conferência)
 **Backup antes:** `backups/allka-backup-20261008T203327Z.sql.gz` (136.657 bytes) no servidor, gerado pelo workflow "DB Backup (manual)".
 **Subiu — Banco (migrations aditivas, exceto as 2 de limpeza):** 20261005120000 a 20261008200000. Destaques: PLAC 13 passos, tarefas internas, navegador seguro, calendário de trabalho, níveis de agência por produto, qualificação do especialista, pedido sob consulta → contratação (cotação 7 dias), cobrança de alterações por IA, **gateways de pagamento trocáveis** (3 tabelas novas), recargas em andamento. **Limpeza (remove tabelas):** 20261008100000 (camada de dados provisórios, 4 tabelas) e 20261008110000 (lista antiga de acessos, copiada para o cadastro único). Rollbacks ao lado de cada migration.
