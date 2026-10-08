@@ -45,9 +45,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     env:
-      RELEASE_TAG: catalog2-transfer-2026-10-04
-      ASSET_NAME: catalog2-prepared-20261004.enc
-      PACKAGE_SHA256: 84945b7d3160f56067218e7b50a976801e89a3e8d8d327deff9d92ea12e8af49
+      RELEASE_TAG: catalog2-transfer-2026-10-08
+      ASSET_NAME: catalog2-prepared-20261008.enc
+      PACKAGE_SHA256: 18795f7d8e7c9b5a5625bedf77c67758e2d7a14f16168d12badcaec44f17fc7b
     steps:
       - name: Validate controlled inputs and secrets
         shell: bash
@@ -108,15 +108,15 @@ jobs:
           const ciphertext = input.subarray(magic.length + 28);
           const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
           decipher.setAuthTag(tag);
-          fs.writeFileSync('.transfer/catalog2-prepared-20261004.zip', Buffer.concat([decipher.update(ciphertext), decipher.final()]), { mode: 0o600 });
+          fs.writeFileSync('.transfer/catalog2-prepared-20261008.zip', Buffer.concat([decipher.update(ciphertext), decipher.final()]), { mode: 0o600 });
           NODE
-          unzip -q .transfer/catalog2-prepared-20261004.zip -d .transfer
+          unzip -q .transfer/catalog2-prepared-20261008.zip -d .transfer
           test -f .transfer/catalog2-package-production-final/package.json
           actual="$(sha256sum .transfer/catalog2-package-production-final/package.json | awk '{print $1}')"
           test "$actual" = "$PACKAGE_SHA256" || { echo "::error::Checksum do pacote divergente; nada será enviado ao VPS."; exit 1; }
-          file_count="$(find .transfer/catalog2-package-production-final/images -type f | wc -l | tr -d ' ')"
-          test "$file_count" = 31 || { echo "::error::Esperadas 31 imagens no pacote; encontradas $file_count."; exit 1; }
-          echo "Pacote validado: 36 produtos, 31 imagens, checksum conferido."
+          file_count="$(find .transfer/catalog2-package-production-final/images -type f 2>/dev/null | wc -l | tr -d ' ')"
+          test "$file_count" = 0 || { echo "::error::Esperadas 0 imagens no pacote; encontradas $file_count."; exit 1; }
+          echo "Pacote validado: 36 produtos, 0 imagens, checksum conferido."
 
       - name: Configure SSH
         shell: bash

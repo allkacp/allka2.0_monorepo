@@ -57,7 +57,7 @@ async function main() {
   console.log(`▶ Exportando estado preparado do catalog2 para ${outDir}`);
 
   const products = await src.catalog2Product.findMany({
-    where: { import_origin: { isNot: null } },
+    // Desde 08/10 todo produto é do catálogo novo (não há mais origem de importação antiga): exporta TODOS; a origem, quando existe, segue junto.
     include: {
       import_origin: true,
       four_f: { include: { four_f: true } },
