@@ -10,6 +10,10 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 **NÃO subiu (dados):** nenhum dado local (usuários, empresas, projetos, saldos, produtos). Fixtures de teste locais (`empresa.teste@allka.test`, `teste.local@allka.test`) NÃO existem no servidor. Produtos: envio só pelo procedimento "sobe os produtos" (simulação → confirmação).
 **Atenção:** o navegador seguro real precisa do serviço `browser-runner` no servidor; o compose de produção ainda NÃO o tem (a tela existe, mas a sessão real só funciona depois de instalar o serviço). Gateway PagBank ainda sem chaves no servidor: o gateway ativo continua o de teste até o Admin Master cadastrar o token e ativar.
 
+## deploy-2026-10-08-2 — correção do CI (só banco/schema)
+**Subiu:** ajuste do schema.prisma para bater com as migrations já aplicadas (tamanhos de colunas e um índice; nenhuma coluna foi encolhida) e a migration 20261008210000_calendar_id_default (só põe o padrão "default" no id do calendário de trabalho; nenhum dado muda). O CI que acusava "schema divergente das migrations" passa a ficar verde.
+**NÃO subiu:** frontend, dados.
+
 ## Envio de produtos 2026-10-04 (local → allka.store)
 Usuário autorizou a substituição do cadastro de teste do servidor pelo estado atual LOCAL. Pacote cifrado exportado: **36 produtos / 31 imagens**. Simulação conferida antes do apply: destino=36, esperado=36, extras=0 e numeração divergente=0.
 

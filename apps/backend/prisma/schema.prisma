@@ -5725,7 +5725,7 @@ model Catalog2VariationOption {
   // Mídia opcional por opção. A URL pode ser um arquivo enviado ou uma imagem
   // cadastrada; icon_key mantém uma alternativa sem imagem de marca.
   media_url String? @db.Text
-  icon_key String?
+  icon_key String? @db.VarChar(60)
 }
 
 // Efeito de escolher uma OPCAO de variacao — vocabulario FECHADO, igual ao
@@ -5777,7 +5777,7 @@ model Catalog2Addon {
   base_cost           Float?
   // Mídia opcional cadastrada pelo administrador; nenhum logo é assumido.
   media_url           String? @db.Text
-  icon_key            String?
+  icon_key            String? @db.VarChar(60)
 
   // Vinculo opcional a uma tarefa/etapa especifica da mesma versao.
   target_task_id String?
@@ -7322,6 +7322,7 @@ model Catalog2CommercialRequest {
 
   @@index([product_id, status])
   @@index([requested_by_user_id])
+  @@index([assigned_to_user_id])
   @@map("catalog2_commercial_requests")
 }
 
@@ -7681,7 +7682,7 @@ model BrowserProfile {
   agency_id           String?
   connection_id       String?
   label               String
-  start_url           String
+  start_url           String @db.VarChar(500)
   provider_hint       String?
   // active | revoked
   status              String    @default("active")
@@ -7714,7 +7715,7 @@ model BrowserAccessGrant {
   valid_from         DateTime
   valid_until        DateTime
   project_task_id    String?
-  reason             String?
+  reason             String? @db.VarChar(500)
   granted_by_user_id String
   revoked_at         DateTime?
   revoked_by_user_id String?
