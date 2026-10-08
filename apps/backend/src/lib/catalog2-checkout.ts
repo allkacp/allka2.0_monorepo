@@ -175,6 +175,10 @@ export async function attachCatalog2QuoteToProject(tx: DbClient, params: AttachQ
   });
 
   await tx.catalog2Quote.update({ where: { id: quote.id }, data: { status: "convertida" } });
+  // D-2: o pedido "sob consulta" de origem passa a apontar para o projeto criado.
+  if (quote.commercial_request_id) {
+    await tx.catalog2CommercialRequest.update({ where: { id: quote.commercial_request_id }, data: { converted_project_id: params.projectId } }).catch(() => undefined);
+  }
 
   return pp;
 }

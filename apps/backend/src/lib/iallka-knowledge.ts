@@ -49,7 +49,7 @@ interface Catalog2KnowledgeOpts {
  * provisório como fato comercial (sempre rotulado "[PROVISÓRIO]", e só
  * quando `includeProvisional` for true); nunca lista um produto "em
  * preparação" como contratável. */
-import { audienceAllows, type AudienceViewer } from "./catalog2-audience";
+import { productVisibleTo as audienceAllows, type AudienceViewer } from "./catalog2-audience";
 
 export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): Promise<{ text: string; sources: KnowledgeSource[] }> {
   const products = await prisma.catalog2Product.findMany({
@@ -59,7 +59,6 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
       category: { select: { name: true } },
       four_f: { select: { four_f: { select: { name: true } } } },
       import_origin: { select: { pendencies_json: true } },
-      provisional_preview: true,
       versions: {
         orderBy: { version_number: "desc" },
         include: {
@@ -81,13 +80,10 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
     if (!target) continue;
 
     let pricing: Awaited<ReturnType<typeof computePricing>> | null = null;
-    let pricingSimulation: Awaited<ReturnType<typeof computePricing>> | null = null;
     try {
       pricing = await computePricing(target.id, await defaultSelection(target.id));
-      if (opts.includeProvisional) pricingSimulation = pricing; // fonte única: mesma regra real
     } catch {
       pricing = null;
-      pricingSimulation = null;
     }
 
     const pend = safeJsonArray(p.import_origin?.pendencies_json);
@@ -109,12 +105,6 @@ export async function buildCatalog2KnowledgeText(opts: Catalog2KnowledgeOpts): P
     if (pricing?.commercial_ready && realAmount != null) {
       priceText = `R$ ${realAmount.toFixed(2)} [REAL]`;
       deadlineText = `${pricing.deadline.commercial_deadline_days} dia(s) [REAL]`;
-    } else if (opts.includeProvisional && pricingSimulation?.simulation_provenance.commercial_config === "provisional") {
-      priceText = `R$ ${pricingSimulation.simulation.total.toFixed(2)} [SIMULAÇÃO PROVISÓRIA PARA TESTE — nunca oferecer como preço final]`;
-      deadlineText = `${pricingSimulation.deadline.commercial_deadline_days ?? "?"} dia(s) [SIMULAÇÃO PROVISÓRIA — nunca prometer ao cliente]`;
-    } else if (opts.includeProvisional && p.provisional_preview?.price_amount != null) {
-      priceText = `R$ ${p.provisional_preview.price_amount.toFixed(2)} [PROVISÓRIO — revisar, nunca oferecer como preço final]`;
-      deadlineText = `${p.provisional_preview.deadline_days ?? "?"} dia(s) [PROVISÓRIO — revisar]`;
     } else {
       priceText = "a definir (produto em preparação, sem preço comercial ainda)";
       deadlineText = "a definir (produto em preparação, sem prazo comercial ainda)";

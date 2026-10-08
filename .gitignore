@@ -101,3 +101,5 @@ links-primeiro-acesso*.csv
 backups/
 .kilo/
 /entregas/tarefa-22506/layout-site/
+.test-login.local
+.test-login-*.local

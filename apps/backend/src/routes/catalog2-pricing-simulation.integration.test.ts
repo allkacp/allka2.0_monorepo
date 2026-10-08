@@ -75,20 +75,6 @@ describe("Precificação — fonte única da regra e pré-visualização (reuni�
     };
     await prisma.catalog2PricingSettings.upsert({ where: { id: "default" }, create: { id: "default", ...realSeed }, update: realSeed });
 
-    // Config PROVISÓRIA antiga (reunião 10/09): continua guardada, mas NUNCA mais alimenta preço algum — o teste prova que é ignorada.
-    const simSeed = {
-      tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 20, human_review_percent: 10,
-      component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]),
-      is_provisional: true, source: "provisional_simulation_v1",
-    };
-    await prisma.catalog2PricingSimulationSettings.upsert({ where: { id: "default" }, create: { id: "default", ...simSeed }, update: simSeed });
-    const designer = await prisma.catalog2Specialty.findUniqueOrThrow({ where: { key: "designer" } });
-    await prisma.catalog2PricingSimulationSpecialtyRate.upsert({
-      where: { specialty_id: designer.id },
-      create: { specialty_id: designer.id, hourly_rate: 90, is_provisional: true, source: "provisional_simulation_v1" },
-      update: { hourly_rate: 90, is_provisional: true, source: "provisional_simulation_v1" },
-    });
-
     const master = await mkMaster();
     TOKEN = tokenFor(master);
     server = app.listen(0);
@@ -109,16 +95,14 @@ describe("Precificação — fonte única da regra e pré-visualização (reuni�
     await prisma.$disconnect();
   });
 
-  it("a configuração provisória antiga é IGNORADA: pré-visualização e cálculo normal usam a mesma regra real (fonte única)", async () => {
+  it("pré-visualização e cálculo normal usam a mesma regra real (fonte única)", async () => {
     const { v1 } = await mkPricedProduct();
     const sel = await defaultSelection(v1);
     const real = await computePricing(v1, sel);
     const prev = await computePricing(v1, sel, { previewOnly: true });
-    const legacy = await computePricing(v1, sel, { simulateProvisional: true }); // alias antigo: mesma regra real
     // margem/revisão da provisória (20%/10%) diferem da real (30%/15%): se fossem lidas, os preços divergiriam
     assert.equal(prev.lines.final_price.amount, real.lines.final_price.amount);
     assert.equal(prev.simulation.total, real.simulation.total);
-    assert.equal(legacy.simulation.total, real.simulation.total);
     assert.equal(prev.rule.hash, real.rule.hash, "mesma versão da regra");
     assert.equal(prev.rule.profit_margin_percent, 30);
     assert.equal(prev.rule.qualification_percent, 15);

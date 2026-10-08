@@ -274,15 +274,6 @@ export interface PricingSplit {
 export interface PricingOptions {
   /** Implantações que o cliente JÁ concluiu antes (por modelo global ou chave da tarefa) — decide se a implantação é cobrada de novo. */
   implementationDone?: { modelIds: Set<number>; keys: Set<string> };
-  /** Reunião 10/09: usa Catalog2PricingSimulationSettings (estrutura
-   * PROVISÓRIA e SEPARADA do singleton comercial real) e o prazo comercial
-   * provisório da versão em vez do real quando o real não estiver
-   * definido — nunca sobrescreve/mistura com o real, que sempre vence
-   * quando presente. Força commercial_ready=false incondicionalmente. Só
-   * deve ser passado por rotas admin-only explícitas — nunca por
-   * catalog2-client.ts (checkout/cotação/catálogo do cliente) nem por
-   * validateVersionForPublish/publishVersion. */
-  simulateProvisional?: boolean;
   /** Pré-visualização (rascunho/admin): usa as MESMAS regras reais e só impede que o resultado autorize cotação/contratação. */
   previewOnly?: boolean;
 }
@@ -479,7 +470,7 @@ export async function computePricing(versionId: string, selection: PricingSelect
     cycle_prices: r.split.cycle_prices.map((c) => ({ cycle: c.cycle, price })),
     schedule: { tasks: [{ key: "preco_fixo", name: "Preço fixo informado", price, kind: "recurring", every_n: null }], items: [] },
   };
-  if (!(opts.previewOnly || opts.simulateProvisional)) {
+  if (!opts.previewOnly) {
     r.quote_blockers = [...r.quote_requirements.map((q) => `${REQUEST_KIND_LABEL[q.kind] ?? q.kind}: ${q.message}`), ...r.selection_issues.map((i) => i.message)];
     r.commercial_ready = r.quote_blockers.length === 0;
   }
@@ -493,7 +484,7 @@ async function computePricingCore(versionId: string, selection: PricingSelection
   if (!version) throw Object.assign(new Error("Versão não encontrada."), { httpStatus: 404 });
 
   // Pré-visualização/rascunho: mesmas regras reais; só impede que o resultado autorize cotação ou contratação.
-  const previewOnly = !!(opts.previewOnly || opts.simulateProvisional);
+  const previewOnly = !!opts.previewOnly;
   const settings = (await prisma.catalog2PricingSettings.findUnique({ where: { id: "default" } })) ?? null;
   // FONTE ÚNICA DA REGRA DE PREÇO (2026-10-02): a configuração real. A antiga "simulação provisória" (valor/hora, revisão e margem
   // próprios) deixou de alimentar qualquer cálculo, tela ou API — era a origem de preços diferentes em telas diferentes.

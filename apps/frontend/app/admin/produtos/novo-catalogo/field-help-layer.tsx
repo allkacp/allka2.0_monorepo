@@ -12,7 +12,7 @@ const CSS = `
 `;
 const SKIP = "button, option, select, textarea, input, script, style, [role=tab], [role=tablist], [data-no-info], .field-info";
 
-function ensureIcons(root: HTMLElement) {
+function ensureIcons(root: HTMLElement, helpOf: (t: string) => string | null, strict = false) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const found: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -23,10 +23,12 @@ function ensureIcons(root: HTMLElement) {
     if (!el || el.closest(SKIP)) continue;
     const next = t.nextSibling as HTMLElement | null;
     if (next && next.nodeType === 1 && next.classList?.contains("field-info")) continue;
-    if (helpFor(v)) found.push(t);
+    // strict (camada geral): só o texto que é o rótulo inteiro do elemento (aceita * e :), nunca um pedaço de frase como "4 empresas".
+    if (strict && (el.textContent ?? "").replace(/[\s*:]+$/g, "").trim() !== v.replace(/[\s*:]+$/g, "").trim()) continue;
+    if (helpOf(v)) found.push(t);
   }
   for (const t of found) {
-    const help = helpFor(t.nodeValue ?? "");
+    const help = helpOf(t.nodeValue ?? "");
     if (!help) continue;
     const i = document.createElement("span");
     i.className = "field-info";
@@ -37,7 +39,7 @@ function ensureIcons(root: HTMLElement) {
   }
 }
 
-export function FieldHelpLayer({ children }: { children: React.ReactNode }) {
+export function FieldHelpLayer({ children, help = helpFor, strict = false }: { children: React.ReactNode; help?: (label: string) => string | null; strict?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
 
@@ -45,11 +47,11 @@ export function FieldHelpLayer({ children }: { children: React.ReactNode }) {
     const root = ref.current;
     if (!root) return;
     let raf = 0;
-    const run = () => { raf = 0; obs.disconnect(); try { ensureIcons(root); } finally { obs.observe(root, { childList: true, subtree: true, characterData: true }); } };
+    const run = () => { raf = 0; obs.disconnect(); try { ensureIcons(root, help, strict); } finally { obs.observe(root, { childList: true, subtree: true, characterData: true }); } };
     const obs = new MutationObserver(() => { if (!raf) raf = window.setTimeout(run, 120) as unknown as number; });
     run();
     return () => { obs.disconnect(); if (raf) window.clearTimeout(raf); };
-  }, []);
+  }, [help, strict]);
 
   const show = (e: React.MouseEvent | React.FocusEvent) => {
     const el = (e.target as HTMLElement | null)?.closest?.(".field-info") as HTMLElement | null;

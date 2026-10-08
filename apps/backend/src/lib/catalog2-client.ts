@@ -14,7 +14,7 @@
 
 import { clientCommercialView } from "./catalog2-commercial-fields";
 import { prisma } from "./prisma";
-import { audienceAllows, audienceWhere, viewerFromContext } from "./catalog2-audience";
+import { audienceWhere, productVisibleTo as audienceAllows, viewerFromContext } from "./catalog2-audience";
 import { config } from "../config";
 import { hashPayload } from "./canonical-json";
 import { Catalog2Error, isNewByPublicationDate, computeInactivationState } from "./catalog2-service";
@@ -22,6 +22,7 @@ import { computePricing, defaultSelection, type PricingResult, type PricingSelec
 import { REQUEST_KIND_LABEL, strongestRequirement } from "./catalog2-availability";
 import { findEarliestCommercialChangeAfter } from "./catalog2-commercial-change-log";
 import { createCatalog2NotificationJob } from "./catalog2-notifications";
+import { OPEN_REQUEST_STATUSES, PROPOSAL_VISIBLE_STATUSES, loadRequestQuestionnaire, notifyAdmins, validateRequestAnswers } from "./catalog2-commercial-flow";
 import { connectionsPreviewForClient } from "./connections/quote";
 import { linkedProductsForClient } from "./catalog2-linked-products";
 import {
@@ -77,6 +78,8 @@ export interface ClientContext {
   always_sees_all_products: boolean;
   /** Nível de parceiro da agência (visibilidade por público, C7). */
   agency_is_partner?: boolean;
+  /** Nível da agência (bronze…diamond) — visibilidade por nível (D-1). */
+  agency_level?: string | null;
 }
 
 // Item 16.1 (reunião 2026-09-14, "Visibilidade e teste") — parseia a lista
@@ -106,8 +109,8 @@ export async function resolveClientContext(userId: string, accountType: string, 
       // project-scope.ts e quebraria pra um sub-usuário no futuro).
       company_id: true,
       agency_id: true,
-      agency_link: { select: { partner_profile: { select: { status: true } } } },
-      owned_agency: { select: { partner_profile: { select: { status: true } } } },
+      agency_link: { select: { partner_level: true, partner_profile: { select: { status: true } } } },
+      owned_agency: { select: { partner_level: true, partner_profile: { select: { status: true } } } },
       admin_profile: { select: { is_master: true, is_active: true } },
     },
   });
@@ -160,6 +163,7 @@ export async function resolveClientContext(userId: string, accountType: string, 
     // decisão adiada pelo usuário, feita pelo fluxo do projeto da empresa,
     // não por aqui.
     always_sees_all_products: kind === "leader" || isMaster,
+    agency_level: kind === "agency" ? (user?.agency_link?.partner_level ?? user?.owned_agency?.partner_level ?? null) : null,
     agency_is_partner: kind === "agency" && (user?.agency_link?.partner_profile?.status ?? user?.owned_agency?.partner_profile?.status) === "active",
   };
 }
@@ -1109,6 +1113,16 @@ interface QuoteAssessment {
 // nunca uma segunda fórmula de "quantos dias restam" reimplementada num
 // prompt.
 export async function assessQuote(q: QuoteRow): Promise<QuoteAssessment> {
+  if (q.commercial_request_id) {
+    // D-2: cotação travada no valor APROVADO do pedido "sob consulta" — o motor de preço não recalcula; vale só pela validade (7 dias).
+    const timeExpired = q.valid_until != null && q.valid_until < new Date();
+    return {
+      vis: { visible: true, contractable: true, contractable_existing: true, reasons: [], published_version_id: q.version_id, inactivation_scheduled_at: null, inactivation_effective_at: null },
+      sel: normalizeSelection(JSON.parse(q.selection_json)), pricingVersionId: q.version_id, versionChanged: false, scopeCompatible: true, structurallyBroken: false,
+      pricing: null, periodResult: null, pricingBroken: false, priceOrDeadlineDrifted: false, timeExpired,
+      resolvedAnchor: null, anchorSource: null, protectionEndsAt: null, withinProtectionWindow: false, withinProtection: false, needsRenewal: timeExpired,
+    };
+  }
   const product = await prisma.catalog2Product.findUnique({
     where: { id: q.product_id },
     include: { import_origin: { select: { pendencies_json: true } } },
@@ -1325,6 +1339,9 @@ export async function renewQuote(ctx: ClientContext, id: string) {
     throw new Catalog2Error("Esta cotação foi cancelada — gere uma nova cotação no catálogo.", 409, "quote_cancelled");
   }
 
+  if (q.commercial_request_id && q.valid_until && q.valid_until < new Date()) {
+    throw new Catalog2Error("Esta cotação foi negociada com a equipe e a validade terminou. Peça à equipe para gerar a contratação novamente.", 409, "negotiated_quote_expired");
+  }
   const a = await assessQuote(q);
   const updated = await persistQuoteAssessment(q, a);
 
@@ -1751,7 +1768,7 @@ export async function clearCart(ctx: ClientContext) {
 // ── Solicitação comercial (orçamento personalizado / análise / contratação assistida) ───────────────────────
 // Quando a seleção inclui uma opção/adicional que não pode ser contratado automaticamente, o cliente PEDE em vez de contratar:
 // a seleção fica gravada para o time comercial responder. Nunca gera cotação nem cobrança.
-export async function createCommercialRequest(ctx: ClientContext, productIdOrSlug: string, rawSelection: unknown, rawPeriod?: unknown, clientNote?: string | null) {
+export async function createCommercialRequest(ctx: ClientContext, productIdOrSlug: string, rawSelection: unknown, rawPeriod?: unknown, clientNote?: string | null, rawAnswers?: Record<string, unknown> | null) {
   if (!ctx.can_contract) throw new Catalog2Error("Seu perfil não pode solicitar orçamento.", 403, "cannot_contract");
   const product = await prisma.catalog2Product.findFirst({
     where: productLookupWhere(productIdOrSlug),
@@ -1763,7 +1780,6 @@ export async function createCommercialRequest(ctx: ClientContext, productIdOrSlu
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
   if (!audienceAllows(product, viewerFromContext(ctx))) throw new Catalog2Error("Produto não encontrado.", 404);
   const vis = await checkClientVisibility(product);
-  if (!vis.contractable) throw new Catalog2Error(`Produto indisponível.${vis.reasons.length ? ` ${vis.reasons.join("; ")}.` : ""}`, 409, "not_quotable");
   const version = product.versions.find((v) => v.id === product.published_version_id);
   if (!version || version.state !== "publicada") throw new Catalog2Error("Produto sem versão publicada.", 409, "not_published");
 
@@ -1774,13 +1790,22 @@ export async function createCommercialRequest(ctx: ClientContext, productIdOrSlu
   const implOpt = await implOpts(ctx.account_kind, ctx.account_id, product.id);
   const pricing = await computePricing(version.id, sel, implOpt);
   if (pricing.selection_issues.length) throw new Catalog2Error(pricing.selection_issues.map((i) => i.message).join(" "), 422, "invalid_selection");
-  if (pricing.quote_requirements.length === 0) {
+  // Produto SOB CONSULTA (D-2): não contrata direto — o único caminho é solicitar orçamento (com o questionário do produto).
+  const onRequest = pricing.pricing_mode === "on_request";
+  if (onRequest ? !vis.visible : !vis.contractable) throw new Catalog2Error(`Produto indisponível.${vis.reasons.length ? ` ${vis.reasons.join("; ")}.` : ""}`, 409, "not_quotable");
+  if (!onRequest && pricing.quote_requirements.length === 0) {
     throw new Catalog2Error("Esta seleção pode ser contratada diretamente: gere a cotação em vez de solicitar orçamento.", 409, "commercial_request_not_needed");
   }
-  const kind = strongestRequirement(pricing.quote_requirements) ?? "custom_quote";
+  const kind = onRequest ? "custom_quote" : (strongestRequirement(pricing.quote_requirements) ?? "custom_quote");
+  // Questionário do produto: obrigatórias respondidas antes de enviar (só nos produtos sob consulta; nos demais é opcional).
+  const questions = await loadRequestQuestionnaire(version.id);
+  const { answers, errors: answerErrors } = validateRequestAnswers(questions, rawAnswers ?? null);
+  if (onRequest && answerErrors.length) throw new Catalog2Error(answerErrors.join(" "), 422, "request_answers_invalid");
   const checksum = configChecksum(product.id, version.id, sel, period);
   const existing = await prisma.catalog2CommercialRequest.findFirst({
-    where: { product_id: product.id, requested_by_user_id: ctx.user_id, status: "aberta", selection_json: { contains: checksum } },
+    where: onRequest
+      ? { product_id: product.id, requested_by_user_id: ctx.user_id, status: { in: OPEN_REQUEST_STATUSES } }
+      : { product_id: product.id, requested_by_user_id: ctx.user_id, status: "aberta", selection_json: { contains: checksum } },
   });
   if (existing) return serializeCommercialRequest(existing, true);
   const created = await prisma.catalog2CommercialRequest.create({
@@ -1791,23 +1816,61 @@ export async function createCommercialRequest(ctx: ClientContext, productIdOrSlu
       account_id: ctx.account_id,
       requested_by_user_id: ctx.user_id,
       kind,
+      status: onRequest ? "novo" : "aberta",
       selection_json: JSON.stringify({ checksum, selection: sel, period }),
-      reasons_json: JSON.stringify(pricing.quote_requirements),
+      reasons_json: JSON.stringify(onRequest ? [{ kind: "custom_quote", message: "Produto sob consulta." }] : pricing.quote_requirements),
       pricing_snapshot_json: JSON.stringify({ rule_version: pricing.rule.version, indicative_total: pricing.simulation.total, active_scenario: pricing.active_scenario, effort_breakdown: pricing.effort_breakdown, addon_breakdown: pricing.addon_breakdown }),
+      answers_json: answers.length ? JSON.stringify(answers) : null,
       client_note: clientNote?.slice(0, 2000) ?? null,
     },
   });
+  await notifyAdmins("Novo pedido de orçamento", `Há um novo pedido de orçamento para "${product.internal_name}". Responda com valor e prazo em Pedidos de orçamento.`, created.id);
   return serializeCommercialRequest(created, false);
 }
 
-function serializeCommercialRequest(r: { id: string; product_id: string; kind: string; status: string; selection_json: string; reasons_json: string; client_note: string | null; response_note: string | null; created_at: Date; handled_at: Date | null }, alreadyExisted: boolean) {
-  let sel: unknown = null; let reasons: unknown = [];
+type CommercialRequestRow = { id: string; product_id: string; kind: string; status: string; selection_json: string; reasons_json: string; client_note: string | null; response_note: string | null; created_at: Date; handled_at: Date | null; answers_json?: string | null; proposed_price?: number | null; proposed_deadline_days?: number | null; proposal_valid_until?: Date | null; client_response_note?: string | null };
+function serializeCommercialRequest(r: CommercialRequestRow, alreadyExisted: boolean) {
+  let sel: unknown = null; let reasons: unknown = []; let answers: unknown = [];
   try { sel = JSON.parse(r.selection_json); } catch { /* ignora */ }
   try { reasons = JSON.parse(r.reasons_json); } catch { /* ignora */ }
-  return { id: r.id, product_id: r.product_id, kind: r.kind, kind_label: REQUEST_KIND_LABEL[r.kind] ?? r.kind, status: r.status, selection: (sel as { selection?: unknown } | null)?.selection ?? null, period: (sel as { period?: unknown } | null)?.period ?? null, reasons, client_note: r.client_note, response_note: r.response_note, created_at: r.created_at, handled_at: r.handled_at, already_existed: alreadyExisted };
+  try { answers = r.answers_json ? JSON.parse(r.answers_json) : []; } catch { /* ignora */ }
+  // Valor e prazo só aparecem para o cliente depois que a equipe ENVIA a proposta.
+  const proposal = PROPOSAL_VISIBLE_STATUSES.includes(r.status) && r.proposed_price != null
+    ? { proposed_price: r.proposed_price, proposed_deadline_days: r.proposed_deadline_days ?? null, proposal_valid_until: r.proposal_valid_until ?? null, expired: !!r.proposal_valid_until && r.proposal_valid_until.getTime() < Date.now() }
+    : null;
+  return { id: r.id, product_id: r.product_id, kind: r.kind, kind_label: REQUEST_KIND_LABEL[r.kind] ?? r.kind, status: r.status, selection: (sel as { selection?: unknown } | null)?.selection ?? null, period: (sel as { period?: unknown } | null)?.period ?? null, reasons, answers, proposal, can_respond: r.status === "proposta_enviada" && !(proposal?.expired), client_note: r.client_note, response_note: r.response_note, client_response_note: r.client_response_note ?? null, created_at: r.created_at, handled_at: r.handled_at, already_existed: alreadyExisted };
 }
 
 export async function listCommercialRequests(ctx: ClientContext) {
   const rows = await prisma.catalog2CommercialRequest.findMany({ where: { account_kind: ctx.account_kind, account_id: ctx.account_id }, orderBy: { created_at: "desc" }, take: 100 });
   return rows.map((r) => serializeCommercialRequest(r, false));
+}
+
+/** Perguntas que o cliente responde ao solicitar orçamento deste produto. */
+export async function getRequestQuestionnaire(ctx: ClientContext, productIdOrSlug: string) {
+  const product = await prisma.catalog2Product.findFirst({ where: productLookupWhere(productIdOrSlug), select: { id: true, slug: true, status: true, visibility_mode: true, visibility_agency_levels: true, published_version_id: true } });
+  if (!product || !product.published_version_id) throw new Catalog2Error("Produto não encontrado.", 404);
+  if (!audienceAllows(product, viewerFromContext(ctx))) throw new Catalog2Error("Produto não encontrado.", 404);
+  return { product_id: product.id, questions: await loadRequestQuestionnaire(product.published_version_id) };
+}
+
+/** O cliente aprova ou recusa a proposta enviada pela equipe. Aprovar NÃO contrata sozinho: avisa a equipe comercial para formalizar. */
+export async function respondToCommercialRequest(ctx: ClientContext, id: string, decision: "aprovar" | "recusar", note?: string | null) {
+  if (!ctx.can_contract) throw new Catalog2Error("Seu perfil não pode responder a proposta.", 403, "cannot_contract");
+  const row = await prisma.catalog2CommercialRequest.findUnique({ where: { id } });
+  if (!row || row.account_kind !== ctx.account_kind || row.account_id !== ctx.account_id) throw new Catalog2Error("Pedido não encontrado.", 404);
+  if (row.status !== "proposta_enviada") throw new Catalog2Error("Este pedido não tem uma proposta aguardando a sua resposta.", 409, "no_proposal_pending");
+  const history = (() => { try { return row.history_json ? JSON.parse(row.history_json) : []; } catch { return []; } })();
+  if (row.proposal_valid_until && row.proposal_valid_until.getTime() < Date.now()) {
+    await prisma.catalog2CommercialRequest.update({ where: { id }, data: { status: "expirado", history_json: JSON.stringify([...history, { at: new Date().toISOString(), by_user_id: ctx.user_id, status_before: row.status, status_after: "expirado", changes: ["proposal_expired"] }]) } });
+    throw new Catalog2Error("A validade da proposta terminou. Peça uma nova proposta à equipe.", 409, "proposal_expired");
+  }
+  const next = decision === "aprovar" ? "aprovado" : "recusado";
+  const updated = await prisma.catalog2CommercialRequest.update({
+    where: { id },
+    data: { status: next, client_response_note: note?.slice(0, 2000) ?? null, history_json: JSON.stringify([...history, { at: new Date().toISOString(), by_user_id: ctx.user_id, status_before: row.status, status_after: next, changes: ["client_response_note"] }]) },
+  });
+  const prod = await prisma.catalog2Product.findUnique({ where: { id: row.product_id }, select: { internal_name: true } });
+  await notifyAdmins(decision === "aprovar" ? "Cliente aprovou o orçamento" : "Cliente recusou o orçamento", `O cliente ${decision === "aprovar" ? "aprovou" : "recusou"} a proposta de "${prod?.internal_name ?? "produto"}".${decision === "aprovar" ? " Formalize a contratação." : ""}`, id);
+  return serializeCommercialRequest(updated, false);
 }

@@ -66,6 +66,10 @@ import squadRouter from "./routes/squad";
 import aiConsultorRouter from "./routes/ai-consultor";
 import aiKnowledgeBaseRouter from "./routes/ai-knowledge-base";
 import aiUsageRouter from "./routes/ai-usage";
+import aiChangesRouter from "./routes/ai-changes";
+import walletTopupRouter from "./routes/wallet-topup";
+import paymentGatewaysRouter from "./routes/payment-gateways";
+import paymentWebhooksRouter from "./routes/payment-webhooks";
 import productFeedbackRouter from "./routes/product-feedback";
 import productFeedbackAdminRouter from "./routes/product-feedback-admin";
 import roadmapSsoRouter from "./routes/roadmap-sso";
@@ -111,7 +115,8 @@ app.use(
   }),
 );
 
-app.use(express.json({ limit: "10mb" }));
+// rawBody: alguns gateways assinam o corpo exato do aviso (payment-webhooks).
+app.use(express.json({ limit: "10mb", verify: (req, _res, buf) => { (req as unknown as { rawBody?: Buffer }).rawBody = buf; } }));
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
@@ -254,6 +259,11 @@ app.use("/api/ai-consultor", aiConsultorRouter);
 app.use("/api/ai-knowledge-base", aiKnowledgeBaseRouter);
 // Controle de custo de IA (admin > Configurações) — ver lib/ai-usage-tracker.ts
 app.use("/api/ai-usage", aiUsageRouter);
+// P-11: alterações por IA cobradas do saldo da carteira do cliente.
+app.use("/api/ai-changes", aiChangesRouter);
+app.use("/api/wallet-topup", walletTopupRouter);
+app.use("/api/admin/payment-gateways", paymentGatewaysRouter);
+app.use("/api/payment-webhooks", paymentWebhooksRouter);
 // "Ajuda e sugestões" — integração com a Roadmap (chamados de produto).
 // Ver lib/product-feedback-access-decision.ts para a regra de autorização.
 app.use("/api/product-feedback", productFeedbackRouter);

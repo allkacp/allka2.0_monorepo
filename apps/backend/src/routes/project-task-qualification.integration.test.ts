@@ -9,6 +9,7 @@ import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { concluirEtapa } from "../lib/stage-engine";
 import { gerarTarefasCatalog2DoProjeto } from "../lib/generate-tasks-catalog2";
+import { addAccessRequirements } from "../test-support/access-helpers";
 
 // Qualificação obrigatória: a entrega do executor só segue (agência/cliente/
 // concluída) depois do aceite do líder/qualificador; reprovar volta ao
@@ -174,7 +175,7 @@ describe("Qualificação obrigatória da entrega", () => {
     const sm = await prisma.catalog2StepModel.create({ data: { name: `Etapa Qual ${code}`, purpose: "validacao", completion_criteria: "Tudo conferido", is_access_validation: true, signature: `sig-${code}` } });
     const ct = await prisma.catalog2Task.create({ data: { version_id: ver.id, key: "k1", name: "Tarefa que exige qualificação", requires_qualification: true, qualifier_user_id: leader.id } });
     await prisma.catalog2TaskStep.create({ data: { task_id: ct.id, key: "e1", name: "Etapa única", step_model_id: sm.id, step_model_revision: 1 } });
-    await prisma.catalog2VersionAccess.create({ data: { version_id: ver.id, access_type: "google_ads", label: "Google Ads", is_required: true } });
+    await addAccessRequirements(ver.id, [{ type: "google_ads", label: "Google Ads" }]);
     const project = await prisma.project.create({ data: { title: `Projeto Ger ${code}`, project_code: code } });
     projectIds.push(project.id);
     const pp = await prisma.projectProduct.create({

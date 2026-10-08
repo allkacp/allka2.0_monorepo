@@ -100,7 +100,6 @@ async function purgeProduct(id: string) {
   }
   const origin = await prisma.catalog2ProductImportOrigin.findUnique({ where: { product_id: id } }).catch(() => null);
   if (origin) {
-    await prisma.catalog2ReviewResolution.deleteMany({ where: { origin_id: origin.id } }).catch(() => {});
     await prisma.catalog2ProductImportOrigin.delete({ where: { id: origin.id } }).catch(() => {});
   }
   await prisma.catalog2ImportRecord.deleteMany({ where: { product_id: id } }).catch(() => {});
@@ -227,45 +226,10 @@ describe("Importação dos 36 — rotas, filtros e carimbo humano", () => {
     assert.ok(byState.json.data.every((p: any) => p.review_state === "price_pending"));
   });
 
-  it("31. resolver pendência: remove a pendência, recalcula estado, registra decisão e preserva a divergência", async () => {
-    const { product } = await mkImported({
-      index: 120,
-      roseReviewed: true,
-      pendencies: ["classification_decision_pending", "price_pending"],
-      reviewState: "classification_decision_pending",
-      divergences: [{ type: "area_vs_category", detail: "Área Rose ≠ categoria", decision_pending: true }],
-    });
-    const r = await api(`/api/admin/catalog2/products/${product.id}/resolve-pendency`, {
-      method: "POST",
-      token: TOKEN,
-      body: { pendency_key: "classification_decision_pending", decision: "Mantida a categoria Redação; área da Rose registrada como especialidade." },
-    });
-    assert.equal(r.status, 200);
-    assert.deepEqual(r.json.remaining_pendencies, ["price_pending"]);
-    assert.equal(r.json.review_state, "price_pending");
-
-    const origin = await prisma.catalog2ProductImportOrigin.findUnique({
-      where: { product_id: product.id },
-      include: { resolutions: true },
-    });
-    assert.equal(origin!.resolutions.length, 1);
-    assert.equal(origin!.resolutions[0].pendency_key, "classification_decision_pending");
-    assert.match(origin!.resolutions[0].original_divergence_json ?? "", /area_vs_category/);
-    // divergência original permanece intacta no snapshot da origem
-    assert.match(origin!.divergences_json ?? "", /area_vs_category/);
-    // decisão humana registrada → importador não sobrescreve mais
-    assert.ok(origin!.human_edited_at);
-  });
-
-  it("32. resolver pendência inexistente → 422", async () => {
-    const { product } = await mkImported({ index: 121, pendencies: ["price_pending"] });
-    const r = await api(`/api/admin/catalog2/products/${product.id}/resolve-pendency`, {
-      method: "POST",
-      token: TOKEN,
-      body: { pendency_key: "portfolio_pending", decision: "x" },
-    });
-    assert.equal(r.status, 422);
-    assert.equal(r.json.code, "pendency_not_open");
+  it("31. a rota de resolver pendência da importação antiga não existe mais (P-12, 08/10)", async () => {
+    const { product } = await mkImported({ index: 120, pendencies: ["price_pending"] });
+    const r = await api(`/api/admin/catalog2/products/${product.id}/resolve-pendency`, { method: "POST", token: TOKEN, body: { pendency_key: "price_pending", decision: "x" } });
+    assert.equal(r.status, 404);
   });
 
   it("33. editar o rascunho de um produto importado carimba human_edited_at (uma vez)", async () => {

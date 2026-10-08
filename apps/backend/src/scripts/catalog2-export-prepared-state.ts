@@ -60,7 +60,6 @@ async function main() {
     where: { import_origin: { isNot: null } },
     include: {
       import_origin: true,
-      provisional_preview: true,
       four_f: { include: { four_f: true } },
       periods: true,
       pillar: { select: { key: true } },
@@ -71,7 +70,6 @@ async function main() {
         include: {
           variations: { include: { options: { include: { effects: true } } } },
           addons: { include: { effects: true } },
-          access_requirements: { orderBy: { sort_order: "asc" } },
           tasks: { include: { deliverables: true, task_model: { include: { specialty: { select: { key: true } } } }, steps: { include: { step_model: { include: { specialty: { select: { key: true } } } }, specialty: { select: { key: true } } } }, specialty: { select: { key: true, max_hourly_rate: true } }, questionnaire: { include: { questions: true } } } },
         },
       },
@@ -79,12 +77,7 @@ async function main() {
     orderBy: { slug: "asc" },
   });
 
-  // Referências de imagem — só as que o preview provisório de fato aponta.
   const imageRefs = new Set<string>();
-  for (const p of products) {
-    if (p.provisional_preview?.image_path) imageRefs.add(p.provisional_preview.image_path);
-  }
-
   // Caminho do frontend público, relativo a este script (apps/backend/src/scripts -> ../../../frontend/public).
   const frontendPublicRoot = path.resolve(__dirname, "..", "..", "..", "frontend", "public");
   const imagesOutDir = path.join(outDir, "images");

@@ -28,6 +28,8 @@ import {
   removeCartItem,
   clearCart,
   createCommercialRequest,
+  getRequestQuestionnaire,
+  respondToCommercialRequest,
   listCommercialRequests,
 } from "../lib/catalog2-client";
 import { prisma } from "../lib/prisma";
@@ -141,10 +143,20 @@ router.get("/commercial-requests", async (req, res, next) => {
     handle(e, res, next);
   }
 });
+// D-2: perguntas do orçamento de um produto sob consulta e resposta do cliente à proposta.
+router.get("/products/:slug/request-questionnaire", async (req, res, next) => {
+  try { res.json(await getRequestQuestionnaire(ctxOf(req), req.params.slug as string)); } catch (e) { handle(e, res, next); }
+});
+router.post("/commercial-requests/:id/respond", async (req, res, next) => {
+  try {
+    const body = z.object({ decision: z.enum(["aprovar", "recusar"]), note: z.string().max(2000).optional() }).parse(req.body);
+    res.json(await respondToCommercialRequest(ctxOf(req), req.params.id as string, body.decision, body.note));
+  } catch (e) { handle(e, res, next); }
+});
 router.post("/commercial-requests", async (req, res, next) => {
   try {
-    const body = z.object({ product: z.string().min(1), selection: selectionSchema, period: z.string().optional(), note: z.string().max(2000).optional() }).parse(req.body);
-    res.status(201).json(await createCommercialRequest(ctxOf(req), body.product, body.selection, body.period, body.note));
+    const body = z.object({ product: z.string().min(1), selection: selectionSchema, period: z.string().optional(), note: z.string().max(2000).optional(), answers: z.record(z.string(), z.union([z.string().max(4000), z.array(z.string().max(500)).max(50)])).optional() }).parse(req.body);
+    res.status(201).json(await createCommercialRequest(ctxOf(req), body.product, body.selection, body.period, body.note, body.answers));
   } catch (e) {
     handle(e, res, next);
   }

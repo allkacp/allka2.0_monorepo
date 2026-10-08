@@ -9,6 +9,7 @@ import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { gerarTarefasCatalog2DoProjeto } from "../lib/generate-tasks-catalog2";
 import { isAssetValid, reopenAccessValidationOnExecutorChange } from "../lib/client-assets";
+import { addAccessRequirements } from "../test-support/access-helpers";
 
 // Ativos validados do cliente: reaproveitar acessos já válidos, revalidar por regra,
 // nunca aceitar senha.
@@ -41,13 +42,7 @@ async function mkCatalog(assetRule: string, days: number | null = null) {
   const code = uid();
   const prod = await prisma.catalog2Product.create({ data: { slug: `ast-${code}`, internal_name: `[TESTE] Ativos ${code}`, status: "disponivel" } });
   const ver = await prisma.catalog2ProductVersion.create({ data: { product_id: prod.id, version_number: 1, state: "publicada", title: "T" } });
-  await prisma.catalog2VersionAccess.createMany({
-    data: [
-      { version_id: ver.id, access_type: "google_ads", label: "Google Ads", is_required: true, sort_order: 1 },
-      { version_id: ver.id, access_type: "meta_business_manager", label: "Meta Business Manager", is_required: true, sort_order: 2 },
-      { version_id: ver.id, access_type: "crm", label: "CRM", is_required: false, sort_order: 3 },
-    ],
-  });
+  await addAccessRequirements(ver.id, [{ type: "google_ads", label: "Google Ads" }, { type: "meta_business_manager", label: "Meta Business Manager" }, { type: "crm", label: "CRM", required: false }]);
   const sm = await prisma.catalog2StepModel.create({ data: { name: `Acessos ${code}`, purpose: "coleta_informacao", is_access_validation: true, signature: `sig-${code}` } });
   const task = await prisma.catalog2Task.create({ data: { version_id: ver.id, key: "gestao", name: "Gestão de campanhas", asset_rule: assetRule, asset_revalidate_days: days } });
   await prisma.catalog2TaskStep.create({ data: { task_id: task.id, key: "acessos", name: "Validação e organização dos acessos", sort_order: 1, step_model_id: sm.id } });

@@ -65,10 +65,6 @@ import {
   CATALOG2_STATUS_TONE,
 } from "@/lib/catalog2-status";
 import {
-  provisionalPrice,
-  provisionalTaskCount,
-} from "@/lib/catalog2-provisional";
-import {
   catalog2CategoryTone,
   catalog2EditorialImage,
 } from "@/lib/catalog2-editorial";
@@ -1354,28 +1350,10 @@ export default function AdminProdutosPage() {
                           rp?.price_amount;
                         const simulatedPrice: number | null | undefined =
                           rp?.pricing_simulation?.price_amount;
-                        // Fonte ÚNICA de provisório: a camada do backend
-                        // (Catalog2ProvisionalPreview, via p.provisional_preview). O
-                        // hash local (lib/catalog2-provisional.ts) só entra se o
-                        // produto não tiver nenhum preview provisório gravado.
-                        const pv = p.provisional_preview;
-                        const taskProv = pv
-                          ? {
-                              value: pv.included_items_count,
-                              label: "Estrutura provisória — completar",
-                            }
-                          : provisionalTaskCount(p.id);
-                        const priceProv =
-                          pv?.price_amount != null
-                            ? {
-                                value: pv.price_amount,
-                                label: "Preço provisório — revisar.",
-                                is_provisional: true as const,
-                              }
-                            : provisionalPrice(p.id);
+                        // Sem dado inventado (P-12): o que não está preenchido aparece como pendente / “A definir”.
                         const provisionalReasons = [
-                          ...(realTaskCount == null || realTaskCount === 0 ? [taskProv.label] : []),
-                          ...(realPrice == null && simulatedPrice == null ? [priceProv.label] : []),
+                          ...(realTaskCount == null || realTaskCount === 0 ? ["Tarefas ainda não cadastradas."] : []),
+                          ...(realPrice == null && simulatedPrice == null ? ["Preço ainda não definido."] : []),
                           ...(rp?.functional_for_test ? ["Especialidade e tempo provisórios para teste."] : []),
                         ];
                         return (
@@ -1427,9 +1405,7 @@ export default function AdminProdutosPage() {
                                   <span>{realTaskCount} tarefa(s)</span>
                                 ) : (
                                   <>
-                                    <span className="text-slate-400">
-                                      {taskProv.value} tarefa(s)
-                                    </span>
+                                    <span className="text-slate-400">Tarefas a definir</span>
                                   </>
                                 )}
                               </div>
@@ -1456,16 +1432,7 @@ export default function AdminProdutosPage() {
                                   />
                                 </div>
                               ) : (
-                                <div className="flex items-center justify-start gap-1">
-                                  <span className="shrink-0 whitespace-nowrap text-[13px] font-semibold text-slate-400">
-                                    R$ {priceProv.value.toFixed(2)}
-                                  </span>
-                                  <Catalog2PricingMemoryPopover
-                                    productId={p.id}
-                                    isAdminMaster={isAdminMaster}
-                                    provisionalPriceAmount={priceProv.value}
-                                  />
-                                </div>
+                                <span className="text-[12px] font-medium text-slate-400">A definir</span>
                               )}
                             </td>
                             <td className="px-2 py-1 text-center">
@@ -1531,9 +1498,6 @@ export default function AdminProdutosPage() {
                       rp?.price_amount;
                     const simulatedPrice: number | null | undefined =
                       rp?.pricing_simulation?.price_amount;
-                    const previewPrice =
-                      p.provisional_preview?.price_amount ??
-                      provisionalPrice(p.id).value;
                     const categoryName = p.category?.name ?? "Sem categoria";
                     return (
                       <Card
@@ -1577,12 +1541,7 @@ export default function AdminProdutosPage() {
                             <span
                               className={`shrink-0 font-bold tracking-tight text-emerald-600 ${isCompact ? "text-base" : "text-lg"}`}
                             >
-                              R${" "}
-                              {(
-                                realPrice ??
-                                simulatedPrice ??
-                                previewPrice
-                              ).toFixed(2)}
+                              {(realPrice ?? simulatedPrice) != null ? `R$ ${(realPrice ?? simulatedPrice)!.toFixed(2)}` : "A definir"}
                             </span>
                           </div>
                           <TooltipProvider delayDuration={120}>

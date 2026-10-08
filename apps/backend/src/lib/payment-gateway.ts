@@ -38,10 +38,44 @@ export interface RefundResult {
   refundId: string;
 }
 
+export interface PixCharge {
+  gateway: string;
+  transactionId: string;
+  /** Código "copia e cola" do Pix. */
+  copyPaste: string;
+}
+
+/** Cobrança em gateway REAL: o cliente paga fora da Allka (Pix copia e cola ou página segura do cartão) e o gateway avisa depois. */
+export interface IntentInput {
+  amount: number;
+  method: "pix" | "card";
+  /** Nossa referência (id da recarga): volta no aviso do gateway para sabermos qual cobrança foi paga. */
+  referenceId: string;
+  description: string;
+  customer: { name: string; email?: string | null; taxId?: string | null };
+  redirectUrl?: string;
+  notificationUrl?: string;
+  expiresInMinutes?: number;
+}
+export interface IntentResult { externalId: string; status: "pending" | "paid"; pixCopyPaste?: string; redirectUrl?: string; expiresAt?: Date }
+export interface WebhookEvent { referenceId?: string; externalId?: string; status: "pending" | "paid" | "failed" | "expired" }
+
 export interface PaymentGatewayAdapter {
   readonly name: string;
   charge(input: ChargeInput): Promise<ChargeResult>;
   refund(input: RefundInput): Promise<RefundResult>;
+  /** Gateways reais: cria Pix ou página de cartão e devolve o que mostrar ao cliente. */
+  createIntent?(input: IntentInput): Promise<IntentResult>;
+  /** Consulta o gateway (usada quando o aviso automático ainda não chegou). */
+  getIntentStatus?(externalId: string, referenceId?: string): Promise<"pending" | "paid" | "failed" | "expired">;
+  /** Valida a assinatura do aviso do gateway e o traduz. Devolve null se for falso/inválido. */
+  parseWebhook?(input: { headers: Record<string, unknown>; rawBody: string; body: any }): WebhookEvent | null;
+  /** "Testar conexão" da tela de administração. */
+  testConnection?(): Promise<{ ok: boolean; message: string }>;
+  /** Gera uma cobrança Pix (sandbox). */
+  createPix?(input: { amount: number; referenceId: string }): Promise<PixCharge>;
+  /** Só no sandbox: lê o valor de um Pix gerado por este gateway (para "simular pagamento"). */
+  parseFakePix?(transactionId: string): { amount: number } | null;
 }
 
 // ── Cartões de teste (convenção conhecida, mesmo espírito dos cartões de
@@ -72,29 +106,38 @@ export class FakeSandboxGateway implements PaymentGatewayAdapter {
   async refund(input: RefundInput): Promise<RefundResult> {
     return { refunded: true, gateway: this.name, refundId: `FAKE_REFUND_${input.transactionId}` };
   }
+
+  // Id do Pix fake = FAKE_PIX_<centavos>_<aleatório>: o sandbox não guarda estado, o valor viaja no próprio id.
+  async createPix(input: { amount: number; referenceId: string }): Promise<PixCharge> {
+    const transactionId = `FAKE_PIX_${Math.round(input.amount * 100)}_${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+    return { gateway: this.name, transactionId, copyPaste: `00020126FAKE-SANDBOX-PIX-${transactionId}` };
+  }
+
+  parseFakePix(transactionId: string): { amount: number } | null {
+    const m = /^FAKE_PIX_(\d{3,9})_[A-Z0-9]{4,12}$/.exec(transactionId);
+    return m ? { amount: Number(m[1]) / 100 } : null;
+  }
 }
 
 let cachedGateway: PaymentGatewayAdapter | null = null;
 
 /**
- * Fábrica do gateway ativo — lê `PAYMENT_GATEWAY` do ambiente (default
- * FAKE_SANDBOX). Gateway real ainda não implementado: pedir explicitamente
- * um não-fake sem a classe existir falha alto e claro, em vez de cair
- * silenciosamente no fake.
+ * Gateway ATIVO. Quem decide é o Admin Master (tela Configurações → Pagamentos): o serviço carrega o escolhido na partida do servidor e a cada troca
+ * (setActivePaymentGateway). Sem escolha, vale PAYMENT_GATEWAY do ambiente (padrão FAKE_SANDBOX, usado nos testes).
  */
 export function getPaymentGateway(): PaymentGatewayAdapter {
   if (cachedGateway) return cachedGateway;
   const configured = (process.env.PAYMENT_GATEWAY ?? "FAKE_SANDBOX").toUpperCase();
-  switch (configured) {
-    case "FAKE_SANDBOX":
-      cachedGateway = new FakeSandboxGateway();
-      return cachedGateway;
-    default:
-      throw new Error(
-        `PAYMENT_GATEWAY="${configured}" não tem adapter implementado ainda. ` +
-          "Implemente PaymentGatewayAdapter em src/lib/payment-gateway.ts e adicione o case correspondente.",
-      );
+  if (configured !== "FAKE_SANDBOX") {
+    throw new Error(`PAYMENT_GATEWAY="${configured}" não é válido: escolha o gateway em Configurações → Pagamentos.`);
   }
+  cachedGateway = new FakeSandboxGateway();
+  return cachedGateway;
+}
+
+/** Define o gateway em uso (null = volta ao padrão). */
+export function setActivePaymentGateway(gateway: PaymentGatewayAdapter | null): void {
+  cachedGateway = gateway;
 }
 
 /** Só para testes — nunca usar em código de produção. */

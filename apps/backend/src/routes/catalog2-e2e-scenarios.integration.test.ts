@@ -17,6 +17,7 @@ import { iniciarEtapasDaTarefa } from "../lib/stage-engine";
 import { startTaskRotation } from "../lib/task-rotation-engine";
 import { reopenAccessValidationOnExecutorChange } from "../lib/client-assets";
 import { setTaskAIAdapter, resetTaskAIAdapter } from "../lib/task-ai";
+import { addAccessRequirements } from "../test-support/access-helpers";
 
 // Pedido 3 · Fase 8 — 10 cenários ponta a ponta: compra real (cotação → pedido → pagamento) e execução até o resultado.
 
@@ -316,7 +317,7 @@ describe("Pedido 3 · Fase 8 — cenários ponta a ponta", () => {
     const prod = await prisma.catalog2Product.create({ data: { slug: `e2e-ast-${code}`, internal_name: `[TESTE] Troca ${code}`, status: "disponivel" } });
     catProducts.push(prod.id);
     const ver = await prisma.catalog2ProductVersion.create({ data: { product_id: prod.id, version_number: 1, state: "publicada", title: "T" } });
-    await prisma.catalog2VersionAccess.createMany({ data: [{ version_id: ver.id, access_type: "google_ads", label: "Google Ads", is_required: true, sort_order: 1 }] });
+    await addAccessRequirements(ver.id, [{ type: "google_ads", label: "Google Ads" }]);
     const sm = await prisma.catalog2StepModel.create({ data: { name: `Acessos ${code}`, purpose: "coleta_informacao", is_access_validation: true, signature: `sig-${code}` } });
     extra.push(async () => { await prisma.catalog2StepModel.delete({ where: { id: sm.id } }).catch(() => {}); });
     const task = await prisma.catalog2Task.create({ data: { version_id: ver.id, key: "gestao", name: "Gestão", asset_rule: "on_executor_change" } });

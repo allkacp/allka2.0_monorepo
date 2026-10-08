@@ -1953,6 +1953,10 @@ model ProjectTaskStage {
   // Execução por etapa (A8b fase 2): o cliente vê/aprova? passa por qualificação? libera a próxima sozinha?
   visivel_ao_cliente        Boolean   @default(true)
   exige_qualificacao        Boolean   @default(false)
+  // Qualificação do ESPECIALISTA (separada da do líder): quem qualifica é o usuário escolhido na etapa do cadastro.
+  exige_qualificacao_especialista Boolean @default(false)
+  especialista_id           String?
+  qualificada_especialista_em DateTime?
   libera_proxima_auto       Boolean   @default(true)
   rodada_ajuste             Int       @default(0)
   entregue_em               DateTime?
@@ -5218,6 +5222,9 @@ model Catalog2Product {
   // Padrão do banco "multiple" para não alterar produtos antigos; o cadastro novo envia "single".
   task_structure String @default("multiple")
 
+  // P-11 (07/10): alterações por IA grátis por contratação deste produto. Nulo = vale a regra global (AiChangePricingSettings.free_changes).
+  ai_free_changes Int?
+
   // Estado do PRODUTO (nao da versao):
   //   "em_preparacao"            = sem versao publicada; nao aparece pro cliente.
   //   "disponivel"               = tem versao publicada e esta ofertavel.
@@ -5296,7 +5303,6 @@ model Catalog2Product {
   versions            Catalog2ProductVersion[]     @relation("Catalog2ProductVersions")
   four_f              Catalog2ProductFourF[]
   import_origin       Catalog2ProductImportOrigin?
-  provisional_preview Catalog2ProvisionalPreview?
   quotes              Catalog2Quote[]
   cart_items          Catalog2CartItem[]
   // Linhas de pedido (Bloco 6/6) — produto CONTRATADO a partir deste catálogo.
@@ -5313,6 +5319,8 @@ model Catalog2Product {
   // Visibilidade por público (C7): all | company | agency | internal; para agência, nível mínimo de parceiro opcional.
   visibility_mode             String  @default("all")
   visibility_min_partner_level String?
+  // Níveis de agência que enxergam o produto (CSV: bronze,silver,gold,platinum,diamond). Vazio = todos os níveis. Só limita AGENCIAS.
+  visibility_agency_levels    String? @db.Text
 
   @@index([status])
   @@index([pillar_id])
@@ -5626,7 +5634,6 @@ model Catalog2ProductVersion {
   // Item 7 (reunião 2026-09-14, "Histórico de alterações do produto").
   history_events   Catalog2ProductHistoryEvent[]
   // Acessos externos que o produto precisa do cliente (Google Ads, Meta, Pixel…).
-  access_requirements Catalog2VersionAccess[]
 
   @@unique([product_id, version_number])
   @@index([state])
@@ -6006,6 +6013,9 @@ model Catalog2TaskStep {
   internal_step        Boolean @default(false)
   requires_qualification Boolean @default(true)
   release_next_auto    Boolean @default(true)
+  // Qualificação do especialista (opção separada da do líder; D-5): exige escolher o especialista.
+  requires_specialist_qualification Boolean @default(false)
+  specialist_user_id   String?
   // Entrega emergencial: quantos minutos esta etapa encurta e quanto cobra a mais (fixed = R$ · percent = % do preço da etapa).
   emergency_reduction_minutes Int?
   emergency_extra_kind        String?
@@ -6132,25 +6142,6 @@ model Catalog2StepModel {
   ops Json?
 }
 
-// Acessos externos exigidos por uma VERSÃO do produto (configuração por
-// produto). Só descreve QUAIS acessos são necessários — nunca guarda senha nem
-// credencial: o cliente compartilha permissões pelos convites/papéis oficiais
-// de cada ferramenta.
-model Catalog2VersionAccess {
-  id          String                 @id @default(cuid())
-  version_id  String
-  version     Catalog2ProductVersion @relation(fields: [version_id], references: [id], onDelete: Cascade)
-  // google_ads | meta_business_manager | ad_account | pixel_capi | google_analytics
-  // | google_tag_manager | crm | site_landing | other
-  access_type String
-  label       String
-  is_required Boolean                @default(true)
-  notes       String?                @db.Text
-  sort_order  Int                    @default(0)
-
-  @@index([version_id, sort_order])
-  @@map("catalog2_version_accesses")
-}
 
 // Etapas padrão de um modelo de tarefa (ordenadas). Uma mesma etapa pode estar
 // em várias tarefas.
@@ -6308,51 +6299,7 @@ model Catalog2PricingSettings {
   subscription_grace_days Int @default(3)
 }
 
-// Configuracao de simulacao PROVISORIA (reuniao 10/09, "precificacao dos 36
-// produtos funcional para teste") — estrutura PROPRIA, TOTALMENTE separada
-// do singleton comercial real acima (Catalog2PricingSettings). So e lida
-// por computePricing quando chamado explicitamente com
-// { simulateProvisional: true } (so em rotas admin-only da memoria de
-// calculo/IAllka) — NUNCA no fluxo de catalogo do cliente, cotacao ou
-// checkout, e NUNCA grava/edita o singleton real. is_provisional=true e o
-// marcador de procedencia que impede qualquer uso destes valores em
-// producao (computePricing forca commercial_ready=false sempre que este
-// modo e usado, independente do que estes campos contenham).
-model Catalog2PricingSimulationSettings {
-  id String @id @default("default")
 
-  tax_percent             Float?
-  commission_percent      Float?
-  operational_fee_percent Float?
-  profit_margin_percent   Float?
-  human_review_percent    Float?
-  component_order_json    String? @db.Text
-
-  is_provisional Boolean @default(true)
-  // "provisional_simulation_v1" — versao da regra que preencheu isto.
-  source         String  @default("provisional_simulation_v1")
-  notes          String? @db.Text
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  @@map("catalog2_pricing_simulation_settings")
-}
-
-// Valores/hora exclusivamente para a simulação administrativa. A tabela
-// real de especialidades permanece intocada; computePricing só consulta
-// estes valores quando simulateProvisional=true.
-model Catalog2PricingSimulationSpecialtyRate {
-  specialty_id String @id
-  hourly_rate  Float
-  is_provisional Boolean @default(true)
-  source       String @default("provisional_simulation_v1")
-  notes        String? @db.Text
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
-
-  @@map("catalog2_pricing_simulation_specialty_rates")
-}
 
 // ─── Importacao dos 36 produtos definitivos (bloco 4/6) ──────────────────────
 // Cada `--apply` = um lote. Auditavel, repetivel, NUNCA sobrescreve edicao
@@ -6458,74 +6405,12 @@ model Catalog2ProductImportOrigin {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  resolutions Catalog2ReviewResolution[]
 
   @@index([review_state])
   @@map("catalog2_product_import_origins")
 }
 
-// Camada de CONTEUDO PROVISORIO DE DEMONSTRACAO (reparo 2026-09, "restaurar o
-// detalhe completo do produto, precos e imagens"). Existe SOMENTE para que o
-// Admin Master consiga visualizar os produtos do catalog2 completos (imagem,
-// preco, prazo, opcoes, destaques, portfolio) enquanto os dados comerciais
-// definitivos nao existem — nunca e usada pelo cliente comum, nunca entra em
-// cotacao/cesta/checkout, nunca torna o produto "commercial_ready" e nunca e
-// considerada aprovada. Tudo aqui e nullable, auditavel (created/updated_at,
-// created_by), idempotente (upsert por product_id) e removivel (script com
-// --remove restrito exatamente aos produtos preenchidos por ele).
-model Catalog2ProvisionalPreview {
-  id         String          @id @default(cuid())
-  product_id String          @unique
-  product    Catalog2Product @relation(fields: [product_id], references: [id], onDelete: Cascade)
 
-  // Sempre true enquanto a linha existir — reforco redundante e explicito
-  // (nunca lido como "true" por omissao/ausencia de campo).
-  is_provisional Boolean @default(true)
-  needs_review   Boolean @default(true)
-
-  // Caminho de um arquivo JA EXISTENTE em /public/images/products (nunca uma
-  // URL externa/temporaria, nunca um caminho inventado — o script que
-  // preenche esta tabela valida a existencia do arquivo antes de gravar).
-  image_path        String?
-  image_source_note String? @db.Text
-
-  price_amount  Float?
-  deadline_days Int?
-  // "Projeto unico" | "Recorrente mensal" | "Sob demanda" — rotulo provisorio,
-  // nunca confundido com o campo comercial real (que ainda nao existe no
-  // catalog2 para este conceito).
-  modality      String?
-  contract_note String? @db.Text
-
-  // JSON string[] / objetos simples — sempre decodificados e reapresentados
-  // com marcacao "provisorio" no frontend, nunca tratados como dado aprovado.
-  highlights_json     String? @db.Text
-  included_items_json String? @db.Text
-  options_json        String? @db.Text
-  portfolio_refs_json String? @db.Text
-
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
-  created_by_user_id String?
-
-  @@map("catalog2_provisional_previews")
-}
-
-// Resolucao de UMA pendencia pelo Admin Master — altera so o rascunho,
-// registra quem/quando/decisao e PRESERVA a divergencia original.
-model Catalog2ReviewResolution {
-  id                       String                      @id @default(cuid())
-  origin_id                String
-  origin                   Catalog2ProductImportOrigin @relation(fields: [origin_id], references: [id], onDelete: Cascade)
-  pendency_key             String
-  decision                 String                      @db.Text
-  original_divergence_json String?                     @db.Text
-  resolved_by_user_id      String?
-  resolved_at              DateTime                    @default(now())
-
-  @@index([origin_id])
-  @@map("catalog2_review_resolutions")
-}
 
 // ─────────────────────────────────────────────────────────────────────────
 // BLOCO 5 — catalogo do cliente: pre-cotacao e cesta do catalogo2.
@@ -6582,6 +6467,9 @@ model Catalog2Quote {
   status      String    @default("rascunho")
   valid_until DateTime?
   is_preview  Boolean   @default(false)
+
+  // D-2 (07/10): cotação travada no valor APROVADO de um pedido "sob consulta" (gerada pela equipe; vale 7 dias). Não é recalculada pelo motor.
+  commercial_request_id String? @unique
 
   // Item 4 (reuniao 2026-09-14, "Precos e protecao por 30 dias"): ancora
   // o momento em que o preco/prazo desta cotacao foi percebido pela
@@ -7425,6 +7313,8 @@ model Catalog2CommercialRequest {
     client_response_note  String?   @db.Text
     converted_project_id  String?
     history_json          String?   @db.LongText
+    // Respostas do cliente ao questionário do produto (D-2): [{ question_id, label, question_type, group, answer }]
+    answers_json          String?   @db.LongText
   handled_by_user_id    String?
   handled_at            DateTime?
   created_at            DateTime  @default(now())
@@ -7872,4 +7762,95 @@ model BrowserSessionEvent {
   @@index([profile_id, created_at])
   @@index([session_id])
   @@map("browser_session_events")
+}
+
+// Precificação das alterações feitas por IA (P-11, reunião 07/10): média de tokens/custo real + margem; singleton id="default".
+model AiChangePricingSettings {
+  id                 String   @id
+  usd_brl_rate       Float    @default(5.5)
+  margin_percent     Float    @default(100)
+  free_changes       Int      @default(1)
+  min_price_brl      Float    @default(0)
+  basis              String   @default("average") @db.VarChar(20)
+  features           String?  @db.VarChar(1000)
+  updated_by_user_id String?
+  updated_at         DateTime @updatedAt
+
+  @@map("ai_change_pricing_settings")
+}
+
+// Cobrança das alterações feitas por IA (P-11, 07/10): cada alteração de uma contratação vira uma linha; as grátis têm amount 0.
+// A cobrança sai do SALDO da carteira (todo dinheiro que entra — cartão/Pix — vira crédito antes de ser debitado).
+model AiChangeCharge {
+  id                 String   @id @default(cuid())
+  account_kind       String   @db.VarChar(20)
+  account_id         String   @db.VarChar(191)
+  project_product_id String   @db.VarChar(191)
+  user_id            String   @db.VarChar(191)
+  feature            String   @db.VarChar(60)
+  is_free            Boolean  @default(false)
+  amount_brl         Float    @default(0)
+  ledger_id          String?  @db.VarChar(191)
+  note               String?  @db.VarChar(500)
+  created_at         DateTime @default(now())
+
+  @@index([account_kind, account_id])
+  @@index([project_product_id])
+  @@map("ai_change_charges")
+}
+
+// ─── Gateways de pagamento (troca pelo Admin Master) ─────────────────────────
+// Um registro por gateway cadastrado (pagbank, asaas, mercadopago, stripe…). Só um fica ativo; as chaves ficam CIFRADAS (cofre) e nunca voltam para a tela.
+model PaymentGatewayConfig {
+  key               String    @id
+  label             String
+  mode              String    @default("sandbox") // sandbox | live
+  is_active         Boolean   @default(false)
+  public_json       String?   @db.Text // campos NÃO secretos (ex.: endereço público do servidor)
+  secret_ciphertext String?   @db.LongText // JSON dos campos secretos, cifrado
+  fee_note          String?   @db.Text // anotação livre da taxa negociada
+  last_test_at      DateTime?
+  last_test_ok      Boolean?
+  last_test_message String?   @db.Text
+  updated_by        String?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@map("payment_gateway_configs")
+}
+
+model PaymentGatewayChange {
+  id         String   @id @default(cuid())
+  from_key   String?
+  to_key     String
+  mode       String?
+  changed_by String
+  note       String?  @db.Text
+  created_at DateTime @default(now())
+
+  @@index([created_at])
+  @@map("payment_gateway_changes")
+}
+
+// Recarga de crédito em andamento num gateway real (Pix gerado / página de pagamento aberta). Fica "paid" quando o gateway confirma (aviso automático ou consulta).
+model WalletTopupIntent {
+  id              String    @id @default(cuid())
+  owner_type      String // company | agency
+  owner_id        String
+  user_id         String
+  method          String // pix | card
+  amount          Float
+  gateway         String
+  external_id     String?
+  status          String    @default("pending") // pending | paid | failed | expired
+  pix_copy_paste  String?   @db.Text
+  redirect_url    String?   @db.Text
+  expires_at      DateTime?
+  paid_at         DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  @@index([owner_type, owner_id, status])
+  @@index([gateway, external_id])
+  @@map("wallet_topup_intents")
 }

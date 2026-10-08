@@ -254,6 +254,9 @@ async function main() {
     if (process.env.NODE_ENV !== "production") await ensureStandardStepModels(prisma);
   })().catch((err) => console.error("❌ Falha ao preparar o catálogo global de modelos:", err));
 
+  // Gateway de pagamento escolhido pelo Admin Master (sem escolha: o de teste).
+  await (await import("./lib/payment-gateways/config-service")).loadActiveGateway();
+
   // Passenger/cPanel sets PORT as a socket path or port number
   // Use process.env.PORT directly to support both TCP and Unix socket
   const port = process.env.PORT || config.PORT;

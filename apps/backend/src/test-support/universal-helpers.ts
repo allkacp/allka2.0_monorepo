@@ -26,6 +26,7 @@ export async function startServer() {
   await new Promise<void>((r) => server.once("listening", () => r()));
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
+export const getBaseUrl = () => baseUrl;
 export async function stopServer() {
   await new Promise<void>((res, rej) => server.close((e) => (e ? rej(e) : res())));
 }
@@ -139,3 +140,5 @@ export async function checkoutAndPay(token: string, quoteIds: string[]) {
 export const tasksOf = (projectId: string, occurrence?: number) =>
   prisma.projectTask.findMany({ where: { project_id: projectId, ...(occurrence != null ? { occurrence_index: occurrence } : {}) }, include: { catalog2_task: { select: { key: true } }, stages: { orderBy: { ordem: "asc" } } }, orderBy: { sort_order: "asc" } });
 export const byKey = (rows: Awaited<ReturnType<typeof tasksOf>>) => Object.fromEntries(rows.map((r) => [r.catalog2_task?.key ?? r.title, r]));
+
+export { addAccessRequirements } from "./access-helpers";

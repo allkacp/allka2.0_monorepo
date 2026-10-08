@@ -7,14 +7,21 @@ import { resolveMyAgencyId, resolveMyPartnerId } from "../lib/project-scope";
 
 const router = Router();
 
+import { loadRegisteredLevels, levelKey } from "../lib/catalog2-audience";
+/** O nível da agência precisa ser um dos níveis cadastrados em Níveis Agências. */
+async function levelIsRegistered(level: unknown): Promise<boolean> {
+  if (level === undefined || level === null) return true;
+  const keys = (await loadRegisteredLevels()).map((l) => l.key);
+  return keys.includes(levelKey(String(level)));
+}
+
 const createSchema = z.object({
   name: z.string().min(1),
   cnpj: z.string().optional(),
   email: z.string().email().optional(),
   phone: z.string().optional(),
-  partner_level: z
-    .enum(["bronze", "silver", "gold", "platinum", "diamond"])
-    .default("bronze"),
+  // Qualquer nível cadastrado em Níveis Agências (conferido na rota); guardado em minúsculas.
+  partner_level: z.string().trim().min(1).max(60).transform((v) => v.toLowerCase()).default("bronze"),
   status: z.string().default("ativo"),
   owner_user_id: z.string().min(1),
   // Colunas já existentes no model Agency (schema.prisma) mas nunca
@@ -218,6 +225,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
 // POST /api/agencies — admin only
 router.post("/", verifyToken, requireRole("admin"), validate(createSchema), async (req, res, next) => {
   try {
+    if (!(await levelIsRegistered(req.body.partner_level))) return res.status(422).json({ error: "Nível de agência não cadastrado (Administração > Níveis Agências)." });
     const agency = await prisma.agency.create({
       data: req.body,
       include: { owner: { select: { id: true, email: true, name: true } } },
@@ -231,6 +239,7 @@ router.post("/", verifyToken, requireRole("admin"), validate(createSchema), asyn
 // PUT /api/agencies/:id — admin only
 router.put("/:id", verifyToken, requireRole("admin"), validate(updateSchema), async (req, res, next) => {
   try {
+    if (req.body.partner_level !== undefined && !(await levelIsRegistered(req.body.partner_level))) return res.status(422).json({ error: "Nível de agência não cadastrado (Administração > Níveis Agências)." });
     const agency = await prisma.agency.update({
       where: { id: (req.params.id as string) },
       data: req.body,

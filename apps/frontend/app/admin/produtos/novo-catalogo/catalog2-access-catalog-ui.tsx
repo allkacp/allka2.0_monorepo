@@ -131,6 +131,9 @@ function Pill({ children, tone = "bg-slate-100 text-slate-700 dark:bg-slate-800 
   return <span title={title} className={`inline-flex max-w-full items-center truncate rounded-full px-2 py-0.5 text-[10px] font-medium ${tone}`}>{children}</span>;
 }
 
+// Total de acessos do produto: os fixos (lista antiga) + os adicionados pelo catálogo de acessos (conexões). Alimenta o selo e o checklist do editor.
+export const accessCount = (v: any) => v?.connection_requirements?.length ?? 0;
+
 export function AccessCatalogDialog({ open, onOpenChange, version, readOnly, act }: { open: boolean; onOpenChange: (v: boolean) => void; version: any; readOnly: boolean; act: Act }) {
   const [types, setTypes] = useState<any[]>([]);
   const [vocab, setVocab] = useState<any>(null);
@@ -157,6 +160,8 @@ export function AccessCatalogDialog({ open, onOpenChange, version, readOnly, act
         return apiClient.saveConnectionRequirement(version.id, `${t.key}_${Date.now().toString(36)}`, buildProductRequirementBody(version, t));
       }, `"${t.name}" adicionado aos acessos do produto.`, { rethrow: true });
       setMsg({ ok: true, text: `"${t.name}" adicionado ao produto. Ajuste os detalhes na lista de acessos, abaixo.` });
+      // abre o cartão "Acessos necessários" para a pessoa ver o que entrou
+      setTimeout(() => { const el = document.getElementById("sec-connections") as HTMLDetailsElement | null; if (el) el.open = true; }, 0);
     } catch (e: any) { setMsg({ ok: false, text: e?.message ?? "Não foi possível adicionar." }); }
   };
   const remove = async (t: any) => {

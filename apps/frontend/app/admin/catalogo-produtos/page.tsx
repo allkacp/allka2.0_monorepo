@@ -78,15 +78,7 @@ import {
   CATALOG2_STATUS_LABEL,
   CATALOG2_STATUS_TONE,
 } from "@/lib/catalog2-status";
-import {
-  provisionalPrice,
-  provisionalDeadlineDays,
-  provisionalTaskCount,
-  provisionalStepCount,
-  provisionalMerchandising,
-  MERCH_KIND_LABEL,
-  type MerchBadgeKind,
-} from "@/lib/catalog2-provisional";
+import { MERCH_KIND_LABEL, type MerchBadgeKind } from "@/lib/catalog2-provisional";
 import { Eye, Info } from "lucide-react";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
@@ -169,16 +161,6 @@ interface ReadinessProduct {
   effort_data_state?: "missing" | "provisional" | "real_reviewed";
   functional_for_test?: boolean;
   functional_for_test_label?: string | null;
-  // Camada de demonstração provisória (reparo 2026-09) — sempre um bloco
-  // SEPARADO, nunca confundido com os campos reais acima.
-  provisional: {
-    is_provisional: true;
-    needs_review: boolean;
-    image_path: string | null;
-    price_amount: number | null;
-    deadline_days: number | null;
-    modality: string | null;
-  } | null;
   // Merchandising administrável (reunião 10/09) — sempre real, nulo até um
   // Admin Master decidir; nunca preenchido automaticamente.
   merchandising: {
@@ -226,29 +208,19 @@ function categoryForSort(p: Merged): string {
   return p.list?.category?.name ?? "Sem categoria";
 }
 function tasksForSort(p: Merged): number {
-  return p.task_count > 0 ? p.task_count : provisionalTaskCount(p.id).value;
+  return p.task_count;
 }
 function pendenciesForSort(p: Merged): number {
   return p.blockers.length + p.pendings.length;
 }
 function deadlineForSort(p: Merged): number {
-  return (
-    p.deadline_days ??
-    p.pricing_simulation?.deadline_days ??
-    p.provisional?.deadline_days ??
-    provisionalDeadlineDays(p.id).value
-  );
+  return p.deadline_days ?? p.pricing_simulation?.deadline_days ?? 0;
 }
 function statusForSort(p: Merged): string {
   return STATUS_LABEL[p.status] ?? p.status;
 }
 function priceForSort(p: Merged): number {
-  return (
-    p.price_amount ??
-    p.pricing_simulation?.price_amount ??
-    p.provisional?.price_amount ??
-    provisionalPrice(p.id).value
-  );
+  return p.price_amount ?? p.pricing_simulation?.price_amount ?? 0;
 }
 
 // ── Badge comercial (reunião 10/09) — UM único badge por card, prioridade
@@ -283,13 +255,7 @@ function resolveMerchBadge(p: Merged): MerchBadgeView | null {
   if (p.list?.is_new)
     return { kind: "novo", label: "Novo", isProvisional: false };
   if (p.is_test_local) return null; // fixture nunca recebe badge comercial
-  const prov = provisionalMerchandising(p.id);
-  if (!prov.value) return null;
-  return {
-    kind: prov.value,
-    label: MERCH_KIND_LABEL[prov.value],
-    isProvisional: true,
-  };
+  return null;
 }
 
 const MERCH_TONE: Record<MerchBadgeKind, string> = {
@@ -709,7 +675,7 @@ export default function AdminCatalogoProdutosPage() {
     hasTasks: "Com tarefas",
     hasSteps: "Com etapas",
     hasPendencies: "Com pendências",
-    provisionalOnly: "Campos provisórios",
+    provisionalOnly: "Campos faltando",
   };
 
   const openedProduct = merged.find((p) => p.id === openProductId) ?? null;
@@ -981,7 +947,7 @@ export default function AdminCatalogoProdutosPage() {
                           ["hasTasks", "Com tarefas"],
                           ["hasSteps", "Com etapas"],
                           ["hasPendencies", "Com pendências"],
-                          ["provisionalOnly", "Campos provisórios"],
+                          ["provisionalOnly", "Campos faltando"],
                         ] as const
                       ).map(([key, label]) => (
                         <label
@@ -1212,31 +1178,14 @@ function ProductCard({
   // Fonte ÚNICA de provisório: Catalog2ProvisionalPreview (via p.provisional,
   // vindo do backend). O hash local só é usado se o produto não tiver
   // nenhuma linha provisória gravada (reparo 2026-09, seção 11).
-  const priceProv =
-    p.provisional?.price_amount != null
-      ? {
-          value: p.provisional.price_amount,
-          label: "Preço provisório — revisar.",
-          is_provisional: true as const,
-        }
-      : provisionalPrice(p.id);
-  const prazoProv =
-    p.provisional?.deadline_days != null
-      ? {
-          value: p.provisional.deadline_days,
-          label: "Prazo provisório — revisar.",
-          is_provisional: true as const,
-        }
-      : provisionalDeadlineDays(p.id);
-  const taskProv = provisionalTaskCount(p.id);
   const hasRealTasks = p.task_count > 0;
   const pendCount = p.blockers.length + p.pendings.length;
   const badge = resolveMerchBadge(p);
   const cardLabel = `${p.name} — ver detalhes`;
   const displayPrice =
-    p.price_amount ?? p.pricing_simulation?.price_amount ?? priceProv.value;
+    p.price_amount ?? p.pricing_simulation?.price_amount ?? null;
   const displayDeadline =
-    p.deadline_days ?? p.pricing_simulation?.deadline_days ?? prazoProv.value;
+    p.deadline_days ?? p.pricing_simulation?.deadline_days ?? null;
 
   // Visual do card é o componente compartilhado (Catalog2ProductCard) —
   // qualquer tela que mostre produto do catalog2 usa o MESMO visual. Só o
@@ -1260,10 +1209,7 @@ function ProductCard({
         hasRealTasks ? (
           <span>{p.task_count} tarefa(s)</span>
         ) : (
-          <>
-            <span className="text-slate-400">{taskProv.value} tarefa(s)</span>
-            <ProvisionalBadge label={taskProv.label + " Pendência real de tarefas continua registrada."} />
-          </>
+          <span className="text-slate-400">Tarefas a definir</span>
         )
       }
       extraTags={
@@ -1297,84 +1243,9 @@ function ProductCard({
         <Catalog2PricingMemoryPopover
           productId={p.id}
           isAdminMaster={isAdminMaster}
-          provisionalPriceAmount={p.price_amount == null && !p.pricing_simulation ? priceProv.value : undefined}
         />
       }
     />
-  );
-}
-
-function PriceOrProvisional({
-  p,
-  priceProv,
-  isAdminMaster = false,
-}: {
-  p: Merged;
-  priceProv: ReturnType<typeof provisionalPrice>;
-  isAdminMaster?: boolean;
-}) {
-  if (p.pricing_simulation?.price_amount != null && p.price_amount == null) {
-    return (
-      <p className="flex items-center gap-1 text-xs font-semibold text-violet-600 dark:text-violet-300">
-        R$ {p.pricing_simulation.price_amount.toFixed(2)}
-        <ProvisionalBadge label="Preço final simulado para teste. Não vale para cotação, checkout, publicação ou contratação." />
-        <Catalog2PricingMemoryPopover
-          productId={p.id}
-          isAdminMaster={isAdminMaster}
-        />
-      </p>
-    );
-  }
-  if (p.items.preco?.note) {
-    return (
-      <p className="flex items-center gap-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-        {p.items.preco.note}
-        <Catalog2PricingMemoryPopover
-          productId={p.id}
-          isAdminMaster={isAdminMaster}
-        />
-      </p>
-    );
-  }
-  return (
-    <p className="flex items-center gap-1 text-xs font-medium text-slate-400">
-      R$ {priceProv.value.toFixed(2)}
-      <ProvisionalBadge
-        label={
-          priceProv.label + " Não vale para cotação, checkout ou publicação."
-        }
-      />
-      <Catalog2PricingMemoryPopover
-        productId={p.id}
-        isAdminMaster={isAdminMaster}
-        provisionalPriceAmount={priceProv.value}
-      />
-    </p>
-  );
-}
-function DeadlineOrProvisional({
-  p,
-  prazoProv,
-}: {
-  p: Merged;
-  prazoProv: ReturnType<typeof provisionalDeadlineDays>;
-}) {
-  if (p.pricing_simulation?.deadline_days != null && p.deadline_days == null) {
-    return (
-      <p className="flex items-center gap-1 text-[11px] font-medium text-violet-600 dark:text-violet-300">
-        {p.pricing_simulation.deadline_days} dia(s)
-        <ProvisionalBadge label="Prazo simulado para teste — nunca é promessa ao cliente." />
-      </p>
-    );
-  }
-  if (p.items.prazo?.note) {
-    return <p className="text-[11px] text-slate-400">{p.items.prazo.note}</p>;
-  }
-  return (
-    <p className="flex items-center gap-1 text-[11px] text-slate-400">
-      {prazoProv.value} dia(s)
-      <ProvisionalBadge label={prazoProv.label} />
-    </p>
   );
 }
 
@@ -1396,29 +1267,12 @@ function ProductListRow({
   onChoose: () => void;
   isAdminMaster?: boolean;
 }) {
-  const priceProv =
-    p.provisional?.price_amount != null
-      ? {
-          value: p.provisional.price_amount,
-          label: "Preço provisório — revisar.",
-          is_provisional: true as const,
-        }
-      : provisionalPrice(p.id);
-  const taskProv = provisionalTaskCount(p.id);
-  const prazoProv =
-    p.provisional?.deadline_days != null
-      ? {
-          value: p.provisional.deadline_days,
-          label: "Prazo provisório — revisar.",
-          is_provisional: true as const,
-        }
-      : provisionalDeadlineDays(p.id);
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   const pendCount = p.blockers.length + p.pendings.length;
   const displayPrice =
-    p.price_amount ?? p.pricing_simulation?.price_amount ?? priceProv.value;
+    p.price_amount ?? p.pricing_simulation?.price_amount ?? null;
   const displayDeadline =
-    p.deadline_days ?? p.pricing_simulation?.deadline_days ?? prazoProv.value;
+    p.deadline_days ?? p.pricing_simulation?.deadline_days ?? null;
   return (
     <Catalog2ProductListRow
       productId={p.sequence_number}
@@ -1429,7 +1283,7 @@ function ProductListRow({
       gridTemplate={gridTemplate}
       stripe={stripe}
       onOpen={onChoose}
-      taskCount={p.task_count > 0 ? `${p.task_count} tarefa(s)` : `${taskProv.value} tarefa(s)`}
+      taskCount={p.task_count > 0 ? `${p.task_count} tarefa(s)` : "Tarefas a definir"}
       pendencyBadge={
         pendCount > 0 ? (
           <TooltipProvider delayDuration={250}>
@@ -1454,7 +1308,6 @@ function ProductListRow({
         <Catalog2PricingMemoryPopover
           productId={p.id}
           isAdminMaster={isAdminMaster}
-          provisionalPriceAmount={!p.items.preco?.note && !p.pricing_simulation ? priceProv.value : undefined}
         />
       }
       statusBadge={
@@ -1479,24 +1332,6 @@ function ProductDetail({
 }) {
   const categoryName = p.list?.category?.name ?? "Sem categoria";
   const pendencias = [...p.blockers, ...p.pendings];
-  const priceProv =
-    p.provisional?.price_amount != null
-      ? {
-          value: p.provisional.price_amount,
-          label: "Preço provisório — revisar.",
-          is_provisional: true as const,
-        }
-      : provisionalPrice(p.id);
-  const prazoProv =
-    p.provisional?.deadline_days != null
-      ? {
-          value: p.provisional.deadline_days,
-          label: "Prazo provisório — revisar.",
-          is_provisional: true as const,
-        }
-      : provisionalDeadlineDays(p.id);
-  const taskProv = provisionalTaskCount(p.id);
-  const stepProv = provisionalStepCount(p.id, taskProv.value);
   const hasRealPrice = p.price_amount != null;
   const hasRealPrazo = p.deadline_days != null;
   const hasRealTasks = p.task_count > 0;
@@ -1545,7 +1380,6 @@ function ProductDetail({
         <div className="h-40">
           <Catalog2Thumbnail
             productId={p.id}
-            imagePath={p.provisional?.image_path}
             size="lg"
             showBadge
           />
@@ -1568,39 +1402,32 @@ function ProductDetail({
             exatamente o que precisa ser substituído (reparo 2026-09). */}
         <div>
           <h2 className="text-sm font-semibold text-foreground">
-            Campos reais × provisórios
+            O que já está preenchido
           </h2>
           <div className="mt-1.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             <FieldStatusChip
               label="Descrição"
-              status={hasRealSummary ? "real" : "provisorio"}
+              status={hasRealSummary ? "real" : "ausente"}
             />
             <FieldStatusChip
               label="Preço"
-              status={hasRealPrice ? "real" : "provisorio"}
+              status={hasRealPrice ? "real" : p.pricing_simulation ? "previa" : "ausente"}
             />
             <FieldStatusChip
               label="Prazo"
-              status={hasRealPrazo ? "real" : "provisorio"}
+              status={hasRealPrazo ? "real" : p.pricing_simulation ? "previa" : "ausente"}
             />
             <FieldStatusChip
               label="Tarefas"
-              status={hasRealTasks ? "real" : "provisorio"}
+              status={hasRealTasks ? "real" : "ausente"}
             />
             <FieldStatusChip
               label="Etapas"
-              status={hasRealSteps ? "real" : "provisorio"}
+              status={hasRealSteps ? "real" : "ausente"}
             />
-            <FieldStatusChip label="Imagem" status="provisorio" />
             <FieldStatusChip
               label="Especialidade/Tempo"
-              status={
-                p.effort_data_state === "real_reviewed"
-                  ? "real"
-                  : p.effort_data_state === "provisional"
-                    ? "provisorio"
-                    : "ausente"
-              }
+              status={p.effort_data_state === "real_reviewed" ? "real" : "ausente"}
             />
           </div>
           {p.functional_for_test && (
@@ -1619,25 +1446,11 @@ function ProductDetail({
                 ? `R$ ${p.price_amount!.toFixed(2)}`
                 : p.pricing_simulation?.price_amount != null
                   ? `R$ ${p.pricing_simulation.price_amount.toFixed(2)}`
-                  : `R$ ${priceProv.value.toFixed(2)}`
+                  : "A definir"
             }
-            provisional={
-              !hasRealPrice
-                ? p.pricing_simulation
-                  ? "Simulação provisória para teste"
-                  : priceProv.label
-                : undefined
-            }
+            provisional={!hasRealPrice && p.pricing_simulation ? "Prévia: produto ainda não publicado" : undefined}
             extra={
-              <Catalog2PricingMemoryPopover
-                productId={p.id}
-                isAdminMaster={isAdminMaster}
-                provisionalPriceAmount={
-                  !hasRealPrice && !p.pricing_simulation
-                    ? priceProv.value
-                    : undefined
-                }
-              />
+              <Catalog2PricingMemoryPopover productId={p.id} isAdminMaster={isAdminMaster} />
             }
           />
           <DetailStat
@@ -1647,25 +1460,17 @@ function ProductDetail({
                 ? `${p.deadline_days} dia(s)`
                 : p.pricing_simulation?.deadline_days != null
                   ? `${p.pricing_simulation.deadline_days} dia(s)`
-                  : `${prazoProv.value} dia(s)`
+                  : "A definir"
             }
-            provisional={
-              !hasRealPrazo
-                ? p.pricing_simulation
-                  ? "Simulação provisória para teste"
-                  : prazoProv.label
-                : undefined
-            }
+            provisional={!hasRealPrazo && p.pricing_simulation ? "Prévia: produto ainda não publicado" : undefined}
           />
           <DetailStat
             label="Tarefas"
-            value={hasRealTasks ? String(p.task_count) : String(taskProv.value)}
-            provisional={!hasRealTasks ? taskProv.label : undefined}
+            value={hasRealTasks ? String(p.task_count) : "A definir"}
           />
           <DetailStat
             label="Etapas"
-            value={hasRealSteps ? String(p.step_count) : String(stepProv.value)}
-            provisional={!hasRealSteps ? stepProv.label : undefined}
+            value={hasRealSteps ? String(p.step_count) : "A definir"}
           />
         </div>
 
@@ -1715,9 +1520,9 @@ function ProductDetail({
 
         <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
           Esta é uma visualização comercial, só leitura. Para editar tarefas,
-          etapas, preço ou publicar, use o Cadastro de Produtos. Valores
-          provisórios nunca entram em cotação, checkout ou publicação — servem
-          só pra conferência visual.
+          etapas, preço ou publicar, use o Cadastro de Produtos. O que
+          ainda não foi preenchido aparece como “A definir” (nada é inventado) e só o
+          cliente vê o produto depois de publicado.
         </p>
       </div>
     </div>
@@ -1754,20 +1559,20 @@ function FieldStatusChip({
   status,
 }: {
   label: string;
-  status: "real" | "provisorio" | "ausente";
+  status: "real" | "previa" | "ausente";
 }) {
   const tone =
     status === "real"
       ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-      : status === "provisorio"
+      : status === "previa"
         ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
         : "bg-muted text-muted-foreground";
   const statusLabel =
     status === "real"
-      ? "Real"
-      : status === "provisorio"
-        ? "Provisório"
-        : "Ausente";
+      ? "Preenchido"
+      : status === "previa"
+        ? "Prévia"
+        : "A preencher";
   return (
     <div
       className={`flex items-center justify-between rounded-md px-2 py-1 text-[11px] ${tone}`}

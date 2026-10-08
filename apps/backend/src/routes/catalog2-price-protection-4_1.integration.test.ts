@@ -431,10 +431,5 @@ describe("Ajustar a proteção comercial (Item 4.1, reunião 2026-09-14)", () =>
     assert.equal(pp.preco_final_cliente_snapshot, paidPrice);
     await setPricingSettings(30);
 
-    // dado provisório continua isolado do recálculo, mesmo com o novo caminho de versão/escopo.
-    await prisma.catalog2ProvisionalPreview.create({ data: { product_id: product.id, image_path: "/x.svg", price_amount: 123456, deadline_days: 1, modality: "Sob demanda" } });
-    const q2 = await createQuoteViaApi(CO_A.token, product.id, { variation_option_keys: ["carrossel"] });
-    assert.notEqual(q2.commercial_price, 123456);
-    await prisma.catalog2ProvisionalPreview.deleteMany({ where: { product_id: product.id } });
   });
 });

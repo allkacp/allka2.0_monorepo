@@ -172,7 +172,6 @@ interface ProductManifestLine {
   options: { created: number; updated: number; unchanged: number };
   addons: { created: number; updated: number; unchanged: number };
   periods: { created: number; updated: number; unchanged: number };
-  provisional_preview: Outcome | "absent";
   import_origin: Outcome;
   global_config_divergences: string[];
   warnings: string[];
@@ -317,7 +316,6 @@ async function main() {
         options: { created: 0, updated: 0, unchanged: 0 },
         addons: { created: 0, updated: 0, unchanged: 0 },
         periods: { created: 0, updated: 0, unchanged: 0 },
-        provisional_preview: p.provisional_preview ? "unchanged" : "absent",
         import_origin: "unchanged",
         global_config_divergences: [],
         warnings: [],
@@ -432,7 +430,6 @@ async function main() {
       options: { created: 0, updated: 0, unchanged: 0 },
       addons: { created: 0, updated: 0, unchanged: 0 },
       periods: { created: 0, updated: 0, unchanged: 0 },
-      provisional_preview: p.provisional_preview ? "unchanged" : "absent",
       import_origin: "unchanged",
       global_config_divergences: [],
       warnings: [],
@@ -474,6 +471,7 @@ async function main() {
             task_structure: (p as any).task_structure ?? "multiple",
             visibility_mode: (p as any).visibility_mode ?? "all",
             visibility_min_partner_level: (p as any).visibility_min_partner_level ?? null,
+            visibility_agency_levels: (p as any).visibility_agency_levels ?? null,
             status: "em_preparacao", // NUNCA nasce em status contratável por esta transferência
           },
         });
@@ -491,6 +489,8 @@ async function main() {
               task_structure: (p as any).task_structure ?? "multiple",
               visibility_mode: (p as any).visibility_mode ?? "all",
               visibility_min_partner_level: (p as any).visibility_min_partner_level ?? null,
+              visibility_agency_levels: (p as any).visibility_agency_levels ?? null,
+            visibility_agency_levels: (p as any).visibility_agency_levels ?? null,
               // A sincronização espelho local nunca mantém uma publicação,
               // categoria ou classificação que já não exista no pacote.
               status: "em_preparacao",
@@ -569,7 +569,6 @@ async function main() {
         // Todas as relações abaixo pertencem à versão em rascunho. O banco
         // protege qualquer vínculo operacional incompatível e, nesse caso,
         // toda a transação do produto é desfeita sem alteração parcial.
-        await tx.catalog2VersionAccess.deleteMany({ where: { version_id: versionId } });
         await tx.catalog2Task.deleteMany({ where: { version_id: versionId } });
         await tx.catalog2Variation.deleteMany({ where: { version_id: versionId } });
         await tx.catalog2Addon.deleteMany({ where: { version_id: versionId } });
@@ -577,12 +576,6 @@ async function main() {
         await tx.catalog2ConnectionRequirement.deleteMany({ where: { version_id: versionId } });
         await tx.catalog2ApprovalGate.deleteMany({ where: { version_id: versionId } });
         await tx.catalog2SlaRule.deleteMany({ where: { version_id: versionId } });
-      }
-
-      // acessos externos exigidos pela versão (nunca guarda senha)
-      for (const a of ((v as any).access_requirements ?? []) as any[]) {
-        const exAccess = await tx.catalog2VersionAccess.findFirst({ where: { version_id: versionId, access_type: a.access_type, label: a.label } });
-        if (!exAccess) await tx.catalog2VersionAccess.create({ data: { version_id: versionId, access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes, sort_order: a.sort_order } });
       }
 
       // tarefas + etapas + questionário (por key dentro da versão)
@@ -673,7 +666,7 @@ async function main() {
           const newStepFields = {
             depends_on_json: (s as any).depends_on_json ?? null, executor_policy: (s as any).executor_policy ?? "auto", executor_same_as_key: (s as any).executor_same_as_key ?? null,
             executor_kind: (s as any).executor_kind ?? "nomad", leader_mode: (s as any).leader_mode ?? "auto", leader_user_id: (s as any).leader_user_id ?? null,
-            internal_step: (s as any).internal_step ?? false, requires_qualification: (s as any).requires_qualification ?? true, release_next_auto: (s as any).release_next_auto ?? true,
+            internal_step: (s as any).internal_step ?? false, requires_qualification: (s as any).requires_qualification ?? true, release_next_auto: (s as any).release_next_auto ?? true, requires_specialist_qualification: (s as any).requires_specialist_qualification ?? false, specialist_user_id: (s as any).specialist_user_id ?? null,
             emergency_reduction_minutes: (s as any).emergency_reduction_minutes ?? null, emergency_extra_kind: (s as any).emergency_extra_kind ?? null, emergency_extra_value: (s as any).emergency_extra_value ?? null,
             approval_hours: (s as any).approval_hours ?? null, rework_hours: (s as any).rework_hours ?? null, executor_accept_hours: (s as any).executor_accept_hours ?? null,
           };
@@ -744,30 +737,6 @@ async function main() {
           if (changed) { await tx.catalog2ProductPeriod.update({ where: { id: existingPer.id }, data: perData }); line.periods.updated++; }
           else line.periods.unchanged++;
         }
-      }
-
-      // preview provisório — preserva a marcação de "provisório" explicitamente
-      if (p.provisional_preview) {
-        const pv = p.provisional_preview;
-        const existingPv = await tx.catalog2ProvisionalPreview.findUnique({ where: { product_id: productId } });
-        const pvData = {
-          is_provisional: true,
-          needs_review: pv.needs_review,
-          image_path: pv.image_path,
-          image_source_note: pv.image_source_note,
-          price_amount: pv.price_amount,
-          deadline_days: pv.deadline_days,
-          modality: pv.modality,
-          contract_note: pv.contract_note,
-          highlights_json: pv.highlights_json,
-          included_items_json: pv.included_items_json,
-          options_json: pv.options_json,
-          portfolio_refs_json: pv.portfolio_refs_json,
-        };
-        if (!existingPv) { await tx.catalog2ProvisionalPreview.create({ data: { product_id: productId, ...pvData } }); line.provisional_preview = "created"; }
-        else { await tx.catalog2ProvisionalPreview.update({ where: { product_id: productId }, data: pvData }); line.provisional_preview = "unchanged"; }
-      } else if (replaceExisting) {
-        await tx.catalog2ProvisionalPreview.deleteMany({ where: { product_id: productId } });
       }
 
       // procedência da importação (metadado — nunca decide sozinho, só preserva o rastro)

@@ -1,5 +1,7 @@
 "use client"
 
+import { withScreenHelp } from "@/components/with-screen-help"
+import { SECURE_BROWSER_HELP } from "@/lib/screen-help"
 // D3 — Navegador seguro: o dono guarda contas (consentimento), autoriza pessoas por tempo e acompanha/derruba sessões; quem foi autorizado abre a sessão.
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Clock, Loader2, Lock, Plus, ShieldCheck, Trash2 } from "lucide-react"
@@ -162,7 +164,7 @@ function ProfileCard({ p, onChanged, onOpen, isAdmin = false }: { p: any; onChan
   )
 }
 
-export function SecureBrowserHub({ canCreate = true, adminScope, isAdmin = false, onExpandedChange, onViewerOpenChange, onViewerInfo }: { canCreate?: boolean; onViewerInfo?: (text: string | null) => void; isAdmin?: boolean; onExpandedChange?: (v: boolean) => void; onViewerOpenChange?: (v: boolean) => void; adminScope?: { agency_id?: string; company_id?: string } }) {
+function SecureBrowserHubBase({ canCreate = true, adminScope, isAdmin = false, onExpandedChange, onViewerOpenChange, onViewerInfo }: { canCreate?: boolean; onViewerInfo?: (text: string | null) => void; isAdmin?: boolean; onExpandedChange?: (v: boolean) => void; onViewerOpenChange?: (v: boolean) => void; adminScope?: { agency_id?: string; company_id?: string } }) {
   const [profiles, setProfiles] = useState<any[] | null>(null)
   const [consent, setConsent] = useState<{ version: string; text: string } | null>(null)
   const [form, setForm] = useState({ label: "", start_url: "https://", provider_hint: "", max: "60", ok: false })
@@ -227,3 +229,5 @@ export function SecureBrowserHub({ canCreate = true, adminScope, isAdmin = false
     </div>
   )
 }
+
+export const SecureBrowserHub = withScreenHelp(SecureBrowserHubBase, SECURE_BROWSER_HELP)

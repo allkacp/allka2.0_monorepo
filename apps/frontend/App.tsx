@@ -14,6 +14,7 @@ import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { MobileLayoutWrapper } from "@/components/mobile-layout-wrapper";
+import { GlobalScreenHelp } from "@/components/with-screen-help";
 
 import { AccountTypeProvider } from "@/contexts/account-type-context";
 import { useAccountType } from "@/contexts/account-type-context";
@@ -636,9 +637,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                     )}
                                   >
                                     <PageErrorBoundary>
-                                      <Suspense fallback={<PageLoader />}>
-                                        {children}
-                                      </Suspense>
+                                      <GlobalScreenHelp>
+                                        <Suspense fallback={<PageLoader />}>
+                                          {children}
+                                        </Suspense>
+                                      </GlobalScreenHelp>
                                     </PageErrorBoundary>
                                   </main>
                                   <Footer transparent={isEmpresasRoute} />

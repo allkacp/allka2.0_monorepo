@@ -9,9 +9,9 @@ let ADMIN: Awaited<ReturnType<typeof mkAdmin>>;
 let CO: Awaited<ReturnType<typeof mkCompanyUser>>;
 let LEADER: Awaited<ReturnType<typeof mkLeader>>;
 const adm = (p: string, method = "GET", body?: unknown) => api(`/api/admin/catalog2${p}`, { method, token: ADMIN.token, body });
-async function mkAgency(partner: boolean) {
+async function mkAgency(partner: boolean, level?: string) {
   const owner = await mkUser("agency_admin", "agencias");
-  const agency = await prisma.agency.create({ data: { name: `[TESTE] AUD ${partner ? "partner" : "comum"} ${uid()}`, status: "ativo", owner_user_id: owner.id } });
+  const agency = await prisma.agency.create({ data: { name: `[TESTE] AUD ${partner ? "partner" : "comum"} ${uid()}`, status: "ativo", owner_user_id: owner.id, ...(level ? { partner_level: level } : {}) } });
   await prisma.user.update({ where: { id: owner.id }, data: { agency_id: agency.id } });
   if (partner) await prisma.partnerProfile.create({ data: { agency_id: agency.id, status: "active" } as any });
   return { user: owner, token: tokenFor(owner) };
@@ -101,5 +101,55 @@ describe("Visibilidade do produto por público — lista de marcação (C7)", ()
     assert.equal((await adm(`/versions/${p.versionId}`, "PUT", { base_commercial_deadline_days: 5 })).status, 200);
     v = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: p.versionId } });
     assert.deepEqual([v.base_commercial_deadline_days, v.base_commercial_deadline_hours], [5, null]);
+  });
+
+  it("AU-NIV. níveis de agência: restringe só agências (lista, detalhe, cotação); empresas e equipe não são afetadas; vazio ou todos = sem restrição", async () => {
+    // como no sistema real: os cinco níveis iniciais estão cadastrados
+    if ((await prisma.partnerLevel.count()) === 0) for (const [i, n] of ["Bronze", "Silver", "Gold", "Platinum", "Diamond"].entries()) await prisma.partnerLevel.create({ data: { name: n, sort_order: i + 1 } });
+    const gold = await mkAgency(false, "gold"), bronze = await mkAgency(false, "bronze"), partnerGold = await mkAgency(true, "gold");
+    const p = await publicado();
+    const slug = await slugOf(p.product.id);
+    // inválido
+    assert.equal((await adm(`/products/${p.product.id}/visibility`, "PATCH", { audiences: [], agency_levels: ["ouro"] })).status, 422);
+    // só Gold e Platinum
+    const ok = await adm(`/products/${p.product.id}/visibility`, "PATCH", { audiences: [], agency_levels: ["Gold", "platinum"] });
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    assert.equal(ok.json.visibility_agency_levels, ",gold,platinum,");
+    assert.deepEqual(ok.json.agency_levels, ["gold", "platinum"]);
+    assert.equal(await lista(gold.token, slug), true, "agência Gold vê");
+    assert.equal(await lista(partnerGold.token, slug), true, "partner Gold vê");
+    assert.equal(await lista(bronze.token, slug), false, "agência Bronze não vê");
+    assert.equal(await detalhe(gold.token, slug), 200);
+    assert.equal(await detalhe(bronze.token, slug), 404);
+    assert.equal(await cotar(bronze.token, p.product.id), 404, "Bronze não cota");
+    assert.equal(await lista(CO.token, slug), true, "empresa não é afetada");
+    assert.equal(await lista(LEADER.token, slug), true, "líder vê");
+    assert.equal(await detalhe(ADMIN.token, slug), 200);
+    // trocar só o público mantém os níveis; "somente Company" limpa os níveis
+    const keep = await adm(`/products/${p.product.id}/visibility`, "PATCH", { audiences: ["agency", "partner"] });
+    assert.equal(keep.json.visibility_agency_levels, ",gold,platinum,");
+    const co = await adm(`/products/${p.product.id}/visibility`, "PATCH", { audiences: ["company"] });
+    assert.equal(co.json.visibility_agency_levels, null);
+    // todos os níveis marcados = sem restrição
+    // os níveis oferecidos são os CADASTRADOS: a lista reflete a tabela de níveis
+    const reg = await adm("/agency-levels");
+    assert.equal(reg.status, 200);
+    const keys = reg.json.data.map((l: any) => l.key);
+    assert.ok(keys.includes("gold") && keys.includes("bronze"), "traz os níveis cadastrados");
+    // cadastrar um nível novo faz ele aparecer, aceitar agência nesse nível e valer como filtro do produto
+    const novoNome = "Elite " + uid();
+    await prisma.partnerLevel.create({ data: { name: novoNome, sort_order: 99 } });
+    const reg2 = await adm("/agency-levels");
+    const novoKey = novoNome.toLowerCase();
+    assert.ok(reg2.json.data.some((l: any) => l.key === novoKey), "nível novo aparece na lista");
+    const elite = await mkAgency(false, novoKey);
+    const soElite = await adm(`/products/${p.product.id}/visibility`, "PATCH", { audiences: [], agency_levels: [novoKey] });
+    assert.equal(soElite.status, 200, JSON.stringify(soElite.json));
+    assert.equal(await lista(elite.token, slug), true, "agência do nível novo vê");
+    assert.equal(await lista(gold.token, slug), false, "Gold não vê (só o nível novo)");
+    // todos os níveis cadastrados marcados = sem restrição
+    await adm(`/products/${p.product.id}/visibility`, "PATCH", { audiences: [], agency_levels: [...keys, novoKey] });
+    assert.equal((await prisma.catalog2Product.findUniqueOrThrow({ where: { id: p.product.id } })).visibility_agency_levels, null);
+    assert.equal(await lista(bronze.token, slug), true, "todos os níveis: Bronze volta a ver");
   });
 });

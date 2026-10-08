@@ -127,7 +127,8 @@ export function stepFlowSentences(step: any, steps: any[], opts: { stageMode?: b
   if (opts.stageMode) {
     flags.push(step.internal_step ? "etapa interna (o cliente não vê nem aprova)" : "o cliente aprova a etapa");
     if (step.requires_qualification !== false) flags.push("passa pela qualificação do líder");
-    flags.push(step.release_next_auto === false ? "a próxima é liberada pelo líder" : "libera a próxima sozinha");
+    flags.push("libera a próxima sozinha");
+    if (step.requires_specialist_qualification) flags.push("qualificação do especialista");
   }
   return { starts, who, flags, minutes: Math.max(0, step.estimated_minutes ?? 0) };
 }

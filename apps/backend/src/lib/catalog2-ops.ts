@@ -101,6 +101,10 @@ export interface StepOps {
   /** A etapa só conclui depois de anexar uma evidência (usa o mesmo bloqueio já existente de "exige anexo"). */
   evidence_required?: boolean;
   evidence_hint?: string;
+  /** P-12 (08/10): quais acessos do produto esta etapa usa. Ausente = padrão (a etapa de validação de acessos usa todos; as demais, nenhum). */
+  access_scope?: "all" | "some";
+  /** Chaves das exigências de conexão escolhidas (quando access_scope = "some"). */
+  access_keys?: string[];
   visibility?: Partial<Record<StepOpsTextField | "completion_criteria", Visibility>>;
 }
 
@@ -126,6 +130,8 @@ export const stepOpsSchema = z
     instructions: text(STEP_TEXT_MAX.instructions),
     evidence_required: z.boolean().nullish(),
     evidence_hint: text(STEP_TEXT_MAX.evidence_hint),
+    access_scope: z.enum(["all", "some"]).nullish(),
+    access_keys: z.array(z.string().max(60)).max(40).nullish(),
     visibility: z.record(z.string(), visibilityEnum).nullish(),
   })
   .strict()
@@ -179,6 +185,12 @@ export function normalizeStepOps(raw: unknown): StepOps | null {
       items.push({ id, text: t, kind, required: it.required !== false });
     }
     if (items.length) out.checklist = items;
+  }
+  if (r.access_scope === "all") out.access_scope = "all";
+  if (r.access_scope === "some" && Array.isArray(r.access_keys)) {
+    const keys = Array.from(new Set(r.access_keys.filter((k): k is string => typeof k === "string").map((k) => k.trim().slice(0, 60)).filter(Boolean))).slice(0, 40);
+    out.access_scope = "some";
+    out.access_keys = keys;
   }
   const vis = cleanVisibility(r.visibility, [...STEP_OPS_TEXT_FIELDS, "completion_criteria"] as const);
   if (vis) out.visibility = vis;

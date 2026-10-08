@@ -943,6 +943,11 @@ class ApiClient {
   addCatalog2TaskFromModel(versionId: string, modelId: number) { return this.c2("POST", `/versions/${versionId}/tasks/from-model`, { model_id: modelId }); }
   addCatalog2StepFromModel(taskId: string, stepModelId: number) { return this.c2("POST", `/tasks/${taskId}/steps/from-model`, { step_model_id: stepModelId }); }
   /** Líderes e administradores que podem ser designados como qualificador de uma tarefa. */
+  draftCatalog2ProductWithAI(productId: string, messages: { role: "user" | "assistant"; text: string }[], current: Record<string, any> | null) { return this.c2<{ draft: any; reply: string }>("POST", `/products/${productId}/ai-draft`, { messages, current }); }
+  suggestCatalog2TaskQuestionnaire(taskId: string, existingLabels: string[] = []) { return this.c2<{ name: string; description: string | null; questions: any[] }>("POST", `/tasks/${taskId}/questionnaire/ai-suggest`, { existing_labels: existingLabels }); }
+  getAiChangePricing(days = 90) { return this.get<any>(`/ai-usage/change-pricing?days=${days}`); }
+  saveAiChangePricing(body: Record<string, any>) { return this.put<any>(`/ai-usage/change-pricing`, body); }
+  getCatalog2Specialists() { return this.c2<{ data: { id: string; name: string; email: string; kind: "admin" | "lider" | "nomade" }[] }>("GET", `/specialists`); }
   getCatalog2Qualifiers() { return this.c2<{ data: { id: string; name: string; email: string; kind: "admin" | "lider" }[] }>("GET", `/qualifiers`); }
   getCatalog2AccessTypes() { return this.c2<{ data: { key: string; label: string }[] }>("GET", `/access-types`); }
   // ── Conexões e acessos necessários (módulo universal) ──────────────────
@@ -956,7 +961,6 @@ class ApiClient {
   saveConnectionRequirement(versionId: string, key: string, body: Record<string, any>) { return this.c2<any>("PUT", `/versions/${versionId}/connection-requirements/by-key/${encodeURIComponent(key)}`, body); }
   deleteConnectionRequirement(id: string) { return this.c2<any>("DELETE", `/connection-requirements/${id}`); }
   getConnectors() { return this.c2<{ data: any[] }>("GET", "/connectors"); }
-  updateCatalog2AccessRequirements(versionId: string, items: { access_type: string; label?: string | null; is_required?: boolean; notes?: string | null }[]) { return this.c2("PUT", `/versions/${versionId}/access-requirements`, { items }); }
   addCatalog2AccessValidationStep(taskId: string) { return this.c2("POST", `/tasks/${taskId}/steps/access-validation`); }
   syncCatalog2TaskModel(taskId: string) { return this.c2("POST", `/tasks/${taskId}/sync-model`); }
   syncCatalog2StepModel(stepId: string) { return this.c2("POST", `/steps/${stepId}/sync-model`); }
@@ -988,7 +992,7 @@ class ApiClient {
   updateCatalog2SlaRule(id: string, body: Record<string, any>) { return this.c2("PUT", `/sla-rules/${id}`, body); }
   deleteCatalog2SlaRule(id: string) { return this.c2("DELETE", `/sla-rules/${id}`); }
   saveCatalog2StepFlow(taskId: string, steps: { step_id: string; depends_on?: string[] | null; executor_policy?: string; executor_same_as_key?: string | null }[]) { return this.c2<any>("PUT", `/tasks/${taskId}/steps/flow`, { steps }); }
-  setCatalog2ProductVisibility(productId: string, audiences: string[]) { return this.c2<any>("PATCH", `/products/${productId}/visibility`, { audiences }); }
+  setCatalog2ProductVisibility(productId: string, audiences: string[], agencyLevels?: string[]) { return this.c2<any>("PATCH", `/products/${productId}/visibility`, agencyLevels === undefined ? { audiences } : { audiences, agency_levels: agencyLevels }); }
   getCatalog2StepPerformance(stepId: string) { return this.c2<any>("GET", `/steps/${stepId}/performance`); }
   setCatalog2TaskStructure(productId: string, task_structure: "single" | "multiple") { return this.c2<any>("PATCH", `/products/${productId}/task-structure`, { task_structure }); }
   renameCatalog2ProductInternalName(productId: string, body: { internal_name: string; slug?: string | null; confirm_slug_change?: boolean }) { return this.c2<any>("PATCH", `/products/${productId}/internal-name`, body); }
@@ -998,6 +1002,8 @@ class ApiClient {
     return this.c2<any>("GET", `/commercial-requests${query.size ? `?${query}` : ""}`);
   }
   updateCatalog2CommercialRequest(id: string, body: Record<string, any>) { return this.c2<any>("PATCH", `/commercial-requests/${id}`, body); }
+  setCatalog2ProductAiFreeChanges(productId: string, aiFreeChanges: number | null) { return this.c2<{ id: string; ai_free_changes: number | null }>("PATCH", `/products/${productId}/ai-free-changes`, { ai_free_changes: aiFreeChanges }); }
+  generateCatalog2RequestContract(id: string) { return this.c2<{ quote_id: string; valid_until: string; renewed: boolean }>("POST", `/commercial-requests/${id}/generate-contract`, {}); }
   // tarefas / etapas
   addCatalog2Task(versionId: string, body: Record<string, any>) { return this.c2("POST", `/versions/${versionId}/tasks`, body); }
   updateCatalog2Task(id: string, body: Record<string, any>) { return this.c2("PUT", `/tasks/${id}`, body); }
@@ -1035,9 +1041,6 @@ class ApiClient {
   getCatalog2ImportQuality() { return this.c2("GET", "/import/quality"); }
   getCatalog2ImportBatches() { return this.c2<{ data: any[] }>("GET", "/import/batches"); }
   getCatalog2ProductOrigin(productId: string) { return this.c2("GET", `/products/${productId}/origin`); }
-  resolveCatalog2Pendency(productId: string, body: { pendency_key: string; decision: string }) {
-    return this.c2("POST", `/products/${productId}/resolve-pendency`, body);
-  }
   /** Prontidão dos produtos para o catálogo do cliente (bloco 5/6). */
   getCatalog2Readiness() { return this.c2("GET", "/readiness"); }
   /** Prontidão de UM produto — mesma regra do painel geral (bloco 2, 10/09). */
@@ -1094,13 +1097,32 @@ class ApiClient {
   configureClientCatalog2(slug: string, selection: Record<string, any>, preview?: boolean, period?: string | null, versionId?: string) {
     return this.cc("POST", `/products/${encodeURIComponent(slug)}/configure${preview ? `?preview=1${versionId ? `&version=${encodeURIComponent(versionId)}` : ""}` : ""}`, { ...selection, ...(period ? { period } : {}) });
   }
+  // P-11: alterações por IA — grátis até o limite da contratação; depois debita do saldo da carteira.
+  quoteAiChange(body: { project_product_id: string }) { return this.post<any>("/ai-changes/quote", body); }
+  chargeAiChange(body: { project_product_id: string; feature?: string; note?: string | null }) { return this.post<any>("/ai-changes/charge", body); }
+  // Pagamentos (Admin Master): gateways, chaves, teste e troca.
+  listPaymentGateways() { return this.get<any>("/admin/payment-gateways"); }
+  paymentGatewayHistory() { return this.get<any>("/admin/payment-gateways/history"); }
+  savePaymentGateway(key: string, body: { mode: string; secrets: Record<string, string>; values: Record<string, string>; fee_note?: string | null }) { return this.put<any>(`/admin/payment-gateways/${key}`, body); }
+  testPaymentGateway(key: string) { return this.post<any>(`/admin/payment-gateways/${key}/test`, {}); }
+  activatePaymentGateway(key: string, body: { password: string; note?: string }) { return this.post<any>(`/admin/payment-gateways/${key}/activate`, body); }
+  // Recarga em gateway real (Pix / página do cartão) e consulta do andamento.
+  startWalletTopup(body: { amount: number; method: "pix" | "card" }) { return this.post<any>("/wallet-topup/start", body); }
+  getWalletTopupIntent(id: string) { return this.get<any>(`/wallet-topup/intents/${id}`); }
+  // Recarga de crédito da carteira (cartão/Pix) — o gateway é escolhido no backend.
+  getWalletTopupSummary() { return this.get<any>("/wallet-topup/summary"); }
+  topupWalletByCard(body: { amount: number; card_number: string; holder?: string }) { return this.post<any>("/wallet-topup/card", body); }
+  createWalletPix(body: { amount: number }) { return this.post<any>("/wallet-topup/pix", body); }
+  confirmWalletPixSandbox(body: { transaction_id: string }) { return this.post<any>("/wallet-topup/pix/confirm-sandbox", body); }
   listClientCatalog2Quotes() { return this.cc<{ data: any[] }>("GET", "/quotes"); }
   createClientCatalog2Quote(product: string, selection: Record<string, any>, period?: string | null) {
     return this.cc("POST", "/quotes", { product, selection, ...(period ? { period } : {}) });
   }
-  createClientCatalog2CommercialRequest(product: string, selection: Record<string, any>, period?: string | null, note?: string) {
-    return this.cc<any>("POST", "/commercial-requests", { product, selection, ...(period ? { period } : {}), ...(note ? { note } : {}) });
+  createClientCatalog2CommercialRequest(product: string, selection: Record<string, any>, period?: string | null, note?: string, answers?: Record<string, string | string[]>) {
+    return this.cc<any>("POST", "/commercial-requests", { product, selection, ...(period ? { period } : {}), ...(note ? { note } : {}), ...(answers && Object.keys(answers).length ? { answers } : {}) });
   }
+  getClientCatalog2RequestQuestionnaire(product: string) { return this.cc<{ product_id: string; questions: any[] }>("GET", `/products/${product}/request-questionnaire`); }
+  respondClientCatalog2CommercialRequest(id: string, decision: "aprovar" | "recusar", note?: string) { return this.cc<any>("POST", `/commercial-requests/${id}/respond`, { decision, ...(note ? { note } : {}) }); }
   listClientCatalog2CommercialRequests() { return this.cc<{ data: any[] }>("GET", "/commercial-requests"); }
   getClientCatalog2Quote(id: string) { return this.cc("GET", `/quotes/${id}`); }
   revalidateClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/revalidate`); }
@@ -1264,6 +1286,7 @@ class ApiClient {
   revokeSecureBrowserProfile(id: string) { return this.post<any>(`/secure-browser/profiles/${id}/revoke`, {}); }
   getSecureBrowserGrants(id: string) { return this.get<any>(`/secure-browser/profiles/${id}/grants`); }
   getSecureBrowserGrantable(id: string) { return this.get<any>(`/secure-browser/profiles/${id}/grantable-users`); }
+  getCatalog2AgencyLevels() { return this.c2<any>("GET", `/agency-levels`); }
   deleteSecureBrowserProfile(id: string) { return this.del<any>(`/secure-browser/profiles/${id}`); }
   updateSecureBrowserProfile(id: string, body: Record<string, any>) { return this.patch<any>(`/secure-browser/profiles/${id}`, body); }
   createSecureBrowserGroupGrant(id: string, body: Record<string, any>) { return this.post<any>(`/secure-browser/profiles/${id}/grants/group`, body); }
@@ -1291,10 +1314,9 @@ class ApiClient {
   deleteHoliday(id: string) { return this.del<any>(`/work-calendar/holidays/${id}`); }
   // Painel operacional da tarefa (A8b fase 5): etapas, portões de aprovação, prazos (SLA) e entradas de outros produtos.
   getTaskFlowPanel(taskId: string) { return this.get<any>(`/task-flow/${taskId}`); }
-  decideStage(taskId: string, stageId: string, tipo: "qualificacao" | "aprovacao", decisao: "aprovar" | "reprovar" | "comentar", comentario?: string) {
+  decideStage(taskId: string, stageId: string, tipo: "qualificacao" | "especialista" | "aprovacao", decisao: "aprovar" | "reprovar" | "comentar", comentario?: string) {
     return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/decisao`, { tipo, decisao, ...(comentario ? { comentario } : {}) });
   }
-  releaseNextStage(taskId: string, stageId: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/liberar-proxima`, {}); }
   warnStageClient(taskId: string, stageId: string, mensagem: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/avisar-cliente`, { mensagem }); }
   getStageHistory(taskId: string, stageId: string) { return this.get<{ data: any[] }>(`/project-tasks/${taskId}/etapas/${stageId}/historico`); }
   decideApprovalGate(gateId: string, decision: "approve" | "reject", comment?: string) { return this.post<any>(`/approval-gates/${gateId}/decision`, { decision, ...(comment ? { comment } : {}) }); }

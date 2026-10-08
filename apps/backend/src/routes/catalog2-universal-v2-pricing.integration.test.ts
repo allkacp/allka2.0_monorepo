@@ -25,11 +25,7 @@ describe("Estrutura universal v2 · preço, esforço, opções e adicionais", ()
 
   // ── PROBLEMA 1 · FONTE ÚNICA DA REGRA DE PREÇO ───────────────────────────────────────────────
   describe("P1 · fonte única de preço", () => {
-    it("U01. configuração provisória paralela NÃO altera nenhum preço; a memória registra a regra real versionada", async () => {
-      // cria a "simulação provisória" antiga com valores bem diferentes (era a origem das telas divergentes)
-      await prisma.catalog2PricingSimulationSettings.upsert({ where: { id: "default" }, create: { id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 25, human_review_percent: 12, component_order_json: JSON.stringify(["tax", "commission", "operational", "margin"]), is_provisional: true, source: "provisional_simulation_v1" }, update: { profit_margin_percent: 25, human_review_percent: 12 } });
-      const spec = await prisma.catalog2Specialty.findFirstOrThrow({ where: { key: "designer" } });
-      await prisma.catalog2PricingSimulationSpecialtyRate.upsert({ where: { specialty_id: spec.id }, create: { specialty_id: spec.id, hourly_rate: 150, is_provisional: true, source: "provisional_simulation_v1" }, update: { hourly_rate: 150 } });
+    it("U01. o preço usa só a regra real; a memória registra a regra versionada", async () => {
       const { versionId, product } = await mkProduct({ name: "Fonte única", tasks: [T1] }); // rascunho
       const sim = await simulate(ADMIN.token, versionId);
       const p = sim.pricing;

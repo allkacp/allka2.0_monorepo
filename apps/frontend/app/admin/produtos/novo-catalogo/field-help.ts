@@ -20,6 +20,12 @@ const H: Record<string, string> = {
   "horas a reduzir": "Quantas horas esta etapa encurta quando o cliente escolhe a entrega emergencial. Não pode passar do tempo da própria etapa.",
   "adicional": "Quanto se cobra a mais por esta etapa na entrega emergencial: valor fixo em reais ou percentual do preço da etapa.",
   "valor": "Valor do adicional (R$ ou %, conforme o tipo escolhido).",
+  "niveis de agencia": "Limita o produto a certos níveis de agência (os níveis cadastrados em Administração > Níveis Agências; se cadastrar um novo, ele aparece aqui). Só vale para agências: empresas e equipe interna continuam vendo. Todos marcados = sem restrição.",
+  "todos os niveis": "Sem restrição por nível: agências de qualquer nível enxergam o produto (respeitando o público escolhido acima).",
+  "passa pela qualificacao do especialista": "Opção separada da do líder: depois da entrega (e da qualificação do líder, se houver), o especialista escolhido confere o trabalho. Só ele (ou a administração) decide.",
+  "quem aprova esta etapa": "Quem confere a entrega da etapa antes de ela seguir: o líder, o especialista, ou o líder e depois o especialista. Quando a etapa é feita por IA (ou híbrida), SEMPRE precisa de um qualificador aprovando.",
+  "alteracoes por ia gratis neste produto": "Quantas alterações por IA o cliente faz sem pagar em cada contratação deste produto. Vazio = regra global (Configurações). Depois das grátis, cada alteração é cobrada do saldo da carteira.",
+  "especialista que qualifica":"Quem confere a etapa como especialista: líder, administrador ou nômade ativo. Obrigatório quando a qualificação do especialista está ligada.",
   "todos": "Marque para o produto aparecer para qualquer cliente (empresas e agências). Marcar uma opção específica desmarca esta.",
   "informacoes comerciais": "Textos de venda do produto: resumo, descrição, o que está incluído e o que não está.",
   "base comercial": "Dados de venda deste produto: prazo, modalidades e implementação.",
@@ -204,19 +210,24 @@ const H: Record<string, string> = {
   "condicional (so entra se uma condicao exigir)": "Só entra quando uma condição exigir.",
 };
 
-export function helpFor(rawText: string): string | null {
+/** Procura a ajuda de um campo em um dicionário (chave normalizada). Ignora "(...)" no fim e o que vem depois de " — ". */
+export function lookupHelp(dict: Record<string, string>, rawText: string): string | null {
   const t = normalizeHelpKey(rawText);
   if (!t || t.length > 120) return null;
-  if (H[t]) return H[t];
-  const noParen = t.replace(/\s*\([^)]*\)\s*$/g, "").trim();
-  if (noParen !== t && H[noParen]) return H[noParen];
+  if (dict[t]) return dict[t];
+  const stripParen = (v: string) => v.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const noParen = stripParen(t);
+  if (noParen !== t && dict[noParen]) return dict[noParen];
   const noDash = t.split(" — ")[0]?.trim();
   if (noDash && noDash !== t) {
-    if (H[noDash]) return H[noDash];
-    const nd = noDash.replace(/s*([^)]*)s*$/g, "").trim();
-    if (H[nd]) return H[nd];
+    if (dict[noDash]) return dict[noDash];
+    const nd = stripParen(noDash);
+    if (dict[nd]) return dict[nd];
   }
   return null;
+}
+export function helpFor(rawText: string): string | null {
+  return lookupHelp(H, rawText);
 }
 
 export const HELP_KEYS = Object.keys(H);

@@ -1,5 +1,7 @@
 "use client"
 
+import { withScreenHelp } from "@/components/with-screen-help"
+import { PLAC_HELP } from "@/lib/screen-help"
 // Configuração dos 13 passos PLAC (modelo único da plataforma): quem faz, quando (D+N), para quem vale, 4F e responsáveis internos de cobrança.
 import { useCallback, useEffect, useState } from "react"
 import { Loader2, Plus, Save, Trash2 } from "lucide-react"
@@ -72,7 +74,7 @@ function Row({ t, all, users, fourFs, onChanged, onError }: { t: any; all: any[]
   )
 }
 
-export function PlacSettings() {
+function PlacSettingsBase() {
   const [rows, setRows] = useState<any[] | null>(null)
   const [users, setUsers] = useState<any[]>([])
   const [fourFs, setFourFs] = useState<any[]>([])
@@ -98,3 +100,5 @@ export function PlacSettings() {
     </div>
   )
 }
+
+export const PlacSettings = withScreenHelp(PlacSettingsBase, PLAC_HELP)

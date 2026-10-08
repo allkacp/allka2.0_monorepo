@@ -23,7 +23,7 @@ import { computeInactivationState, CATALOG2_INACTIVATION_NOTICE_DAYS } from "./c
 import { listPeriodsForAdmin } from "./catalog2-periods";
 import { listCatalog2ProductHistory } from "./catalog2-product-history";
 import type { KnowledgeSource } from "./iallka-knowledge";
-import { audienceAllows, type AudienceViewer } from "./catalog2-audience";
+import { productVisibleTo as audienceAllows, type AudienceViewer } from "./catalog2-audience";
 
 export interface Catalog2ProductAuraOpts {
   /** Admin Master: vê rascunho + publicada, pendências, dados provisórios.

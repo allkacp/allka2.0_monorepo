@@ -464,6 +464,48 @@ describe("Conexões e acessos necessários", () => {
     assert.equal(await statusOf(t2.a.id), "PARA_LANCAMENTO");
   });
 
+  it("C10b. checagem ativa: conexão que estava boa e o provedor passa a recusar → sai de 'válida', pausa a tarefa e AVISA; provedor fora do ar não derruba", async () => {
+    setConnectorFetch(async (url) => url.includes("/wp-json/wp/v2/users/me") ? { ok: true, status: 200, json: async () => ({ slug: "allka-temp", roles: ["editor"] }), text: async () => "" } : { ok: false, status: 404, json: async () => ({}), text: async () => "" });
+    const { product } = await mkConnProduct("WP saude", [{ key: "a" }], [{ key: "wp", type: "wordpress", method: "app_password", permission: "editor", deps: [{ task_key: "a" }], extra: { validation_mode: "automatic" } }]);
+    const { projectId } = await buy(product.id);
+    const t = byKey(await tasksOf(projectId));
+    const pcr = (await pcrsOf(projectId))[0];
+    const c = await cn(`/requirements/${pcr.id}/create-and-link`, CO_A.token, "POST", { method: "app_password", label: "Site saude", external_id: "https://saude.example.test", account_label: "allka-temp", secret_value: "abcd efgh ijkl mnop", scope: "project" });
+    assert.equal((await cn(`/${c.json.connection_id}/verify`, ADMIN.token, "POST")).json.status, "valid");
+    assert.equal(await statusOf(t.a.id), "PARA_LANCAMENTO");
+    const antigo = new Date(Date.now() - 48 * 3_600_000);
+    const envelhece = () => prisma.clientConnection.update({ where: { id: c.json.connection_id }, data: { last_validated_at: antigo } });
+    const { recheckValidConnections } = await import("../lib/connections/pending");
+
+    // 1) provedor fora do ar (500): não derruba nada
+    setConnectorFetch(async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => "" }));
+    await envelhece();
+    const r1 = await recheckValidConnections(prisma);
+    assert.equal(r1.broken, 0);
+    assert.equal((await prisma.clientConnection.findUniqueOrThrow({ where: { id: c.json.connection_id } })).status, "valid");
+
+    // 2) provedor ainda aceita: renova a data e segue válida
+    setConnectorFetch(async () => ({ ok: true, status: 200, json: async () => ({ slug: "allka-temp", roles: ["editor"] }), text: async () => "" }));
+    await envelhece();
+    await recheckValidConnections(prisma);
+    const renovada = await prisma.clientConnection.findUniqueOrThrow({ where: { id: c.json.connection_id } });
+    assert.equal(renovada.status, "valid");
+    assert.ok(renovada.last_validated_at!.getTime() > antigo.getTime() + 3_600_000, "a data da última conferência foi renovada");
+
+    // 3) senha trocada no site (401): desconecta, pausa a tarefa e avisa
+    setConnectorFetch(async () => ({ ok: false, status: 401, json: async () => ({}), text: async () => "" }));
+    await envelhece();
+    const r3 = await recheckValidConnections(prisma);
+    assert.ok(r3.broken >= 1);
+    const depois = await prisma.clientConnection.findUniqueOrThrow({ where: { id: c.json.connection_id } });
+    assert.equal(depois.status, "invalid");
+    assert.match(depois.last_problem ?? "", /recusou/i);
+    assert.equal(await statusOf(t.a.id), "PENDENTE_DE_LIBERACAO", "a atividade que dependia da conexão foi pausada");
+    const avisos = await prisma.systemAlert.findMany({ where: { type: "conexao_desconectada", entity_id: c.json.connection_id } });
+    assert.ok(avisos.length >= 1, "alguém foi avisado");
+    assert.match(avisos[0].message, /parou de funcionar/);
+  });
+
   it("C11. correção: conexão inválida mostra o problema e a correção; o cliente corrige e a equipe revalida", async () => {
     setConnectorFetch(async () => ({ ok: false, status: 401, json: async () => ({}), text: async () => "" }));
     const { product } = await mkConnProduct("WP corrige", [{ key: "a" }], [{ key: "wp", type: "wordpress", method: "app_password", permission: "editor", deps: [{ task_key: "a" }], extra: { validation_mode: "automatic" } }]);

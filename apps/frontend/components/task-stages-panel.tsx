@@ -13,6 +13,7 @@ export const STAGE_STATUS_LABEL: Record<string, { label: string; tone: string }>
   AGUARDANDO_EXECUTOR: { label: "Procurando executor", tone: "bg-blue-100 text-blue-800" },
   EM_ANDAMENTO: { label: "Em execução", tone: "bg-blue-100 text-blue-800" },
   EM_QUALIFICACAO: { label: "Aguardando qualificação do líder", tone: "bg-fuchsia-100 text-fuchsia-800" },
+  EM_QUALIFICACAO_ESPECIALISTA: { label: "Aguardando qualificação do especialista", tone: "bg-pink-100 text-pink-800" },
   EM_APROVACAO_CLIENTE: { label: "Aguardando aprovação", tone: "bg-purple-100 text-purple-800" },
   CONCLUIDA: { label: "Concluída", tone: "bg-emerald-100 text-emerald-800" },
   AGUARDANDO_APROVACAO: { label: "Aguardando uma aprovação", tone: "bg-amber-100 text-amber-800" },
@@ -20,6 +21,7 @@ export const STAGE_STATUS_LABEL: Record<string, { label: string; tone: string }>
 }
 const SLA_TONE: Record<string, string> = { correndo: "bg-blue-100 text-blue-800", pausado: "bg-amber-100 text-amber-800", estourado: "bg-red-100 text-red-800", concluido: "bg-emerald-100 text-emerald-800", aguardando: "bg-slate-100 text-slate-700" }
 const fmtDate = (v?: string | null) => (v ? new Date(v).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "—")
+const tipoOf = (e: any): "qualificacao" | "especialista" | "aprovacao" => (e.can_qualify ? "qualificacao" : e.can_qualify_specialist ? "especialista" : "aprovacao")
 const BTN = "inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold transition disabled:opacity-50"
 
 export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string; status: string; onChanged?: () => void }) {
@@ -66,7 +68,7 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
         <ol className="space-y-2">
           {stages.map((e) => {
             const st = STAGE_STATUS_LABEL[e.status] ?? { label: e.status, tone: "bg-slate-100 text-slate-700" }
-            const acts = e.can_qualify || e.can_approve || e.can_release || e.can_warn_client
+            const acts = e.can_qualify || e.can_qualify_specialist || e.can_approve || e.can_warn_client
             return (
               <li key={e.id} className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/60" data-testid={`stage-${e.id}`}>
                 <div className="flex flex-wrap items-center gap-2">
@@ -80,24 +82,20 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
                 </div>
                 {acts && (
                   <div className="mt-2 space-y-2">
-                    {(e.can_qualify || e.can_approve) && (
+                    {(e.can_qualify || e.can_qualify_specialist || e.can_approve) && (
                       <>
                         <textarea aria-label={`Comentário da etapa ${e.position}`} rows={2} maxLength={4000} value={comments[e.id] ?? ""} onChange={(ev) => setComment(e.id, ev.target.value)} placeholder="Comentário (obrigatório para pedir ajuste)" className="w-full rounded-md border border-slate-200 bg-white p-2 text-xs dark:border-slate-700 dark:bg-slate-900" />
                         <div className="flex flex-wrap gap-2">
                           <button type="button" disabled={busy === e.id} className={`${BTN} border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100`}
-                            onClick={() => run(e.id, () => apiClient.decideStage(taskId, e.id, e.can_qualify ? "qualificacao" : "aprovacao", "aprovar", comment(e.id) || undefined).then(() => clear(e.id)), e.can_qualify ? "Qualificação aprovada." : "Etapa aprovada.")}>
-                            {busy === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}{e.can_qualify ? "Aprovar qualificação" : "Aprovar etapa"}
+                            onClick={() => run(e.id, () => apiClient.decideStage(taskId, e.id, tipoOf(e), "aprovar", comment(e.id) || undefined).then(() => clear(e.id)), e.can_qualify ? "Qualificação do líder aprovada." : e.can_qualify_specialist ? "Qualificação do especialista aprovada." : "Etapa aprovada.")}>
+                            {busy === e.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}{e.can_qualify ? "Aprovar qualificação" : e.can_qualify_specialist ? "Aprovar como especialista" : "Aprovar etapa"}
                           </button>
                           <button type="button" disabled={busy === e.id || comment(e.id).length < 3} title={comment(e.id).length < 3 ? "Escreva o motivo para pedir ajuste" : ""} className={`${BTN} border-red-300 bg-red-50 text-red-800 hover:bg-red-100`}
-                            onClick={() => run(e.id, () => apiClient.decideStage(taskId, e.id, e.can_qualify ? "qualificacao" : "aprovacao", "reprovar", comment(e.id)).then(() => clear(e.id)), "Ajuste solicitado: a etapa voltou para o mesmo executor, com o mesmo prazo.")}>Pedir ajuste</button>
+                            onClick={() => run(e.id, () => apiClient.decideStage(taskId, e.id, tipoOf(e), "reprovar", comment(e.id)).then(() => clear(e.id)), "Ajuste solicitado: a etapa voltou para o mesmo executor, com o mesmo prazo.")}>Pedir ajuste</button>
                           <button type="button" disabled={busy === e.id || !comment(e.id)} className={`${BTN} border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}
-                            onClick={() => run(e.id, () => apiClient.decideStage(taskId, e.id, e.can_qualify ? "qualificacao" : "aprovacao", "comentar", comment(e.id)).then(() => clear(e.id)), "Comentário registrado.")}>Só comentar</button>
+                            onClick={() => run(e.id, () => apiClient.decideStage(taskId, e.id, tipoOf(e), "comentar", comment(e.id)).then(() => clear(e.id)), "Comentário registrado.")}>Só comentar</button>
                         </div>
                       </>
-                    )}
-                    {e.can_release && (
-                      <button type="button" disabled={busy === e.id} className={`${BTN} border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100`}
-                        onClick={() => run(e.id, () => apiClient.releaseNextStage(taskId, e.id), "Próxima etapa liberada.")}><PlayCircle className="h-3.5 w-3.5" />Liberar a próxima etapa</button>
                     )}
                     {e.can_warn_client && (
                       <div className="flex flex-wrap items-center gap-2">
@@ -114,7 +112,7 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
                 {history[e.id] && (
                   <ul className="mt-1 space-y-0.5 text-[11px] text-slate-600 dark:text-slate-300">
                     {history[e.id].length === 0 && <li>Nenhuma decisão registrada ainda.</li>}
-                    {history[e.id].map((h) => <li key={h.id}>{fmtDate(h.created_at)} — {h.kind === "qualificacao" ? "Qualificação" : h.kind === "aprovacao" ? "Aprovação" : "Aviso ao cliente"}: <strong>{h.decision}</strong>{h.comment ? ` — ${h.comment}` : ""}</li>)}
+                    {history[e.id].map((h) => <li key={h.id}>{fmtDate(h.created_at)} — {h.kind === "qualificacao" ? "Qualificação do líder" : h.kind === "especialista" ? "Qualificação do especialista" : h.kind === "aprovacao" ? "Aprovação" : "Aviso ao cliente"}: <strong>{h.decision}</strong>{h.comment ? ` — ${h.comment}` : ""}</li>)}
                   </ul>
                 )}
               </li>

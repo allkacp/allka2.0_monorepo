@@ -28,4 +28,11 @@ describe("ajuda por campo (ícone i)", () => {
     fireEvent.mouseOut(icon);
     await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
   });
+
+  it("campos novos de 07/10 têm explicação (níveis de agência, especialista, prazos da etapa, IA nas etapas)", async () => {
+    const { helpFor } = await import("./field-help");
+    for (const t of ["Níveis de agência:", "Quem aprova esta etapa", "Alterações por IA grátis neste produto", "Especialista que qualifica", "Prazo de aprovação do cliente (h úteis)", "Prazo de refação (h úteis)", "Prazo de aceite do preferido (h)", "Descrição (o que acontece nesta etapa)", "Critério de conclusão", "Etapa interna (o cliente não vê nem aprova)"]) {
+      expect(helpFor(t), t).toBeTruthy();
+    }
+  });
 });

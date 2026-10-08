@@ -4,7 +4,6 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 const api = {
   getTaskFlowPanel: vi.fn(),
   decideStage: vi.fn(async () => ({})),
-  releaseNextStage: vi.fn(async () => ({})),
   warnStageClient: vi.fn(async () => ({})),
   getStageHistory: vi.fn(async () => ({ data: [] })),
   decideApprovalGate: vi.fn(async () => ({})),
@@ -15,7 +14,7 @@ const api = {
 vi.mock("@/lib/api-client", () => ({ apiClient: new Proxy({}, { get: (_t, k: string) => (api as any)[k] }) }));
 import { TaskStagesPanel } from "./task-stages-panel";
 
-const stage = (over: Record<string, unknown>) => ({ id: "s1", titulo: "Layout", status: "EM_QUALIFICACAO", ordem: 1, position: 1, rodada_ajuste: 0, can_qualify: false, can_approve: false, can_release: false, can_warn_client: false, ...over });
+const stage = (over: Record<string, unknown>) => ({ id: "s1", titulo: "Layout", status: "EM_QUALIFICACAO", ordem: 1, position: 1, rodada_ajuste: 0, can_qualify: false, can_approve: false, can_warn_client: false, ...over });
 const flow = (over: Record<string, unknown> = {}) => ({ task: { id: "t", stage_execution: "stage" }, viewer: { kind: "leader", can_manage_sla: true }, stages: [stage({ can_qualify: true })], approval_gates: [], sla: [], inputs: [], ...over });
 
 describe("Painel operacional da tarefa (A8b fase 5)", () => {
@@ -45,16 +44,16 @@ describe("Painel operacional da tarefa (A8b fase 5)", () => {
     expect(screen.queryByLabelText("Motivo da pausa")).toBeNull();
   });
 
-  it("líder: libera a próxima etapa e avisa o cliente sobre etapa interna; portões e prazos aparecem com ações", async () => {
+  it("líder: avisa o cliente sobre etapa interna; portões e prazos aparecem com ações (sem botão de liberar a próxima etapa)", async () => {
     api.getTaskFlowPanel.mockResolvedValue(flow({
-      stages: [stage({ id: "a", status: "CONCLUIDA", can_qualify: false, can_release: true, titulo: "Briefing" }), stage({ id: "b", titulo: "Acessos", status: "EM_ANDAMENTO", interna: true, can_warn_client: true, position: 2 })],
+      stages: [stage({ id: "a", status: "CONCLUIDA", can_qualify: false, titulo: "Briefing" }), stage({ id: "b", titulo: "Acessos", status: "EM_ANDAMENTO", interna: true, can_warn_client: true, position: 2 })],
       approval_gates: [{ id: "g1", name: "Cliente aprova criativos", status: "pendente", position_label: "Antes de publicar", approver_label: "Cliente", requires_comment: true, can_decide: true }],
       sla: [{ id: "c1", scope_label: "Implantação inicial", amount: 7, unit_label: "dias úteis", status: "correndo", due_at: "2026-10-20T12:00:00Z", pauses: [] }],
       inputs: [{ id: "i1", label: "Arte aprovada", link_url: "https://exemplo.com/arte" }],
     }));
     render(<TaskStagesPanel taskId="t" status="EM_EXECUCAO" />);
-    fireEvent.click(await screen.findByRole("button", { name: /Liberar a próxima etapa/ }));
-    await waitFor(() => expect(api.releaseNextStage).toHaveBeenCalledWith("t", "a"));
+    await screen.findByText("Briefing");
+    expect(screen.queryByRole("button", { name: /Liberar a próxima etapa/ })).toBeNull();
     expect(screen.getByText("Interna (cliente não vê)")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Aviso ao cliente sobre a etapa 2"), { target: { value: "O acesso está errado" } });
     fireEvent.click(screen.getByRole("button", { name: "Avisar o cliente" }));
@@ -79,5 +78,17 @@ describe("Painel operacional da tarefa (A8b fase 5)", () => {
     const { container } = render(<TaskStagesPanel taskId="t" status="EM_EXECUCAO" />);
     await waitFor(() => expect(api.getTaskFlowPanel).toHaveBeenCalled());
     expect(container.querySelector("[data-testid=task-stages-panel]")).toBeNull();
+  });
+
+  it("especialista: vê o rótulo próprio e aprova/pede ajuste como especialista (separado do líder)", async () => {
+    api.getTaskFlowPanel.mockResolvedValue(flow({ viewer: { kind: "nomad", can_manage_sla: false }, stages: [stage({ status: "EM_QUALIFICACAO_ESPECIALISTA", can_qualify: false, can_qualify_specialist: true })] }));
+    render(<TaskStagesPanel taskId="t" status="EM_EXECUCAO" />);
+    await screen.findByText("Layout");
+    expect(screen.getByText("Aguardando qualificação do especialista")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Aprovar como especialista/ }));
+    await waitFor(() => expect(api.decideStage).toHaveBeenCalledWith("t", "s1", "especialista", "aprovar", undefined));
+    fireEvent.change(screen.getByLabelText("Comentário da etapa 1"), { target: { value: "Falta evidência" } });
+    fireEvent.click(screen.getByRole("button", { name: "Pedir ajuste" }));
+    await waitFor(() => expect(api.decideStage).toHaveBeenCalledWith("t", "s1", "especialista", "reprovar", "Falta evidência"));
   });
 });

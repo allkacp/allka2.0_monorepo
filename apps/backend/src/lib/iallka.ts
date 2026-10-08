@@ -10,7 +10,7 @@ import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
 import { assertProductContractable } from "./product-contractability";
 import { checkClientVisibility } from "./catalog2-client";
-import { audienceAllows, type AudienceViewer } from "./catalog2-audience";
+import { productVisibleTo as audienceAllows, type AudienceViewer } from "./catalog2-audience";
 import { recordAIUsage, usageFromGeminiResponse } from "./ai-usage-tracker";
 import {
   buildCatalog2KnowledgeText,
@@ -307,7 +307,7 @@ export async function validateCatalog2Recommendations(
         published_version_id: true,
         import_origin: { select: { pendencies_json: true } },
         inactivation_scheduled_at: true, inactivation_effective_at: true,
-        visibility_mode: true,
+        visibility_mode: true, visibility_agency_levels: true,
       },
     });
     if (!product || product.internal_name.startsWith("[TESTE LOCAL]")) continue;

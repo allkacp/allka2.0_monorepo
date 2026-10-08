@@ -351,12 +351,7 @@ describe("Preços e proteção por 30 dias (Item 4, reunião 2026-09-14)", () =>
 
   it("9. dado provisório nunca vira preço comercial definitivo via renovação/proteção", async () => {
     const { product } = await mkPublishedProduct(`t7-${crypto.randomBytes(4).toString("hex")}`);
-    // preview administrativo provisório do mesmo produto não interfere —
-    // garante que renovação sempre recalcula pela regra comercial real
-    // (computePricing), nunca herda price_amount de ProvisionalPreview.
-    await prisma.catalog2ProvisionalPreview.create({
-      data: { product_id: product.id, image_path: "/images/x.svg", price_amount: 999999, deadline_days: 1, modality: "Sob demanda" },
-    });
+    // a renovação sempre recalcula pela regra comercial real (computePricing).
     const q1 = await createQuoteViaApi(CO_A.token, product.id);
     await prisma.catalog2Quote.update({
       where: { id: q1.id },
@@ -365,8 +360,7 @@ describe("Preços e proteção por 30 dias (Item 4, reunião 2026-09-14)", () =>
     await setPricingSettings(80);
     const renew = await api(`/api/catalog2/quotes/${q1.id}/renew`, { method: "POST", token: CO_A.token });
     assert.equal(renew.status, 200);
-    assert.notEqual(renew.json.quote.commercial_price, 999999);
-    await prisma.catalog2ProvisionalPreview.deleteMany({ where: { product_id: product.id } });
+    assert.ok(renew.json.quote.commercial_price > 0);
   });
 
   it("10. renovar uma cotação que ainda está válida (nunca expirou) é um no-op — não cria nada novo", async () => {

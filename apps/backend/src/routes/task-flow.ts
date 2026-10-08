@@ -33,7 +33,7 @@ router.get("/:taskId", async (req: Request, res: Response, next: NextFunction) =
     const gates = (await gateView(prisma, task.id)).map((g) => ({ ...g, can_decide: g.actionable && canDecide({ approver_kind: g.approver_kind }, decider).ok }));
     const stageRows = await prisma.projectTaskStage.findMany({
       where: { project_task_id: task.id }, orderBy: [{ ordem: "asc" }, { created_at: "asc" }],
-      select: { id: true, titulo: true, status: true, ordem: true, iniciada_em: true, concluida_em: true, entregue_em: true, qualificada_em: true, aprovada_em: true, prazo_execucao: true, executor_type: true, lider_id: true, nomade_id: true, visivel_ao_cliente: true, exige_qualificacao: true, libera_proxima_auto: true, rodada_ajuste: true, depende_de_json: true, catalog_step_ref: true },
+      select: { id: true, titulo: true, status: true, ordem: true, iniciada_em: true, concluida_em: true, entregue_em: true, qualificada_em: true, aprovada_em: true, prazo_execucao: true, executor_type: true, lider_id: true, nomade_id: true, visivel_ao_cliente: true, exige_qualificacao: true, exige_qualificacao_especialista: true, especialista_id: true, libera_proxima_auto: true, rodada_ajuste: true, depende_de_json: true, catalog_step_ref: true },
     });
     const staff = kind === "admin" || kind === "leader";
     const isLeaderOfTask = task.lider_responsavel_id === req.user!.id;
@@ -42,14 +42,13 @@ router.get("/:taskId", async (req: Request, res: Response, next: NextFunction) =
     // Quem contratou NÃO vê etapa interna (a menos que o líder tenha avisado o cliente); equipe e nômade veem tudo.
     const visiveis = stageRows.filter((e) => staff || kind === "nomad" || e.visivel_ao_cliente || !stageMode);
     const stages = visiveis.map((e, i) => {
-      const concluidaSemLiberar = stageMode && e.status === "CONCLUIDA" && !e.libera_proxima_auto && stageRows.some((o) => o.ordem > e.ordem && ["BLOQUEADA", "PENDENTE"].includes(o.status) && !o.iniciada_em);
       return {
         id: e.id, titulo: e.titulo, status: e.status, ordem: e.ordem, iniciada_em: e.iniciada_em, concluida_em: e.concluida_em, entregue_em: e.entregue_em, qualificada_em: e.qualificada_em, aprovada_em: e.aprovada_em,
         prazo_execucao: e.prazo_execucao, rodada_ajuste: e.rodada_ajuste, em_paralelo: e.depende_de_json != null,
-        ...(staff ? { interna: !e.visivel_ao_cliente, exige_qualificacao: e.exige_qualificacao, libera_proxima_auto: e.libera_proxima_auto, executor_type: e.executor_type } : {}),
+        ...(staff ? { interna: !e.visivel_ao_cliente, exige_qualificacao: e.exige_qualificacao, exige_qualificacao_especialista: e.exige_qualificacao_especialista, libera_proxima_auto: e.libera_proxima_auto, executor_type: e.executor_type } : {}),
+        can_qualify_specialist: stageMode && e.status === "EM_QUALIFICACAO_ESPECIALISTA" && (kind === "admin" || e.especialista_id === req.user!.id),
         can_qualify: stageMode && e.status === "EM_QUALIFICACAO" && (kind === "admin" || isLeaderOfTask || e.lider_id === req.user!.id),
         can_approve: stageMode && e.status === "EM_APROVACAO_CLIENTE" && ladoContratante && e.visivel_ao_cliente,
-        can_release: concluidaSemLiberar && (kind === "admin" || isLeaderOfTask || e.lider_id === req.user!.id),
         can_warn_client: stageMode && !e.visivel_ao_cliente && (kind === "admin" || isLeaderOfTask || e.lider_id === req.user!.id),
         position: i + 1,
       };

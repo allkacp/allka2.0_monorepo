@@ -39,7 +39,6 @@ import {
   atribuirExecutorDaEtapa, atribuirExecutoresPendentes,
   decidirEtapa,
   EtapaDecisaoError,
-  liberarProximasEtapas,
   avisarClienteDaEtapa,
   aprovarTarefa,
   reprovarTarefa,
@@ -2600,7 +2599,7 @@ router.post(
 
 // ── Execução por ETAPA (A8b fase 2): qualificação do líder e aprovação de quem contratou, etapa por etapa ──────────────────
 const decisaoEtapaSchema = z.object({
-  tipo: z.enum(["qualificacao", "aprovacao"]),
+  tipo: z.enum(["qualificacao", "especialista", "aprovacao"]),
   decisao: z.enum(["aprovar", "reprovar", "comentar"]),
   comentario: z.string().max(4000).optional(),
 });
@@ -2609,7 +2608,7 @@ const LADO_CONTRATANTE = new Set(["agencias", "empresas", "admin"]);
 async function etapaDaTarefa(taskId: string, stageId: string) {
   return prisma.projectTaskStage.findFirst({
     where: { id: stageId, project_task_id: taskId },
-    select: { id: true, titulo: true, status: true, lider_id: true, visivel_ao_cliente: true, project_task: { select: { id: true, project_id: true, task_code: true, stage_execution: true, lider_responsavel_id: true, nomade_responsavel_id: true } } },
+    select: { id: true, titulo: true, status: true, lider_id: true, especialista_id: true, visivel_ao_cliente: true, project_task: { select: { id: true, project_id: true, task_code: true, stage_execution: true, lider_responsavel_id: true, nomade_responsavel_id: true } } },
   });
 }
 
@@ -2627,6 +2626,9 @@ router.post(
       if (tipo === "qualificacao") {
         const pode = admin || task.lider_responsavel_id === req.user!.id || etapa.lider_id === req.user!.id;
         if (!pode) { res.status(403).json({ error: "Somente o líder/qualificador desta tarefa pode qualificar a etapa." }); return; }
+      } else if (tipo === "especialista") {
+        const pode = admin || (!!etapa.especialista_id && etapa.especialista_id === req.user!.id);
+        if (!pode) { res.status(403).json({ error: "Somente o especialista escolhido para esta etapa pode qualificá-la." }); return; }
       } else {
         // Aprovação: quem contratou (agência/empresa) enxerga a tarefa; etapa interna só aparece para o cliente depois de avisada.
         const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
@@ -2668,20 +2670,6 @@ router.post(
     }
   },
 );
-
-router.post("/:id/etapas/:stageId/liberar-proxima", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const etapa = await etapaDaTarefa(req.params.id as string, req.params.stageId as string);
-    if (!etapa) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
-    if (!(isAdminUser(req.user) || etapa.project_task.lider_responsavel_id === req.user!.id || etapa.lider_id === req.user!.id)) { res.status(403).json({ error: "Somente o líder desta tarefa (ou o administrador) libera a próxima etapa." }); return; }
-    const abertas = await prisma.$transaction((tx) => liberarProximasEtapas(tx, etapa.project_task.id));
-    atribuirExecutoresPendentes(etapa.project_task.id).catch((err) => console.error("[stage-engine] atribuir executor:", err));
-    res.json({ liberadas: abertas.map((a) => ({ stage_id: a.stageId, titulo: a.titulo, status: a.status })) });
-  } catch (err) {
-    if (err instanceof EtapaDecisaoError) { res.status(err.httpStatus).json({ error: err.message }); return; }
-    next(err);
-  }
-});
 
 router.post("/:id/etapas/:stageId/avisar-cliente", verifyToken, validate(z.object({ mensagem: z.string().min(3).max(2000) })), async (req: Request, res: Response, next: NextFunction) => {
   try {

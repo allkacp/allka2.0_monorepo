@@ -26,15 +26,19 @@ import { CommercialFieldsCard } from "./catalog2-commercial-ui";
 import { ConnectionsSection } from "./catalog2-connections-ui";
 import { StepChecklistDialog, checklistCount, type ChecklistItem } from "./catalog2-step-checklist-ui";
 import { AudienceCard } from "./catalog2-audience-ui";
+import { AiFreeChangesCard } from "./catalog2-ai-free-changes";
+import { StepAccessPicker } from "./step-access-picker";
+import { APPROVER_OPTIONS, applyApprover, approverOf, enforceApprover, type ApproverMode } from "./step-approver";
 import { FieldHelpLayer } from "./field-help-layer";
-import { AccessCatalogDialog, typeSummary } from "./catalog2-access-catalog-ui";
+import { AccessCatalogDialog, accessCount, typeSummary } from "./catalog2-access-catalog-ui";
+import { ProductAiChatDialog, draftToVersionPatch } from "./catalog2-product-ai-chat";
 import { StepGovernance } from "./catalog2-step-governance-ui";
 import { EmergencyCard } from "./catalog2-emergency-ui";
 import { StepFlowEditor, StepFlowControls, stepFlowChips, stepStartMode, startChangePayload, flowSummary } from "./catalog2-step-flow-ui";
 import { useWorkCalendar, fmtBusinessMinutes, businessDaysOf } from "@/lib/use-work-calendar";
 import { specialtiesForMode, keepSpecialtyForMode, isSpecialtyCompatible, emptySpecialtyHint, EXEC_KIND_LABEL, specialtyKind } from "./catalog2-specialty-kind";
 import { EffortEffectForm, EFFORT_TYPES, isEffortType, effortEffectSummary, InternalNameEditor, ProductCounts, ApprovalGatesSection, SlaRulesSection, UniversalMemory, availabilityLabel } from "./catalog2-universal-ui";
-import { QuestionConfigFields, emptyQuestion, draftFromServer, payloadFromDraft, questionTypeLabel, type QuestionDraft } from "./catalog2-questions-ui";
+import { QuestionConfigFields, emptyQuestion, draftFromServer, draftFromSuggestion, payloadFromDraft, questionTypeLabel, type QuestionDraft } from "./catalog2-questions-ui";
 import { BillingSplitSection } from "@/components/catalog2-pricing-memory-popover";
 import { VariationSettings, OptionSettings, AddonSettings, ChargeScopeFields, chargeScopeLabel } from "./catalog2-choices-ui";
 import { CATALOG2_STATUSES, CATALOG2_STATUS_LABEL, CATALOG2_STATUS_MEANING, catalog2StatusLabel, catalog2StatusTone, type Catalog2Status } from "@/lib/catalog2-status";
@@ -477,7 +481,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
           <Stepper current={editorTab} onSelect={(t: string) => { void flushPending().then(() => setEditorTab(t)); }} items={readinessItems} />
 
           <KeepTabsContent value="info" className="mt-3">
-            <div className="mb-3 space-y-2"><ProductCounts version={version} /><AudienceCard product={product} readOnly={!product} onDone={() => void load()} /></div>
+            <div className="mb-3 space-y-2"><ProductCounts version={version} /><AudienceCard product={product} readOnly={!product} onDone={() => void load()} /><AiFreeChangesCard key={product?.id ?? "novo"} product={product} readOnly={!product} /></div>
             <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} />
           </KeepTabsContent>
 
@@ -501,7 +505,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
             <div className="mb-3 space-y-3">
               <DeliveryCommercialOverview version={version} readOnly={readOnly} act={act} ringOf={ringOf} locked={!editMode} />
               <AccessCatalogDialog open={accessCatalogOpen} onOpenChange={setAccessCatalogOpen} version={version} readOnly={readOnly} act={act} />
-              <PersistDetails persistKey="d1" id="sec-connections" className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[30px] cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Lock className="h-4 w-4" /></span>Acessos necessários{!readOnly && <button type="button" data-testid="add-access-header" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAccessCatalogOpen(true); }} className="ml-2 inline-flex h-7 items-center gap-1 rounded-lg border border-violet-300 bg-white px-2.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-50"><Plus className="h-3.5 w-3.5" />Adicionar acesso</button>}<span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-semibold ${(version.access_requirements?.length ?? 0) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{(version.access_requirements?.length ?? 0) > 0 ? `${version.access_requirements.length} configurado${version.access_requirements.length === 1 ? "" : "s"}` : "1 acesso pendente"}</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3 min-w-0 space-y-4"><AccessRequirementsSection version={version} readOnly={readOnly} act={act} /><div className="border-t border-slate-100 pt-4 dark:border-slate-800"><ConnectionsSection version={version} readOnly={readOnly} act={act} /></div></div></PersistDetails>
+              <PersistDetails persistKey="d1" id="sec-connections" className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[30px] cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Lock className="h-4 w-4" /></span>Acessos necessários{!readOnly && <button type="button" data-testid="add-access-header" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAccessCatalogOpen(true); }} className="ml-2 inline-flex h-7 items-center gap-1 rounded-lg border border-violet-300 bg-white px-2.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-50"><Plus className="h-3.5 w-3.5" />Adicionar acesso</button>}<span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-semibold ${accessCount(version) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{accessCount(version) > 0 ? `${accessCount(version)} configurado${accessCount(version) === 1 ? "" : "s"}` : "1 acesso pendente"}</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3 min-w-0 space-y-4"><ConnectionsSection version={version} readOnly={readOnly} act={act} /></div></PersistDetails>
             </div>
             <Tabs value={subTabs.entrega} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, entrega: v }))}>
               <div className="flex items-center gap-3">
@@ -951,6 +955,16 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
       setSavingInfo(false);
     }
   }
+  const [aiChatOpen, setAiChatOpen] = useState(false);
+  // P-8: aplica o rascunho da IA (textos + listas) e salva; listas vazias não apagam o que já existe.
+  async function applyAiDraft(d: any) {
+    const patch = draftToVersionPatch(d, f);
+    const next = { ...f, title: patch.title, summary: patch.summary, full_description: patch.full_description };
+    await onSave({ ...next, ...(patch.included_items ? { included_items: patch.included_items } : {}), ...(patch.excluded_items ? { excluded_items: patch.excluded_items } : {}), ...(patch.client_requirements ? { client_requirements: patch.client_requirements } : {}), ...(patch.deliverables_summary ? { deliverables_summary: patch.deliverables_summary } : {}) } as any);
+    setF(next);
+    dirtyRef.current = false;
+    setInfoSaved(true);
+  }
   function updateInfo(next: Partial<typeof f>) {
     setF({ ...f, ...next });
     dirtyRef.current = true;
@@ -983,8 +997,10 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
 
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-3 pt-1">
+          <button type="button" data-testid="open-ai-chat" onClick={() => setAiChatOpen(true)} title="A IA conversa com você e preenche o produto inteiro a partir de uma explicação" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:brightness-110"><Sparkles className="h-3.5 w-3.5" />Preencher o produto com IA</button>
           <SaveButton disabled={savingInfo || (f.summary.length > 500 && f.summary !== (version.summary ?? "")) || (f.full_description.length > 4000 && f.full_description !== (version.full_description ?? ""))} onClick={() => void saveInfo()}>{savingInfo ? "Salvando…" : "Salvar informações"}</SaveButton>
           {fmtUpdatedAt(version?.updated_at) && <span className="text-xs text-slate-500 dark:text-slate-400">Última atualização: {fmtUpdatedAt(version.updated_at)}</span>}
+          <ProductAiChatDialog open={aiChatOpen} onOpenChange={setAiChatOpen} productId={product.id} readOnly={readOnly} onApply={applyAiDraft} />
           {infoSaved && <p role="status" className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">✓ Informações salvas.</p>}
         </div>
       )}
@@ -1438,7 +1454,7 @@ function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked }: 
   const readyParts = [
     { label: "Estrutura comercial", ok: !!version.title && !!version.summary },
     { label: "Tarefas e etapas", ok: tasks.length > 0 },
-    { label: "Acessos necessários", ok: (version.access_requirements?.length ?? 0) > 0 },
+    { label: "Acessos necessários", ok: accessCount(version) > 0 },
   ];
   const ready = readyParts.filter((part) => part.ok).length;
   const percent = Math.round((ready / readyParts.length) * 100);
@@ -1493,72 +1509,6 @@ function ProductPrerequisitesSection({ version, compact = false, onAdd }: { vers
         </li>)}
       </ul>}
     </SetupCard>
-  );
-}
-
-// Acessos externos que este produto exige do cliente (Google Ads, Meta, Pixel…).
-// Só diz QUAIS acessos são necessários — nunca senha. A etapa padrão "Validação e
-// organização dos acessos" usa esta lista.
-const ACCESS_OPTIONS: [string, string][] = [
-  ["google_ads", "Google Ads"], ["meta_business_manager", "Meta Business Manager"], ["ad_account", "Conta de anúncios"],
-  ["pixel_capi", "Pixel / Conversions API"], ["google_analytics", "Google Analytics"], ["google_tag_manager", "Google Tag Manager"],
-  ["crm", "CRM"], ["site_landing", "Site / landing page"],
-];
-function AccessBrandMark({ type }: { type: string }) {
-  const logo: Record<string, string> = {
-    google_ads: "https://cdn.simpleicons.org/googleads/4285F4",
-    meta_business_manager: "https://cdn.simpleicons.org/meta/0866FF",
-    ad_account: "https://cdn.simpleicons.org/googleads/4285F4",
-    pixel_capi: "https://cdn.simpleicons.org/meta/0866FF",
-    google_analytics: "https://cdn.simpleicons.org/googleanalytics/E37400",
-    google_tag_manager: "https://cdn.simpleicons.org/googletagmanager/246FDB",
-    crm: "https://cdn.simpleicons.org/hubspot/FF7A59",
-  };
-  if (logo[type]) return <img src={logo[type]} alt="" aria-hidden="true" className="h-5 w-5 shrink-0 object-contain" />;
-  return <Globe2 className="h-5 w-5 shrink-0 text-blue-600" />;
-}
-function AccessRequirementsSection({ version, readOnly, act }: any) {
-  const current: any[] = version.access_requirements ?? [];
-  const build = () => {
-    const sel: Record<string, { on: boolean; required: boolean }> = {};
-    for (const [k] of ACCESS_OPTIONS) {
-      const found = current.find((a) => a.access_type === k);
-      sel[k] = { on: !!found, required: found ? found.is_required : true };
-    }
-    return { sel, others: current.filter((a) => a.access_type === "other").map((a) => ({ label: a.label, required: a.is_required })) };
-  };
-  const [st, setSt] = useState(build);
-  const [newOther, setNewOther] = useState("");
-  const [catalog, setCatalog] = useState<{ types: any[]; methods: any[] }>({ types: [], methods: [] });
-  useEffect(() => { void Promise.all([apiClient.getConnectionTypes(), apiClient.getConnectionVocabulary()]).then(([t, v]) => setCatalog({ types: t.data, methods: v.methods ?? [] })).catch(() => {}); }, []);
-  const LEGACY_TYPE: Record<string, string> = { google_ads: "google_ads", meta_business_manager: "meta_business_manager", ad_account: "meta_ad_account", pixel_capi: "pixel_capi", google_analytics: "google_analytics_4", google_tag_manager: "google_tag_manager", crm: "crm", site_landing: "site_landing" };
-  const hintOf = (k: string) => { const t = catalog.types.find((x) => x.key === LEGACY_TYPE[k]); if (!t) return "Informa a identificação da conta"; const s = typeSummary(t, (m) => catalog.methods.find((x: any) => x.key === m)?.label ?? m); return `Libera por: ${s.how} · Informa: ${s.needs}`; };
-  const sig = JSON.stringify(current.map((a) => [a.access_type, a.label, a.is_required]));
-  useEffect(() => { setSt(build()); }, [version.id, sig]); // eslint-disable-line react-hooks/exhaustive-deps
-  const save = () => act(() => apiClient.updateCatalog2AccessRequirements(version.id, [
-    ...ACCESS_OPTIONS.filter(([k]) => st.sel[k].on).map(([k, label]) => ({ access_type: k, label, is_required: st.sel[k].required })),
-    ...st.others.map((o) => ({ access_type: "other", label: o.label, is_required: o.required })),
-  ]), "Acessos necessários salvos.");
-  const total = ACCESS_OPTIONS.filter(([k]) => st.sel[k].on).length + st.others.length;
-  const addOther = () => {
-    const label = newOther.trim();
-    if (!label || st.others.some((item) => item.label.toLocaleLowerCase() === label.toLocaleLowerCase())) return;
-    setSt({ ...st, others: [...st.others, { label, required: true }] });
-    setNewOther("");
-  };
-  return (
-    <div className="space-y-3">
-      <div><div className="flex justify-end"><span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-200">{total} selecionado{total === 1 ? "" : "s"}</span></div><p className="text-[11px] leading-relaxed text-slate-500">Escolha os acessos que o cliente precisa liberar. Use convite, permissão ou parceiro/agência — nunca senha.</p></div>
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-700 dark:bg-slate-800/40"><p className="mb-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">Acessos comuns</p><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        {ACCESS_OPTIONS.map(([k, label]) => (
-          <button key={k} type="button" disabled={readOnly} onClick={() => setSt({ ...st, sel: { ...st.sel, [k]: { ...st.sel[k], on: !st.sel[k].on } } })} className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left text-xs transition-colors ${st.sel[k].on ? "border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-700 dark:bg-violet-950/30 dark:text-violet-100" : "border-slate-200 bg-white text-slate-700 hover:border-violet-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[11px] ${st.sel[k].on ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 bg-white text-transparent"}`}>{st.sel[k].on ? "✓" : ""}</span><AccessBrandMark type={k} /><span className="min-w-0"><span className="block truncate font-semibold">{label}</span><span className="block truncate text-[10px] font-normal text-slate-500" title={hintOf(k)}>{hintOf(k)}</span></span></button>
-        ))}
-      </div></section>
-      <section className="rounded-xl border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900/60"><p className="mb-2 text-[11px] font-semibold text-slate-700 dark:text-slate-200">Selecionados para este produto</p>{total === 0 ? <p className="rounded-lg bg-slate-50 px-2.5 py-2 text-xs text-slate-500 dark:bg-slate-800/50">Nenhum acesso selecionado ainda.</p> : <div className="space-y-1.5">{ACCESS_OPTIONS.filter(([k]) => st.sel[k].on).map(([k, label]) => <div key={k} className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs dark:bg-slate-800/50"><span className="min-w-0 flex-1 truncate font-medium text-slate-800 dark:text-slate-100">{label}</span><button type="button" disabled={readOnly} onClick={() => setSt({ ...st, sel: { ...st.sel, [k]: { ...st.sel[k], required: !st.sel[k].required } } })} className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.sel[k].required ? "bg-amber-100 text-amber-800" : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-200"}`}>{st.sel[k].required ? "Obrigatório" : "Opcional"}</button><button type="button" disabled={readOnly} aria-label={`Remover ${label}`} onClick={() => setSt({ ...st, sel: { ...st.sel, [k]: { ...st.sel[k], on: false } } })} className="text-slate-400 hover:text-rose-600"><X className="h-4 w-4" /></button></div>)}{st.others.map((item, index) => <div key={`other-${index}`} className="flex items-center gap-2 rounded-lg bg-violet-50 px-2.5 py-2 text-xs text-violet-900 dark:bg-violet-950/30 dark:text-violet-100"><span className="min-w-0 flex-1 truncate font-medium">{item.label}</span><button type="button" disabled={readOnly} onClick={() => setSt({ ...st, others: st.others.map((other, i) => i === index ? { ...other, required: !other.required } : other) })} className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-slate-900/70 dark:text-violet-200">{item.required ? "Obrigatório" : "Opcional"}</button><button type="button" disabled={readOnly} aria-label={`Remover ${item.label}`} onClick={() => setSt({ ...st, others: st.others.filter((_, i) => i !== index) })} className="text-violet-500 hover:text-rose-600"><X className="h-4 w-4" /></button></div>)}</div>}</section>
-      {!readOnly && (
-        <><section className="rounded-xl border border-dashed border-violet-300 bg-violet-50/50 p-2.5 dark:border-violet-800 dark:bg-violet-950/20"><label className="block text-[11px] font-semibold text-violet-900 dark:text-violet-100">Outro acesso necessário</label><p className="mt-0.5 text-[10px] text-slate-500">Ex.: ERP do cliente, ferramenta proprietária ou conta de parceiro.</p><div className="mt-2 flex gap-2"><Input className="h-8 min-w-0 flex-1 text-xs" placeholder="Descreva o acesso" value={newOther} onChange={(e) => setNewOther(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOther(); } }} /><Button type="button" disabled={!newOther.trim()} onClick={addOther} className="h-8 shrink-0 bg-violet-600 px-3 text-xs text-white hover:bg-violet-700"><Plus className="mr-1 h-3.5 w-3.5" />Adicionar</Button></div></section><div className="flex justify-end"><SaveButton onClick={() => void save()}>Salvar acessos</SaveButton></div></>
-      )}
-    </div>
   );
 }
 
@@ -1748,16 +1698,23 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [savingChecklist, setSavingChecklist] = useState(false);
   const [leaders, setLeaders] = useState<{ id: string; name: string; kind: string }[]>([]);
+  const [specialists, setSpecialists] = useState<{ id: string; name: string; kind: string }[]>([]);
+  useEffect(() => {
+    if (!editing || specialists.length > 0) return;
+    Promise.resolve(apiClient.getCatalog2Specialists?.()).then((r: any) => setSpecialists(r?.data ?? [])).catch(() => {});
+  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!editing || leaders.length > 0) return;
     apiClient.getCatalog2Qualifiers().then((r) => setLeaders(r.data.filter((u) => u.kind === "lider"))).catch(() => {});
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
-  const initial = () => ({ name: step.name, estimated_hours: step.estimated_minutes == null ? "" : String(step.estimated_minutes / 60), specialty_id: step.specialty_id ?? "", purpose: step.purpose ?? "execucao", execution_mode: step.execution_mode ?? "humano", completion_criteria: step.completion_criteria ?? "", first_execution_only: !!step.first_execution_only, skip_when_same_executor: !!step.skip_when_same_executor, description: step.description ?? "", ops: (step.ops ?? {}) as any, executor_kind: step.executor_kind ?? "nomad", leader_mode: step.leader_mode ?? "auto", leader_user_id: step.leader_user_id ?? "", internal_step: !!step.internal_step, requires_qualification: step.requires_qualification !== false, release_next_auto: step.release_next_auto !== false });
+  const initial = () => ({ name: step.name, estimated_hours: step.estimated_minutes == null ? "" : String(step.estimated_minutes / 60), specialty_id: step.specialty_id ?? "", purpose: step.purpose ?? "execucao", execution_mode: step.execution_mode ?? "humano", completion_criteria: step.completion_criteria ?? "", first_execution_only: !!step.first_execution_only, skip_when_same_executor: !!step.skip_when_same_executor, description: step.description ?? "", ops: (step.ops ?? {}) as any, executor_kind: step.executor_kind ?? "nomad", leader_mode: step.leader_mode ?? "auto", leader_user_id: step.leader_user_id ?? "", internal_step: !!step.internal_step, requires_qualification: step.requires_qualification !== false, release_next_auto: step.release_next_auto !== false, requires_specialist_qualification: !!step.requires_specialist_qualification, specialist_user_id: step.specialist_user_id ?? "", approval_hours: step.approval_hours == null ? "" : String(step.approval_hours), rework_hours: step.rework_hours == null ? "" : String(step.rework_hours), executor_accept_hours: step.executor_accept_hours == null ? "" : String(step.executor_accept_hours) });
   const [f, setF] = useState(initial);
   const specName = (refs?.specialties ?? []).find((sp: any) => sp.id === (step.specialty_id ?? task?.specialty?.id))?.name;
-  const payload = () => ({ name: f.name, estimated_minutes: f.estimated_hours === "" ? null : Math.round(Number(f.estimated_hours) * 60), specialty_id: f.specialty_id || null, purpose: f.purpose, execution_mode: f.execution_mode, completion_criteria: f.completion_criteria.trim() ? f.completion_criteria : null, first_execution_only: f.first_execution_only, skip_when_same_executor: f.skip_when_same_executor, description: f.description.trim() ? f.description : null, ops: f.ops, executor_kind: f.executor_kind, leader_mode: f.executor_kind === "leader" ? f.leader_mode : "auto", leader_user_id: f.executor_kind === "leader" && f.leader_mode === "specific" ? f.leader_user_id || null : null, internal_step: f.internal_step, requires_qualification: f.requires_qualification, release_next_auto: f.release_next_auto });
+  const hoursOf = (v: string): number | null | "bad" => { const t = String(v ?? "").trim(); if (t === "") return null; const n = Number(t); return Number.isInteger(n) && n >= 1 ? n : "bad"; };
+  const hoursBad = [f.approval_hours, f.rework_hours, f.executor_accept_hours].some((v) => hoursOf(v) === "bad");
+  const payload = () => ({ approval_hours: hoursOf(f.approval_hours) === "bad" ? null : hoursOf(f.approval_hours), rework_hours: hoursOf(f.rework_hours) === "bad" ? null : hoursOf(f.rework_hours), executor_accept_hours: step.executor_policy === "prefer_same_as_step" ? (hoursOf(f.executor_accept_hours) === "bad" ? null : hoursOf(f.executor_accept_hours)) : (step.executor_accept_hours ?? null), name: f.name, estimated_minutes: f.estimated_hours === "" ? null : Math.round(Number(f.estimated_hours) * 60), specialty_id: f.specialty_id || null, purpose: f.purpose, execution_mode: f.execution_mode, completion_criteria: f.completion_criteria.trim() ? f.completion_criteria : null, first_execution_only: f.first_execution_only, skip_when_same_executor: f.skip_when_same_executor, description: f.description.trim() ? f.description : null, ops: f.ops, executor_kind: f.executor_kind, leader_mode: f.executor_kind === "leader" ? f.leader_mode : "auto", leader_user_id: f.executor_kind === "leader" && f.leader_mode === "specific" ? f.leader_user_id || null : null, internal_step: f.internal_step, requires_qualification: enforceApprover(f).requires_qualification, release_next_auto: true, requires_specialist_qualification: enforceApprover(f).requires_specialist_qualification, specialist_user_id: enforceApprover(f).requires_specialist_qualification ? f.specialist_user_id || null : null });
   const doSave = (scope?: "product" | "model") => act(() => apiClient.updateCatalog2Step(step.id, { ...payload(), ...(scope ? { scope } : {}), ...(scope === "model" ? { confirm_model_update: true } : {}) }), "Etapa salva.").then(() => setEditing(false));
-  const save = () => (step.step_model_id != null ? setScopeAsk(true) : void doSave());
+  const save = () => { if (hoursBad) { void act(() => Promise.reject(new Error("Os prazos em horas precisam ser números inteiros a partir de 1 (ou ficar vazios para usar o padrão).")), ""); return; } return step.step_model_id != null ? setScopeAsk(true) : void doSave(); };
   if (editing) {
     const draftCost = (() => { const h = Number(f.estimated_hours); const sp = (refs?.specialties ?? []).find((x: any) => x.id === (f.specialty_id || task?.specialty?.id)); return f.estimated_hours !== "" && h > 0 && sp?.max_hourly_rate != null ? (h * Number(sp.max_hourly_rate)) : null; })();
     const draftChecklist: ChecklistItem[] = (f.ops?.checklist as ChecklistItem[] | undefined) ?? [];
@@ -1782,14 +1739,14 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
           <section className={SECTION}>
             <h5 className={TITLE}>1 · O que é esta etapa</h5>
             <Field label="Nome da etapa"><input className={CTL} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-            <Field label="Descrição (o que acontece nesta etapa)"><Textarea rows={3} maxLength={8000} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-[88px] text-sm" /></Field>
+            <Field label={<span className="inline-flex items-center gap-2">Descrição (o que acontece nesta etapa)<AiFieldButton compact label="Descrição (o que acontece nesta etapa)" value={f.description} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Critério de conclusão": f.completion_criteria } }} disabled={readOnly} onResult={(v) => setF({ ...f, description: v.slice(0, 8000) })} /></span>}><Textarea rows={3} maxLength={8000} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-[88px] text-sm" /></Field>
           </section>
           {/* 2 · Quem faz e quanto tempo leva */}
           <section className={SECTION}>
             <h5 className={TITLE}>2 · Quem faz e quanto tempo leva</h5>
             <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
               <Field label="Finalidade"><select className={CTL} value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-              <Field label="Quem executa"><select className={CTL} aria-label="Quem executa" value={f.execution_mode} onChange={(e) => setF({ ...f, execution_mode: e.target.value, specialty_id: keepSpecialtyForMode(refs?.specialties, f.specialty_id, e.target.value) })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+              <Field label="Quem executa"><select className={CTL} aria-label="Quem executa" value={f.execution_mode} onChange={(e) => setF(enforceApprover({ ...f, execution_mode: e.target.value, specialty_id: keepSpecialtyForMode(refs?.specialties, f.specialty_id, e.target.value) }))}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
               <Field label="Especialidade"><SpecialtySelect refs={refs} mode={f.execution_mode} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
               <Field label="Horas estimadas"><input className={CTL} type="number" min="0" step="0.25" value={f.estimated_hours} onChange={(e) => setF({ ...f, estimated_hours: e.target.value })} /></Field>
             </div>
@@ -1817,15 +1774,28 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
           {/* 3 · Quando a etapa termina */}
           <section className={SECTION}>
             <h5 className={TITLE}>3 · Quando a etapa termina</h5>
-            <Field label="Critério de conclusão"><input className={CTL} value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
+            <Field label={<span className="inline-flex items-center gap-2">Critério de conclusão<AiFieldButton compact label="Critério de conclusão" value={f.completion_criteria} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Descrição da etapa": f.description } }} disabled={readOnly} onResult={(v) => setF({ ...f, completion_criteria: v.replace(/\n/g, " ").slice(0, 4000) })} /></span>}><input className={CTL} value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
             <label className="flex items-center gap-2 text-sm" title="Nunca se repete nos ciclos seguintes"><input type="checkbox" className="h-4 w-4" checked={f.first_execution_only} onChange={(e) => setF({ ...f, first_execution_only: e.target.checked })} /> Só na primeira execução</label>
             <label className="flex items-center gap-2 text-sm" title="Se o mesmo executor for mantido no ciclo seguinte, esta etapa é dispensada"><input type="checkbox" className="h-4 w-4" checked={f.skip_when_same_executor} onChange={(e) => setF({ ...f, skip_when_same_executor: e.target.checked })} /> Dispensável quando o mesmo executor continua</label>
             {task?.stage_execution === "stage" && (
               <div className="mt-1 space-y-1.5 rounded-lg border border-violet-200 bg-violet-50/50 p-2.5 dark:border-violet-900 dark:bg-violet-950/20" data-testid="stage-flags">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">Execução por etapa</p>
                 <label className="flex items-center gap-2 text-sm" title="O cliente não vê nem aprova esta etapa (ex.: validação de briefing ou de acessos). Se achar um problema, o líder pode avisar o cliente."><input type="checkbox" className="h-4 w-4" checked={f.internal_step} onChange={(e) => setF({ ...f, internal_step: e.target.checked })} /> Etapa interna (o cliente não vê nem aprova)</label>
-                <label className="flex items-center gap-2 text-sm" title="Depois de entregue, o líder qualifica antes de seguir."><input type="checkbox" className="h-4 w-4" checked={f.requires_qualification} onChange={(e) => setF({ ...f, requires_qualification: e.target.checked })} /> Passa pela qualificação do líder</label>
-                <label className="flex items-center gap-2 text-sm" title="Desligado: depois de aprovada, o líder precisa liberar a próxima etapa."><input type="checkbox" className="h-4 w-4" checked={f.release_next_auto} onChange={(e) => setF({ ...f, release_next_auto: e.target.checked })} /> Libera a próxima etapa automaticamente</label>
+                <Field label="Quem aprova esta etapa">
+                  <select className={CTL} aria-label="Quem aprova esta etapa" data-testid="step-approver" title="Quem qualifica a entrega antes de seguir. Quando a execução é feita por IA (ou híbrida), SEMPRE precisa de um qualificador." value={approverOf(f)} onChange={(e) => setF({ ...f, ...applyApprover(e.target.value as ApproverMode) })}>
+                    {APPROVER_OPTIONS.filter((o) => o.value !== "none" || (f.execution_mode === "humano" && approverOf(f) === "none")).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </Field>
+                {f.execution_mode !== "humano" && <p className="text-[11px] text-violet-700" data-testid="approver-ai-note">Esta etapa usa IA: um qualificador sempre aprova a entrega.</p>}
+                <div className="grid gap-1.5 sm:grid-cols-3" data-testid="stage-hours">
+                  <Field label="Prazo de aprovação do cliente (h úteis)"><input type="number" min={1} step={1} aria-label="Prazo de aprovação do cliente (horas úteis)" title="Quantas horas úteis o cliente tem para aprovar esta etapa. Vazio = padrão da plataforma." className={CTL} value={f.approval_hours} onChange={(e) => setF({ ...f, approval_hours: e.target.value })} placeholder="padrão" /></Field>
+                  <Field label="Prazo de refação (h úteis)"><input type="number" min={1} step={1} aria-label="Prazo de refação (horas úteis)" title="Quantas horas úteis o executor tem para refazer depois de uma reprovação. Vazio = mantém o prazo anterior." className={CTL} value={f.rework_hours} onChange={(e) => setF({ ...f, rework_hours: e.target.value })} placeholder="mantém" /></Field>
+                  {step.executor_policy === "prefer_same_as_step" && <Field label="Prazo de aceite do preferido (h)"><input type="number" min={1} step={1} aria-label="Prazo de aceite do preferido (horas)" title="Quantas horas o executor preferido tem para aceitar antes de a etapa abrir para os demais. Vazio = 2 h." className={CTL} value={f.executor_accept_hours} onChange={(e) => setF({ ...f, executor_accept_hours: e.target.value })} placeholder="2 h" /></Field>}
+                </div>
+                {hoursBad && <p role="alert" className="text-[11px] font-semibold text-red-600">Use números inteiros a partir de 1 (ou deixe vazio).</p>}
+                {f.requires_specialist_qualification && (
+                  <Field label="Especialista que qualifica"><select aria-label="Especialista que qualifica" className={CTL} value={f.specialist_user_id} onChange={(e) => setF({ ...f, specialist_user_id: e.target.value })}><option value="">Escolha o especialista…</option>{specialists.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.kind === "nomade" ? "nômade" : u.kind === "admin" ? "administração" : "líder"})</option>)}</select></Field>
+                )}
               </div>
             )}
           </section>
@@ -1857,6 +1827,7 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
         {/* 5 · Conexões e acessos (largura total) */}
         <section className="space-y-2.5 border-t border-slate-200 p-4 dark:border-slate-700">
           <h5 className={TITLE}>5 · Conexões e acessos desta etapa</h5>
+          <StepAccessPicker requirements={version?.connection_requirements ?? []} value={f.ops} disabled={readOnly} onChange={(patch) => setOps(patch)} />
           <ConnectionsSection version={version} readOnly={readOnly} act={act} scope={{ kind: "step", task: { key: task.key, name: task.name }, step: { key: step.key, name: step.name } }} />
         </section>
 
@@ -1887,25 +1858,17 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
             {PURPOSE_LABEL[step.purpose] ?? step.purpose} · {EXEC_LABEL[step.execution_mode] ?? step.execution_mode} · {specName ?? "sem especialidade"} · {formatStageHours(step.estimated_minutes)} · <span data-testid="step-cost" title="Custo estimado: horas × valor/hora da especialidade (sem taxas e margem)">{stepCostEstimate(step, task, refs) == null ? "custo a definir" : brl2(stepCostEstimate(step, task, refs)!)}</span>{step.is_conditional ? " · condicional" : ""}
           </div>
           {!readOnly && steps.length > 1 && <StepFlowControls step={step} steps={steps} index={index} taskId={taskId} act={act} />}
-          {task?.stage_execution === "stage" && (readOnly ? (
+          {task?.stage_execution === "stage" && (
             <div className="mt-0.5 flex flex-wrap gap-1" data-testid="stage-chips">
               {step.internal_step && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Interna (cliente não vê)</span>}
-              {step.requires_qualification === false && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Sem qualificação</span>}
-              {step.release_next_auto === false && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Libera a próxima manualmente</span>}
+              {step.requires_qualification === false && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Sem qualificação do líder</span>}
+              {step.requires_specialist_qualification && <span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-semibold text-pink-800">Qualificação do especialista</span>}
+              {step.approval_hours != null && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800" title="Prazo do cliente para aprovar">Aprovação: {step.approval_hours} h úteis</span>}
+              {step.rework_hours != null && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800" title="Prazo para refazer após reprovação">Refação: {step.rework_hours} h úteis</span>}
+              {step.executor_policy === "prefer_same_as_step" && step.executor_accept_hours != null && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800" title="Prazo de aceite do executor preferido">Aceite: {step.executor_accept_hours} h</span>}
+              {!readOnly && <span className="text-[10px] text-slate-400">Para alterar, clique em Editar.</span>}
             </div>
-          ) : (
-            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-violet-200 bg-violet-50/60 px-2 py-1 text-[11px] text-violet-900 dark:border-violet-900 dark:bg-violet-950/20 dark:text-violet-100" data-testid="stage-quick-flags">
-              <span className="font-bold uppercase tracking-wide">Execução por etapa:</span>
-              <label className="flex items-center gap-1" title="O cliente não vê nem aprova esta etapa."><input type="checkbox" checked={!!step.internal_step} onChange={(e) => void act(() => apiClient.updateCatalog2Step(step.id, { internal_step: e.target.checked, scope: "product" }), "Salvo.")} /> etapa interna (cliente não vê)</label>
-              <label className="flex items-center gap-1" title="Depois de entregue, o líder qualifica antes de seguir."><input type="checkbox" checked={step.requires_qualification !== false} onChange={(e) => void act(() => apiClient.updateCatalog2Step(step.id, { requires_qualification: e.target.checked, scope: "product" }), "Salvo.")} /> qualificação do líder</label>
-              <label className="flex items-center gap-1" title="Desligado: depois de aprovada, o líder precisa liberar a próxima etapa."><input type="checkbox" checked={step.release_next_auto !== false} onChange={(e) => void act(() => apiClient.updateCatalog2Step(step.id, { release_next_auto: e.target.checked, scope: "product" }), "Salvo.")} /> libera a próxima sozinha</label>
-              {step.executor_policy === "prefer_same_as_step" && (
-                <label className="flex items-center gap-1" title="Quantas horas o executor preferido tem para aceitar esta etapa antes de ela abrir para os demais. Vazio = padrão da plataforma (2 h).">prazo de aceite do preferido <input type="number" min={1} step={1} aria-label="Prazo de aceite do preferido (horas)" disabled={readOnly} className="h-6 w-14 rounded border border-slate-200 bg-white px-1 text-xs dark:border-slate-700 dark:bg-slate-900" defaultValue={step.executor_accept_hours ?? ""} key={`acc-${step.executor_accept_hours ?? ""}`} onBlur={(e) => { const raw = e.target.value.trim(); const n = raw === "" ? null : Number(raw); if (n !== null && (!Number.isInteger(n) || n < 1)) { e.target.value = String(step.executor_accept_hours ?? ""); return; } if ((step.executor_accept_hours ?? null) !== n) void act(() => apiClient.updateCatalog2Step(step.id, { executor_accept_hours: n, scope: "product" }), "Salvo."); }} /> h</label>
-              )}
-              <label className="flex items-center gap-1" title="Quantas horas úteis o cliente tem para aprovar esta etapa (vale na execução por etapa). Vazio = padrão.">prazo de aprovação do cliente <input type="number" min={1} step={1} aria-label="prazo de aprovação do cliente (horas úteis)" disabled={readOnly} className="h-6 w-14 rounded border border-slate-200 bg-white px-1 text-xs dark:border-slate-700 dark:bg-slate-900" defaultValue={step.approval_hours ?? ""} key={`approval_hours-${step.approval_hours ?? ""}`} onBlur={(e) => { const raw = e.target.value.trim(); const n = raw === "" ? null : Number(raw); if (n !== null && (!Number.isInteger(n) || n < 1)) { e.target.value = String(step.approval_hours ?? ""); return; } if ((step.approval_hours ?? null) !== n) void act(() => apiClient.updateCatalog2Step(step.id, { approval_hours: n, scope: "product" }), "Salvo."); }} /> h úteis</label>
-              <label className="flex items-center gap-1" title="Quantas horas úteis o executor tem para refazer depois de uma reprovação (vale na execução por etapa). Vazio = mantém o prazo anterior.">prazo de refação <input type="number" min={1} step={1} aria-label="prazo de refação (horas úteis)" disabled={readOnly} className="h-6 w-14 rounded border border-slate-200 bg-white px-1 text-xs dark:border-slate-700 dark:bg-slate-900" defaultValue={step.rework_hours ?? ""} key={`rework_hours-${step.rework_hours ?? ""}`} onBlur={(e) => { const raw = e.target.value.trim(); const n = raw === "" ? null : Number(raw); if (n !== null && (!Number.isInteger(n) || n < 1)) { e.target.value = String(step.rework_hours ?? ""); return; } if ((step.rework_hours ?? null) !== n) void act(() => apiClient.updateCatalog2Step(step.id, { rework_hours: n, scope: "product" }), "Salvo."); }} /> h úteis</label>
-            </div>
-          ))}
+          )}
           {(step.executor_kind === "leader" || step.executor_kind === "internal") && <div className="mt-0.5"><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800" data-testid="step-receiver-chip">{step.executor_kind === "internal" ? "Equipe interna" : step.leader_mode === "specific" ? "Líder específico" : "Líder da área"}</span></div>}
           {stepFlowChips(step, steps).length > 0 && <div className="mt-0.5 flex flex-wrap gap-1" data-testid="step-flow-chips">{stepFlowChips(step, steps).map((c) => <span key={c} className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200">{c}</span>)}</div>}
           {step.completion_criteria && <div className="text-xs text-neutral-500">Critério de conclusão: {step.completion_criteria}</div>}
@@ -2145,7 +2108,19 @@ function QuestionnaireSection({ task, refs, act }: any) {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [selectId, setSelectId] = useState("");
+  const [prefill, setPrefill] = useState<{ name: string; description: string; questions: QuestionDraft[] } | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
   const q = task.questionnaire;
+  // D-7: a IA lê todos os campos cadastrados do produto/tarefa e sugere o questionário; abre já preenchido para revisar e editar.
+  const generate = async () => {
+    setAiBusy(true); setAiErr(null);
+    try {
+      const r = await apiClient.suggestCatalog2TaskQuestionnaire(task.id);
+      setPrefill({ name: r.name, description: r.description ?? "", questions: r.questions.map(draftFromSuggestion) });
+      setShowCreate(true); setShowPicker(false);
+    } catch (e: any) { setAiErr(e?.message ?? "Não foi possível usar a IA agora."); } finally { setAiBusy(false); }
+  };
 
   if (q) {
     if (showEdit) {
@@ -2177,8 +2152,10 @@ function QuestionnaireSection({ task, refs, act }: any) {
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={() => { setShowPicker((v) => !v); setShowCreate(false); }}><Link2 className="h-3.5 w-3.5" /> Selecionar questionário existente</Button>
-        <Button size="sm" variant="outline" onClick={() => { setShowCreate((v) => !v); setShowPicker(false); }}><Plus className="h-3.5 w-3.5" /> Criar novo questionário</Button>
+        <Button size="sm" variant="outline" onClick={() => { setShowCreate((v) => !v); setShowPicker(false); setPrefill(null); }}><Plus className="h-3.5 w-3.5" /> Criar novo questionário</Button>
+        <button type="button" data-testid="ai-questionnaire" disabled={aiBusy} onClick={() => void generate()} title="A IA lê tudo o que está cadastrado no produto e sugere as perguntas. Você revisa antes de criar." className="inline-flex h-8 items-center gap-1 rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Gerar questionário com IA"}</button>
       </div>
+      {aiErr && <p role="alert" className="text-[11px] font-semibold text-red-600">{aiErr}</p>}
       {showPicker && (
         <div className="flex items-end gap-2">
           <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={selectId} onChange={(e) => setSelectId(e.target.value)}>
@@ -2188,17 +2165,17 @@ function QuestionnaireSection({ task, refs, act }: any) {
           <Button size="sm" disabled={!selectId} onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, selectId), "Questionário vinculado.")}>Vincular</Button>
         </div>
       )}
-      {showCreate && <NewQuestionnaireForm taskId={task.id} act={act} onDone={() => setShowCreate(false)} />}
+      {showCreate && <NewQuestionnaireForm key={prefill ? "ai" : "manual"} taskId={task.id} act={act} initial={prefill ?? undefined} onDone={() => { setShowCreate(false); setPrefill(null); }} />}
     </div>
   );
 }
 
 // Cria um questionário novo (nome + perguntas com obrigatoriedade) e já
 // vincula à tarefa atual ao salvar.
-function NewQuestionnaireForm({ taskId, act, onDone }: { taskId: string; act: any; onDone: () => void }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [questions, setQuestions] = useState<QuestionDraft[]>([]);
+function NewQuestionnaireForm({ taskId, act, onDone, initial }: { taskId: string; act: any; onDone: () => void; initial?: { name: string; description: string; questions: QuestionDraft[] } }) {
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [questions, setQuestions] = useState<QuestionDraft[]>(initial?.questions ?? []);
   const [nq, setNq] = useState({ label: "", is_required: true });
   const updateQuestion = (i: number, patch: Partial<QuestionDraft>) => setQuestions((qs) => qs.map((item, idx) => (idx === i ? { ...item, ...patch } : item)));
   // Evita duplicar o questionário se o admin clicar "Criar e vincular"
@@ -2260,6 +2237,7 @@ function NewQuestionnaireForm({ taskId, act, onDone }: { taskId: string; act: an
       >
         {saving ? "Salvando…" : "Criar e vincular"}
       </Button>
+      {initial && <p className="text-[11px] text-violet-700">Sugestão da IA: revise, edite, remova ou adicione perguntas antes de criar.</p>}
       {questions.length === 0 && <p className="text-neutral-400">Adicione ao menos uma pergunta antes de criar.</p>}
     </div>
   );
@@ -2279,6 +2257,18 @@ function EditQuestionnaireForm({ task, act, onDone, onCancel }: { task: any; act
   const [questions, setQuestions] = useState<QuestionDraft[]>(q.questions.map((qq: any) => draftFromServer(qq)));
   const [nq, setNq] = useState({ label: "", is_required: true });
   const [saving, setSaving] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMsg, setAiMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  async function suggestMore() {
+    setAiBusy(true); setAiMsg(null);
+    try {
+      const r = await apiClient.suggestCatalog2TaskQuestionnaire(task.id, questions.map((x) => x.label));
+      const taken = new Set(questions.map((x) => x.key));
+      const novas = r.questions.map(draftFromSuggestion).map((d) => { let k = d.key; while (taken.has(k)) k += "x"; taken.add(k); return { ...d, key: k }; });
+      setQuestions((qs) => [...qs, ...novas]);
+      setAiMsg({ ok: true, text: `${novas.length} pergunta(s) sugerida(s) adicionada(s) ao final. Revise antes de salvar.` });
+    } catch (e: any) { setAiMsg({ ok: false, text: e?.message ?? "Não foi possível usar a IA agora." }); } finally { setAiBusy(false); }
+  }
 
   function addQuestion() {
     if (!nq.label.trim()) return;
@@ -2333,7 +2323,9 @@ function EditQuestionnaireForm({ task, act, onDone, onCancel }: { task: any; act
         <Field label="nova pergunta"><Input value={nq.label} onChange={(e) => setNq({ ...nq, label: e.target.value })} /></Field>
         <label><input type="checkbox" checked={nq.is_required} onChange={(e) => setNq({ ...nq, is_required: e.target.checked })} /> obrigatória</label>
         <Button size="sm" variant="outline" onClick={addQuestion}>Adicionar pergunta</Button>
+        <button type="button" data-testid="ai-questionnaire-more" disabled={aiBusy} onClick={() => void suggestMore()} title="A IA lê tudo o que está cadastrado no produto e sugere perguntas que ainda não existem." className="inline-flex h-8 items-center gap-1 rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Sugerir mais perguntas com IA"}</button>
       </div>
+      {aiMsg && <p role={aiMsg.ok ? "status" : "alert"} className={`text-[11px] font-semibold ${aiMsg.ok ? "text-emerald-700" : "text-red-600"}`}>{aiMsg.text}</p>}
       <div className="flex items-center gap-2">
         <Button
           size="sm"
@@ -3211,8 +3203,6 @@ const PENDENCY_LABEL: Record<string, string> = {
 function OriginReviewTab({ productId, onChanged }: { productId: string; onChanged: () => void }) {
   const [data, setData] = useState<any>(null);
   const [state, setState] = useState<"loading" | "ready" | "not_imported" | "error">("loading");
-  const [decisions, setDecisions] = useState<Record<string, string>>({});
-  const [msg, setMsg] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     setState("loading");
@@ -3228,24 +3218,8 @@ function OriginReviewTab({ productId, onChanged }: { productId: string; onChange
   if (state === "error" || !data) return <p className="mt-3 text-sm text-red-600">Não foi possível carregar a origem.</p>;
 
   const hp = data.historical_price ?? {};
-  async function resolve(key: string) {
-    const decision = (decisions[key] ?? "").trim();
-    if (!decision) { setMsg("Descreva a decisão antes de concluir a pendência."); return; }
-    setMsg(null);
-    try {
-      await apiClient.resolveCatalog2Pendency(productId, { pendency_key: key, decision });
-      setDecisions((d) => ({ ...d, [key]: "" }));
-      reload();
-      onChanged();
-    } catch (e: any) {
-      setMsg(e?.message ?? "Falha ao concluir a pendência.");
-    }
-  }
-
   return (
     <div className="mt-3 space-y-4 text-sm">
-      {msg && <p className="text-blue-600">{msg}</p>}
-
       <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
         <h3 className="font-semibold">Planilha principal (fonte da identidade)</h3>
         <p className="text-xs text-neutral-500">#{data.source.index} · {data.source.name} · chave <code>{data.source.key}</code></p>
@@ -3318,45 +3292,14 @@ function OriginReviewTab({ productId, onChanged }: { productId: string; onChange
       )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-        <h3 className="font-semibold">Pendências para decisão</h3>
-        <p className="text-[11px] text-neutral-400">
-          Estado de preparo atual: <Badge className="bg-amber-100 text-amber-700">{data.review_state}</Badge>. Concluir uma
-          pendência altera só o rascunho, registra quem/quando/decisão e preserva a divergência original no histórico.
-        </p>
+        <h3 className="font-semibold">Pendências da importação</h3>
+        <p className="text-[11px] text-neutral-400">Estado de preparo atual: <Badge className="bg-amber-100 text-amber-700">{data.review_state}</Badge>. Somente leitura: o produto é ajustado direto no cadastro.</p>
         {data.pendencies.length === 0 ? (
           <p className="mt-2 text-xs text-emerald-600">Nenhuma pendência aberta — pronto para revisão final.</p>
         ) : (
-          <ul className="mt-2 space-y-2">
-            {data.pendencies.map((key: string) => (
-              <li key={key} className="rounded border border-neutral-200 p-2 dark:border-neutral-700">
-                <div className="text-xs font-medium">{PENDENCY_LABEL[key] ?? key}</div>
-                <Textarea
-                  rows={2}
-                  className="mt-1 text-xs"
-                  placeholder="Descreva a decisão tomada (ex.: preço comercial definido em R$ X; ou 'mantida a categoria Redação, área da Rose registrada como especialidade')."
-                  value={decisions[key] ?? ""}
-                  onChange={(e) => setDecisions((d) => ({ ...d, [key]: e.target.value }))}
-                />
-                <Button size="sm" className="mt-1" onClick={() => resolve(key)}>Concluir pendência</Button>
-              </li>
-            ))}
-          </ul>
+          <ul className="mt-2 list-inside list-disc text-xs">{data.pendencies.map((key: string) => <li key={key}>{PENDENCY_LABEL[key] ?? key}</li>)}</ul>
         )}
       </section>
-
-      {data.resolutions?.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-          <h3 className="font-semibold">Histórico de resoluções</h3>
-          <ul className="mt-1 space-y-1 text-xs">
-            {data.resolutions.map((r: any) => (
-              <li key={r.id} className="text-neutral-500">
-                {new Date(r.resolved_at).toLocaleString("pt-BR")} — <strong>{PENDENCY_LABEL[r.pendency_key] ?? r.pendency_key}</strong>: {r.decision}
-                {r.original_divergence && <div className="text-neutral-400">divergência preservada: {JSON.stringify(r.original_divergence)}</div>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       {data.human_edited_at && (
         <p className="text-[11px] text-sky-600">
@@ -4006,7 +3949,7 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
           </Tooltip>
         </TooltipProvider>
       )}
-      <HeaderIconBtn label="Visualizar como o cliente vê (prévia da versão que está aberta)" onClick={onClientView} className={`shrink-0 !p-1.5 ${previewOpen ? "!bg-white/25 !text-white" : ""}`}><Eye className="h-4.5 w-4.5" /></HeaderIconBtn>
+      <HeaderIconBtn label="Visualizar como o cliente vê (prévia da versão que está aberta)" onClick={onClientView} className={`flex shrink-0 items-center gap-1.5 !px-2.5 !py-1.5 text-xs font-semibold ${previewOpen ? "!bg-white/25 !text-white" : "bg-white/10"}`}><Eye className="h-4.5 w-4.5" /><span className="hidden sm:inline" data-testid="client-view-label">Ver como o cliente vê</span></HeaderIconBtn>
       {pin && (
         <HeaderIconBtn label={pinned ? "Remover da Bandeja de Telas" : "Fixar na Bandeja de Telas"} onClick={toggle} className={pinned ? "!text-amber-300" : ""}>
           <Pin className={`h-5 w-5 ${pinned ? "fill-current" : ""}`} />

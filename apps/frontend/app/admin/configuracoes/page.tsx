@@ -1,4 +1,8 @@
 ﻿// @ts-nocheck
+import { withScreenHelp } from "@/components/with-screen-help"
+import { SETTINGS_HELP } from "@/lib/screen-help"
+import { AiChangePricingPanel } from "@/components/ai-change-pricing-panel";
+import { PaymentGatewaysPanel } from "@/components/payment-gateways-panel";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "@/hooks/use-navigate";
 import { apiClient } from "@/lib/api-client";
@@ -404,7 +408,7 @@ const WEBHOOK_EVENTS = [
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-export default function AdminConfiguracoesPage() {
+function AdminConfiguracoesPage() {
   useSidebar();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -1074,6 +1078,9 @@ export default function AdminConfiguracoesPage() {
           </TabsTrigger>
           <TabsTrigger value="ai-usage" className="text-xs px-3 h-8">
             Uso e Custos de IA
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="text-xs px-3 h-8">
+            Pagamentos
           </TabsTrigger>
         </TabsList>
 
@@ -2550,6 +2557,10 @@ export default function AdminConfiguracoesPage() {
         </TabsContent>
 
         {/* ─── USO E CUSTOS DE IA ───────────────────────────────────────────── */}
+        <TabsContent value="payments" className="space-y-4">
+          <PaymentGatewaysPanel />
+        </TabsContent>
+
         <TabsContent value="ai-usage" className="space-y-4">
           {aiUsageLoading && aiUsageServices.length === 0 && (
             <p className="text-xs text-slate-400">Carregando…</p>
@@ -2581,6 +2592,8 @@ export default function AdminConfiguracoesPage() {
               color="violet"
             />
           </div>
+
+          <AiChangePricingPanel />
 
           <div className="flex justify-end">
             <Button
@@ -2908,3 +2921,5 @@ export default function AdminConfiguracoesPage() {
     </div>
   );
 }
+
+export default withScreenHelp(AdminConfiguracoesPage, SETTINGS_HELP)

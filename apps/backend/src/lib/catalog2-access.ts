@@ -48,26 +48,3 @@ export async function ensureStandardStepModels(db: Db) {
   const created = await createStepModel(db, { ...ACCESS_VALIDATION_STEP, specialty_id: specialty?.id ?? null, estimated_minutes: 30 });
   return db.catalog2StepModel.update({ where: { id: created.id }, data: { is_access_validation: true } });
 }
-
-export interface AccessRequirementInput {
-  access_type: AccessType;
-  label?: string | null;
-  is_required?: boolean;
-  notes?: string | null;
-}
-
-/** Troca a lista de acessos exigidos por uma versão (só versão editável). */
-export async function replaceVersionAccess(tx: Prisma.TransactionClient, versionId: string, items: AccessRequirementInput[]) {
-  await tx.catalog2VersionAccess.deleteMany({ where: { version_id: versionId } });
-  let order = 1;
-  const seen = new Set<string>();
-  for (const it of items) {
-    const label = (it.label?.trim() || ACCESS_LABEL[it.access_type] || it.access_type).slice(0, 191);
-    const dedupe = `${it.access_type}:${label.toLowerCase()}`;
-    if (seen.has(dedupe)) continue;
-    seen.add(dedupe);
-    await tx.catalog2VersionAccess.create({
-      data: { version_id: versionId, access_type: it.access_type, label, is_required: it.is_required !== false, notes: it.notes?.trim() || null, sort_order: order++ },
-    });
-  }
-}

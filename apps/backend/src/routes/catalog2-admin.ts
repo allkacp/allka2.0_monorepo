@@ -28,7 +28,7 @@ import { taskOpsSchema, stepOpsSchema, normalizeTaskOps, normalizeStepOps } from
 import { DEPENDENCY_TARGET_KINDS, DEPENDENCY_BEHAVIORS, DEPENDENCY_TARGET_LABEL, DEPENDENCY_BEHAVIOR_LABEL } from "../lib/project-dependencies";
 import { ASSET_RULES } from "../lib/client-assets";
 import { CYCLE_TYPES, REPEAT_RULES, IMPLEMENTATION_RULES, SELL_MODES } from "../lib/catalog2-cycles";
-import { ACCESS_TYPES, ACCESS_TYPE_KEYS, replaceVersionAccess } from "../lib/catalog2-access";
+import { ACCESS_TYPES, ACCESS_TYPE_KEYS } from "../lib/catalog2-access";
 import { createModelGuarded, findCandidates } from "../lib/catalog2-model-guard";
 import { type SimilarModel, createTaskModel, createStepModel, findOrCreateTaskModel, syncTaskModelSteps, taskModelSignature, stepModelSignature, STEP_PURPOSES, autoKey, addTaskFromModel, addStepFromModel, taskDataFromModel, stepDataFromModel } from "../lib/catalog2-models";
 import { maybeCreateCatalog2ActivationJobOnStatusTransition, notifyValidQuoteOwnersOfCommercialChange } from "../lib/catalog2-notifications";
@@ -68,7 +68,11 @@ import {
   validateConditionShape,
   validateVersionForPublish,
 } from "../lib/catalog2-service";
-import { serializeAudiences, validateAudiences } from "../lib/catalog2-audience";
+import { notifyUser } from "../lib/catalog2-commercial-flow";
+import { generateContractFromRequest, ContractingError } from "../lib/catalog2-contracting";
+import { ProductDraftError, draftProductWithAI } from "../lib/catalog2-product-draft-ai";
+import { QuestionnaireAiError, suggestQuestionnaire } from "../lib/catalog2-questionnaire-ai";
+import { loadRegisteredLevels, parseAgencyLevels, serializeAgencyLevels, serializeAudiences, validateAgencyLevels, validateAudiences } from "../lib/catalog2-audience";
 import { EMERGENCY_EXTRA_KINDS, validateEmergencyStepInput } from "../lib/catalog2-emergency";
 import { EXECUTOR_KINDS, EXECUTOR_POLICIES, isRefPolicy, LEADER_MODES, parseDepends, validateStepExecutor, validateStepFlow } from "../lib/step-flow";
 import { computePricing, defaultSelection, CHARGE_SCOPES, PRICING_MODES } from "../lib/catalog2-pricing";
@@ -572,6 +576,34 @@ router.put("/questionnaires/:id/questions/order", async (req, res, next) => {
 // tocado. Se ninguém mais usa (contagem <= 1), edita no próprio registro.
 // Um único save transacional cobre criar/editar/excluir/reordenar
 // perguntas de uma vez (o formulário da tarefa manda o estado final).
+// P-8: a IA conversa e PREENCHE o produto inteiro (rascunho para o administrador revisar e aplicar; não grava nada).
+const draftSchema = z.object({
+  messages: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(6000) })).min(1).max(30),
+  current: z.record(z.any()).nullish(),
+});
+router.post("/products/:id/ai-draft", async (req, res, next) => {
+  try {
+    const d = draftSchema.parse(req.body);
+    const r = await draftProductWithAI(req.params.id as string, d.messages, (d.current ?? null) as never);
+    await audit(req, "product_ai_draft", { product_id: req.params.id, messages: d.messages.length });
+    res.json(r);
+  } catch (e) {
+    if (e instanceof ProductDraftError) { res.status(e.httpStatus).json({ error: e.message, code: "product_ai_draft" }); return; }
+    handle(e, res, next);
+  }
+});
+// D-7: a IA lê TUDO que está cadastrado no produto/tarefa e SUGERE o questionário (não salva nada; o administrador revisa e edita antes de criar).
+router.post("/tasks/:id/questionnaire/ai-suggest", async (req, res, next) => {
+  try {
+    const d = z.object({ existing_labels: z.array(z.string().max(500)).max(60).optional() }).parse(req.body ?? {});
+    const r = await suggestQuestionnaire(req.params.id as string, d.existing_labels ?? []);
+    await audit(req, "task_questionnaire_ai_suggested", { task_id: req.params.id, questions: r.questions.length });
+    res.json(r);
+  } catch (e) {
+    if (e instanceof QuestionnaireAiError) { res.status(e.httpStatus).json({ error: e.message, code: "questionnaire_ai" }); return; }
+    handle(e, res, next);
+  }
+});
 router.put("/tasks/:id/questionnaire/content", async (req, res, next) => {
   try {
     const taskVersion = await versionOfTask(req.params.id as string);
@@ -959,7 +991,6 @@ router.get("/products", async (req, res, next) => {
       category: { select: { key: true, name: true } },
       versions: { select: { id: true, version_number: true, state: true, published_at: true, updated_at: true, summary: true } },
       import_origin: { select: { rose_reviewed: true, review_state: true, pendencies_json: true, area_rose: true, human_edited_at: true, source_index: true } },
-      provisional_preview: { select: { image_path: true, price_amount: true, deadline_days: true, modality: true, needs_review: true, included_items_json: true } },
     } satisfies Prisma.Catalog2ProductInclude;
 
     // Ordenar por PREÇO usa o MESMO valor que a coluna mostra (preço real →
@@ -1034,21 +1065,6 @@ router.get("/products", async (req, res, next) => {
             promotion_valid_until: p.merch_promotion_valid_until,
             badge_priority: p.merch_badge_priority,
           },
-          // Camada de demonstração provisória (reparo 2026-09) — nunca dado
-          // comercial real; usada só pra miniatura/preço aparecerem no
-          // Cadastro/Catálogo administrativo enquanto o produto não tem
-          // conteúdo definitivo. Sempre acompanhada de `is_provisional`.
-          provisional_preview: p.provisional_preview
-            ? {
-                is_provisional: true,
-                needs_review: p.provisional_preview.needs_review,
-                image_path: p.provisional_preview.image_path,
-                price_amount: p.provisional_preview.price_amount,
-                deadline_days: p.provisional_preview.deadline_days,
-                modality: p.provisional_preview.modality,
-                included_items_count: safeJsonArray(p.provisional_preview.included_items_json).length,
-              }
-            : null,
           // Item 5 (reunião 2026-09-14, "Inativação programada de produtos").
           inactivation_scheduled_at: p.inactivation_scheduled_at,
           inactivation_effective_at: p.inactivation_effective_at,
@@ -1102,21 +1118,42 @@ router.patch("/products/:id/task-structure", async (req, res, next) => {
     res.json({ ok: true, ...r });
   } catch (e) { handle(e, res, next); }
 });
+// Níveis de agência CADASTRADOS (Administração > Níveis Agências): alimentam a lista "Níveis de agência" do cartão de público do produto.
+router.get("/agency-levels", async (_req, res, next) => {
+  try { res.json({ data: await loadRegisteredLevels() }); } catch (e) { handle(e, res, next); }
+});
 // Público do produto (C7): lista de marcação — todos, ou qualquer combinação de Company / Agency / Agency Partner, ou só equipe interna.
+// P-11: alterações por IA grátis por contratação deste produto (null = vale a regra global das Configurações).
+router.patch("/products/:id/ai-free-changes", async (req, res, next) => {
+  try {
+    const d = z.object({ ai_free_changes: z.number().int().min(0).max(100).nullable() }).parse(req.body);
+    const p = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true } });
+    if (!p) throw new Catalog2Error("Produto não encontrado.", 404);
+    const row = await prisma.catalog2Product.update({ where: { id: p.id }, data: { ai_free_changes: d.ai_free_changes }, select: { id: true, ai_free_changes: true } });
+    await audit(req, "product_ai_free_changes", { id: p.id, ai_free_changes: d.ai_free_changes });
+    res.json(row);
+  } catch (e) { handle(e, res, next); }
+});
 router.patch("/products/:id/visibility", async (req, res, next) => {
   try {
-    const d = z.object({ audiences: z.array(z.string().max(30)).max(10) }).parse(req.body);
+    const d = z.object({ audiences: z.array(z.string().max(30)).max(10), agency_levels: z.array(z.string().max(20)).max(10).optional() }).parse(req.body);
     const err = validateAudiences(d.audiences);
     if (err) throw new Catalog2Error(err, 422, "invalid_audience");
+    const registered = (await loadRegisteredLevels()).map((l) => l.key);
+    const levelErr = validateAgencyLevels(d.agency_levels ?? [], registered);
+    if (levelErr) throw new Catalog2Error(levelErr, 422, "invalid_agency_level");
     const value = serializeAudiences(d.audiences);
-    const before = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true, visibility_mode: true } });
+    const before = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true, visibility_mode: true, visibility_agency_levels: true } });
     if (!before) throw new Catalog2Error("Produto não encontrado.", 404);
-    const changed = before.visibility_mode !== value;
+    // Sem "agency_levels" na chamada = mantém os níveis atuais. Equipe interna / só Company: níveis de agência não se aplicam (limpa).
+    const nextLevels = d.agency_levels === undefined ? before.visibility_agency_levels : serializeAgencyLevels(d.agency_levels, registered);
+    const levels = value === "internal" || value === "company" ? null : nextLevels;
+    const changed = before.visibility_mode !== value || (before.visibility_agency_levels ?? null) !== (levels ?? null);
     if (changed) {
-      await prisma.catalog2Product.update({ where: { id: before.id }, data: { visibility_mode: value, visibility_min_partner_level: null } });
-      await audit(req, "product_visibility_updated", { id: before.id, from: before.visibility_mode, to: value });
+      await prisma.catalog2Product.update({ where: { id: before.id }, data: { visibility_mode: value, visibility_min_partner_level: null, visibility_agency_levels: levels } });
+      await audit(req, "product_visibility_updated", { id: before.id, from: before.visibility_mode, to: value, levels_from: before.visibility_agency_levels, levels_to: levels });
     }
-    res.json({ ok: true, changed, visibility_mode: value });
+    res.json({ ok: true, changed, visibility_mode: value, visibility_agency_levels: levels, agency_levels: parseAgencyLevels(levels) });
   } catch (e) { handle(e, res, next); }
 });
 router.patch("/products/:id/internal-name", async (req, res, next) => {
@@ -2378,7 +2415,7 @@ router.post("/tasks/:id/duplicate", async (req, res, next) => {
           requires_review: src.requires_review, requires_client_approval: src.requires_client_approval, is_conditional: src.is_conditional,
         },
       });
-      for (const s of src.steps) await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined, first_execution_only: s.first_execution_only, skip_when_same_executor: s.skip_when_same_executor, depends_on_json: s.depends_on_json, executor_policy: s.executor_policy, executor_same_as_key: s.executor_same_as_key, executor_kind: s.executor_kind, leader_mode: s.leader_mode, leader_user_id: s.leader_user_id, internal_step: s.internal_step, requires_qualification: s.requires_qualification, release_next_auto: s.release_next_auto, emergency_reduction_minutes: s.emergency_reduction_minutes, emergency_extra_kind: s.emergency_extra_kind, emergency_extra_value: s.emergency_extra_value, approval_hours: s.approval_hours, rework_hours: s.rework_hours, executor_accept_hours: s.executor_accept_hours, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
+      for (const s of src.steps) await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined, first_execution_only: s.first_execution_only, skip_when_same_executor: s.skip_when_same_executor, depends_on_json: s.depends_on_json, executor_policy: s.executor_policy, executor_same_as_key: s.executor_same_as_key, executor_kind: s.executor_kind, leader_mode: s.leader_mode, leader_user_id: s.leader_user_id, internal_step: s.internal_step, requires_qualification: s.requires_qualification, release_next_auto: s.release_next_auto, requires_specialist_qualification: s.requires_specialist_qualification, specialist_user_id: s.specialist_user_id, emergency_reduction_minutes: s.emergency_reduction_minutes, emergency_extra_kind: s.emergency_extra_kind, emergency_extra_value: s.emergency_extra_value, approval_hours: s.approval_hours, rework_hours: s.rework_hours, executor_accept_hours: s.executor_accept_hours, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
       await copyTaskDeliverables(tx, src, t.id);
       if (src.ai) await tx.catalog2TaskAI.create({ data: { task_id: t.id, ...aiCopyData(src.ai) } });
       return t;
@@ -2430,7 +2467,7 @@ router.post("/versions/:id/tasks/import", async (req, res, next) => {
         },
       });
       for (const s of src.steps) {
-        await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined, first_execution_only: s.first_execution_only, skip_when_same_executor: s.skip_when_same_executor, depends_on_json: s.depends_on_json, executor_policy: s.executor_policy, executor_same_as_key: s.executor_same_as_key, executor_kind: s.executor_kind, leader_mode: s.leader_mode, leader_user_id: s.leader_user_id, internal_step: s.internal_step, requires_qualification: s.requires_qualification, release_next_auto: s.release_next_auto, emergency_reduction_minutes: s.emergency_reduction_minutes, emergency_extra_kind: s.emergency_extra_kind, emergency_extra_value: s.emergency_extra_value, approval_hours: s.approval_hours, rework_hours: s.rework_hours, executor_accept_hours: s.executor_accept_hours, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
+        await tx.catalog2TaskStep.create({ data: { step_model_id: s.step_model_id, step_model_revision: s.step_model_revision, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria, task_id: t.id, ops: (s.ops ?? undefined) as Prisma.InputJsonValue | undefined, first_execution_only: s.first_execution_only, skip_when_same_executor: s.skip_when_same_executor, depends_on_json: s.depends_on_json, executor_policy: s.executor_policy, executor_same_as_key: s.executor_same_as_key, executor_kind: s.executor_kind, leader_mode: s.leader_mode, leader_user_id: s.leader_user_id, internal_step: s.internal_step, requires_qualification: s.requires_qualification, release_next_auto: s.release_next_auto, requires_specialist_qualification: s.requires_specialist_qualification, specialist_user_id: s.specialist_user_id, emergency_reduction_minutes: s.emergency_reduction_minutes, emergency_extra_kind: s.emergency_extra_kind, emergency_extra_value: s.emergency_extra_value, approval_hours: s.approval_hours, rework_hours: s.rework_hours, executor_accept_hours: s.executor_accept_hours, key: s.key, name: s.name, description: s.description, sort_order: s.sort_order, estimated_minutes: s.estimated_minutes, is_conditional: s.is_conditional, specialty_id: s.specialty_id } });
       }
       await copyTaskDeliverables(tx, src, t.id);
       if (src.ai) {
@@ -2459,7 +2496,7 @@ router.put("/versions/:id/tasks/order", async (req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 
-const stepSchema = z.object({ key: z.string().min(1).max(60).optional(), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), sort_order: z.number().int().optional(), estimated_minutes: z.number().int().nonnegative().nullish(), is_conditional: z.boolean().optional(), specialty_id: z.string().nullish(), purpose: z.enum(STEP_PURPOSES).nullish(), execution_mode: z.enum(CATALOG2_EXECUTION_MODES).nullish(), completion_criteria: z.string().max(4000).nullish(), ops: stepOpsSchema, first_execution_only: z.boolean().optional(), skip_when_same_executor: z.boolean().optional(), executor_kind: z.enum(EXECUTOR_KINDS).optional(), leader_mode: z.enum(LEADER_MODES).optional(), leader_user_id: z.string().max(191).nullish(), internal_step: z.boolean().optional(), requires_qualification: z.boolean().optional(), release_next_auto: z.boolean().optional(), emergency_reduction_minutes: z.number().int().min(0).max(100000).nullish(), emergency_extra_kind: z.enum(EMERGENCY_EXTRA_KINDS).nullish(), emergency_extra_value: z.number().min(0).max(100000000).nullish(), executor_accept_hours: z.number().int().min(1).max(720).nullish(), approval_hours: z.number().int().min(1).max(100000).nullish(), rework_hours: z.number().int().min(1).max(100000).nullish() });
+const stepSchema = z.object({ key: z.string().min(1).max(60).optional(), name: z.string().min(1).max(200), description: z.string().max(8000).nullish(), sort_order: z.number().int().optional(), estimated_minutes: z.number().int().nonnegative().nullish(), is_conditional: z.boolean().optional(), specialty_id: z.string().nullish(), purpose: z.enum(STEP_PURPOSES).nullish(), execution_mode: z.enum(CATALOG2_EXECUTION_MODES).nullish(), completion_criteria: z.string().max(4000).nullish(), ops: stepOpsSchema, first_execution_only: z.boolean().optional(), skip_when_same_executor: z.boolean().optional(), executor_kind: z.enum(EXECUTOR_KINDS).optional(), leader_mode: z.enum(LEADER_MODES).optional(), leader_user_id: z.string().max(191).nullish(), internal_step: z.boolean().optional(), requires_qualification: z.boolean().optional(), release_next_auto: z.boolean().optional(), requires_specialist_qualification: z.boolean().optional(), specialist_user_id: z.string().max(191).nullish(), emergency_reduction_minutes: z.number().int().min(0).max(100000).nullish(), emergency_extra_kind: z.enum(EMERGENCY_EXTRA_KINDS).nullish(), emergency_extra_value: z.number().min(0).max(100000000).nullish(), executor_accept_hours: z.number().int().min(1).max(720).nullish(), approval_hours: z.number().int().min(1).max(100000).nullish(), rework_hours: z.number().int().min(1).max(100000).nullish() });
 const STEP_MODEL_FIELDS = ["name", "description", "estimated_minutes", "specialty_id", "purpose", "execution_mode", "completion_criteria", "first_execution_only", "skip_when_same_executor", "ops"] as const;
 // Item 7.1: "etapas" — o Item 7 nunca instrumentou etapas (só tarefas) —
 // fechado aqui (add/update/remove; reordenar segue o mesmo padrão de baixo
@@ -2499,6 +2536,18 @@ router.post("/tasks/:id/steps", async (req, res, next) => {
 // ─── Pacotes de produtos e regras de dependência ───────────────────────────────
 // Pacote = 2+ produtos contratados juntos, cada um continua item independente. A regra diz
 // quem espera o quê (produto/tarefa/etapa/entregável/aprovação/ativo) e COMO espera.
+// Quem pode ser designado como ESPECIALISTA que qualifica uma etapa (D-5): líderes, administradores e nômades ativos.
+router.get("/specialists", async (_req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { is_active: true, OR: [{ role: "lider" }, { account_type: "lider" }, { role: "admin" }, { account_type: "admin" }, { account_type: "nomades" }] },
+      select: { id: true, name: true, email: true, role: true, account_type: true },
+      orderBy: { name: "asc" },
+      take: 500,
+    });
+    res.json({ data: users.map((u) => ({ id: u.id, name: u.name, email: u.email, kind: u.role === "admin" || u.account_type === "admin" ? "admin" : u.account_type === "nomades" ? "nomade" : "lider" })) });
+  } catch (e) { handle(e, res, next); }
+});
 // Quem pode ser designado como QUALIFICADOR de uma tarefa: líderes e administradores ativos.
 router.get("/qualifiers", async (_req, res, next) => {
   try {
@@ -2720,30 +2769,6 @@ router.patch("/dependency-rules/:id/active", async (req, res, next) => {
 // ── Acessos externos exigidos pelo produto (Google Ads, Meta, Pixel…) ──────────
 // Só descreve QUAIS acessos são necessários — nunca senha/credencial.
 router.get("/access-types", (_req, res) => { res.json({ data: ACCESS_TYPES }); });
-router.put("/versions/:id/access-requirements", async (req, res, next) => {
-  try {
-    const version = await editableVersionOrThrow(req.params.id as string);
-    const d = z.object({
-      items: z.array(z.object({
-        access_type: z.enum(ACCESS_TYPE_KEYS),
-        label: z.string().max(191).nullish(),
-        is_required: z.boolean().optional(),
-        notes: z.string().max(2000).nullish(),
-      })).max(40),
-    }).parse(req.body);
-    for (const it of d.items) {
-      if (it.access_type === "other" && !it.label?.trim()) throw new Catalog2Error("Informe o nome do acesso em \"Outros\".", 422);
-    }
-    await prisma.$transaction(async (tx) => {
-      await replaceVersionAccess(tx, version.id, d.items);
-      await recordCatalog2ProductHistory(tx, {
-        productId: version.product_id, versionId: version.id, eventType: "access_requirements_updated",
-        description: `Acessos necessários do produto atualizados (${d.items.length}).`, actorUserId: req.user!.id,
-      });
-    });
-    res.json({ ok: true });
-  } catch (e) { handle(e, res, next); }
-});
 // Adiciona à tarefa a etapa padrão "Validação e organização dos acessos".
 router.post("/tasks/:id/steps/access-validation", async (req, res, next) => {
   try {
@@ -2876,6 +2901,22 @@ router.put("/steps/:id", async (req, res, next) => {
       };
       const err = validateEmergencyStepInput(merged);
       if (err) throw new Catalog2Error(err, 422, "invalid_emergency_step");
+    }
+    if ("requires_specialist_qualification" in d || "specialist_user_id" in d) {
+      const requires = "requires_specialist_qualification" in d ? d.requires_specialist_qualification : before.requires_specialist_qualification;
+      const who = "specialist_user_id" in d ? d.specialist_user_id : before.specialist_user_id;
+      if (requires) {
+        if (!who) throw new Catalog2Error("Escolha o especialista que vai qualificar esta etapa.", 422, "specialist_required");
+        const sp = await prisma.user.findUnique({ where: { id: who }, select: { is_active: true } });
+        if (!sp || !sp.is_active) throw new Catalog2Error("O especialista escolhido não existe ou está inativo.", 422, "invalid_step_specialist");
+      } else { d.specialist_user_id = null; }
+    }
+    // P-14 (07/10): etapa feita por IA/híbrida SEMPRE tem qualificador. Sem líder nem especialista marcados, o líder passa a qualificar.
+    {
+      const mode = ("execution_mode" in d ? d.execution_mode : before.execution_mode) ?? "humano";
+      const rq = "requires_qualification" in d ? d.requires_qualification : before.requires_qualification;
+      const rs = "requires_specialist_qualification" in d ? d.requires_specialist_qualification : before.requires_specialist_qualification;
+      if (mode !== "humano" && rq === false && !rs) d.requires_qualification = true;
     }
     if ("executor_kind" in d || "leader_mode" in d || "leader_user_id" in d) {
       const merged = { name: before.name, executor_kind: d.executor_kind ?? before.executor_kind, leader_mode: d.leader_mode ?? before.leader_mode, leader_user_id: "leader_user_id" in d ? d.leader_user_id : before.leader_user_id };
@@ -3469,7 +3510,9 @@ router.get("/commercial-requests", async (req, res, next) => {
     });
     const products = await prisma.catalog2Product.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.product_id))] } }, select: { id: true, sequence_number: true, internal_name: true } });
     const byId = new Map(products.map((p) => [p.id, p]));
-    res.json({ data: rows.map((r) => ({ ...r, selection: safeJson(r.selection_json, null), reasons: safeJson(r.reasons_json, []), pricing: safeJson(r.pricing_snapshot_json, null), history: safeJson(r.history_json, []), product: byId.get(r.product_id) ?? null })) });
+    const contractQuotes = await prisma.catalog2Quote.findMany({ where: { commercial_request_id: { in: rows.map((r) => r.id) } }, select: { id: true, commercial_request_id: true, status: true, valid_until: true } });
+    const quoteByRequest = new Map(contractQuotes.map((q) => [q.commercial_request_id as string, q]));
+    res.json({ data: rows.map((r) => ({ ...r, contract_quote: quoteByRequest.get(r.id) ?? null, answers: safeJson(r.answers_json, []), selection: safeJson(r.selection_json, null), reasons: safeJson(r.reasons_json, []), pricing: safeJson(r.pricing_snapshot_json, null), history: safeJson(r.history_json, []), product: byId.get(r.product_id) ?? null })) });
   } catch (e) { handle(e, res, next); }
 });
 router.patch("/commercial-requests/:id", async (req, res, next) => {
@@ -3483,6 +3526,12 @@ router.patch("/commercial-requests/:id", async (req, res, next) => {
     }).parse(req.body);
     const cur = await prisma.catalog2CommercialRequest.findUnique({ where: { id: req.params.id as string } });
     if (!cur) throw new Catalog2Error("Solicitação não encontrada.", 404);
+    // Só se ENVIA a proposta com valor e prazo definidos (o cliente passa a ver e responder).
+    if (d.status === "proposta_enviada") {
+      const price = d.proposed_price !== undefined ? d.proposed_price : cur.proposed_price;
+      const days = d.proposed_deadline_days !== undefined ? d.proposed_deadline_days : cur.proposed_deadline_days;
+      if (price == null || days == null) throw new Catalog2Error("Informe o preço e o prazo antes de enviar a proposta ao cliente.", 422, "proposal_incomplete");
+    }
     const beforeHistory = safeJson<Array<Record<string, unknown>>>(cur.history_json, []);
     const entry = { at: new Date().toISOString(), by_user_id: req.user!.id, status_before: cur.status, status_after: d.status ?? cur.status, changes: Object.keys(d) };
     const row = await prisma.catalog2CommercialRequest.update({ where: { id: cur.id }, data: {
@@ -3494,8 +3543,21 @@ router.patch("/commercial-requests/:id", async (req, res, next) => {
       history_json: JSON.stringify([...beforeHistory, entry]), handled_by_user_id: req.user!.id, handled_at: new Date(),
     } });
     await audit(req, "commercial_request_updated", { id: cur.id, status: d.status ?? cur.status, fields: Object.keys(d) });
+    if (d.status === "proposta_enviada" && cur.status !== "proposta_enviada") await notifyUser(cur.requested_by_user_id, "Sua proposta de orçamento chegou", "A equipe respondeu ao seu pedido de orçamento com valor e prazo. Abra o produto para aprovar ou recusar.", cur.id);
     res.json(row);
   } catch (e) { handle(e, res, next); }
+});
+
+// D-2: a equipe gera a contratação de um pedido aprovado (cotação travada no valor aprovado, válida por 7 dias).
+router.post("/commercial-requests/:id/generate-contract", async (req, res, next) => {
+  try {
+    const out = await generateContractFromRequest(req.params.id as string, req.user!.id);
+    await audit(req, "commercial_request_contract_generated", { id: req.params.id, quote_id: out.quote_id });
+    res.status(201).json(out);
+  } catch (e) {
+    if (e instanceof ContractingError) { res.status(e.httpStatus).json({ error: e.message, code: e.code }); return; }
+    handle(e, res, next);
+  }
 });
 
 // ── Simulador e Pré-visualização (mesmo cálculo do backend) ─────────
@@ -3719,7 +3781,6 @@ router.get("/products/:id/origin", async (req, res, next) => {
   try {
     const origin = await prisma.catalog2ProductImportOrigin.findUnique({
       where: { product_id: req.params.id as string },
-      include: { resolutions: { orderBy: { resolved_at: "desc" } } },
     });
     if (!origin) throw new Catalog2Error("Este produto não foi criado pela importação dos 36.", 404, "not_imported");
     res.json({
@@ -3743,68 +3804,6 @@ router.get("/products/:id/origin", async (req, res, next) => {
       human_edited_by_user_id: origin.human_edited_by_user_id,
       last_import_checksum: origin.last_import_checksum,
       last_import_batch_id: origin.last_import_batch_id,
-      resolutions: origin.resolutions.map((r) => ({
-        id: r.id,
-        pendency_key: r.pendency_key,
-        decision: r.decision,
-        original_divergence: safeJson(r.original_divergence_json, null),
-        resolved_by_user_id: r.resolved_by_user_id,
-        resolved_at: r.resolved_at,
-      })),
-    });
-  } catch (e) { handle(e, res, next); }
-});
-
-// Resolver UMA pendência: altera só o rascunho/estado de preparo, registra
-// quem/quando/decisão e PRESERVA a divergência original no histórico.
-router.post("/products/:id/resolve-pendency", async (req, res, next) => {
-  try {
-    const d = z.object({
-      pendency_key: z.string().min(1).max(60),
-      decision: z.string().min(1).max(4000),
-    }).parse(req.body);
-    const origin = await prisma.catalog2ProductImportOrigin.findUnique({ where: { product_id: req.params.id as string } });
-    if (!origin) throw new Catalog2Error("Este produto não foi criado pela importação dos 36.", 404, "not_imported");
-
-    const pendencies = safeJsonArray(origin.pendencies_json);
-    if (!pendencies.includes(d.pendency_key)) {
-      throw new Catalog2Error("Essa pendência não está aberta para este produto.", 422, "pendency_not_open");
-    }
-    const remaining = pendencies.filter((p) => p !== d.pendency_key);
-    // Snapshot da divergência associada (preservada intacta no histórico).
-    const divergences = safeJson<Array<{ type: string; detail: string; decision_pending?: boolean }>>(origin.divergences_json, []);
-    const relatedDivergence =
-      d.pendency_key === "classification_decision_pending"
-        ? divergences.find((x) => x.type === "area_vs_category" || x.type === "ebook_classification") ?? null
-        : null;
-
-    await prisma.$transaction(async (tx) => {
-      await tx.catalog2ReviewResolution.create({
-        data: {
-          origin_id: origin.id,
-          pendency_key: d.pendency_key,
-          decision: d.decision,
-          original_divergence_json: relatedDivergence ? JSON.stringify(relatedDivergence) : JSON.stringify(divergences),
-          resolved_by_user_id: req.user!.id,
-        },
-      });
-      await tx.catalog2ProductImportOrigin.update({
-        where: { id: origin.id },
-        data: {
-          pendencies_json: JSON.stringify(remaining),
-          review_state: reviewStateFromPendencies(remaining),
-          // decisão humana registrada → o importador não mexe mais no rascunho.
-          human_edited_at: origin.human_edited_at ?? new Date(),
-          human_edited_by_user_id: origin.human_edited_by_user_id ?? req.user!.id,
-        },
-      });
-    });
-    await audit(req, "import_pendency_resolved", { product_id: req.params.id, pendency_key: d.pendency_key });
-    res.json({
-      ok: true,
-      pendency_key: d.pendency_key,
-      remaining_pendencies: remaining,
-      review_state: reviewStateFromPendencies(remaining),
     });
   } catch (e) { handle(e, res, next); }
 });
@@ -3842,25 +3841,6 @@ type ReadinessProduct = Prisma.Catalog2ProductGetPayload<{ include: typeof READI
 
 // Regra ÚNICA de prontidão por produto (nenhuma duplicação no frontend nem
 // entre rotas). Só leitura — nada aqui grava ou publica.
-async function loadProvisionalPreview(productId: string) {
-  const row = await prisma.catalog2ProvisionalPreview.findUnique({ where: { product_id: productId } });
-  if (!row) return null;
-  return {
-    is_provisional: true as const,
-    needs_review: row.needs_review,
-    image_path: row.image_path,
-    image_source_note: row.image_source_note,
-    price_amount: row.price_amount,
-    deadline_days: row.deadline_days,
-    modality: row.modality,
-    contract_note: row.contract_note,
-    highlights: safeJsonArray(row.highlights_json),
-    included_items: safeJsonArray(row.included_items_json) as unknown as { title: string; description?: string }[],
-    options: safeJsonArray(row.options_json) as unknown as { name: string; price: number; deadline_days: number; modality: string; features: string[] }[],
-    portfolio_refs: safeJsonArray(row.portfolio_refs_json),
-  };
-}
-
 // Ids dos produtos que têm ao menos um bloqueio/pendência no checklist (mesma regra do editor).
 async function productIdsWithOpenReadiness(): Promise<string[]> {
   const all = await prisma.catalog2Product.findMany({ include: READINESS_INCLUDE });
@@ -4071,7 +4051,7 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
     // segregadas. Nunca substitui price_amount/deadline_days reais e nunca
     // autoriza publicação, cotação ou contratação.
     // FONTE ÚNICA: mesma regra real. Enquanto houver pendência, o valor é só ILUSTRATIVO (nunca de outra configuração).
-    pricing_simulation: pricing && !pricing.commercial_ready && pricing.simulation.total != null
+    pricing_simulation: pricing && !pricing.commercial_ready && pricing.simulation.total != null && pricing.simulation.total > 0 // P-12: preço 0 = ainda sem dados; não mostra valor nenhum
       ? {
           is_provisional: false,
           is_illustrative: true,
@@ -4099,10 +4079,6 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
       promotion_valid_until: p.merch_promotion_valid_until,
       badge_priority: p.merch_badge_priority,
     },
-    // Camada de demonstração provisória (reparo 2026-09) — nunca substitui os
-    // campos reais acima; sempre um objeto SEPARADO e marcado, pra nunca ser
-    // confundido com dado comercial aprovado.
-    provisional: await loadProvisionalPreview(p.id),
   };
 }
 

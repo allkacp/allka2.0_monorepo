@@ -90,7 +90,6 @@ const { api } = vi.hoisted(() => ({
     getCatalog2ProductReadiness: vi.fn(),
     getCatalog2ProductDetailPreview: vi.fn(),
     getCatalog2ProductOrigin: vi.fn(),
-    resolveCatalog2Pendency: vi.fn(),
   },
 }))
 vi.mock("@/lib/api-client", () => ({ apiClient: api }))
@@ -226,7 +225,6 @@ beforeEach(() => {
     },
   })
   api.getCatalog2ProductOrigin.mockResolvedValue(ORIGIN)
-  api.resolveCatalog2Pendency.mockResolvedValue({ ok: true, remaining_pendencies: ["portfolio_pending"], review_state: "portfolio_pending" })
   api.getCatalog2Product.mockResolvedValue(productDetail())
   api.validateCatalog2Version.mockResolvedValue({ ok: false, issues: ["Selecione um pilar."], pricing_pending: true })
   api.simulateCatalog2.mockResolvedValue({ pricing: { currency: "BRL", quantity: 1, active_task_keys: ["t1"], warnings: [], applied_conditions: [], deadline_detail: "…", estimated_deadline_days: 1, order_defined: true, applied_order: ["tax", "commission", "operational", "margin"], pending_info: [], deadline: { effort_days: 1, internal_estimate_days: 1, commercial_deadline_days: 5, commercial_deadline_pending: false }, pricing_pending: false, lines: { human_cost: { label: "Custo humano", amount: 90 }, ia_cost: { label: "IA", amount: 0 }, human_review_cost: { label: "Revisão humana", amount: 0 }, addons: { label: "Adicionais", amount: 0 }, variation_impacts: { label: "Impactos de variações", amount: 0 }, condition_impacts: { label: "Impactos de condições", detail: "nenhuma" }, direct_cost: { label: "Custo direto", amount: 90 }, subtotal_cost: { label: "Subtotal", amount: 90 }, taxes_and_margins: [], commercial_final_price: { label: "Preço comercial final", amount: 90 }, final_price: { label: "Preço comercial final", amount: 90 }, minimum_price: { label: "Mínimo", amount: 90 } } } })
@@ -1169,9 +1167,7 @@ it("aba Origem e importação: planilha, Rose, divergência, preço histórico e
   expect(screen.getByRole("heading", { name: /Referência histórica de preço/i })).toBeInTheDocument()
   expect(screen.getAllByText(/preço final/i).length).toBeGreaterThan(0)
   expect(screen.getByText(/name_updated_seo_geo/)).toBeInTheDocument()
-  // resolver a pendência de preço
-  const box = screen.getAllByPlaceholderText(/Descreva a decisão tomada/i)[0]
-  await user.type(box, "Preço comercial definido em R$ 1200.")
-  await user.click(screen.getAllByRole("button", { name: /Concluir pendência/i })[0])
-  await waitFor(() => expect(api.resolveCatalog2Pendency).toHaveBeenCalledWith("prod1", expect.objectContaining({ pendency_key: "price_pending" })))
+  // P-12 (08/10): a resolução de pendências da importação antiga saiu — a lista é só leitura
+  expect(screen.queryByPlaceholderText(/Descreva a decisão tomada/i)).not.toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: /Concluir pendência/i })).not.toBeInTheDocument()
 })

@@ -149,8 +149,9 @@ export async function runConnectionMaintenance(db: PrismaClient, now = new Date(
   const { recalcConnection } = await import("./flow");
   const expired = await expireDueConnections(db, now);
   for (const id of expired) await recalcConnection(db, id, { id: null, integration: "system", role: "system" });
+  const health = await recheckValidConnections(db, now);
   const reminders = await runConnectionReminders(db, now);
-  return { expired: expired.length, ...reminders };
+  return { expired: expired.length, ...reminders, health_checked: health.checked, health_broken: health.broken };
 }
 
 // ── IA orientadora (sem autonomia) ────────────────────────────────────────────
@@ -248,3 +249,42 @@ export async function guidanceWithAI(db: Db, pcrId: string, viewer: Viewer): Pro
 }
 
 export { parseJsonArray };
+
+// ── Checagem ATIVA: avisa na hora quando uma conexão que estava boa parou de funcionar ───────────────────────────────────────────
+const HEALTH_INTERVAL_H = Number(process.env.CONNECTION_HEALTH_HOURS ?? 24);
+
+/**
+ * Reconfere, no provedor, as conexões válidas com validação antiga (a cada HEALTH_INTERVAL_H horas). Se o provedor RECUSAR (senha trocada, acesso removido…),
+ * a conexão sai de "válida", o motivo fica registrado, as tarefas que dependiam dela são pausadas e o cliente, o dono e o líder/administrador recebem aviso.
+ * Provedor fora do ar, não configurado ou sem resposta clara NÃO derruba nada (só tenta de novo na próxima rodada).
+ */
+export async function recheckValidConnections(db: PrismaClient, now = new Date()): Promise<{ checked: number; broken: number }> {
+  const { getConnector, connectorStatus } = await import("./connectors");
+  const { recordValidation } = await import("./core");
+  const { recalcConnection } = await import("./flow");
+  const out = { checked: 0, broken: 0 };
+  const cutoff = new Date(now.getTime() - HEALTH_INTERVAL_H * 3_600_000);
+  const due = await db.clientConnection.findMany({
+    where: { status: "valid", OR: [{ last_validated_at: null }, { last_validated_at: { lte: cutoff } }] },
+    include: { connection_type: true }, take: 200,
+  });
+  for (const c of due) {
+    const connector = getConnector(c.connection_type.integration_key);
+    if (connector.key === "none" || connectorStatus(connector).state === "not_configured") continue;
+    out.checked++;
+    let result;
+    try { result = await connector.verify(db, { id: c.id, external_id: c.external_id, account_label: c.account_label, permission_level: c.permission_level, scopes: [] }); } catch { continue; }
+    if (result.outcome === "valid") { await db.clientConnection.update({ where: { id: c.id }, data: { last_validated_at: now } }); continue; }
+    if (result.outcome !== "invalid" && result.outcome !== "needs_correction") continue; // fora do ar / dúvida: não derruba
+    const actor = { id: null, integration: connector.key, role: "integration" };
+    await recordValidation(db, actor, c.id, { result: result.outcome, problem: result.problem ?? "O provedor deixou de aceitar esta conexão.", correction_needed: result.correction ?? "Reconecte para continuar.", mode: "automatic" });
+    await recalcConnection(db, c.id, { id: null, integration: "system", role: "system" });
+    out.broken++;
+    const msg = `A conexão "${c.label}" (${connector.label}) parou de funcionar: ${safeText(result.problem ?? "o provedor recusou o acesso")} ${safeText(result.correction ?? "Reconecte para as atividades continuarem.")}`;
+    const owners = new Set<string>([c.owner_user_id, c.connected_by_user_id, c.provided_by_user_id].filter((x): x is string => !!x));
+    const people = await db.user.findMany({ where: { is_active: true, OR: [...(c.company_id ? [{ company_id: c.company_id }] : []), ...(c.agency_id ? [{ agency_id: c.agency_id }] : [])] }, select: { id: true }, take: 5 });
+    people.forEach((p) => owners.add(p.id));
+    for (const uid of owners) await db.systemAlert.create({ data: { type: "conexao_desconectada", title: "Conexão desconectada", message: msg, severity: "high", category: "alerta", entity_type: "client_connection", entity_id: c.id, user_id: uid, action_url: `/conexoes?conexao=${c.id}` } }).catch(() => {});
+  }
+  return out;
+}

@@ -219,7 +219,6 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
             variations: { include: { options: { include: { effects: true } } } },
             addons: { include: { effects: true, choices: true } },
             conditions: true,
-            access_requirements: true,
             approval_gates: true,
             sla_rules: true,
             tasks: { include: { steps: true, ai: true, dependencies: true, deliverables: true } },
@@ -274,7 +273,6 @@ type FullVersion = Prisma.Catalog2ProductVersionGetPayload<{
     variations: { include: { options: { include: { effects: true } } } };
     addons: { include: { effects: true; choices: true } };
     conditions: true;
-    access_requirements: true;
     approval_gates: true;
     sla_rules: true;
     tasks: { include: { steps: true; ai: true; dependencies: true; deliverables: true } };
@@ -282,9 +280,6 @@ type FullVersion = Prisma.Catalog2ProductVersionGetPayload<{
 }>;
 
 async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVersion, destId: string) {
-  for (const a of src.access_requirements) {
-    await db.catalog2VersionAccess.create({ data: { version_id: destId, access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes, sort_order: a.sort_order } });
-  }
   const taskIdByKey = new Map<string, string>();
   const stepIdByRef = new Map<string, string>();
   for (const t of src.tasks) {
@@ -358,6 +353,8 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
           internal_step: s.internal_step,
           requires_qualification: s.requires_qualification,
           release_next_auto: s.release_next_auto,
+          requires_specialist_qualification: s.requires_specialist_qualification,
+          specialist_user_id: s.specialist_user_id,
           emergency_reduction_minutes: s.emergency_reduction_minutes,
           emergency_extra_kind: s.emergency_extra_kind,
           emergency_extra_value: s.emergency_extra_value,
@@ -639,6 +636,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
         if (!u || !u.is_active || !["lider", "admin"].includes(u.role)) issues.push(`Tarefa "${t.name}": o líder escolhido para a etapa "${s.name}" não existe, está inativo ou não é líder.`);
       }
     }
+    for (const s of t.steps) if (s.requires_specialist_qualification && !s.specialist_user_id) issues.push(`Tarefa "${t.name}": a etapa "${s.name}" exige qualificação do especialista, mas nenhum especialista foi escolhido.`);
     if (t.steps.length === 0) issues.push(`A tarefa "${t.name}" precisa de ao menos uma etapa (as etapas formam o checklist da tarefa).`);
     for (const st of t.steps) {
       if (!(st.estimated_minutes && st.estimated_minutes > 0) || !(st.specialty_id ?? t.specialty_id)) {
@@ -1308,7 +1306,6 @@ export async function getProductDetail(productId: string) {
           variations: { orderBy: { sort_order: "asc" }, include: { options: { orderBy: { sort_order: "asc" }, include: { effects: { orderBy: { sort_order: "asc" } } } } } },
           addons: { orderBy: { sort_order: "asc" }, include: { effects: { orderBy: { sort_order: "asc" } }, choices: { orderBy: { sort_order: "asc" } } } },
           conditions: { orderBy: { sort_order: "asc" } },
-          access_requirements: { orderBy: { sort_order: "asc" } },
           approval_gates: { orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] },
           sla_rules: { orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] },
           connection_requirements: { orderBy: { sort_order: "asc" }, include: { connection_type: true, dependencies: { orderBy: { dep_key: "asc" } }, triggers: { orderBy: { sort_order: "asc" } } } },
@@ -1373,7 +1370,6 @@ export async function getProductDetail(productId: string) {
       updated_at: v.updated_at,
       is_published_current: v.id === product.published_version_id,
       history: v.events.map((e) => ({ event_type: e.event_type, actor_user_id: e.actor_user_id, note: e.note, at: e.created_at })),
-      access_requirements: v.access_requirements.map((a) => ({ id: a.id, access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes })),
       requires_connections: v.requires_connections,
       connection_requirements: v.connection_requirements.map(serializeRequirement),
       approval_gates: v.approval_gates.map((g) => ({ id: g.id, key: g.key, name: g.name, description: g.description, anchor_task_key: g.anchor_task_key, anchor_step_key: g.anchor_step_key, position: g.position, approver_kind: g.approver_kind, group_key: g.group_key, sequence_no: g.sequence_no, group_mode: g.group_mode, rejection_return_step_key: g.rejection_return_step_key, requires_comment: g.requires_comment, is_required: g.is_required, is_active: g.is_active, sort_order: g.sort_order })),
@@ -1540,6 +1536,8 @@ export async function getProductDetail(productId: string) {
           internal_step: s.internal_step ?? false,
           requires_qualification: s.requires_qualification ?? true,
           release_next_auto: s.release_next_auto ?? true,
+          requires_specialist_qualification: s.requires_specialist_qualification ?? false,
+          specialist_user_id: s.specialist_user_id ?? null,
           emergency_reduction_minutes: s.emergency_reduction_minutes ?? null,
           emergency_extra_kind: s.emergency_extra_kind ?? null,
           emergency_extra_value: s.emergency_extra_value ?? null,

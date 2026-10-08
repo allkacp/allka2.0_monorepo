@@ -34,6 +34,10 @@ export function draftFromServer(q: any): QuestionDraft {
     visibility: q.visibility ?? "client", answer_usage: q.answer_usage ?? "both",
   };
 }
+/** Pergunta sugerida pela IA → rascunho editável. */
+export function draftFromSuggestion(q: any): QuestionDraft {
+  return { ...emptyQuestion(), key: q.key, label: q.label, is_required: q.is_required !== false, question_type: q.question_type ?? "texto_longo", help_text: q.help_text ?? "", options_text: (q.options ?? []).join("\n") };
+}
 /** Rascunho → corpo aceito pela API (campos vazios não entram). */
 export function payloadFromDraft(q: QuestionDraft) {
   const num = (s: string) => (s.trim() === "" ? undefined : Number(s));

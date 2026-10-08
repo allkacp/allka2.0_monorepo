@@ -1,5 +1,7 @@
 "use client"
 
+import { withScreenHelp } from "@/components/with-screen-help"
+import { INTERNAL_TASKS_HELP } from "@/lib/screen-help"
 // D2 — Tarefas internas da conta: quadro (A fazer / Fazendo / Bloqueada / Feita) com responsável, prazo, checklist e comentários.
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { CalendarClock, ListChecks, Loader2, MessageSquare, Plus, Trash2, User } from "lucide-react"
@@ -80,7 +82,7 @@ function TaskDialog({ task, members, onClose, onSaved, canDelete }: { task: any;
 }
 
 /** Quadro. Para a administração, passe `scope` ({ agency_id } ou { company_id }) para criar/ver de uma conta; sem scope lista tudo (sem criar). */
-export function InternalTasksBoard({ scope, adminMode = false }: { scope?: { agency_id?: string; company_id?: string }; adminMode?: boolean }) {
+function InternalTasksBoardBase({ scope, adminMode = false }: { scope?: { agency_id?: string; company_id?: string }; adminMode?: boolean }) {
   const [tasks, setTasks] = useState<any[]>([])
   const [members, setMembers] = useState<any[]>([])
   const [summary, setSummary] = useState<any>(null)
@@ -148,3 +150,5 @@ export function InternalTasksBoard({ scope, adminMode = false }: { scope?: { age
     </div>
   )
 }
+
+export const InternalTasksBoard = withScreenHelp(InternalTasksBoardBase, INTERNAL_TASKS_HELP)

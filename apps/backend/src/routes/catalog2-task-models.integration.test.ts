@@ -11,6 +11,7 @@ import { seedCatalog2Classifications, seedCatalog2FourFForTests } from "../lib/c
 import { createProduct, newDraftVersion } from "../lib/catalog2-service";
 import { ensureStandardStepModels } from "../lib/catalog2-access";
 import { backfillCatalog2Models, ensureStepModelFromPackage, ensureTaskModelFromPackage } from "../lib/catalog2-models";
+import { addAccessRequirements } from "../test-support/access-helpers";
 
 // Catálogo global de modelos de tarefa ("Tarefa #ID") e de etapa ("Etapa #ID").
 
@@ -243,27 +244,17 @@ describe("Catálogo global de modelos de tarefa e etapa", () => {
     assert.equal(tbRow.task_model_revision, 2);
   });
 
-  it("acessos exigidos pelo produto: salvar, exigir nome em 'Outros', copiar para a nova versão e bloquear em versão publicada", async () => {
+  it("acessos do produto (cadastro único): a rota antiga saiu; a nova versão herda as exigências de conexão", async () => {
     const a = await mkProduct(masterId, "[TESTE] Acessos");
-    const bad = await api(`/api/admin/catalog2/versions/${a.versionId}/access-requirements`, { method: "PUT", token, body: { items: [{ access_type: "other" }] } });
-    assert.equal(bad.status, 422);
-    const ok = await api(`/api/admin/catalog2/versions/${a.versionId}/access-requirements`, {
-      method: "PUT", token,
-      body: { items: [{ access_type: "google_ads" }, { access_type: "meta_business_manager", is_required: false }, { access_type: "other", label: "ERP do cliente", notes: "Somente leitura" }] },
-    });
-    assert.equal(ok.status, 200);
-    let detail = (await api(`/api/admin/catalog2/products/${a.product.id}`, { token })).json.versions[0];
-    assert.deepEqual(detail.access_requirements.map((x: { label: string }) => x.label), ["Google Ads", "Meta Business Manager", "ERP do cliente"]);
-    assert.equal(detail.access_requirements[1].is_required, false);
-
+    const old = await api(`/api/admin/catalog2/versions/${a.versionId}/access-requirements`, { method: "PUT", token, body: { items: [{ access_type: "google_ads" }] } });
+    assert.equal(old.status, 404, "a lista antiga de acessos não existe mais");
+    await addAccessRequirements(a.versionId, [{ type: "google_ads", label: "Google Ads" }, { type: "meta_business_manager", label: "Meta Business Manager", required: false }]);
     await prisma.catalog2ProductVersion.update({ where: { id: a.versionId }, data: { state: "publicada", published_at: new Date() } });
     await prisma.catalog2Product.update({ where: { id: a.product.id }, data: { published_version_id: a.versionId } });
-    const locked = await api(`/api/admin/catalog2/versions/${a.versionId}/access-requirements`, { method: "PUT", token, body: { items: [] } });
-    assert.ok(locked.status >= 400, "versão publicada é imutável");
     await newDraftVersion(a.product.id, masterId);
-    detail = (await api(`/api/admin/catalog2/products/${a.product.id}`, { token })).json.versions[0];
+    const detail = (await api(`/api/admin/catalog2/products/${a.product.id}`, { token })).json.versions[0];
     assert.equal(detail.version_number, 2);
-    assert.equal(detail.access_requirements.length, 3, "a nova versão herda os acessos");
+    assert.deepEqual(detail.connection_requirements.map((x: { label: string }) => x.label), ["Google Ads", "Meta Business Manager"], "a nova versão herda os acessos");
   });
 
   it("etapa padrão de acessos: falta no ambiente → 404; existindo entra no INÍCIO da tarefa e não duplica", async () => {

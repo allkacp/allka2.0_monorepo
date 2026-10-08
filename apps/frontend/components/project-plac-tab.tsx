@@ -1,5 +1,7 @@
 "use client"
 
+import { withScreenHelp } from "@/components/with-screen-help"
+import { PLAC_HELP } from "@/lib/screen-help"
 // PLAC — cronograma de 13 passos do projeto: o que já foi feito, o que falta, prazos e quem cobra. Abre sozinho quando o projeto é pago.
 import { useCallback, useEffect, useState } from "react"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
@@ -11,7 +13,7 @@ const ROLE_TONE: Record<string, string> = { vc: "bg-violet-100 text-violet-800",
 const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString("pt-BR") : "—")
 const toInput = (d?: string | null) => (d ? new Date(d).toISOString().slice(0, 10) : "")
 
-export function ProjectPlacTab({ projectId }: { projectId: string }) {
+function ProjectPlacTabBase({ projectId }: { projectId: string }) {
   const [data, setData] = useState<any>(null)
   const [users, setUsers] = useState<any[]>([])
   const [err, setErr] = useState<string | null>(null)
@@ -86,3 +88,5 @@ export function ProjectPlacTab({ projectId }: { projectId: string }) {
     </div>
   )
 }
+
+export const ProjectPlacTab = withScreenHelp(ProjectPlacTabBase, PLAC_HELP)

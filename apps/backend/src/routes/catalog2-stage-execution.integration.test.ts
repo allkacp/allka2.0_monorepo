@@ -3,7 +3,7 @@ import { after, before, describe, it } from "node:test";
 import crypto from "node:crypto";
 import { prisma } from "../lib/prisma";
 import { concluirEtapa, iniciarEtapasDaTarefa } from "../lib/stage-engine";
-import { api, byKey, checkoutAndPay, mkAdmin, mkCompanyUser, mkLeader, mkProduct, SEL, startServer, stopServer, tasksOf } from "../test-support/universal-helpers";
+import { api, byKey, checkoutAndPay, mkAdmin, mkCompanyUser, mkLeader, mkProduct, mkUser, SEL, startServer, stopServer, tasksOf, tokenFor } from "../test-support/universal-helpers";
 
 // Execução por ETAPA (A8b fase 2): entrega → qualificação do líder → aprovação do cliente (exceto etapa interna) → libera a próxima.
 let ADMIN: Awaited<ReturnType<typeof mkAdmin>>;
@@ -12,7 +12,7 @@ let OUTRO: Awaited<ReturnType<typeof mkCompanyUser>>;
 let LEADER: Awaited<ReturnType<typeof mkLeader>>;
 const adm = (p: string, method = "GET", body?: unknown) => api(`/api/admin/catalog2${p}`, { method, token: ADMIN.token, body });
 
-async function projeto(cfg: Record<string, Partial<{ internal_step: boolean; requires_qualification: boolean; release_next_auto: boolean }>>, stageMode = true) {
+async function projeto(cfg: Record<string, Partial<{ internal_step: boolean; requires_qualification: boolean; release_next_auto: boolean; requires_specialist_qualification: boolean; specialist_user_id: string | null }>>, stageMode = true) {
   const keys = Object.keys(cfg);
   const p = await mkProduct({ name: "Etapas", tasks: [{ key: "t", steps: keys.map((k) => ({ key: k, minutes: 30 })), data: { stage_execution: stageMode ? "stage" : "task" } }] });
   const t = await prisma.catalog2Task.findFirstOrThrow({ where: { version_id: p.versionId, key: "t" }, include: { steps: true } });
@@ -101,20 +101,16 @@ describe("Execução por etapa · qualificação e aprovação (A8b fase 2)", ()
     assert.equal((await prisma.projectTask.findUniqueOrThrow({ where: { id: p.taskId } })).status, "CONCLUIDA");
   });
 
-  it("EX03. 'liberar a próxima automaticamente' desligado: aprovada, a próxima só abre com a liberação do líder", async () => {
+  it("EX03. a etapa aprovada libera a próxima SEMPRE sozinha (decisão de 07/10): mesmo com o campo antigo desligado, e a rota manual não existe mais", async () => {
     const p = await projeto({ s1: { requires_qualification: false, release_next_auto: false }, s2: {} });
     const r = await entregar(p.taskId, p.idOf.s1);
     assert.equal(r.etapaEmConferencia, "aprovacao", "sem qualificação vai direto para o cliente");
     const a = await decidir(CO.token, p.taskId, p.idOf.s1, "aprovacao", "aprovar");
-    assert.equal(a.json.aguardandoLiberacao, true);
+    assert.notEqual(a.json.aguardandoLiberacao, true);
     assert.equal(await status(p.taskId, p.idOf.s1), "CONCLUIDA");
-    assert.equal(await status(p.taskId, p.idOf.s2), "BLOQUEADA");
+    assert.equal(await status(p.taskId, p.idOf.s2), "EM_ANDAMENTO", "a próxima abriu sozinha");
     const stageId = (await stageOf(p.taskId, p.idOf.s1)).id;
-    assert.equal((await api(`/api/project-tasks/${p.taskId}/etapas/${stageId}/liberar-proxima`, { method: "POST", token: CO.token })).status, 403, "cliente não libera");
-    const lib = await api(`/api/project-tasks/${p.taskId}/etapas/${stageId}/liberar-proxima`, { method: "POST", token: LEADER.token });
-    assert.equal(lib.status, 200, JSON.stringify(lib.json));
-    assert.equal(await status(p.taskId, p.idOf.s2), "EM_ANDAMENTO");
-    assert.equal((await api(`/api/project-tasks/${p.taskId}/etapas/${stageId}/liberar-proxima`, { method: "POST", token: LEADER.token })).status, 422, "nada mais para liberar");
+    assert.equal((await api(`/api/project-tasks/${p.taskId}/etapas/${stageId}/liberar-proxima`, { method: "POST", token: LEADER.token })).status, 404, "não há mais botão/rota de liberação manual");
   });
 
   it("EX04. etapa interna: invisível para o cliente até o líder avisar; aviso gera alerta e passa a mostrar a etapa", async () => {
@@ -184,5 +180,80 @@ describe("Execução por etapa · qualificação e aprovação (A8b fase 2)", ()
     assert.deepEqual([sa.internal_step, sa.requires_qualification, sa.release_next_auto], [true, false, false]);
     const sb = task.steps.find((s: any) => s.key === "b");
     assert.deepEqual([sb.internal_step, sb.requires_qualification, sb.release_next_auto], [false, true, true], "padrões");
+  });
+
+  it("EX-ESP. qualificação do líder e do especialista são opções separadas: líder → especialista → cliente; só o especialista escolhido decide; reprovar volta ao mesmo executor", async () => {
+    const esp = await mkUser("nomad", "nomades", { status: "ativo" });
+    const espToken = tokenFor(esp);
+    const p = await projeto({ s1: { requires_specialist_qualification: true, specialist_user_id: esp.id }, s2: {}, s3: { requires_qualification: false, requires_specialist_qualification: true, specialist_user_id: esp.id } });
+    const st1 = await stageOf(p.taskId, p.idOf.s1);
+    assert.deepEqual([st1.exige_qualificacao, st1.exige_qualificacao_especialista, st1.especialista_id], [true, true, esp.id], "configuração materializada na etapa");
+    await entregar(p.taskId, p.idOf.s1);
+    assert.equal(await status(p.taskId, p.idOf.s1), "EM_QUALIFICACAO", "primeiro o líder");
+    assert.equal((await decidir(espToken, p.taskId, p.idOf.s1, "especialista", "aprovar")).status, 422, "ainda não é a vez do especialista");
+    assert.equal((await decidir(LEADER.token, p.taskId, p.idOf.s1, "qualificacao", "aprovar")).status, 200);
+    assert.equal(await status(p.taskId, p.idOf.s1), "EM_QUALIFICACAO_ESPECIALISTA", "depois do líder, o especialista");
+    assert.equal((await decidir(LEADER.token, p.taskId, p.idOf.s1, "especialista", "aprovar")).status, 403, "o líder não qualifica como especialista");
+    assert.equal((await decidir(CO.token, p.taskId, p.idOf.s1, "especialista", "aprovar")).status, 403, "o cliente também não");
+    const espDec = await decidir(espToken, p.taskId, p.idOf.s1, "especialista", "aprovar", "Tudo certo");
+    assert.equal(espDec.status, 200, JSON.stringify(espDec.json));
+    assert.equal(await status(p.taskId, p.idOf.s1), "EM_APROVACAO_CLIENTE");
+    assert.ok((await stageOf(p.taskId, p.idOf.s1)).qualificada_especialista_em, "registrou a qualificação do especialista");
+    assert.equal((await decidir(CO.token, p.taskId, p.idOf.s1, "aprovacao", "aprovar")).status, 200);
+    assert.equal(await status(p.taskId, p.idOf.s2), "EM_ANDAMENTO", "aprovou → libera a próxima");
+    const hist = await api(`/api/project-tasks/${p.taskId}/etapas/${(await stageOf(p.taskId, p.idOf.s1)).id}/historico`, { token: ADMIN.token });
+    assert.ok(hist.json.data.some((h: any) => h.kind === "especialista" && h.decision === "aprovada"), "histórico registra a decisão do especialista");
+
+    // só especialista (sem líder): vai direto para ele; reprovar volta ao mesmo executor
+    await entregar(p.taskId, p.idOf.s2);
+    await decidir(LEADER.token, p.taskId, p.idOf.s2, "qualificacao", "aprovar");
+    await decidir(CO.token, p.taskId, p.idOf.s2, "aprovacao", "aprovar");
+    const r3 = await entregar(p.taskId, p.idOf.s3);
+    assert.equal(r3.etapaEmConferencia, "especialista", "sem líder, entrega vai direto ao especialista");
+    assert.equal(await status(p.taskId, p.idOf.s3), "EM_QUALIFICACAO_ESPECIALISTA");
+    assert.equal((await decidir(espToken, p.taskId, p.idOf.s3, "especialista", "reprovar")).status, 422, "motivo obrigatório");
+    assert.equal((await decidir(espToken, p.taskId, p.idOf.s3, "especialista", "reprovar", "Faltou evidência")).status, 200);
+    const s3 = await stageOf(p.taskId, p.idOf.s3);
+    assert.deepEqual([s3.status, s3.rodada_ajuste, s3.lider_id], ["EM_ANDAMENTO", 1, LEADER.user.id], "mesmo executor, conta rodada");
+    // painel: o especialista vê o botão na hora certa
+    await entregar(p.taskId, p.idOf.s3);
+    const painel = await api(`/api/task-flow/${p.taskId}`, { token: espToken });
+    assert.equal(painel.status, 200, JSON.stringify(painel.json));
+    assert.equal(painel.json.stages.find((e: any) => e.id === s3.id)?.can_qualify_specialist, true);
+  });
+
+  it("EX-ESP2. cadastro: exigir o especialista sem escolher quem é recusa (422); desmarcar limpa o especialista", async () => {
+    const p = await mkProduct({ name: "Esp cadastro", tasks: [{ key: "t", steps: [{ key: "a", minutes: 30 }], data: { stage_execution: "stage" } }] });
+    const t = await prisma.catalog2Task.findFirstOrThrow({ where: { version_id: p.versionId, key: "t" }, include: { steps: true } });
+    const step = t.steps[0];
+    const esp = await mkUser("nomad", "nomades", { status: "ativo" });
+    const semUser = await adm(`/steps/${step.id}`, "PUT", { requires_specialist_qualification: true, scope: "product" });
+    assert.equal(semUser.status, 422, JSON.stringify(semUser.json));
+    const ok = await adm(`/steps/${step.id}`, "PUT", { requires_specialist_qualification: true, specialist_user_id: esp.id, scope: "product" });
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    const lista = await adm("/specialists");
+    assert.equal(lista.status, 200);
+    assert.ok(lista.json.data.some((u: any) => u.id === esp.id && u.kind === "nomade"), "nômades aparecem como possíveis especialistas");
+    const off = await adm(`/steps/${step.id}`, "PUT", { requires_specialist_qualification: false, scope: "product" });
+    assert.equal(off.status, 200);
+    const depois = await prisma.catalog2TaskStep.findUniqueOrThrow({ where: { id: step.id } });
+    assert.deepEqual([depois.requires_specialist_qualification, depois.specialist_user_id], [false, null]);
+  });
+
+  it("EX-EVD. evidência obrigatória: a etapa só é entregue com o anexo de entrega; sem ele não vai nem ao líder nem ao cliente", async () => {
+    const p = await projeto({ s1: {}, s2: {} });
+    const st = await stageOf(p.taskId, p.idOf.s1);
+    await prisma.projectTaskStage.update({ where: { id: st.id }, data: { exige_anexo: true } });
+    await assert.rejects(() => entregar(p.taskId, p.idOf.s1), /evidência/i, "sem evidência não entrega");
+    assert.equal(await status(p.taskId, p.idOf.s1), "EM_ANDAMENTO");
+    // um anexo comum da tarefa NÃO vale: tem que ser a entrega desta etapa
+    await prisma.taskAttachment.create({ data: { project_task_id: p.taskId, type: "file", name: "briefing.pdf", url: "https://exemplo.com/b.pdf" } });
+    await assert.rejects(() => entregar(p.taskId, p.idOf.s1), /evidência/i);
+    await prisma.taskAttachment.create({ data: { project_task_id: p.taskId, type: "delivery", name: "print-acesso.png", url: "https://exemplo.com/p.png", project_task_stage_id: st.id } });
+    const r = await entregar(p.taskId, p.idOf.s1);
+    assert.equal(r.etapaEmConferencia, "qualificacao");
+    assert.equal(await status(p.taskId, p.idOf.s1), "EM_QUALIFICACAO");
+    // a etapa 2 (sem exigência) continua entregando normalmente
+    assert.equal(await status(p.taskId, p.idOf.s2), "BLOQUEADA");
   });
 });

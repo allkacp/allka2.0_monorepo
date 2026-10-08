@@ -52,6 +52,8 @@ export const STAGE_STATUS = {
   CONCLUIDA: "CONCLUIDA",
   // Execução por etapa (A8b fase 2): a etapa entregue espera a qualificação do líder e a aprovação de quem contratou.
   EM_QUALIFICACAO: "EM_QUALIFICACAO",
+  // Qualificação do especialista (D-5): vem depois da do líder (quando as duas existem) e antes da aprovação de quem contratou.
+  EM_QUALIFICACAO_ESPECIALISTA: "EM_QUALIFICACAO_ESPECIALISTA",
   EM_APROVACAO_CLIENTE: "EM_APROVACAO_CLIENTE",
 } as const;
 
@@ -323,7 +325,7 @@ export async function iniciarEtapasDaTarefa(
   if (etapas.length === 0) return null;
 
   const jaAndando = etapas.some((e) =>
-    [STAGE_STATUS.EM_ANDAMENTO, STAGE_STATUS.AGUARDANDO_EXECUTOR, STAGE_STATUS.EM_QUALIFICACAO, STAGE_STATUS.EM_APROVACAO_CLIENTE, "AGUARDANDO_APROVACAO", "AGUARDANDO_DEPENDENCIA"].includes(e.status as any),
+    [STAGE_STATUS.EM_ANDAMENTO, STAGE_STATUS.AGUARDANDO_EXECUTOR, STAGE_STATUS.EM_QUALIFICACAO, STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA, STAGE_STATUS.EM_APROVACAO_CLIENTE, "AGUARDANDO_APROVACAO", "AGUARDANDO_DEPENDENCIA"].includes(e.status as any),
   );
   if (jaAndando) return null;
 
@@ -460,7 +462,7 @@ async function avisarReprovacao(
   db: Db,
   stageId: string,
   motivo: string,
-  nivel: NivelAprovacao | "qualificacao" | "revisao",
+  nivel: NivelAprovacao | "qualificacao" | "especialista" | "revisao",
 ): Promise<void> {
   try {
     const etapa = await db.projectTaskStage.findUnique({
@@ -491,7 +493,7 @@ async function avisarReprovacao(
       data: {
         type: "tarefa_reprovada",
         title: `Ajuste solicitado: ${etapa.titulo}`,
-        message: `${nivel === "cliente" ? "O cliente" : nivel === "qualificacao" ? "O líder/qualificador" : nivel === "revisao" ? "O revisor" : "A agência"} pediu ajustes na tarefa "${etapa.project_task.title}". Motivo: ${motivo}`,
+        message: `${nivel === "cliente" ? "O cliente" : nivel === "especialista" ? "O especialista" : nivel === "qualificacao" ? "O líder/qualificador" : nivel === "revisao" ? "O revisor" : "A agência"} pediu ajustes na tarefa "${etapa.project_task.title}". Motivo: ${motivo}`,
         severity: "warning",
         category: "alerta",
         entity_type: "project_task_stage",
@@ -527,7 +529,7 @@ export interface ResultadoConclusao {
   /** Execução por etapa: a etapa foi aprovada mas a próxima só abre com liberação manual. */
   aguardandoLiberacao?: boolean;
   /** Execução por etapa: a etapa foi entregue e aguarda qualificação ("qualificacao") ou aprovação ("aprovacao"). */
-  etapaEmConferencia?: "qualificacao" | "aprovacao";
+  etapaEmConferencia?: "qualificacao" | "especialista" | "aprovacao";
 }
 
 /**
@@ -544,7 +546,7 @@ export async function concluirEtapa(
     include: { project_task: { select: { id: true, status: true, requires_qualification: true, qualification_round: true, stage_execution: true } } },
   });
 
-  if (stage.status === STAGE_STATUS.EM_QUALIFICACAO || stage.status === STAGE_STATUS.EM_APROVACAO_CLIENTE) {
+  if (stage.status === STAGE_STATUS.EM_QUALIFICACAO || stage.status === STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA || stage.status === STAGE_STATUS.EM_APROVACAO_CLIENTE) {
     throw new DependencyBlockedError("Esta etapa já foi entregue e aguarda a conferência. Ela segue quando for aprovada, ou volta para ajuste se for reprovada.");
   }
   if (stage.status === STAGE_STATUS.CONCLUIDA) {
@@ -557,6 +559,12 @@ export async function concluirEtapa(
       enviadaParaQualificacao: false,
       enviadaParaRevisao: false,
     };
+  }
+
+  // Evidência obrigatória (D-6): sem o anexo de entrega DESTA etapa, ela não é entregue — assim nada chega ao líder, ao especialista nem ao cliente sem a prova.
+  if (stage.exige_anexo) {
+    const anexos = await db.taskAttachment.count({ where: { project_task_stage_id: stage.id, type: "delivery" } });
+    if (anexos === 0) throw new DependencyBlockedError("Esta etapa exige evidência (print, vídeo ou arquivo de entrega) antes de ser entregue.");
   }
 
   if (stage.status === "AGUARDANDO_APROVACAO") {
@@ -643,10 +651,8 @@ async function seguirDepoisDeEtapaConcluida(db: Db, stage: StageComTarefa, opts:
 
   let proxima: AberturaEtapa | null = null;
   const fluxoConfigurado = todasFlow.some((e) => e.depende_de_json != null);
-  if (modoEtapa && !stage.libera_proxima_auto) {
-    // Liberação manual: a próxima etapa só abre quando o líder/administrador liberar (ver liberarProximasEtapas).
-    aguardandoLiberacao = true;
-  } else if (fluxoConfigurado) {
+  // Etapa aprovada libera a próxima sozinha (decisão de 07/10): não existe mais liberação manual.
+  if (fluxoConfigurado) {
     const abertas = await abrirEtapasLiberadas(db, stage.project_task_id, stage);
     proxima = abertas[0] ?? null;
     if (abertas.length) {
@@ -731,7 +737,7 @@ export class EtapaDecisaoError extends Error {
     this.name = "EtapaDecisaoError";
   }
 }
-export type TipoDecisaoEtapa = "qualificacao" | "aprovacao";
+export type TipoDecisaoEtapa = "qualificacao" | "especialista" | "aprovacao";
 export type DecisaoEtapa = "aprovar" | "reprovar" | "comentar";
 
 const baseResultado = (stage: StageComTarefa): ResultadoConclusao => ({
@@ -759,6 +765,16 @@ async function entregarEtapa(db: Db, stage: StageComTarefa, opts: { userId?: str
     return { ...baseResultado(stage), enviadaParaQualificacao: true, etapaEmConferencia: "qualificacao" };
   }
   await db.projectTaskStage.update({ where: { id: stage.id }, data: { entregue_em: agora, concluida_por: opts.userId ?? null } });
+  return seguirParaEspecialistaOuAprovacao(db, stage, opts, agora, round);
+}
+
+/** Depois do líder (ou sem ele): a qualificação do ESPECIALISTA, se a etapa exige; senão, a aprovação/conclusão. */
+async function seguirParaEspecialistaOuAprovacao(db: Db, stage: StageComTarefa, opts: { userId?: string }, agora: Date, round: number): Promise<ResultadoConclusao> {
+  if (stage.exige_qualificacao_especialista) {
+    await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA, entregue_em: stage.entregue_em ?? agora } });
+    await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: "especialista", decision: "solicitada", round, actor_user_id: opts.userId ?? null } });
+    return { ...baseResultado(stage), enviadaParaQualificacao: true, etapaEmConferencia: "especialista" };
+  }
   return seguirParaAprovacaoOuConcluir(db, stage, opts, agora, round);
 }
 
@@ -788,9 +804,9 @@ export async function decidirEtapa(
     include: { project_task: { select: { id: true, status: true, requires_qualification: true, qualification_round: true, stage_execution: true } } },
   });
   if (stage.project_task.stage_execution !== "stage") throw new EtapaDecisaoError("Esta tarefa não usa execução por etapa.");
-  const esperado = opts.tipo === "qualificacao" ? STAGE_STATUS.EM_QUALIFICACAO : STAGE_STATUS.EM_APROVACAO_CLIENTE;
+  const esperado = opts.tipo === "qualificacao" ? STAGE_STATUS.EM_QUALIFICACAO : opts.tipo === "especialista" ? STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA : STAGE_STATUS.EM_APROVACAO_CLIENTE;
   if (stage.status !== esperado) {
-    throw new EtapaDecisaoError(`A etapa está "${stage.status}" e não aguarda ${opts.tipo === "qualificacao" ? "qualificação" : "aprovação"} agora.`);
+    throw new EtapaDecisaoError(`A etapa está "${stage.status}" e não aguarda ${opts.tipo === "qualificacao" ? "qualificação do líder" : opts.tipo === "especialista" ? "qualificação do especialista" : "aprovação"} agora.`);
   }
   const texto = (opts.comentario ?? "").trim();
   const round = (stage.rodada_ajuste ?? 0) + 1;
@@ -810,37 +826,24 @@ export async function decidirEtapa(
     if (stage.refacao_horas) { await ensureWorkCalendar(db); prazoRefacao = addBusinessMinutes(agora, stage.refacao_horas * 60); }
     await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.EM_ANDAMENTO, rodada_ajuste: { increment: 1 }, entregue_em: null, concluida_por: null, ...(prazoRefacao ? { prazo_execucao: prazoRefacao } : {}) } });
     await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: opts.tipo, decision: "reprovada", round, comment: texto, actor_user_id: opts.userId } });
-    await avisarReprovacao(db, stage.id, texto, opts.tipo === "qualificacao" ? "qualificacao" : "cliente");
+    await avisarReprovacao(db, stage.id, texto, opts.tipo === "qualificacao" ? "qualificacao" : opts.tipo === "especialista" ? "especialista" : "cliente");
     return { ...base, decisao: "reprovar", status: STAGE_STATUS.EM_ANDAMENTO };
   }
 
   await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: opts.tipo, decision: "aprovada", round, comment: texto || null, actor_user_id: opts.userId } });
   if (opts.tipo === "qualificacao") {
     await db.projectTaskStage.update({ where: { id: stage.id }, data: { qualificada_em: agora } });
+    const r = await seguirParaEspecialistaOuAprovacao(db, stage, { userId: opts.userId }, agora, round);
+    return { ...r, decisao: "aprovar", status: stage.exige_qualificacao_especialista ? STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA : stage.visivel_ao_cliente ? STAGE_STATUS.EM_APROVACAO_CLIENTE : STAGE_STATUS.CONCLUIDA };
+  }
+  if (opts.tipo === "especialista") {
+    await db.projectTaskStage.update({ where: { id: stage.id }, data: { qualificada_especialista_em: agora } });
     const r = await seguirParaAprovacaoOuConcluir(db, stage, { userId: opts.userId }, agora, round);
     return { ...r, decisao: "aprovar", status: stage.visivel_ao_cliente ? STAGE_STATUS.EM_APROVACAO_CLIENTE : STAGE_STATUS.CONCLUIDA };
   }
   await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.CONCLUIDA, concluida_em: agora, aprovada_em: agora } });
   const r = await seguirDepoisDeEtapaConcluida(db, stage, { userId: opts.userId }, agora);
   return { ...r, decisao: "aprovar", status: STAGE_STATUS.CONCLUIDA };
-}
-
-/** Liberação MANUAL da(s) próxima(s) etapa(s): vale para etapas aprovadas cuja configuração não libera sozinha. */
-export async function liberarProximasEtapas(db: Db, taskId: string): Promise<AberturaEtapa[]> {
-  const task = await db.projectTask.findUnique({ where: { id: taskId }, select: { stage_execution: true, status: true } });
-  if (!task || task.stage_execution !== "stage") throw new EtapaDecisaoError("Esta tarefa não usa execução por etapa.");
-  const etapas = await db.projectTaskStage.findMany({ where: { project_task_id: taskId }, orderBy: [{ ordem: "asc" }, { created_at: "asc" }] });
-  let abertas: AberturaEtapa[] = [];
-  if (etapas.some((e) => e.depende_de_json != null)) {
-    abertas = await abrirEtapasLiberadas(db, taskId, null);
-  } else {
-    const i = etapas.findIndex((e) => e.status !== STAGE_STATUS.CONCLUIDA);
-    const alvo = i >= 0 ? etapas[i] : null;
-    const anteriorOk = i <= 0 || etapas[i - 1].status === STAGE_STATUS.CONCLUIDA;
-    if (alvo && anteriorOk && [STAGE_STATUS.PENDENTE, STAGE_STATUS.BLOQUEADA].includes(alvo.status as never) && !alvo.iniciada_em) abertas = [await abrirEtapa(db, alvo.id)];
-  }
-  if (abertas.length === 0) throw new EtapaDecisaoError("Não há etapa pronta para liberar agora (a anterior precisa estar aprovada).");
-  return abertas;
 }
 
 /** Líder/administrador avisa quem contratou de um problema numa etapa interna (ex.: acesso ou briefing errado): a etapa passa a ficar visível para o cliente. */
@@ -1158,6 +1161,19 @@ export async function garantirQualificador(taskId: string): Promise<void> {
     // Execução por etapa: quem aguarda qualificação é a ETAPA entregue, não a tarefa.
     const emQual = await prisma.projectTaskStage.findFirst({ where: { project_task_id: taskId, status: STAGE_STATUS.EM_QUALIFICACAO }, select: { id: true } });
     if (emQual) { await garantirQualificadorDaEtapa(emQual.id); return; }
+    const emEsp = await prisma.projectTaskStage.findFirst({ where: { project_task_id: taskId, status: STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA }, select: { id: true, titulo: true, especialista_id: true, project_task: { select: { title: true } } } });
+    if (emEsp) {
+      if (emEsp.especialista_id) {
+        await prisma.systemAlert.create({
+          data: {
+            type: "qualificacao_pendente", title: `Etapa para o especialista qualificar: ${emEsp.titulo}`,
+            message: `A etapa "${emEsp.titulo}" da tarefa "${emEsp.project_task.title}" foi entregue e aguarda a sua qualificação como especialista (aprovar, pedir ajustes ou comentar).`,
+            severity: "info", category: "alerta", entity_type: "project_task", entity_id: taskId, user_id: emEsp.especialista_id, action_url: "/leader/tarefas",
+          },
+        });
+      }
+      return;
+    }
     let tarefa = await prisma.projectTask.findUnique({
       where: { id: taskId },
       select: { title: true, task_code: true, status: true, lider_responsavel_id: true },

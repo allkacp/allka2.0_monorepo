@@ -181,13 +181,6 @@ describe("Catálogo do cliente — visibilidade, configurador, cotação e cesta
     catProducts.push(p.id);
     DRAFT_ID = p.id;
     await prisma.catalog2ProductVersion.create({ data: { product_id: p.id, version_number: 1, state: "rascunho", title: "rascunho" } });
-    // reparo 2026-09: este rascunho ganha uma linha de preview provisório
-    // (imagem/preço/prazo de demonstração) — usada pelo teste abaixo pra
-    // provar que ela NUNCA vaza pro catálogo do cliente, nem em preview.
-    await prisma.catalog2ProvisionalPreview.create({
-      data: { product_id: p.id, image_path: "/images/products/alk-ads-001.svg", price_amount: 4321, deadline_days: 11, modality: "Sob demanda" },
-    });
-
     CO = await mkCompanyUser("A");
     CO2 = await mkCompanyUser("B");
     AG = await mkAgencyUser("X");

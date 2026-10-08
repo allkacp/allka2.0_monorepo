@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ModalBrandHeader } from "@/components/ui/modal-brand-header";
 import { Catalog2AdditivesPanel } from "@/components/catalog2/catalog2-additives-panel";
+import { Catalog2AiChangesPanel } from "@/components/catalog2/catalog2-ai-changes-panel";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import {
   Select,
@@ -2720,6 +2721,7 @@ export function ProjectViewSlidePanel({
                   value="aditivos"
                   className="flex-1 overflow-y-auto bg-slate-200 mt-0"
                 >
+                  <Catalog2AiChangesPanel projectId={String(project.id)} />
                   <Catalog2AdditivesPanel projectId={String(project.id)} />
                 </TabsContent>
                 {/* ══════════════════════════════════════════════════════════

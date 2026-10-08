@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { verifyToken, requireRole } from "../middleware/auth";
 import { validate } from "../middleware/validate";
+import { BASES, computeChangePricing, loadChangePricingSettings, validateSettings } from "../lib/ai-change-pricing";
 
 const router = Router();
 
@@ -224,6 +225,36 @@ router.put("/pricing/:id", validate(updatePricingSchema), async (req, res, next)
   } catch (err) {
     next(err);
   }
+});
+
+// P-11: preço das alterações por IA = média real de tokens/custo × dólar × margem (editável). GET traz médias e preço sugerido; PUT salva as regras.
+router.get("/change-pricing", async (req, res, next) => {
+  try {
+    const days = Math.min(365, Math.max(7, Number(req.query.days) || 90));
+    res.json(await computeChangePricing(days));
+  } catch (err) { next(err); }
+});
+const changePricingSchema = z.object({
+  usd_brl_rate: z.number().optional(), margin_percent: z.number().optional(), free_changes: z.number().int().optional(),
+  min_price_brl: z.number().optional(), basis: z.enum(BASES).optional(), features: z.array(z.string().max(80)).max(50).nullish(),
+});
+router.put("/change-pricing", validate(changePricingSchema), async (req, res, next) => {
+  try {
+    const d = req.body as z.infer<typeof changePricingSchema>;
+    const err = validateSettings(d as never);
+    if (err) { res.status(422).json({ error: err, code: "invalid_change_pricing" }); return; }
+    await loadChangePricingSettings();
+    await prisma.aiChangePricingSettings.update({
+      where: { id: "default" },
+      data: {
+        ...(d.usd_brl_rate !== undefined ? { usd_brl_rate: d.usd_brl_rate } : {}), ...(d.margin_percent !== undefined ? { margin_percent: d.margin_percent } : {}),
+        ...(d.free_changes !== undefined ? { free_changes: d.free_changes } : {}), ...(d.min_price_brl !== undefined ? { min_price_brl: d.min_price_brl } : {}),
+        ...(d.basis !== undefined ? { basis: d.basis } : {}), ...(d.features !== undefined ? { features: d.features && d.features.length ? d.features.join(",") : null } : {}),
+        updated_by_user_id: req.user?.id ?? null,
+      },
+    });
+    res.json(await computeChangePricing(90));
+  } catch (err) { next(err); }
 });
 
 export default router;

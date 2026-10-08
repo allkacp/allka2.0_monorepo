@@ -84,8 +84,6 @@
     "catalog2:import-prepared": "tsx src/scripts/catalog2-import-prepared-state.ts",
     "catalog2:seed-demo-commercial": "tsx src/scripts/catalog2-seed-demo-commercial-values.ts",
     "catalog2:fill-provisional-effort": "tsx src/scripts/fill-catalog2-provisional-effort.ts",
-    "catalog2:fill-provisional-pricing-simulation": "tsx src/scripts/fill-catalog2-provisional-pricing-simulation.ts",
-    "catalog2:seed-provisional-preview": "tsx src/scripts/seed-catalog2-provisional-preview.ts",
     "catalog2:cutover-plan": "tsx src/scripts/catalog2-cutover-plan.ts",
     "catalog2:commercial-cutover-plan": "tsx src/scripts/catalog2-commercial-cutover-plan.ts",
     "catalog2:client-demo": "tsx src/scripts/seed-catalog2-client-demo.ts",

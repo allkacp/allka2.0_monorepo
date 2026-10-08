@@ -19,6 +19,7 @@
 // dataSource="client" NUNCA usa a camada provisória (cliente real nunca vê
 // dado provisório — regra confirmada pelo usuário antes).
 import { useEffect, useMemo, useRef, useState } from "react";
+import { OnRequestBox } from "@/components/catalog2-on-request-box";
 import {
   CheckCircle2,
   Circle,
@@ -612,6 +613,8 @@ export function Catalog2ProductDetail({
   const code = isClient ? undefined : product.slug;
   const hasProvisionalFields = isGenuinelyIncomplete;
   const canBuyReal = isClient && canBuy && !!clientProduct.can_configure;
+  // D-2: produto sob consulta não contrata direto — o cliente solicita orçamento respondendo ao questionário.
+  const onRequestClient = isClient && !clientProduct.is_preview && clientPricing?.pricing_mode === "on_request";
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden">
@@ -656,12 +659,12 @@ export function Catalog2ProductDetail({
             <div className="flex flex-col items-stretch gap-1.5">
               <Button
                 type="button"
-                disabled={!canBuyReal && !adminCanCheckout || clientSelErrors.length > 0 || (isClient && !!contractBlockedReason)}
-                onClick={canBuyReal ? addToCart : (adminCanCheckout ? () => setShowAdminCheckout(true) : undefined)}
+                disabled={onRequestClient ? false : (!canBuyReal && !adminCanCheckout || clientSelErrors.length > 0 || (isClient && !!contractBlockedReason))}
+                onClick={onRequestClient ? () => document.getElementById("catalog2-request-box")?.scrollIntoView({ behavior: "smooth", block: "center" }) : canBuyReal ? addToCart : (adminCanCheckout ? () => setShowAdminCheckout(true) : undefined)}
                 className="h-9 rounded-lg border-0 bg-gradient-to-r from-violet-600 to-pink-600 px-5 text-sm font-bold text-white opacity-100 hover:from-violet-600 hover:to-pink-600 disabled:opacity-60"
                 title={adminCanCheckout ? "Contratar em nome de empresa/agência" : (blockedReason ?? contractBlockedReason ?? "")}
               >
-                <ShoppingCart className="mr-1.5 h-4 w-4" /> Contratar
+                <ShoppingCart className="mr-1.5 h-4 w-4" /> {onRequestClient ? "Solicitar orçamento" : "Contratar"}
               </Button>
               {/* Ir para a cesta — achado do usuário 2026-09-23: precisa dar
                   pra ver o que já está na cesta sem sair da tela do
@@ -693,7 +696,7 @@ export function Catalog2ProductDetail({
           <span>{clientProduct.preview_notice}{clientProduct.pendencies?.length > 0 && <> Pendências: {clientProduct.pendencies.join(", ")}.</>}</span>
         </div>
       )}
-      {isClient && !clientProduct.is_preview && contractBlockedReason && (
+      {isClient && !clientProduct.is_preview && contractBlockedReason && !onRequestClient && (
         <div className="shrink-0 mb-2 flex items-start gap-1.5 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/20 px-2 py-1.5 text-[11px] text-amber-800 dark:text-amber-300">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span>Contratação bloqueada: {contractBlockedReason}.</span>
@@ -1140,7 +1143,9 @@ export function Catalog2ProductDetail({
           </ScrollArea>
 
           <div className="shrink-0 p-3 border-t border-border/50 space-y-2">
-            {isClient && canBuy ? (
+            {onRequestClient ? (
+              <OnRequestBox productId={productId} selection={sel} period={period} />
+            ) : isClient && canBuy ? (
               <>
                 <Button type="button" className="w-full gap-2 rounded-xl border-0 bg-gradient-to-r from-[#4a2cff] via-[#7b2cdb] to-[#d92293] text-white" disabled={busy || !!clientPricing?.requires_commercial_request || !clientProduct.can_configure || clientSelErrors.length > 0 || !!contractBlockedReason} onClick={addToCart} title={contractBlockedReason ?? ""}>
                   <ShoppingCart className="h-4 w-4" /> Adicionar à cesta

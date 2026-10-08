@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { snapshotQuestion } from "./catalog2-question-types";
+import { accessesForStep, accessesForTask } from "./catalog2-step-accesses";
 import { normalizeStepOps, normalizeTaskOps } from "./catalog2-ops";
 import { materializeTaskDeliverables } from "./task-deliverables";
 import type { DbClient } from "./project-scope";
@@ -32,7 +33,7 @@ const projectProductInclude = {
   catalog2_product: { select: { delivery_recurrence: true } },
   catalog2_version: {
     include: {
-      access_requirements: { orderBy: { sort_order: "asc" as const } },
+      connection_requirements: { orderBy: { sort_order: "asc" as const }, include: { connection_type: { select: { key: true, name: true } } } },
       tasks: {
         orderBy: { sort_order: "asc" as const },
         include: {
@@ -205,6 +206,8 @@ async function materializeTasksForProjectProduct(
   let activeTaskKeys: Set<string> | null = null;
   // A divisão vem da cotação congelada, nunca do cadastro atual.
   let deliveryGroups = [1];
+  // D-2: contratação gerada de um pedido "sob consulta" — as respostas do cliente ao questionário viram o briefing das tarefas.
+  const requestAnswers = new Map<string, string>();
   if (pp.origin_catalog2_quote_id) {
     const quote = await tx.catalog2Quote.findUnique({
       where: { id: pp.origin_catalog2_quote_id },
@@ -214,6 +217,11 @@ async function materializeTasksForProjectProduct(
       const sel = JSON.parse(quote.selection_json) as PricingSelection;
       const pricing = await computePricing(version.id, sel);
       activeTaskKeys = new Set(pricing.active_task_keys);
+      const negotiated = await tx.catalog2Quote.findUnique({ where: { id: pp.origin_catalog2_quote_id }, select: { commercial_request_id: true } });
+      if (negotiated?.commercial_request_id) {
+        const req = await tx.catalog2CommercialRequest.findUnique({ where: { id: negotiated.commercial_request_id }, select: { answers_json: true } });
+        try { for (const a of req?.answers_json ? (JSON.parse(req.answers_json) as { question_id: string; answer: string }[]) : []) if (a.question_id && a.answer) requestAnswers.set(a.question_id, a.answer); } catch { /* sem respostas */ }
+      }
       const quantity = Math.max(1, Math.floor(Number(sel.quantity ?? 1)) || 1);
       const requestedGroups = Array.isArray(sel.delivery_groups) ? sel.delivery_groups : [quantity];
       const validGroups = requestedGroups.every((group) => Number.isInteger(group) && group > 0)
@@ -358,6 +366,17 @@ async function materializeTasksForProjectProduct(
     });
     generated++;
     createdTasks.push({ id: newTask.id, ctId: ct.id, cycleType: ct.cycle_type });
+    if (requestAnswers.size > 0 && ct.questionnaire) {
+      for (const q of ct.questionnaire.questions) {
+        const ans = requestAnswers.get(q.id);
+        if (!ans) continue;
+        await tx.taskBriefingAnswer.upsert({
+          where: { project_task_id_question_key: { project_task_id: newTask.id, question_key: q.key } },
+          update: {},
+          create: { project_task_id: newTask.id, question_key: q.key, question_text: q.label, answer: ans },
+        });
+      }
+    }
 
     // Etapas "somente na 1ª execução" nunca se repetem nos ciclos seguintes (nem no contrato
     // seguinte do mesmo cliente, quando já rodaram).
@@ -386,8 +405,11 @@ async function materializeTasksForProjectProduct(
             obrigatoria: true,
             // Quem recebe a etapa (fase 1 da execução por etapa): nômade (padrão), líder ou equipe interna; líder específico já nasce atribuído.
             visivel_ao_cliente: stageMode ? !step.internal_step : true,
-            exige_qualificacao: stageMode && step.requires_qualification !== false,
-            libera_proxima_auto: step.release_next_auto !== false,
+            // P-14 (07/10): etapa feita por IA/híbrida SEMPRE tem qualificador — sem outro qualificador definido, o líder aprova.
+            exige_qualificacao: stageMode && (step.requires_qualification !== false || ((step.execution_mode ?? step.step_model?.execution_mode ?? "humano") !== "humano" && !(step.requires_specialist_qualification && step.specialist_user_id))),
+            exige_qualificacao_especialista: stageMode && !!step.requires_specialist_qualification && !!step.specialist_user_id,
+            especialista_id: stageMode && step.requires_specialist_qualification ? step.specialist_user_id ?? null : null,
+            libera_proxima_auto: true, // sempre automático (D-4, 07/10)
             aprovacao_horas: stageMode ? step.approval_hours ?? null : null,
             preferencia_nomade: graphMode && stageMode && step.executor_same_as_key ? (step.executor_policy === "prefer_same_as_step" ? "prefer_same" : step.executor_policy === "other_than_step" ? "never_same" : null) : null,
             preferencia_ref: graphMode && stageMode && step.executor_same_as_key && ["prefer_same_as_step", "other_than_step"].includes(step.executor_policy) ? stepIdByKey.get(step.executor_same_as_key) ?? null : null,
@@ -410,12 +432,9 @@ async function materializeTasksForProjectProduct(
               first_execution_only: !!(step.first_execution_only || step.step_model?.first_execution_only),
               skip_when_same_executor: !!(step.skip_when_same_executor || step.step_model?.skip_when_same_executor),
               // Etapa padrão de acessos: leva a lista de acessos que o produto exige (sem senha).
-              ...(step.step_model?.is_access_validation
-                ? {
-                    is_access_validation: true,
-                    access_requirements: (version.access_requirements ?? []).map((a) => ({ access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes })),
-                  }
-                : {}),
+              // P-12: acessos desta etapa (cadastro único = exigências de conexão); o nômade só vê os da etapa dele.
+              ...(step.step_model?.is_access_validation ? { is_access_validation: true } : {}),
+              ...(() => { const list = accessesForStep(version.connection_requirements ?? [], step.ops, !!step.step_model?.is_access_validation); return step.step_model?.is_access_validation || list.length > 0 ? { access_requirements: list.map((a) => ({ access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes })) } : {}; })(),
             }),
           }))
         : [
@@ -471,7 +490,7 @@ async function materializeTasksForProjectProduct(
     await applyAssetGate(tx, {
       projectId, projectProductId: pp.id, taskId: newTask.id, catalog2ProductId: pp.catalog2_product_id, catalog2TaskId: ct.id,
       assetRule: ct.asset_rule, revalidateDays: ct.asset_revalidate_days,
-      requirements: (version.access_requirements ?? []).map((a) => ({ access_type: a.access_type, label: a.label, is_required: a.is_required })),
+      requirements: accessesForTask(version.connection_requirements ?? [], ct.steps.map((st) => ({ ops: st.ops, isAccessValidation: !!st.step_model?.is_access_validation }))).map((a) => ({ access_type: a.access_type, label: a.label, is_required: a.is_required })),
     });
 
     // Continuidade com o mesmo executor (mesmo cliente): obrigatório já nasce "mantido";

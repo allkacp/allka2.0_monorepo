@@ -30,4 +30,11 @@ describe("catálogo de tipos de acesso (admin)", () => {
     expect(body.allowed_methods).toEqual(["api_key"]);
     expect(body.fields[0]).toMatchObject({ key: "id_da_conta_loja", type: "text", required: true });
   });
+
+  it("contagem de acessos do produto = exigências de conexão do cadastro único (P-9/P-12: o selo reflete o que foi adicionado)", async () => {
+    const { accessCount } = await import("./catalog2-access-catalog-ui");
+    expect(accessCount({})).toBe(0);
+    expect(accessCount({ connection_requirements: [{}] })).toBe(1);
+    expect(accessCount({ connection_requirements: [{}, {}] })).toBe(2);
+  });
 });

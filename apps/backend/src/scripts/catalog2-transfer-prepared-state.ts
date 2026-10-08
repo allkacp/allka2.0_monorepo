@@ -105,7 +105,6 @@ interface ProductManifestLine {
   options: { created: number; updated: number; unchanged: number };
   addons: { created: number; updated: number; unchanged: number };
   periods: { created: number; updated: number; unchanged: number };
-  provisional_preview: Outcome | "absent";
   import_origin: Outcome;
   global_config_divergences: string[];
   warnings: string[];
@@ -148,10 +147,9 @@ async function main() {
     where: { import_origin: { isNot: null } },
     include: {
       import_origin: true,
-      provisional_preview: true,
       four_f: { include: { four_f: true } },
       periods: true,
-      versions: { orderBy: { version_number: "desc" }, take: 1, include: { variations: { include: { options: { include: { effects: true } } } }, addons: { include: { effects: true } }, tasks: { include: { task_model: { include: { specialty: true } }, steps: { include: { step_model: { include: { specialty: true } }, specialty: true } }, specialty: true, questionnaire: { include: { questions: true } } } }, access_requirements: { orderBy: { sort_order: "asc" } } } },
+      versions: { orderBy: { version_number: "desc" }, take: 1, include: { variations: { include: { options: { include: { effects: true } } } }, addons: { include: { effects: true } }, tasks: { include: { task_model: { include: { specialty: true } }, steps: { include: { step_model: { include: { specialty: true } }, specialty: true } }, specialty: true, questionnaire: { include: { questions: true } } } } } },
     },
     orderBy: { slug: "asc" },
   });
@@ -176,7 +174,6 @@ async function main() {
         options: { created: 0, updated: 0, unchanged: 0 },
         addons: { created: 0, updated: 0, unchanged: 0 },
         periods: { created: 0, updated: 0, unchanged: 0 },
-        provisional_preview: p.provisional_preview ? "unchanged" : "absent",
         import_origin: "unchanged",
         global_config_divergences: [],
         warnings: [],
@@ -286,7 +283,6 @@ async function main() {
       options: { created: 0, updated: 0, unchanged: 0 },
       addons: { created: 0, updated: 0, unchanged: 0 },
       periods: { created: 0, updated: 0, unchanged: 0 },
-      provisional_preview: p.provisional_preview ? "unchanged" : "absent",
       import_origin: "unchanged",
       global_config_divergences: [],
       warnings: [],
@@ -394,12 +390,6 @@ async function main() {
         versionId = existingVersion.id;
         const changed = existingVersion.title !== v.title || existingVersion.full_description !== v.full_description || existingVersion.summary !== v.summary;
         if (changed) { await tx.catalog2ProductVersion.update({ where: { id: versionId }, data: versionData }); line.version = "updated"; }
-      }
-
-      // acessos externos exigidos pela versão (nunca guarda senha)
-      for (const a of ((v as any).access_requirements ?? []) as any[]) {
-        const exAccess = await tx.catalog2VersionAccess.findFirst({ where: { version_id: versionId, access_type: a.access_type, label: a.label } });
-        if (!exAccess) await tx.catalog2VersionAccess.create({ data: { version_id: versionId, access_type: a.access_type, label: a.label, is_required: a.is_required, notes: a.notes, sort_order: a.sort_order } });
       }
 
       // tarefas + etapas + questionário (por key dentro da versão)
@@ -551,28 +541,6 @@ async function main() {
           if (changed) { await tx.catalog2ProductPeriod.update({ where: { id: existingPer.id }, data: perData }); line.periods.updated++; }
           else line.periods.unchanged++;
         }
-      }
-
-      // preview provisório — preserva a marcação de "provisório" explicitamente
-      if (p.provisional_preview) {
-        const pv = p.provisional_preview;
-        const existingPv = await tx.catalog2ProvisionalPreview.findUnique({ where: { product_id: productId } });
-        const pvData = {
-          is_provisional: true,
-          needs_review: pv.needs_review,
-          image_path: pv.image_path,
-          image_source_note: pv.image_source_note,
-          price_amount: pv.price_amount,
-          deadline_days: pv.deadline_days,
-          modality: pv.modality,
-          contract_note: pv.contract_note,
-          highlights_json: pv.highlights_json,
-          included_items_json: pv.included_items_json,
-          options_json: pv.options_json,
-          portfolio_refs_json: pv.portfolio_refs_json,
-        };
-        if (!existingPv) { await tx.catalog2ProvisionalPreview.create({ data: { product_id: productId, ...pvData } }); line.provisional_preview = "created"; }
-        else { await tx.catalog2ProvisionalPreview.update({ where: { product_id: productId }, data: pvData }); line.provisional_preview = "unchanged"; }
       }
 
       // procedência da importação (metadado — nunca decide sozinho, só preserva o rastro)
