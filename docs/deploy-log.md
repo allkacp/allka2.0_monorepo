@@ -2,6 +2,9 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
+## Espelho do banco local no QA 2026-10-08 (run 37864971331)
+A pedido do usuário (o link allka.store é QA; no link final os dados serão zerados), o banco do servidor foi substituído por cópia do banco LOCAL (usuários, empresas, projetos, produtos, saldos), sem a tabela de controle das migrations. Conferido no servidor após o espelho: 25 usuários, 5 empresas, 40 projetos, 36 produtos, 14 movimentos de carteira (igual ao local). **Backup antes:** allka-before-mirror-20261009T002854Z.sql.gz. API e site responderam 200. Release temporário e secret MIRROR_BUNDLE_KEY removidos; dump local apagado. **Não incluído:** arquivos em disco (anexos/entregas). Workflow: mirror-local-to-qa.yml (só para QA; nunca usar no link final).
+
 ## Envio de produtos 2026-10-08 (local → allka.store, ambiente de QA)
 Usuário autorizou espelhar os produtos do LOCAL no servidor (QA). Pacote cifrado com 36 produtos / 0 imagens. Simulação: destino=36, esperado=36, extras=0, numeração divergente=0, nenhum conflito. **Aplicado** (run 37845570905) com substituição dos campos divergentes. **Backup antes:** allka-before-catalog2-apply-20261008T211628Z.sql.gz. Release temporário e secret CATALOG2_TRANSFER_BUNDLE_KEY removidos; pacote local apagado. Não foram enviados usuários/empresas/projetos/saldos (o procedimento nunca os leva).
 
