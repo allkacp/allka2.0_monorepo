@@ -167,7 +167,33 @@ class ApiClient {
   }
 
   // ─── Core Request ──────────────────────────────────────────────────────────
+  // Chamadas GET IDÊNTICAS e SIMULTÂNEAS (mesmo caminho, mesmos parâmetros, mesmo usuário) viram uma só ida ao servidor; cada quem recebe uma
+  // cópia própria da resposta. Não guarda nada depois que a resposta chega, então nunca devolve dado velho. Com AbortSignal não compartilha.
+  private inflightGets = new Map<string, { job: Promise<unknown>; shared: boolean }>();
   private async request<T = any>(
+    method: string,
+    path: string,
+    body?: unknown,
+    params?: Record<string, any>,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (method !== "GET" || signal || body !== undefined) return this.requestRaw<T>(method, path, body, params, signal);
+    const key = `${path}?${params ? JSON.stringify(params) : ""}|${this.getToken() ?? ""}`;
+    const running = this.inflightGets.get(key);
+    const copy = (v: unknown) => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
+    if (running) {
+      running.shared = true; // marcado ANTES da resposta chegar: assim todos (inclusive o primeiro) recebem cópia e ninguém mexe no original dos outros
+      return copy(await running.job) as T;
+    }
+    const entry: { job: Promise<unknown>; shared: boolean } = { job: this.requestRaw<T>(method, path, body, params, signal), shared: false };
+    this.inflightGets.set(key, entry);
+    try {
+      const out = await entry.job;
+      return (entry.shared ? copy(out) : out) as T;
+    } finally { if (this.inflightGets.get(key) === entry) this.inflightGets.delete(key); }
+  }
+
+  private async requestRaw<T = any>(
     method: string,
     path: string,
     body?: unknown,

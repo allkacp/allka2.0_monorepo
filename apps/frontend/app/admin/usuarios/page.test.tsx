@@ -85,7 +85,7 @@ function renderPage() {
 }
 
 async function openRowMenu(user: ReturnType<typeof userEvent.setup>, name: string) {
-  await user.click(await screen.findByRole("button", { name: `Mais ações — ${name}` }));
+  await user.click((await screen.findAllByRole("button", { name: `Mais ações — ${name}` }))[0]);
 }
 
 // Esta página é pesada (tabela grande + vários providers) — `user.type()`
@@ -493,7 +493,7 @@ describe("admin/usuarios — clique duplo, loading isolado por linha, e isolamen
     // Depois que o diálogo fecha (a ação em Fulano terminou), Beltrano
     // nunca teve seu botão de ações desabilitado por um flag global — ele
     // continua exatamente como estava, disponível pra sua própria ação.
-    const beltranoMenuBtn = await screen.findByRole("button", { name: "Mais ações — Beltrano Souza" });
+    const beltranoMenuBtn = (await screen.findAllByRole("button", { name: "Mais ações — Beltrano Souza" }))[0];
     expect(beltranoMenuBtn).toBeEnabled();
     expect(apiMock.updateUser).not.toHaveBeenCalledWith("user-2", expect.anything());
   });

@@ -193,7 +193,10 @@ describe("Validador do catálogo (sprint de onboarding, bloco 3/3)", () => {
   it("toda rota declarada por um tour existe de verdade em App.tsx — nenhuma rota órfã", () => {
     const appTsxPath = resolve(process.cwd(), "App.tsx");
     const appSource = readFileSync(appTsxPath, "utf8");
-    const realRoutes = new Set([...appSource.matchAll(/path="([^"]+)"/g)].map((m) => m[1]));
+    // Rota com parâmetro opcional ("/x/:id?") também vale para "/x".
+    const declared = [...appSource.matchAll(/path="([^"]+)"/g)].map((m) => m[1]);
+    const optionalParam = /\/:[A-Za-z]+\?$/;
+    const realRoutes = new Set([...declared, ...declared.filter((r) => optionalParam.test(r)).map((r) => r.replace(optionalParam, ""))]);
     for (const tour of TOURS) {
       for (const route of tour.routes) {
         expect(realRoutes.has(route), `rota "${route}" do tour "${tour.key}" não existe em App.tsx`).toBe(true);

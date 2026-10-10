@@ -29,6 +29,12 @@ function renderPage() {
 const { api } = vi.hoisted(() => ({
   api: {
     getCurrentUser: vi.fn(),
+    // métodos que o editor passou a chamar (calendário, tipos de conexão, prazos e portões de aprovação)
+    getConnectionVocabulary: vi.fn().mockResolvedValue({ data: [] }),
+    getWorkCalendar: vi.fn().mockResolvedValue({ work_days: "1,2,3,4,5", start_time: "09:00", end_time: "17:00" }),
+    getConnectionTypes: vi.fn().mockResolvedValue({ data: [] }),
+    getCatalog2SlaOptions: vi.fn().mockResolvedValue({ data: [] }),
+    getCatalog2GateOptions: vi.fn().mockResolvedValue({ data: [] }),
     getCatalog2ProductPricingMemory: vi.fn(),
     getCatalog2Overview: vi.fn(),
     getCatalog2Pillars: vi.fn(),
