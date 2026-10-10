@@ -125,6 +125,13 @@ async function guardAdminMaster(req: Request, res: Response, next: NextFunction)
 const requestActor = new AsyncLocalStorage<string | null>();
 
 router.use(verifyToken, guardAdminMaster);
+router.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD" && req.method !== "OPTIONS") {
+    invalidateReadinessCache();
+    res.on("finish", invalidateReadinessCache);
+  }
+  next();
+});
 // Guarda o ator da requisição para os helpers de edição (carimbo humano).
 router.use((req, _res, next) => requestActor.run(req.user?.id ?? null, () => next()));
 
@@ -3842,14 +3849,33 @@ type ReadinessProduct = Prisma.Catalog2ProductGetPayload<{ include: typeof READI
 // Regra ÚNICA de prontidão por produto (nenhuma duplicação no frontend nem
 // entre rotas). Só leitura — nada aqui grava ou publica.
 // Ids dos produtos que têm ao menos um bloqueio/pendência no checklist (mesma regra do editor).
+// Prontidão de TODOS os produtos. A tela de produtos chama /overview e /readiness ao mesmo tempo (e a lista com filtro 'com pendências' também):
+// antes cada chamada refazia a conta inteira, um produto por vez (~2 s). Agora a conta roda em paralelo (limite 6) e chamadas SIMULTÂNEAS
+// compartilham uma única execução. NÃO guarda resultado: toda chamada que começa depois devolve o estado atual do banco.
+type ReadinessRow = Awaited<ReturnType<typeof computeProductReadiness>>;
+let readinessGen = 0;
+let readinessInflight: { gen: number; job: Promise<ReadinessRow[]> } | null = null;
+function invalidateReadinessCache() { readinessGen++; readinessInflight = null; }
+
+async function loadAllReadiness(): Promise<ReadinessRow[]> {
+  if (readinessInflight && readinessInflight.gen === readinessGen) return readinessInflight.job;
+  const gen = readinessGen;
+  const job = (async () => {
+    const products = await prisma.catalog2Product.findMany({ orderBy: { internal_name: "asc" }, include: READINESS_INCLUDE });
+    const rows = new Array<ReadinessRow>(products.length);
+    let next = 0;
+    const worker = async () => { for (;;) { const i = next++; if (i >= products.length) return; rows[i] = await computeProductReadiness(products[i]); } };
+    await Promise.all(Array.from({ length: Math.min(6, products.length) }, worker));
+    return rows;
+  })();
+  const entry = { gen, job };
+  readinessInflight = entry;
+  try { return await job; } finally { if (readinessInflight === entry) readinessInflight = null; }
+}
+
 async function productIdsWithOpenReadiness(): Promise<string[]> {
-  const all = await prisma.catalog2Product.findMany({ include: READINESS_INCLUDE });
-  const out: string[] = [];
-  for (const prod of all) {
-    const r = await computeProductReadiness(prod);
-    if (r.blockers.length + r.pendings.length > 0) out.push(prod.id);
-  }
-  return out;
+  const rows = await loadAllReadiness();
+  return rows.filter((r) => r.blockers.length + r.pendings.length > 0).map((r) => r.id);
 }
 
 async function computeProductReadiness(p: ReadinessProduct, forVersionId?: string) {
@@ -4084,9 +4110,7 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
 
 router.get("/readiness", async (_req, res, next) => {
   try {
-    const products = await prisma.catalog2Product.findMany({ orderBy: { internal_name: "asc" }, include: READINESS_INCLUDE });
-    const rows = [];
-    for (const p of products) rows.push(await computeProductReadiness(p));
+    const rows = await loadAllReadiness();
     const final = rows.filter((r) => !r.is_test_local && r.imported);
     res.json({
       // "Esperado" continua vindo do lote real, nunca de "36" fixo.

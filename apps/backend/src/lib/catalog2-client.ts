@@ -473,6 +473,23 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
 
   // Filtra por cálculo comercial pronto — não se aplica ao preview, que
   // mostra TODOS os reais (fora a fixture), prontos ou não.
+  // Preço/prazo de cada produto da lista: calculados em PARALELO (limite 6) em vez de um por vez; a ordem da lista não muda.
+  const pricingByVersion = new Map<string, Awaited<ReturnType<typeof computePricing>>>();
+  {
+    const versionIds = rows
+      .map((p) => (previewMode ? p.published_version ?? (p as any).versions?.[0] ?? null : p.published_version)?.id as string | undefined)
+      .filter((id): id is string => !!id);
+    let next = 0;
+    const worker = async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= versionIds.length) return;
+        const id = versionIds[i];
+        pricingByVersion.set(id, await computePricing(id, await defaultSelection(id), { previewOnly: previewMode }));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(6, versionIds.length) }, worker));
+  }
   const enriched: Array<Record<string, unknown>> = [];
   for (const p of rows) {
     const versionForPreview = previewMode ? p.published_version ?? (p as any).versions?.[0] ?? null : p.published_version;
@@ -497,7 +514,7 @@ export async function listClientProducts(ctx: ClientContext, f: ClientListFilter
     // provisório. `simulateProvisional` nunca autoriza cotação/contratação
     // (bloqueio incondicional em computePricing/checkClientVisibility) —
     // só afeta o que aparece NESTA leitura de preview.
-    const pricing = await computePricing(versionForPreview.id, await defaultSelection(versionForPreview.id), { previewOnly: previewMode });
+    const pricing = pricingByVersion.get(versionForPreview.id)!;
     const status = p.status as Catalog2Status;
     // Prontidão comercial só é exigida pra APARECER no status "Ativo" (regra
     // de sempre). Pré-lançamento/pausado/esgotado aparecem mesmo com
