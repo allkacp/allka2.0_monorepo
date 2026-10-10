@@ -1,7 +1,7 @@
 "use client";
 
 import { Star } from "lucide-react";
-import { computeProductRating } from "@/dev-mocks/data/product-nomads";
+import { computeProductRating } from "@/lib/product-rating";
 import { cn } from "@/lib/utils";
 
 // ─── Props ────────────────────────────────────────────────────────────────────

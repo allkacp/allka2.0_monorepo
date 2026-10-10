@@ -3895,8 +3895,8 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
     >
       <HeaderIconBtn label="Voltar" onClick={onBack} className="shrink-0 !p-1.5"><ArrowLeft className="h-5 w-5" /></HeaderIconBtn>
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        <h2 title={headerTitle !== product.internal_name ? `Nome interno: ${product.internal_name}` : undefined} className="min-w-0 flex-[2] whitespace-normal break-words text-sm font-bold leading-tight text-white">{headerTitle}</h2>
-        <div className="hidden shrink-0 items-center gap-1.5 whitespace-nowrap 2xl:flex">
+        <h2 title={headerTitle !== product.internal_name ? `Nome interno: ${product.internal_name}` : undefined} className="min-w-[14rem] max-w-full flex-[2] whitespace-normal break-words text-sm font-bold leading-tight text-white [display:-webkit-box] [-webkit-line-clamp:3] [-webkit-box-orient:vertical] overflow-hidden">{headerTitle}</h2>
+        <div className="hidden min-w-0 flex-wrap items-center gap-1.5 2xl:flex">
           {isDraftView && <span className="inline-flex items-center gap-1 rounded-full bg-amber-300 px-2.5 py-0.5 text-xs font-bold text-amber-950 shadow-sm">Rascunho v{selVersion.version_number} · não publicado</span>}
           {isOldView && <span className="inline-flex items-center gap-1 rounded-full bg-slate-300 px-2.5 py-0.5 text-xs font-bold text-slate-800 shadow-sm">Versão antiga v{selVersion.version_number}</span>}
           <DropdownMenu>

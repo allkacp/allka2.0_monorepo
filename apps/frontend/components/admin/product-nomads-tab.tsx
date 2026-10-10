@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,7 +31,7 @@ import {
   TrendingUp,
   ShieldCheck,
 } from "lucide-react";
-import { mockProductNomades } from "@/dev-mocks/data/product-nomads";
+import type { MockNomadeProductQualification } from "@/dev-mocks/data/product-nomads";
 import { cn } from "@/lib/utils";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -168,10 +168,13 @@ export function ProductNomadsTab({ productId }: ProductNomadsTabProps) {
   const [filterLevel, setFilterLevel] = useState<string>("all");
   const [expandedNomade, setExpandedNomade] = useState<string | null>(null);
 
-  const nomades = useMemo(
-    () => mockProductNomades[productId] ?? [],
-    [productId],
-  );
+  // Dados de demonstração carregados SOB DEMANDA (só quando esta aba abre), para não pesar o pacote principal de todo usuário.
+  const [nomades, setNomades] = useState<MockNomadeProductQualification[]>([]);
+  useEffect(() => {
+    let alive = true;
+    import("@/dev-mocks/data/product-nomads").then((m) => { if (alive) setNomades(m.mockProductNomades[productId] ?? []); });
+    return () => { alive = false; };
+  }, [productId]);
 
   const filtered = useMemo(() => {
     return nomades.filter((n) => {

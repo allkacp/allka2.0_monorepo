@@ -103,3 +103,7 @@ backups/
 /entregas/tarefa-22506/layout-site/
 .test-login.local
 .test-login-*.local
+
+# arquivos de trabalho locais (relatórios, dumps, logs de teste) — nunca versionar
+scratch/
+*.orig

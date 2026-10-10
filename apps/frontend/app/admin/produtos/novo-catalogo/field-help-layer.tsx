@@ -46,11 +46,33 @@ export function FieldHelpLayer({ children, help = helpFor, strict = false }: { c
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
-    let raf = 0;
-    const run = () => { raf = 0; obs.disconnect(); try { ensureIcons(root, help, strict); } finally { obs.observe(root, { childList: true, subtree: true, characterData: true }); } };
-    const obs = new MutationObserver(() => { if (!raf) raf = window.setTimeout(run, 120) as unknown as number; });
-    run();
-    return () => { obs.disconnect(); if (raf) window.clearTimeout(raf); };
+    // Incremental: só reexamina os pedaços da tela que MUDARAM (antes varria a tela inteira a cada mudança, o que pesava em telas grandes).
+    const pending = new Set<Node>();
+    let timer = 0;
+    const flush = () => {
+      timer = 0;
+      obs.disconnect();
+      try {
+        for (const n of pending) {
+          if (!root.contains(n)) continue;
+          const el = n.nodeType === 1 ? (n as HTMLElement) : n.parentElement;
+          if (el && !el.closest(".field-info")) ensureIcons(el, help, strict);
+        }
+      } finally {
+        pending.clear();
+        obs.observe(root, { childList: true, subtree: true, characterData: true });
+      }
+    };
+    const obs = new MutationObserver((records) => {
+      for (const r of records) {
+        if (r.type === "characterData") pending.add(r.target);
+        else r.addedNodes.forEach((n) => { if (n.nodeType === 1 || n.nodeType === 3) pending.add(n); });
+      }
+      if (pending.size && !timer) timer = window.setTimeout(flush, 120);
+    });
+    pending.add(root);
+    flush(); // primeira passada: a tela toda, uma vez
+    return () => { obs.disconnect(); if (timer) window.clearTimeout(timer); };
   }, [help, strict]);
 
   const show = (e: React.MouseEvent | React.FocusEvent) => {

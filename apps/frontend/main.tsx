@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { Toaster } from "@/components/ui/toaster";
-import { mockApiClient } from "./dev-mocks/mock-api-client";
 import "./app/globals.css";
 
 // ─── Dev preview: garante token válido sem login manual ───────────────────────
@@ -26,7 +25,7 @@ if (import.meta.env.DEV) {
 
   if (!hasToken && !wasLoggedOut) {
     const login = useMocks
-      ? mockApiClient.login(previewEmail, "123456")
+      ? import("./dev-mocks/mock-api-client").then((m) => m.mockApiClient.login(previewEmail, "123456"))
       : fetch("/api/auth/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

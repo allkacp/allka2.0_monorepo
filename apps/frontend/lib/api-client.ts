@@ -2,8 +2,6 @@
 // Authenticated HTTP client for the Allka platform backend.
 // Token is stored in localStorage under "allka_token".
 
-import { mockApiClient } from "../dev-mocks/mock-api-client";
-
 const API_BASE_URL =
   (typeof import.meta !== "undefined" &&
     (import.meta as any).env?.VITE_API_URL) ||
@@ -3530,6 +3528,10 @@ class ApiClient {
 
 // Em modo mock (Vite --mode mock OU VITE_USE_MOCKS=true), troca pelo mock client.
 // Agency usa banco real (mesma fonte que admin/lider). Mocks só quando VITE_USE_MOCKS=true.
-const env = (import.meta as any).env ?? {};
-const useMocks = env.MODE === "mock" || env.VITE_USE_MOCKS === "true";
-export const apiClient: any = useMocks ? mockApiClient : new ApiClient();
+// IMPORTANTE: o mock (centenas de KB de dados falsos) é carregado SOB DEMANDA e só nesse modo; em produção
+// o modo do Vite vira constante no build e o ramo inteiro some do pacote (ninguém baixa o mock).
+const useMocks = import.meta.env.MODE === "mock" || import.meta.env.VITE_USE_MOCKS === "true";
+const lazyMockClient: any = new Proxy({}, {
+  get: (_t, prop) => (...args: any[]) => import("../dev-mocks/mock-api-client").then((m: any) => m.mockApiClient[prop](...args)),
+});
+export const apiClient: any = useMocks ? lazyMockClient : new ApiClient();

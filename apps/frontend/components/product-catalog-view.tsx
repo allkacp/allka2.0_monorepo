@@ -58,7 +58,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { computeProductRating } from "@/dev-mocks/data/product-nomads";
+import { computeProductRating } from "@/lib/product-rating";
 import { PageLoader } from "@/components/ui/loading";
 import { CatalogCartStickyBar } from "@/components/catalog-cart-sticky-bar";
 
