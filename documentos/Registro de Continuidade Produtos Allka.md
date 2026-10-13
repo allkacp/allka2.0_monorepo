@@ -1,17 +1,20 @@
 # Registro de Continuidade Produtos Allka
-Atualizado em: 2026-10-06
+Atualizado em: 2026-10-13
 
 ## Como retomar
-- Abra o ChatGPT (Codex) na pasta do projeto e diga: "Leia o documento compartilhado entre Claude e você (documentos/Registro de Continuidade Produtos Allka.docx) e continue."
-- O Claude atualiza este documento a cada bloco concluído. O texto-fonte fica em documentos/registro-continuidade.json; o .docx e o .md são gerados com: node scripts/create_continuity_document.cjs
-- Regras fixas: trabalhar só no ambiente local; não publicar produto; não fazer deploy, push ou envio para QA online; fazer backup antes de alterações de dados; nunca preencher produtos com dados fictícios (os produtos ficam só com o título até o Vinicius cadastrar).
-- Ao terminar qualquer tarefa técnica, fechar com um resumo em linguagem simples do que deu e do que não deu certo, e devolver a tabela de situação abaixo.
+- Abra a IA (Claude ou ChatGPT/Codex) na pasta do projeto `allka-plataforma/allka-2026` e diga: "Leia o documento documentos/Registro de Continuidade Produtos Allka.md e continue de onde paramos."
+- ANTES DE TUDO: confira se o Docker Desktop está aberto. Se não estiver, abra (Windows: "C:Program FilesDockerDockerDocker Desktop.exe") e espere ficar pronto. Depois, na pasta allka-2026: `docker compose up -d` e confira `docker compose ps` (mysql, backend, frontend e browser-runner precisam estar Up). Backend responde em http://localhost:3001, frontend em http://localhost:3000.
+- O texto-fonte deste documento é documentos/registro-continuidade.json; o .docx e o .md são gerados com: node scripts/create_continuity_document.cjs. Atualize a cada bloco concluído.
+- Regras fixas: o computador local é a referência. Nada vai para o ar (allka.store, ambiente de QA) sem ordem explícita do usuário. Deploy de código = `git push allka2 HEAD:main` (só com ordem). Sempre backup antes de mexer em dados; migrações só aditivas, sem apagar dado. Nunca inventar dados de produto.
+- O usuário é leigo em código: fechar cada tarefa com resumo em linguagem simples (o que deu e o que não deu certo) e a tabela de situação (farol).
+- O documento final detalhado (todos os itens e o que cada um faz) só deve ser feito no FIM do escopo de outubro, na hora de subir. Não fazer antes.
 
 ## Estado atual
-- Os produtos do catálogo ficam somente com seus títulos para cadastro real item a item (o Produto ID 1 está recebendo a tarefa de teste cadastrada pelo Vinicius).
-- Os 36 produtos oficiais foram marcados como PRODUTO INDIVIDUAL (uma tarefa principal; o resto são etapas). Combos/compostos podem ter várias tarefas (a fixture de QA nº 40 continua como composta).
-- Nada foi publicado. Ambiente local apenas. Último deploy: 2026-10-04 (estrutura universal v2 + sincronização do catálogo).
-- Backup completo mais recente: backups/universal2-20261002-1251/ (restauração validada).
+- 13/10: chat novo (estilo WhatsApp: mídia, apagar mensagem, janela destacada, configurações do Admin) e tema da plataforma salvo no servidor estão prontos no local. Migrações 20261011120000_platform_theme e 20261012150000_chat_whatsapp aplicadas no banco local; backend sobe sem erro; Chat > Nova conversa retorna usuários para Admin, Agência, Empresa e Nômade (testado pela API).
+- Código salvo no GitHub na branch `revisao-plataforma-2026-10-11` (repositório allkacp/allka2.0_monorepo, commit 6f94554). Sem merge na main e sem deploy. Para publicar: abrir PR para main ou `git push allka2 HEAD:main`, só com ordem do usuário.
+- allka.store (QA) está com a versão de 08/10 (espelho completo do local naquela data). Tudo de 10/10 a 13/10 (revisão de desempenho, chat, tema, modais/fontes/mobile) ainda NÃO foi ao ar.
+- Pagamentos: painel Configurações > Pagamentos pronto (PagBank principal, chaves cifradas, ativação com senha Master, Testar conexão, recarga Pix/cartão na página segura do PagBank, estorno, consulta de status). Usuário confirmou que o painel está certo. Falta só o token sandbox do PagBank para testar de verdade. Não feitos: cobrança mensal com cartão guardado; Asaas/Mercado Pago/Stripe só reservados.
+- Próximo: o usuário vai testar coisas novas e pedir ajustes. P-4, P-13 e P-16 foram RETIRADOS da lista (13/10): serão retestados na próxima reunião; só voltam se o erro aparecer de novo.
 
 ## Decisões confirmadas
 - **Edição de tarefa:** A ação Editar tarefa só aparece depois de liberar o editor geral pelo botão Editar.
@@ -25,9 +28,16 @@ Atualizado em: 2026-10-06
 - **Checklist:** O checklist é da ETAPA, com três tipos: execução, aprovação e qualificação (o de qualificação/aprovação é o que o Vinicius quer usar). A lista de etapas da tarefa também funciona como o checklist da tarefa.
 - **Execução por etapa — respostas do Vinicius (05/10):** 1) O CLIENTE APROVA CADA ETAPA, depois da qualificação, exceto etapas INTERNAS (ex.: validação de briefing/acessos): essas o cliente não vê nem aprova; só vê que está em execução. Se a validação interna achar problema, dá para ENVIAR AO CLIENTE ("está errado isso aqui") e aí ele vê. 2) PAGAMENTO CONFIGURÁVEL no cadastro do produto/tarefa: (a) o nômade recebe ao concluir/aprovar cada etapa, ou (b) o crédito de cada etapa fica BLOQUEADO e é liberado na carteira só quando a última etapa terminar. Deve funcionar para qualquer produto (uns marcam, outros não). 3) Prazo de aceite do nômade preferido: 2 horas, CONFIGURÁVEL. Também: especialidades IA/híbridas distintas; "humano ou IA" = a agência escolhe na contratação.
 
-## Situação dos itens da reunião de 05/10/2026
+## Situação dos itens (reuniões de 05/10 e 07/10 e trabalho até 13/10)
 | # | Item | Situação | Detalhe |
 |---|---|---|---|
+| R07-D | Reunião 07/10: decisões D-1 a D-9 (níveis de agência, sob consulta → contratação pela equipe, executor humano/IA/híbrido, liberação automática da próxima etapa, qualificação líder/especialista, evidências obrigatórias, IA gera questionário, editar etapa global/própria, preferir mesmo executor) | FEITO | Todas feitas no local e no QA de 08/10. Detalhes em docs/plano-reuniao-2026-10-07.md. |
+| R07-P | Reunião 07/10: P-5 a P-15 (ajuda (i), padrão de campos, acordeões, IA preenche produto, acessos, IA nos campos, cobrança de alteração por IA pela carteira, reestruturação de acessos/remoção do provisório, quem aprova a etapa, configurações dentro de Editar) | FEITO | Feitos e testados. P-11 inclui recarga de crédito por cartão/Pix. |
+| P-4 / P-13 / P-16 | Bug "editar exige salvar antes", erro no campo de aprovação, Etapa 2 | ADIADO | Retirados em 13/10: serão retestados na próxima reunião; só voltam se o erro reaparecer. |
+| CHAT | Chat estilo WhatsApp + configurações do Admin | FEITO | 13/10: migração aplicada no local, lista de contatos testada por perfil. Falta conferência visual do usuário. |
+| TEMA | Tema da plataforma salvo no servidor (só Admin altera) | FEITO | Vale para todos os usuários em qualquer computador. |
+| PAG | Gateways de pagamento (PagBank) | PARCIAL | Painel pronto e aprovado pelo usuário; falta token sandbox para teste real; recorrência com cartão guardado não feita. |
+| P-2 | Neko (navegador interno) | ADIADO | Fica por último. |
 | A1 | Uma tarefa principal por produto; só combos têm várias | FEITO | Campo task_structure no produto (single/multiple); backend recusa 2ª tarefa; 36 produtos marcados como individuais; teste catalog2-task-structure 5/5. |
 | A2 | Remover o botão Adicionar tarefa; aba única Tarefa e etapas | FEITO | Em produto individual a aba se chama "Tarefa e etapas", a tarefa já abre mostrando as etapas, e o botão de adicionar some depois que existe a tarefa principal. O botão "tornar produto composto" foi REMOVIDO (combos serão montados na tela de Combos, juntando produtos prontos). |
 | A3 | Toda tarefa precisa de pelo menos 1 etapa | FEITO | Validação de publicação já existia; mensagem atualizada. |
@@ -70,16 +80,13 @@ Atualizado em: 2026-10-06
 | A15 | Histórico real de cada etapa (automático) e aprovações/prazos dentro da própria etapa | FEITO (aguardando conferência visual) | A aba "Visão geral: aprovações e prazos" foi REMOVIDA. Aprovações e prazos de cada etapa ficam dentro da etapa; as aprovações e prazos GERAIS do produto (implantação, ciclo recorrente, relatório, publicação) foram para o fim da aba "Prazos e condições" (Classificação e opções). Histórico real da etapa segue dentro da etapa. |
 
 ## Validação pendente (teste manual)
-- Teste manual na tarefa "Teste" do Produto ID 1: etapas de 2 h (Gestor de Tráfego R$100/h) e 1,5 h (Redator R$80/h) -> total 3,5 h e custo estimado R$ 320,00 (etapas R$ 200,00 e R$ 120,00).
-- Conferir: aba "Tarefa e etapas" (singular), tarefa já aberta com as etapas, sem botão de produto composto.
-- Em uma etapa: clicar em "Checklist (N)", cadastrar itens nas abas Execução/Aprovação/Qualificação, salvar e reabrir.
-- Editar uma etapa e avaliar o novo layout (5 blocos); mandar a arte desejada para refinar.
-- Editar tarefa -> Precificação -> salvar valor -> volta para a mesma tarefa; X sem salvar preserva o rascunho.
-- A8: em uma tarefa com 4+ etapas, abrir "Fluxo das etapas", colocar 1, 2 e 3 em "Junto com o início", 4 "Depois de etapas específicas" (só a 3), 5 depois de todas; conferir o resumo (ordem e duração mínima) e salvar; escolher "Mesmo executor de outra etapa".
-- Conferir a edição de etapa contra a arte (grade 1-2 / 3-4 / 5), o botão Gerenciar checklist e o Selecionar acessos.
+- Usuário: abrir a plataforma, atualizar a página e conferir Chat > Nova conversa na tela (a API já retorna os usuários).
+- Usuário: enviar o token sandbox do PagBank para testar conexão e uma recarga real de teste.
+- Próxima reunião: retestar o cadastro de produto (antigos P-4, P-13, P-16) e relatar se algum erro voltar.
+- Por último: P-2 (Neko) e, só com ordem, o espelho completo local → online (A12).
 
 ## Próximo passo
-Conferência da fase 2 (cadastro) pelo Vinicius. Seguir com fase 3 (oferta/rodízio por etapa + preferir/nunca o mesmo nômade, aceite 2h configurável) ou fase 5 (telas do projeto) — Vinicius decide a ordem. Itens rápidos pendentes: C2, C4, C1, C5/C6.
+Aguardar o usuário voltar ("boa tarde, vamos continuar"): conferir/abrir o Docker, subir os containers, confirmar que backend e frontend respondem e perguntar o que ele quer testar ou ajustar. Ele vai pedir itens novos.
 
 ## Histórico
 - **2026-10-02:** 13 correções universais (estrutura universal v2) implementadas e testadas; commitadas e implantadas em 2026-10-04.
@@ -112,3 +119,7 @@ Conferência da fase 2 (cadastro) pelo Vinicius. Seguir com fase 3 (oferta/rodí
 - **2026-10-06 (16):** PLAC 13 passos (D1) implementado; plano do A12 definido (espelho completo no final).
 - **2026-10-06 (17):** D2 tarefas internas e D3 navegador seguro (plano de controle) implementados.
 - **2026-10-06 (18):** D3: navegador seguro REAL (browser-runner com Chromium, visualizador por WebSocket, sessão guardada cifrada) implementado e testado com navegador de verdade.
+- **2026-10-07/08:** Reunião 07/10 executada (D-1…D-9, P-5…P-15), recarga de carteira e gateways trocáveis; QA (allka.store) espelhado do local em 08/10.
+- **2026-10-10:** Revisão de desempenho e limpeza (mocks fora do pacote, GET deduplicado, catálogo 3-4x mais rápido, Clientes unificados).
+- **2026-10-11:** Tema da plataforma no servidor.
+- **2026-10-12/13:** Chat estilo WhatsApp, modais/fontes/mobile; migrações aplicadas no local; tudo commitado na branch revisao-plataforma-2026-10-11 (sem deploy). P-4/P-13/P-16 retirados para reteste.
