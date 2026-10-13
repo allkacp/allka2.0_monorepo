@@ -77,6 +77,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/loading";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -242,6 +243,8 @@ function initials(name: string) {
 const TASK_STATUS_LABELS: Record<string, string> = {
   PARA_LANCAMENTO: "Para lançamento",
   EM_LANCAMENTO: "Em lançamento",
+  LANCAMENTO_ENVIADO_PARA_ANALISE: "Briefing em análise",
+  DEVOLVIDA_PARA_AGENCIA: "Devolvida para ajuste",
   AGUARDANDO_INFORMACOES: "Aguard. informações",
   AGUARDANDO_ETAPA: "Aguardando etapa",
   LIBERADA_PARA_EXECUCAO: "Enviada p/ execução",
@@ -507,6 +510,7 @@ export function TarefaDetailDrawer({
   isAdmin = false,
   canManageRelease = true,
   onOpenTask,
+  canReviewBriefing = false,
 }: {
   tarefa: any | null;
   open: boolean;
@@ -525,6 +529,9 @@ export function TarefaDetailDrawer({
   /** Navega o drawer para outra tarefa, usado pelo link de pré-requisito
    * clicável do painel de bloqueadores. */
   onOpenTask?: (taskId: string) => void;
+  /** Tela do Líder: mostra aprovar/devolver no briefing enviado para análise
+   * (o Admin já vê por `isAdmin`). Backend sempre revalida. */
+  canReviewBriefing?: boolean;
 }) {
   const [tab, setTab] = useState<TabKey>("dados");
   const [isEditMode, setIsEditMode] = useState(false);
@@ -629,10 +636,51 @@ export function TarefaDetailDrawer({
     }
   };
 
+  // Revisão do briefing (LANCAMENTO_ENVIADO_PARA_ANALISE): aprovar libera a
+  // tarefa para execução; devolver manda de volta para quem lançou ajustar.
+  const podeRevisarBriefing =
+    (canReviewBriefing || isAdmin) && tarefa?.status === "LANCAMENTO_ENVIADO_PARA_ANALISE";
+  const [briefingMotivo, setBriefingMotivo] = useState("");
+  const [briefingRevisando, setBriefingRevisando] = useState(false);
+  const [briefingAviso, setBriefingAviso] = useState<string | null>(null);
+
+  const revisarBriefing = async (acao: "aprovar" | "devolver") => {
+    setBriefingRevisando(true);
+    setBriefingAviso(null);
+    try {
+      if (acao === "aprovar") {
+        await apiClient.releaseProjectTask(tarefa.id);
+        setBriefingAviso("Briefing aprovado. A tarefa foi liberada para execução.");
+        onStatusChange?.(tarefa, "LIBERADA_PARA_EXECUCAO");
+      } else {
+        await apiClient.returnTaskBriefing(tarefa.id, briefingMotivo.trim());
+        setBriefingAviso("Briefing devolvido para ajuste.");
+        setBriefingMotivo("");
+        onStatusChange?.(tarefa, "DEVOLVIDA_PARA_AGENCIA");
+      }
+    } catch (e: any) {
+      setBriefingAviso(e?.message ?? "Não foi possível registrar. Tente novamente.");
+    } finally {
+      setBriefingRevisando(false);
+    }
+  };
+
+  // Conta cada abertura: o carregamento por aba roda de novo mesmo quando a
+  // aba inicial não muda (ex.: abrir outro briefing em análise).
+  const [abertura, setAbertura] = useState(0);
+
   // Reset on drawer open/close
   useEffect(() => {
     if (open && tarefa) {
-      setTab("dados");
+      // Briefing em análise abre direto no briefing, onde ficam aprovar/devolver.
+      setTab(
+        (canReviewBriefing || isAdmin) && tarefa.status === "LANCAMENTO_ENVIADO_PARA_ANALISE"
+          ? "briefing"
+          : "dados",
+      );
+      setBriefingMotivo("");
+      setBriefingAviso(null);
+      setAbertura((n) => n + 1);
       setStages([]);
       setBriefingData(null);
       setAttachments([]);
@@ -656,7 +704,7 @@ export function TarefaDetailDrawer({
     )
       loadAttachments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab]);
+  }, [tab, abertura]);
 
   const loadStages = useCallback(async () => {
     if (!tarefa) return;
@@ -1010,7 +1058,7 @@ export function TarefaDetailDrawer({
             <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 dark:bg-amber-900/20 dark:border-amber-700 shrink-0 flex items-center gap-2">
               <Lock className="h-4 w-4 text-amber-600 shrink-0" />
               <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                Bloqueada — aguardando a conclusão de "{tarefa.dependency_blocked_by.title}" ({tarefa.dependency_blocked_by.status}).
+                Bloqueada — aguardando a conclusão de "{tarefa.dependency_blocked_by.title}" ({getStatusLabel(tarefa.dependency_blocked_by.status)}).
               </p>
             </div>
           )}
@@ -1366,13 +1414,51 @@ export function TarefaDetailDrawer({
             {/* ══ QUESTIONÁRIO / BRIEFING ══════════════════════════════ */}
             {tab === "briefing" && (
               <div className="p-6">
-                {briefingLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
-                    <span className="ml-3 text-sm text-slate-500">
-                      Carregando briefing...
-                    </span>
+                {(podeRevisarBriefing || briefingAviso) && (
+                  <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-800 dark:bg-violet-900/20">
+                    <SectionTitle>Revisão do briefing</SectionTitle>
+                    {podeRevisarBriefing && (
+                      <>
+                        <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                          Confira as respostas abaixo. Aprovar libera a tarefa para execução; devolver pede ajuste a quem lançou.
+                        </p>
+                        <textarea
+                          value={briefingMotivo}
+                          onChange={(e) => setBriefingMotivo(e.target.value)}
+                          placeholder="O que precisa ser ajustado (obrigatório para devolver)"
+                          rows={2}
+                          className="mt-3 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm outline-none focus:border-[#2558FF]"
+                        />
+                      </>
+                    )}
+                    {briefingAviso && (
+                      <p className="mt-3 text-xs font-medium text-blue-800 dark:text-blue-300">{briefingAviso}</p>
+                    )}
+                    {podeRevisarBriefing && (
+                      <div className="flex items-center gap-2 mt-3">
+                        <button
+                          disabled={briefingRevisando}
+                          onClick={() => revisarBriefing("aprovar")}
+                          className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                        >
+                          {briefingRevisando ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsUp className="h-4 w-4" />}
+                          Aprovar e liberar
+                        </button>
+                        <button
+                          disabled={briefingRevisando || briefingMotivo.trim().length < 3}
+                          onClick={() => revisarBriefing("devolver")}
+                          title={briefingMotivo.trim().length < 3 ? "Descreva o que precisa ser ajustado" : undefined}
+                          className="inline-flex items-center gap-2 rounded-lg border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 disabled:opacity-40 dark:border-red-800 dark:text-red-400"
+                        >
+                          <PauseCircle className="h-4 w-4" />
+                          Devolver para ajuste
+                        </button>
+                      </div>
+                    )}
                   </div>
+                )}
+                {briefingLoading ? (
+                  <PageLoader text="Carregando briefing…" compact />
                 ) : !briefingData ? (
                   <EmptyState
                     icon={MessageSquare}
@@ -1485,12 +1571,7 @@ export function TarefaDetailDrawer({
             {tab === "etapas" && (
               <div className="p-6">
                 {stagesLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
-                    <span className="ml-3 text-sm text-slate-500">
-                      Carregando etapas...
-                    </span>
-                  </div>
+                  <PageLoader text="Carregando etapas…" compact />
                 ) : stages.length === 0 ? (
                   <EmptyState
                     icon={List}
@@ -2008,12 +2089,7 @@ export function TarefaDetailDrawer({
             {tab === "entregas" && (
               <div className="p-6">
                 {attachmentsLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
-                    <span className="ml-3 text-sm text-slate-500">
-                      Carregando entregas...
-                    </span>
-                  </div>
+                  <PageLoader text="Carregando entregas…" compact />
                 ) : (
                   (() => {
                     const deliveries = attachments.filter(
@@ -2219,12 +2295,7 @@ export function TarefaDetailDrawer({
             {tab === "anexos" && (
               <div className="p-6">
                 {attachmentsLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
-                    <span className="ml-3 text-sm text-slate-500">
-                      Carregando anexos...
-                    </span>
-                  </div>
+                  <PageLoader text="Carregando anexos…" compact />
                 ) : attachments.length === 0 ? (
                   <EmptyState
                     icon={Paperclip}

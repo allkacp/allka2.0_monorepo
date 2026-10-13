@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Building2, Loader2, Search, Users } from "lucide-react";
+import { Building2, Search, Users } from "lucide-react";
 import {
   StandardPageBanner,
   STANDARD_SHELL_PANEL_CLASS,
@@ -11,6 +11,7 @@ import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { LegacyIdBadge } from "@/components/legacy-id-badge";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/loading";
 
 /**
  * Admin › Agências.
@@ -202,10 +203,7 @@ export default function AdminAgenciasPage() {
 
             {/* Tabela */}
             {carregando ? (
-              <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Carregando agências…</span>
-              </div>
+              <PageLoader text="Carregando agências…" compact />
             ) : erro ? (
               <div className="py-16 text-center text-sm text-red-600">{erro}</div>
             ) : visiveis.length === 0 ? (

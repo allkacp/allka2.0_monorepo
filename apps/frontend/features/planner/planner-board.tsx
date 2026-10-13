@@ -38,11 +38,12 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Settings, Calendar, LayoutDashboard, AlertCircle, RefreshCw, Archive, Trash2 } from "lucide-react";
+import { Plus, Settings, Calendar, LayoutDashboard, AlertCircle, Archive, Trash2 } from "lucide-react";
 import { usePlannerBoard, type PlannerPriority } from "./use-planner-board";
 import { PlannerArchivedPanel } from "./planner-archived-panel";
 import { apiClient, type PlannerCard as PlannerCardData, type PlannerColumn as PlannerColumnData } from "@/lib/api-client";
 import type { FrontendProject } from "@/lib/project-adapter";
+import { PageLoader } from "@/components/ui/loading";
 
 const PRIORITY_CFG: Record<PlannerPriority, { label: string; pill: string; border: string }> = {
   low: { label: "Baixa", pill: "bg-slate-100 text-slate-600", border: "#94a3b8" },
@@ -325,10 +326,7 @@ export function PlannerBoard({ projects }: { projects: FrontendProject[] }) {
   // ── Estados de carregamento/erro/vazio ──────────────────────────────────
   if (board.status === "loading") {
     return (
-      <div className="flex items-center justify-center py-16 text-sm text-slate-400">
-        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-        Carregando planejador…
-      </div>
+      <PageLoader text="Carregando planejador…" compact />
     );
   }
 

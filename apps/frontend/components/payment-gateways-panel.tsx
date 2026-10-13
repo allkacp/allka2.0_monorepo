@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, CheckCircle2, AlertCircle, ShieldCheck, KeyRound, PlugZap, History } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { ButtonLoader } from "@/components/ui/loading";
 
 interface Field { key: string; label: string; secret: boolean; required: boolean; help: string }
 interface Gateway {
@@ -40,7 +41,7 @@ export function PaymentGatewaysPanel() {
   useEffect(() => { void load(); }, [load]);
 
   if (error) return <p className="flex items-center gap-2 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700"><AlertCircle className="h-4 w-4" /> {error}</p>;
-  if (!data) return <div className="flex items-center gap-2 p-4 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>;
+  if (!data) return <div className="flex items-center gap-2 p-4 text-sm text-neutral-500"><ButtonLoader text="Carregando gateways de pagamento…" /></div>;
 
   const active = data.gateways.find((g) => g.is_active)?.label ?? "Pagamento de teste (fictício)";
   return (

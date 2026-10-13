@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Lock, AlertTriangle, Clock, Eye, BarChart2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { PageLoader } from "@/components/ui/loading";
 
 // ─── Shared: brand strip at top of state-screen cards ────────────────────────
 function BrandStrip() {
@@ -55,37 +56,13 @@ function StateFrame({ children }: { children: React.ReactNode }) {
 export function SharedLoadingScreen() {
   return (
     <div
-      className="fixed inset-0 flex flex-col items-center justify-center gap-4"
+      className="fixed inset-0 flex items-center justify-center"
       style={{
         background:
           "radial-gradient(ellipse at top, rgba(26,42,111,0.08) 0%, transparent 60%), #f0f2f8",
       }}
     >
-      {/* Animated brand logo */}
-      <div className="relative">
-        <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
-          style={{
-            background:
-              "linear-gradient(135deg, #000 0%, #1a2a6f 50%, #c81a7f 100%)",
-          }}
-        >
-          <BarChart2 className="h-6 w-6 text-white" />
-        </div>
-        <div
-          className="absolute -inset-1 rounded-2xl opacity-30 animate-ping"
-          style={{
-            background:
-              "linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%)",
-          }}
-        />
-      </div>
-      <div className="text-center space-y-1">
-        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-          Carregando relatório…
-        </p>
-        <p className="text-xs text-slate-400">Verificando permissões</p>
-      </div>
+      <PageLoader text="Carregando relatório…" subtext="Verificando permissões" />
     </div>
   );
 }

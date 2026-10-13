@@ -41,6 +41,7 @@ import {
 } from "./_components/shared-widget-renderer";
 import { SharedFilterBar, PERIOD_OPTIONS } from "./_components/shared-filter-bar";
 import type { CommentEditorHandle } from "./_components/comment-editor";
+import { ButtonLoader } from "@/components/ui/loading";
 
 // Tiptap só entra no bundle quando o CommentSection de fato monta o editor
 // (nunca em links "view only", que não renderizam CommentSection).
@@ -351,7 +352,7 @@ function CommentSection({ token }: { token: string }) {
       <div className="p-5 space-y-4">
         {/* ── Lista ── */}
         {listState === "loading" && (
-          <p className="text-xs text-muted-foreground">Carregando comentários…</p>
+          <p className="text-xs text-muted-foreground"><ButtonLoader text="Carregando comentários…" /></p>
         )}
         {listState === "error" && (
           <div className="flex items-center justify-between gap-2 text-sm text-destructive">
@@ -414,9 +415,7 @@ function CommentSection({ token }: { token: string }) {
             </p>
             <Suspense
               fallback={
-                <div className="w-full h-[72px] rounded-xl border border-input bg-background flex items-center justify-center text-xs text-muted-foreground">
-                  Carregando editor…
-                </div>
+                <div className="w-full h-[72px] rounded-xl border border-input bg-background flex items-center justify-center text-xs text-muted-foreground"><ButtonLoader text="Carregando editor…" /></div>
               }
             >
               <CommentEditor

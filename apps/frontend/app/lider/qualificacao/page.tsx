@@ -43,6 +43,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
+import { PageLoader } from "@/components/ui/loading";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
@@ -407,10 +408,7 @@ export default function LiderQualificacaoPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-400">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
-            <span className="text-sm">Carregando tarefas…</span>
-          </div>
+          <PageLoader text="Carregando tarefas…" compact />
         )}
 
         {/* Empty — no data */}

@@ -8,6 +8,7 @@ import { SlidePanel } from "@/components/slide-panel";
 import { useToast } from "@/components/ui/use-toast";
 import { BookOpen, Clock, Layers, Video, FileText, HelpCircle, GraduationCap } from "lucide-react";
 import { STANDARD_SHELL_PANEL_CLASS, StandardPageBanner } from "@/components/standard-page-shell";
+import { ButtonLoader } from "@/components/ui/loading";
 
 // Tipos alinhados ao schema real do Prisma (Course/CourseModule/Lesson/
 // CourseEnrollment em apps/backend/prisma/schema.prisma) — NÃO usar
@@ -145,7 +146,7 @@ export default function AllkademyStudentPage() {
           <div className="p-4 sm:p-6 space-y-4">
 
       {loading ? (
-        <p className="text-sm text-slate-400">Carregando cursos…</p>
+        <p className="text-sm text-slate-400"><ButtonLoader text="Carregando cursos…" /></p>
       ) : error ? (
         <p className="text-sm text-red-500">Erro ao carregar cursos: {error}</p>
       ) : courses.length === 0 ? (
@@ -236,7 +237,7 @@ export default function AllkademyStudentPage() {
       >
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {detailLoading ? (
-            <p className="text-sm text-slate-400">Carregando conteúdo…</p>
+            <p className="text-sm text-slate-400"><ButtonLoader text="Carregando conteúdo…" /></p>
           ) : !("modules" in (detailCourse || {})) || !(detailCourse as CourseDetail)?.modules?.length ? (
             <p className="text-sm text-slate-400">Este curso ainda não tem módulos publicados.</p>
           ) : (

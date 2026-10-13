@@ -1160,8 +1160,8 @@ export function CompanyEditSlidePanel({
                 </div>
 
                 {showTransferMasterModal && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-                    <Card className="p-6 w-full max-w-md shadow-2xl">
+                  <div className="modal-celular-fundo fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <Card className="modal-celular-folha p-6 w-full max-w-md shadow-2xl">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-semibold">
                           Transferir Master
@@ -1225,8 +1225,8 @@ export function CompanyEditSlidePanel({
                 )}
 
                 {showAddUserModal && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-                    <Card className="p-6 w-full max-w-md shadow-2xl">
+                  <div className="modal-celular-fundo fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <Card className="modal-celular-folha p-6 w-full max-w-md shadow-2xl">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-semibold">
                           Adicionar Novo Usuário
@@ -1315,8 +1315,8 @@ export function CompanyEditSlidePanel({
                 )}
 
                 {showInviteModal && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-                    <Card className="p-6 w-full max-w-md shadow-2xl">
+                  <div className="modal-celular-fundo fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <Card className="modal-celular-folha p-6 w-full max-w-md shadow-2xl">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-base font-semibold">
                           Convidar {inviteType}

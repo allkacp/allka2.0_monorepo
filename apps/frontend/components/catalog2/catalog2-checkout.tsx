@@ -53,9 +53,28 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
   const [selectedCardId, setSelectedCardId] = useState<string>(SANDBOX_CARDS[0].id);
   const actionIdRef = useRef<string>(crypto.randomUUID());
 
+  // Retomar o pagamento de um pedido já confirmado (?pedido=<id>, vindo de
+  // "Pagar" na lista de projetos): sem isso, quem saía desta tela antes de
+  // pagar não tinha mais como pagar o pedido.
+  const pedidoId = new URLSearchParams(window.location.search).get("pedido");
+
   useEffect(() => {
+    if (pedidoId) {
+      apiClient
+        .getProject(pedidoId)
+        .then((project: any) => {
+          if (project?.status === "draft") {
+            setResult({ project, project_products: [] });
+            setStep("result");
+          } else {
+            setError("Este pedido já foi pago ou não está mais aguardando pagamento.");
+          }
+        })
+        .catch((e: any) => setError(e?.message ?? "Não foi possível carregar o pedido."));
+      return;
+    }
     apiClient.getClientCatalog2Cart().then(setCart).catch((e: any) => setError(e?.message ?? "Não foi possível carregar a cesta."));
-  }, []);
+  }, [pedidoId]);
 
   // Contexto pra Aura (Item 9, reunião 2026-09-14, "Atualizar o contexto da
   // Aura") — só envia um id de cotação quando há EXATAMENTE uma (contexto
@@ -111,12 +130,20 @@ export function Catalog2Checkout({ portal }: { portal: Portal }) {
       });
       setResult(r);
       setStep("result");
+      // Os itens já viraram pedido: tira da cesta (só os que entraram neste
+      // pedido). Antes ficavam lá e o cliente podia contratar tudo de novo
+      // sem perceber. Falha aqui não desfaz o pedido.
+      await Promise.all(
+        (cart?.items ?? []).map((item) =>
+          apiClient.removeClientCatalog2CartItem(item.id).catch(() => undefined),
+        ),
+      );
     } catch (e: any) {
       setError(e?.message ?? "Não foi possível confirmar o pedido.");
     } finally {
       setBusy(false);
     }
-  }, [acceptedTerms, quotes]);
+  }, [acceptedTerms, quotes, cart]);
 
   const simulatePayment = useCallback(async () => {
     if (!result) return;

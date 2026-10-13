@@ -7,6 +7,8 @@ export interface FrontendProject {
   legacy_id?: number | null;
   /** id do cliente antigo — Project não tem FK pra Client no modelo novo. */
   legacy_client_id?: number | null;
+  /** Pedido do catálogo novo (checkout catalog2): rascunho aqui = aguardando pagamento. */
+  catalog2Order?: boolean;
   hasOwner?: boolean;
   ownerType?: "agency" | "company" | "partner" | null;
   ownerName?: string | null;

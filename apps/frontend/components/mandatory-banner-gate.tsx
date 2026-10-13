@@ -106,7 +106,7 @@ export function MandatoryBannerGate() {
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-4"
+      className="modal-celular-fundo fixed inset-0 z-[120] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mandatory-banner-title"
@@ -118,7 +118,7 @@ export function MandatoryBannerGate() {
       {/* Fundo que bloqueia a interação com o conteúdo de trás. */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" aria-hidden="true" />
 
-      <div className="relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900">
+      <div className="modal-celular-folha relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900">
         {!isMandatory && (
           <button
             type="button"

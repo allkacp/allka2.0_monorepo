@@ -41,6 +41,7 @@ import {
   type MockCourse,
   type MockEnrollment,
 } from "./data";
+import { mockChat } from "./mock-chat";
 
 const STORAGE_KEYS = {
   projects: "allka_mock_projects",
@@ -769,10 +770,57 @@ class MockApiClient {
     return this.updateCompany(String(id), data);
   }
 
-  // ─── Chat ───────────────────────────────────────────────────────────────
+  // ─── Chat (estilo WhatsApp Web; dados em dev-mocks/mock-chat.ts) ──────────
+  private async chatMe() {
+    const me: any = await this.getCurrentUser().catch(() => null);
+    return { id: String(me?.id ?? "me"), name: String(me?.name ?? "Você"), isAdmin: String(me?.account_type ?? "") === "admin" };
+  }
   async getConversations() {
     await delay();
-    return [];
+    return mockChat.rooms(await this.chatMe());
+  }
+  async getMessages(conversationId: string) {
+    await delay();
+    return mockChat.messages(await this.chatMe(), String(conversationId));
+  }
+  async markConversationRead(conversationId: string) {
+    return mockChat.markRead(await this.chatMe(), conversationId);
+  }
+  async sendMessage(conversationId: string, body: any) {
+    await delay(300);
+    return mockChat.send(await this.chatMe(), conversationId, body);
+  }
+  async sendChatAttachment(conversationId: string, input: any) {
+    await delay(500);
+    return mockChat.attach(await this.chatMe(), conversationId, input);
+  }
+  async getChatAttachment(messageId: string) {
+    await delay();
+    return mockChat.attachment(messageId);
+  }
+  async editChatMessage(messageId: string, content: string) {
+    await delay();
+    return mockChat.edit(messageId, content);
+  }
+  async deleteChatMessage(messageId: string) {
+    await delay();
+    return mockChat.remove(messageId);
+  }
+  async getChatContacts(q?: string) {
+    await delay();
+    return mockChat.contacts(q);
+  }
+  async createConversation(data: { participant_ids: string[] }) {
+    await delay();
+    return mockChat.createDirect(await this.chatMe(), data.participant_ids[0]);
+  }
+  async getChatSettings() {
+    await delay();
+    return mockChat.settings((await this.chatMe()).isAdmin);
+  }
+  async updateChatSettings(settings: any) {
+    await delay();
+    return mockChat.saveSettings(settings);
   }
   async deleteClient(id: number) {
     return this.deleteCompany(String(id));
@@ -1360,6 +1408,10 @@ class MockApiClient {
 
   async releaseProjectTask(id: string | number) {
     return this.updateTask(id, { status: "in_progress" });
+  }
+
+  async returnTaskBriefing(id: string | number, _motivo: string) {
+    return this.updateTask(id, { status: "pending" });
   }
 
   async deleteTask(id: string | number) {

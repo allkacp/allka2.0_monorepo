@@ -114,6 +114,7 @@ export function HeaderSlideScreen({
       >
         <div
           data-state={closing ? "closed" : "open"}
+          data-tela-slide=""
           className="relative ml-auto w-full h-full flex flex-col overflow-hidden border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-900 rounded-2xl lg:rounded-[1.5rem] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.45)] p-3 sm:p-5 lg:p-[12px] pointer-events-auto data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-right-4 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-right-4 duration-300"
         >
           <div className="h-full min-h-0 flex flex-col">

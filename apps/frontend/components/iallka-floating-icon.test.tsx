@@ -98,10 +98,11 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     const [, mobileBtn] = await openIcons();
     expect(mobileBtn.className).toContain("lg:hidden");
     // jsdom recalcula calc()+env() de forma estranha na volta pra string,
-    // mas soma corretamente as duas partes fixas (72px base + 240px deste
-    // ícone = 312px) — prova que o degrau é o esperado, um acima de Ajuda
-    // (+164px) e distinto de todos os outros ícones empilhados.
-    expect((mobileBtn as HTMLElement).style.bottom).toContain("312px");
+    // mas soma corretamente as duas partes fixas (72px base + 192px deste
+    // ícone = 264px) — prova que o degrau é o esperado, um acima de Ajuda
+    // (+132px) e distinto de todos os outros ícones empilhados (degrau de
+    // 60px desde a revisão mobile de 12/10: botões de 48px em vez de 56px).
+    expect((mobileBtn as HTMLElement).style.bottom).toContain("264px");
   });
 
   it("5. abrir e fechar o painel funciona", async () => {

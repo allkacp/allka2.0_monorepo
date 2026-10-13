@@ -3,6 +3,7 @@ import { withScreenHelp } from "@/components/with-screen-help"
 import { SETTINGS_HELP } from "@/lib/screen-help"
 import { AiChangePricingPanel } from "@/components/ai-change-pricing-panel";
 import { PaymentGatewaysPanel } from "@/components/payment-gateways-panel";
+import { ChatSettingsPanel } from "@/components/admin/chat-settings-panel";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "@/hooks/use-navigate";
 import { apiClient } from "@/lib/api-client";
@@ -84,6 +85,7 @@ import {
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { DocumentDeleteButton } from "@/components/document-delete-button";
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
+import { ButtonLoader } from "@/components/ui/loading";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -1057,6 +1059,9 @@ function AdminConfiguracoesPage() {
           </TabsTrigger>
           <TabsTrigger value="whatsapp" className="text-xs px-3 h-8">
             WhatsApp
+          </TabsTrigger>
+          <TabsTrigger value="chat" className="text-xs px-3 h-8">
+            Chat
           </TabsTrigger>
           <TabsTrigger value="equipe" className="text-xs px-3 h-8">
             Equipe
@@ -2379,7 +2384,7 @@ function AdminConfiguracoesPage() {
 
             <div className="flex flex-wrap gap-1.5 px-5 py-3 border-b border-slate-100 dark:border-slate-800">
               {kbLoadingCategories && kbCategories.length === 0 && (
-                <p className="text-xs text-slate-400">Carregando categorias…</p>
+                <p className="text-xs text-slate-400"><ButtonLoader text="Carregando categorias…" /></p>
               )}
               {kbCategories.map((cat) => (
                 <button
@@ -2561,9 +2566,14 @@ function AdminConfiguracoesPage() {
           <PaymentGatewaysPanel />
         </TabsContent>
 
+        {/* ─── CHAT (só o Admin Master grava) ───────────────────────────────── */}
+        <TabsContent value="chat" className="space-y-4">
+          <ChatSettingsPanel />
+        </TabsContent>
+
         <TabsContent value="ai-usage" className="space-y-4">
           {aiUsageLoading && aiUsageServices.length === 0 && (
-            <p className="text-xs text-slate-400">Carregando…</p>
+            <p className="text-xs text-slate-400"><ButtonLoader text="Carregando uso de IA…" /></p>
           )}
 
           {!aiUsageLoading && aiUsageServices.length === 0 && (

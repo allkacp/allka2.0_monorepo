@@ -183,7 +183,7 @@ export function AccessCatalogDialog({ open, onOpenChange, version, readOnly, act
                 <div className="flex gap-1" role="group" aria-label="Filtrar acessos">
                   {FILTERS.map(([k, l]) => <button key={k} type="button" onClick={() => setFilter(k)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${filter === k ? "border-violet-600 bg-violet-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>{l}</button>)}
                 </div>
-                {!readOnly && <Button type="button" size="sm" className="h-9 bg-gradient-to-r from-violet-700 to-fuchsia-600" onClick={() => setView({ form: true, type: null })} data-testid="new-access-type"><Plus className="mr-1.5 h-4 w-4" />Criar novo tipo de acesso</Button>}
+                {!readOnly && <Button type="button" size="sm" className="h-9 bg-[image:var(--app-brand-button,linear-gradient(to_right,#6d28d9,#c026d3))]" onClick={() => setView({ form: true, type: null })} data-testid="new-access-type"><Plus className="mr-1.5 h-4 w-4" />Criar novo tipo de acesso</Button>}
               </div>
               {msg && <p role={msg.ok ? "status" : "alert"} className={`mt-2 rounded px-2 py-1 text-xs font-semibold ${msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{msg.text}</p>}
             </>

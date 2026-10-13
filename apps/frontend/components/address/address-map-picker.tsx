@@ -1,8 +1,9 @@
 
 import { useEffect, useRef, useState } from "react"
-import { MapPin, Loader2, AlertCircle } from "lucide-react"
+import { MapPin, AlertCircle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { ButtonLoader } from "@/components/ui/loading";
 
 interface AddressData {
   street: string
@@ -269,10 +270,7 @@ export function AddressMapPicker({ address, onAddressChange }: AddressMapPickerP
 
         {/* Loading */}
         {googleMapsReady && !mapLoaded && (
-          <div className="flex items-center justify-center gap-2 py-3 text-xs text-slate-500">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Carregando mapa...
-          </div>
+          <div className="flex items-center justify-center gap-2 py-3 text-xs text-slate-500"><ButtonLoader text="Carregando mapa…" /></div>
         )}
 
         {/* Coords badge — only when position selected */}

@@ -631,7 +631,7 @@ export default function AdminDisponibilidadePage() {
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }}
                 />
                 <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
               </button>

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { PageLoader } from "@/components/ui/loading";
 import { AreaChart, Area, ResponsiveContainer } from "recharts";
 import { ExportButton } from "@/components/export-button";
@@ -147,6 +147,7 @@ function mapEmpresaStatus(s: string): string {
 }
 
 export default function EmpresaProjetosPage() {
+  const navigate = useNavigate();
   const {
     projects: empresaProjects,
     loading: projectsLoading,
@@ -161,6 +162,7 @@ export default function EmpresaProjetosPage() {
       empresaProjects.map((p) => ({
         id: p.id,
         seq: p.seq ?? null,
+        catalog2Order: p.catalog2Order ?? false,
         name: p.name,
         description: "",
         client: profile?.name ?? "",
@@ -170,7 +172,12 @@ export default function EmpresaProjetosPage() {
         consultant: "",
         consultantEmail: "",
         type: p.category || "",
-        status: mapEmpresaStatus(p.status),
+        // Pedido do catálogo novo nasce "draft" até ser pago: para o cliente
+        // isso é "aguardando pagamento", não um rascunho a preencher.
+        status:
+          p.catalog2Order && (p.status as string) === "draft"
+            ? "awaiting-payment"
+            : mapEmpresaStatus(p.status),
         progress:
           p.tasksTotal > 0 ? Math.round((p.tasksDone / p.tasksTotal) * 100) : 0,
         budget: p.value,
@@ -326,12 +333,12 @@ export default function EmpresaProjetosPage() {
 
   // column widths (resizable)
   const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    id: 50,
+    id: 70,
     name: 240,
     client: 160,
     agency: 140,
-    type: 130,
-    status: 140,
+    type: 110,
+    status: 160,
     progress: 110,
     budget: 110,
     team: 70,
@@ -339,6 +346,10 @@ export default function EmpresaProjetosPage() {
   };
   const [colWidths, setColWidths] =
     useState<Record<string, number>>(DEFAULT_COL_WIDTHS);
+  const colTotalWidth = visibleCols.reduce(
+    (acc, col) => acc + (colWidths[col] ?? DEFAULT_COL_WIDTHS[col] ?? 120),
+    90,
+  );
   const dragState = useRef<{
     col: string;
     startX: number;
@@ -1135,16 +1146,23 @@ export default function EmpresaProjetosPage() {
       .filter((p) => p.overdue)
       .reduce((sum, p) => sum + (p.budget - p.spent), 0);
 
-    // Calculate MRR (Monthly Recurring Revenue) based on active projects
-    const mrr = Math.round(
-      totalRevenue /
-        (dateRange?.from && dateRange?.to
-          ? Math.ceil(
+    // MRR: mesma conta do Admin (admin/projetos) — só projetos em andamento,
+    // dividido pelos meses do período. Antes somava também rascunhos não
+    // pagos e, sem valor, mostrava um número fixo inventado (R$ 45k).
+    const activeRevenue = statsFilteredProjects
+      .filter((p) => p.status === "in-progress")
+      .reduce((sum, p) => sum + p.budget, 0);
+    const periodMonths =
+      dateRange?.from && dateRange?.to
+        ? Math.max(
+            1,
+            Math.ceil(
               (dateRange.to.getTime() - dateRange.from.getTime()) /
                 (1000 * 60 * 60 * 24),
-            ) / 30
-          : 1) || 45000,
-    );
+            ) / 30,
+          )
+        : 1;
+    const mrr = Math.round(activeRevenue / periodMonths);
 
     // Calculate growth percentages
     const mrrGrowth =
@@ -1286,7 +1304,10 @@ export default function EmpresaProjetosPage() {
         })),
       },
     };
-  }, [dateRange, filterFromLead]);
+    // projectsData nas dependências: sem ele os cartões ficavam com os
+    // números da primeira renderização (lista ainda vazia) — "0 projetos"
+    // mesmo com projetos na tabela logo abaixo.
+  }, [projectsData, dateRange, filterFromLead]);
 
   const handleEditProject = (project: FrontendProject) => {
     setSelectedProject(project);
@@ -1383,7 +1404,14 @@ export default function EmpresaProjetosPage() {
     return null;
   };
 
+  // Pedido do catálogo novo ainda não pago: o caminho é o pagamento do
+  // próprio checkout, não o assistente de criação de projeto (que pedia
+  // consultor/cliente e nunca levava ao pagamento).
+  const openCatalog2Payment = (project: FrontendProject) =>
+    navigate(`/company/catalogo-produtos/checkout?pedido=${project.id}`);
+
   const handleContinueDraft = (project: FrontendProject) => {
+    if (project.catalog2Order) return openCatalog2Payment(project);
     const draft = loadDraftFromStorage(project);
     if (draft) {
       setProjectCreateData(draft.formData ?? null);
@@ -1409,6 +1437,7 @@ export default function EmpresaProjetosPage() {
   };
 
   const handleGoToPayment = (project: FrontendProject) => {
+    if (project.catalog2Order) return openCatalog2Payment(project);
     const draft = loadDraftFromStorage(project);
     if (draft) {
       setProjectCreateData(draft.formData ?? null);
@@ -1688,7 +1717,9 @@ export default function EmpresaProjetosPage() {
             </div>
           </div>
           <p className="text-2xl font-bold text-white leading-none">
-            R$ {(stats.mrr / 1000).toFixed(0)}k
+            {stats.mrr >= 1000
+              ? `R$ ${(stats.mrr / 1000).toFixed(0)}k`
+              : `R$ ${stats.mrr}`}
           </p>
         </div>
       </div>
@@ -2174,7 +2205,7 @@ export default function EmpresaProjetosPage() {
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge(project.status)}`}>
                           {statusLabel(project.status)}
                         </span>
-                        {project.status === "draft" ? (
+                        {project.status === "draft" && !project.catalog2Order ? (
                           <Button size="sm" className="h-6 px-2.5 text-[11px] bg-violet-600 hover:bg-violet-700 text-white shrink-0" onClick={() => handleContinueDraft(project)}>
                             Continuar
                           </Button>
@@ -2197,7 +2228,7 @@ export default function EmpresaProjetosPage() {
                 >
                   <div
                     className="shrink-0 px-6 pt-6 pb-4"
-                    style={{ background: "linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)" }}
+                    style={{ background: "var(--app-brand-gradient, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%))" }}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
@@ -2259,7 +2290,7 @@ export default function EmpresaProjetosPage() {
                               <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border hidden sm:inline-flex ${statusBadge(project.status)}`}>
                                 {statusLabel(project.status)}
                               </span>
-                              {project.status === "draft" ? (
+                              {project.status === "draft" && !project.catalog2Order ? (
                                 <Button size="sm" className="h-8 px-3 text-xs bg-violet-600 hover:bg-violet-700 text-white" onClick={() => { setShowPendingModal(false); setPendingPanelSearch(""); handleContinueDraft(project); }}>
                                   Continuar <ArrowRight className="h-3 w-3 ml-1" />
                                 </Button>
@@ -2301,7 +2332,7 @@ export default function EmpresaProjetosPage() {
                     onClick={() => setViewMode("accordion")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       viewMode === "accordion"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -2314,7 +2345,7 @@ export default function EmpresaProjetosPage() {
                     onClick={() => setViewMode("kanban")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       viewMode === "kanban"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -2327,7 +2358,7 @@ export default function EmpresaProjetosPage() {
                     onClick={() => setViewMode("planner")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       viewMode === "planner"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -2494,28 +2525,26 @@ export default function EmpresaProjetosPage() {
 
               {/* ── Table ── */}
               <div className="overflow-x-auto">
+                {/* Larguras em % do total: a tabela sempre cabe na tela,
+                    sem barra de rolagem horizontal. Arrastar a borda muda
+                    a proporção entre as colunas. */}
                 <table
                   className="w-full text-xs"
-                  style={{
-                    tableLayout: "fixed",
-                    minWidth: visibleCols.reduce(
-                      (acc, col) => acc + (colWidths[col] ?? 120),
-                      80,
-                    ),
-                  }}
+                  style={{ tableLayout: "fixed" }}
                 >
                   <colgroup>
                     {visibleCols.map((col) => (
                       <col
                         key={col}
                         style={{
-                          width:
-                            colWidths[col] ?? DEFAULT_COL_WIDTHS[col] ?? 120,
+                          width: `${(((colWidths[col] ?? DEFAULT_COL_WIDTHS[col] ?? 120) / colTotalWidth) * 100).toFixed(2)}%`,
                         }}
                       />
                     ))}
                     {/* actions col */}
-                    <col style={{ width: 100 }} />
+                    <col
+                      style={{ width: `${((90 / colTotalWidth) * 100).toFixed(2)}%` }}
+                    />
                   </colgroup>
                   <thead>
                     <tr className="border-b border-slate-200/60">
@@ -2527,8 +2556,8 @@ export default function EmpresaProjetosPage() {
                             key={col}
                             className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none relative bg-white"
                             style={{
-                              paddingLeft: 20,
-                              paddingRight: 20,
+                              paddingLeft: 12,
+                              paddingRight: 12,
                               textAlign: "left",
                               borderRight: "1px solid rgba(148,163,184,0.25)",
                             }}
@@ -2562,15 +2591,14 @@ export default function EmpresaProjetosPage() {
                       <th
                         className="py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-white"
                         style={{
-                          paddingLeft: 20,
-                          paddingRight: 20,
+                          paddingLeft: 12,
+                          paddingRight: 12,
                           textAlign: "right",
                           position: "sticky",
                           right: 0,
                           zIndex: 2,
                           background: "white",
                           borderLeft: "1px solid rgba(148,163,184,0.25)",
-                          width: 100,
                         }}
                       >
                         Ações
@@ -2608,7 +2636,7 @@ export default function EmpresaProjetosPage() {
                             {/* ID */}
                             {visibleCols.includes("id") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2624,7 +2652,7 @@ export default function EmpresaProjetosPage() {
                             {/* Projeto */}
                             {visibleCols.includes("name") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2662,7 +2690,7 @@ export default function EmpresaProjetosPage() {
                             {/* Cliente */}
                             {visibleCols.includes("client") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2681,7 +2709,7 @@ export default function EmpresaProjetosPage() {
                             {/* Empresa (agency/company/nomad) */}
                             {visibleCols.includes("agency") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2719,7 +2747,7 @@ export default function EmpresaProjetosPage() {
                             {/* Tipo */}
                             {visibleCols.includes("type") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2735,7 +2763,7 @@ export default function EmpresaProjetosPage() {
                             {/* Status */}
                             {visibleCols.includes("status") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2749,7 +2777,7 @@ export default function EmpresaProjetosPage() {
                             {/* Progresso */}
                             {visibleCols.includes("progress") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2773,7 +2801,7 @@ export default function EmpresaProjetosPage() {
                             {/* Orçamento */}
                             {visibleCols.includes("budget") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2792,7 +2820,7 @@ export default function EmpresaProjetosPage() {
                             {/* Equipe */}
                             {visibleCols.includes("team") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2811,7 +2839,7 @@ export default function EmpresaProjetosPage() {
                             {/* Criação */}
                             {visibleCols.includes("created") && (
                               <td
-                                className="px-5 py-3.5"
+                                className="px-3 py-3.5"
                                 style={{
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.15)",
@@ -2829,7 +2857,7 @@ export default function EmpresaProjetosPage() {
 
                             {/* Actions */}
                             <td
-                              className="px-5 py-3.5"
+                              className="px-3 py-3.5"
                               style={{
                                 position: "sticky",
                                 right: 0,
@@ -2958,9 +2986,9 @@ export default function EmpresaProjetosPage() {
                   </div>
 
                   {/* Modal body */}
-                  <div className="flex flex-1 min-h-0">
+                  <div className="flex max-sm:flex-col flex-1 min-h-0">
                     {/* Left: Saved filters */}
-                    <div className="w-44 flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50">
+                    <div className="w-44 max-sm:w-full max-sm:max-h-36 max-sm:border-r-0 max-sm:border-b flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50">
                       <div className="px-3 py-2.5 border-b border-slate-100">
                         <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
                           Filtros Salvos
@@ -3742,7 +3770,7 @@ export default function EmpresaProjetosPage() {
                     onClick={() => setViewMode("accordion")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       viewMode === "accordion"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -3755,7 +3783,7 @@ export default function EmpresaProjetosPage() {
                     onClick={() => setViewMode("kanban")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       viewMode === "kanban"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -3768,7 +3796,7 @@ export default function EmpresaProjetosPage() {
                     onClick={() => setViewMode("planner")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       viewMode === "planner"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >

@@ -8,6 +8,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { Archive, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { usePlannerArchivedCards } from "./use-planner-archived-cards";
 import type { PlannerArchivedCard, PlannerCard } from "@/lib/api-client";
+import { InlineLoader } from "@/components/ui/loading";
 
 function formatArchivedAt(iso: string | null) {
   if (!iso) return "";
@@ -63,10 +64,7 @@ export function PlannerArchivedPanel({
 
           <div className="min-h-[240px]">
             {archive.status === "loading" && (
-              <div className="flex items-center justify-center py-16 text-sm text-slate-400">
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Carregando cards arquivados…
-              </div>
+              <InlineLoader text="Carregando cards arquivados…" className="py-16" />
             )}
 
             {archive.status === "error" && (

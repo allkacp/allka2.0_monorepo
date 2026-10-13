@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import { ItemsPerPageSelect } from "@/components/items-per-page-select"
 import { useSidebar } from "@/contexts/sidebar-context"
+import { PageLoader } from "@/components/ui/loading";
 
 const taskGradientMap: Record<string, string> = {
   "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900": "linear-gradient(to bottom right, #1e3a8a, #1e40af, #164e63)",
@@ -491,9 +492,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
 
       {/* Lista de Tarefas */}
       {loadingTasks ? (
-        <div className="flex items-center justify-center py-16 text-sm text-slate-400">
-          Carregando tarefas…
-        </div>
+        <PageLoader text="Carregando tarefas…" compact />
       ) : tasksViewMode === "list" ? (
         <div className="overflow-hidden">
           {paginatedTasks.length > 0 ? (
@@ -732,7 +731,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
 
         return (
           <div
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
+            className="modal-celular-fundo fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 if (unsavedChanges) {
@@ -743,7 +742,7 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
               }
             }}
           >
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-[820px] max-h-[82vh] border border-slate-200 animate-in fade-in zoom-in duration-200 flex flex-col overflow-hidden">
+            <div className="modal-celular-folha relative bg-white rounded-xl shadow-2xl w-full max-w-[820px] max-h-[82vh] border border-slate-200 animate-in fade-in zoom-in duration-200 flex flex-col overflow-hidden">
 
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-3 flex-shrink-0" style={getHeaderStyle()}>
@@ -768,10 +767,10 @@ export function CompanyTasksTab({ company }: CompanyTasksTabProps) {
               </div>
 
               {/* Body */}
-              <div className="flex flex-1 overflow-hidden min-h-0">
+              <div className="flex max-sm:flex-col flex-1 overflow-hidden min-h-0">
 
                 {/* Left — Saved Filters */}
-                <div className="w-44 border-r border-slate-200 flex-shrink-0 bg-slate-50 flex flex-col overflow-hidden">
+                <div className="w-44 max-sm:w-full max-sm:max-h-36 max-sm:border-r-0 max-sm:border-b border-r border-slate-200 flex-shrink-0 bg-slate-50 flex flex-col overflow-hidden">
                   <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1 flex-shrink-0">
                     <Filter className="h-3 w-3" /> Filtros Salvos
                   </p>

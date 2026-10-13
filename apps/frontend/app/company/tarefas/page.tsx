@@ -461,6 +461,12 @@ export default function EmpresaTarefas() {
                                 <Badge className="border-0 bg-rose-100 text-xs text-rose-700" title="Falta uma conexão ou acesso. Veja em Conexões e acessos.">
                                   Aguardando uma conexão
                                 </Badge>
+                              ) : task.rawStatus === "DEVOLVIDA_PARA_AGENCIA" ? (
+                                // Briefing devolvido pelo Líder: a ação é de quem
+                                // lançou (reenviar pelo projeto), não "aguardando início".
+                                <Badge className="border-0 bg-orange-100 text-xs text-orange-700" title="O briefing voltou para ajuste. Abra o projeto, revise e envie de novo.">
+                                  Ajuste no briefing
+                                </Badge>
                               ) : (
                                 <Badge
                                   className={`${cfg?.bg ?? "bg-slate-100 text-slate-500"} border-0 text-xs`}
@@ -468,7 +474,7 @@ export default function EmpresaTarefas() {
                                   {cfg?.label ?? task.rawStatus ?? "—"}
                                 </Badge>
                               )}
-                              {task.aguardandoMinhaAprovacao && (
+                              {(task.aguardandoMinhaAprovacao || task.rawStatus === "DEVOLVIDA_PARA_AGENCIA") && (
                                 <span className="text-[10px] font-semibold text-indigo-600 whitespace-nowrap">
                                   ← sua vez
                                 </span>

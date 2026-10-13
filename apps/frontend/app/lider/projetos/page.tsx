@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Search,
   FolderOpen,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   DollarSign,
@@ -21,6 +20,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { PageLoader } from "@/components/ui/loading";
 
 const API_BASE =
   (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_API_URL) || "/api";
@@ -195,10 +195,7 @@ export default function LiderProjetosPage() {
       {/* Table */}
       <div className="bg-background border border-border/70 rounded-xl shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Carregando projetos...</span>
-          </div>
+          <PageLoader text="Carregando projetos…" compact />
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-red-500">
             <span className="text-sm font-medium">{error}</span>

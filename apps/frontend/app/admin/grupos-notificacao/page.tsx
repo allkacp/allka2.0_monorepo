@@ -8,6 +8,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { InlineLoader } from "@/components/ui/loading";
 
 // Central do Admin Master para os Grupos de Notificação (ata 2026-08, bloco
 // 3/5). Aba própria, separada dos grupos de acesso a chamados. É a "tela
@@ -210,7 +211,7 @@ export default function AdminGruposNotificacaoPage() {
               </div>
             </div>
 
-            {loading && <p className="text-sm text-slate-400 py-8 text-center">Carregando...</p>}
+            {loading && <InlineLoader text="Carregando grupos…" />}
             {error && (
               <div className="py-8 text-center">
                 <p className="text-sm text-red-500">Não foi possível carregar os grupos.</p>

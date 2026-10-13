@@ -29,6 +29,7 @@ import { AlertRulesTab } from "@/components/alert-rules-tab";
 import { AlertSchedulesTab } from "@/components/alert-schedules-tab";
 import { AlertImageThumbnail } from "@/components/alert-image-lightbox";
 import { cn } from "@/lib/utils";
+import { InlineLoader } from "@/components/ui/loading";
 
 type AdminSubview = "padroes" | "regras" | "programados" | "avulsos";
 const SUBVIEWS: { value: AdminSubview; label: string }[] = [
@@ -276,7 +277,7 @@ export function AlertsAdminCenter() {
           <p className="text-sm text-red-500 text-center py-10">Não foi possível carregar a central de alertas agora.</p>
         )}
         {!error && loading && alerts.length === 0 && (
-          <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>
+          <InlineLoader text="Carregando central de alertas…" />
         )}
         {!error && !loading && alerts.length === 0 && (
           <p className="text-sm text-slate-400 text-center py-10">

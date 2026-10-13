@@ -3,6 +3,7 @@ import { validateBriefingAnswers } from "../lib/catalog2-question-types";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import { liderTaskScopeWhere } from "../lib/lider-scope";
 import { verifyToken, requireRole, requireAdminMaster } from "../middleware/auth";
 import { validate } from "../middleware/validate";
 import { getRotationStatus, restartRotation, RotationError, startTaskRotation, sendManualOffer, assignNomadeDirectly } from "../lib/task-rotation-engine";
@@ -255,11 +256,11 @@ export async function getTaskScopeWhere(
   // Admin sees everything
   if (accountType === "admin" || role === "admin") return {};
 
-  // Leader: scoped to tasks where they are the explicitly assigned leader.
-  // Leaders should use /api/lider/tasks for their primary workflow, but if
-  // they hit this endpoint we never let them fall through to admin behaviour.
+  // Leader: tarefas atribuídas a ele OU da área dele — a mesma visibilidade
+  // da fila /api/lider/tasks (ver lib/lider-scope.ts). Nunca cai no
+  // comportamento de admin (o filtro é sempre explícito).
   if (role === "lider") {
-    return { lider_responsavel_id: userId };
+    return liderTaskScopeWhere(userId);
   }
 
   // Agency (inclui Partner — upgrade da própria Agency, não um account_type
@@ -878,12 +879,16 @@ router.patch(
         console.error("[atribuir-lider] Error on launch:", err),
       );
 
-      // Activate the first stage so the lider can start working on it
+      // Activate the first stage so the lider can start working on it — só
+      // quando a primeira etapa é do próprio Líder. Etapa de Nômade/interna
+      // é aberta pelo motor na liberação (iniciarEtapasDaTarefa), que define
+      // executor e prazo; abri-la aqui deixava a etapa "em andamento" sem
+      // ninguém e o motor achava que a tarefa já tinha começado.
       const firstStage = await prisma.projectTaskStage.findFirst({
         where: { project_task_id: updated.id },
         orderBy: { ordem: "asc" },
       });
-      if (firstStage) {
+      if (firstStage && firstStage.executor_type === "leader") {
         await prisma.projectTaskStage.update({
           where: { id: firstStage.id },
           data: { status: "EM_ANDAMENTO" },
@@ -922,11 +927,17 @@ router.patch(
         res.status(404).json({ error: "Tarefa não encontrada" });
         return;
       }
+      // Briefing enviado para análise só sai daqui pela revisão do Líder ou
+      // do Admin — é a aprovação do briefing. Antes nenhuma rota tirava a
+      // tarefa desse status e ela ficava parada para sempre.
+      const emAnaliseRevisavel =
+        task.status === "LANCAMENTO_ENVIADO_PARA_ANALISE" &&
+        (isAdminUser(req.user) || req.user!.role === "lider");
       const releasable = ["EM_LANCAMENTO", "AGUARDANDO_INFORMACOES"];
-      if (!releasable.includes(task.status)) {
+      if (!releasable.includes(task.status) && !emAnaliseRevisavel) {
         res.status(422).json({
           error:
-            "Apenas tarefas em EM_LANCAMENTO ou AGUARDANDO_INFORMACOES podem ser liberadas.",
+            "Apenas tarefas em EM_LANCAMENTO ou AGUARDANDO_INFORMACOES (ou com briefing em análise, pelo Líder/Admin) podem ser liberadas.",
           current_status: task.status,
         });
         return;
@@ -961,6 +972,11 @@ router.patch(
         data: {
           status: "LIBERADA_PARA_EXECUCAO",
           data_liberacao_execucao: new Date(),
+          // Quem aprovou o briefing passa a ser o líder responsável, se a
+          // atribuição automática não tinha encontrado ninguém.
+          ...(emAnaliseRevisavel && req.user!.role === "lider" && !task.lider_responsavel_id
+            ? { lider_responsavel_id: req.user!.id }
+            : {}),
         },
       });
 

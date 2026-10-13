@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
 import { useToast } from "@/hooks/use-toast";
 import { exportAdminCheckoutInvoicePDF } from "@/lib/admin-checkout-invoice-export";
+import { ButtonLoader } from "@/components/ui/loading";
 
 type Target = { kind: "company" | "agency"; id: string; name: string; email: string | null; wallet_balance: number };
 type TargetProject = { id: string; title: string; project_code: string; status: string; created_at: string };
@@ -319,7 +320,7 @@ export function AdminCheckoutModal({
                 >
                   Criar novo projeto
                 </button>
-                {loadingProjects && <p className="text-[11px] text-muted-foreground">Carregando projetos…</p>}
+                {loadingProjects && <p className="text-[11px] text-muted-foreground"><ButtonLoader text="Carregando projetos…" /></p>}
                 {!loadingProjects && projects.length > 0 && (
                   <div className="max-h-32 overflow-y-auto space-y-1.5">
                     {projects.map((p) => (

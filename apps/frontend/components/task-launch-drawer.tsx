@@ -833,21 +833,27 @@ export function TaskLaunchDrawer({
     );
   }
 
+  // Motivo da devolução do Líder. Aparece também no preenchimento manual:
+  // tarefa sem perguntas abre direto nele e o motivo ficava escondido.
+  function renderDevolvidaBanner() {
+    if (currentTask.status !== "DEVOLVIDA_PARA_AGENCIA" || !currentTask.observations) return null;
+    return (
+      <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 flex gap-3">
+        <RotateCcw className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-orange-800 mb-1">Correção solicitada pelo líder</p>
+          <p className="text-sm text-orange-700 whitespace-pre-line">{currentTask.observations}</p>
+        </div>
+      </div>
+    );
+  }
+
   // ── Sub-render: Mode selection screen ────────────────────────────────────
   function renderModeSelection() {
-    const isDevolvida = currentTask.status === "DEVOLVIDA_PARA_AGENCIA";
     return (
       <div className="px-6 py-8 space-y-6">
         {/* Feedback banner when task was returned by leader */}
-        {isDevolvida && currentTask.observations && (
-          <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 flex gap-3">
-            <RotateCcw className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-orange-800 mb-1">Correção solicitada pelo líder</p>
-              <p className="text-sm text-orange-700">{currentTask.observations}</p>
-            </div>
-          </div>
-        )}
+        {renderDevolvidaBanner()}
 
         {/* Info banner */}
         <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 flex gap-3">
@@ -1003,6 +1009,7 @@ export function TaskLaunchDrawer({
     // fillMode === "manual"
     return (
       <div className="px-6 py-6 space-y-8">
+        {renderDevolvidaBanner()}
         {/* ── AI fill success banner ── */}
         {aiFillSuccess && aiFilledFields.size > 0 && (
           <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 flex items-start gap-3">

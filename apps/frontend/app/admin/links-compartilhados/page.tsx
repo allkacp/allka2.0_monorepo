@@ -23,8 +23,9 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { Link2, Search, Copy, Ban, RotateCcw, ArchiveX, Lock, Loader2 } from "lucide-react";
+import { Link2, Search, Copy, Ban, RotateCcw, ArchiveX, Lock} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ButtonLoader } from "@/components/ui/loading";
 
 const STATUS_LABEL: Record<DashboardShareLink["status"], string> = {
   active: "Ativo",
@@ -237,9 +238,7 @@ export default function LinksCompartilhadosPage() {
 
           {/* Lista */}
           {state === "loading" && (
-            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-              <Loader2 className="h-4 w-4 animate-spin" /> Carregando links…
-            </p>
+            <p className="text-sm text-muted-foreground flex items-center gap-1.5"><ButtonLoader text="Carregando links…" /></p>
           )}
           {state === "error" && (
             <div className="flex items-center justify-between gap-2 text-sm text-destructive">

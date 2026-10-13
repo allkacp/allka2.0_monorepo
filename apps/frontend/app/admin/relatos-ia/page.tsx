@@ -14,6 +14,7 @@ import { AlertTimeline } from "@/components/alert-timeline";
 import { STANDARD_SHELL_PANEL_CLASS, StandardPageBanner } from "@/components/standard-page-shell";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { ButtonLoader } from "@/components/ui/loading";
 
 type StatusFilter = "novo" | "em_analise" | "resolvido" | "descartado" | "all";
 
@@ -403,7 +404,7 @@ function SnapshotPreview({ projectId, snapshotId }: { projectId: string; snapsho
       {error ? (
         <p className="text-xs text-red-500">{error}</p>
       ) : text === null ? (
-        <p className="text-xs text-slate-400">Carregando...</p>
+        <p className="text-xs text-slate-400"><ButtonLoader text="Carregando contexto…" /></p>
       ) : (
         <div className="space-y-2">
           {layers.map((layer: any) => (

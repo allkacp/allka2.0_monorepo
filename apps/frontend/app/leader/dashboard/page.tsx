@@ -44,28 +44,18 @@ import {
   Zap,
   CreditCard,
   ArrowRightIcon,
-  FileDown,
-  ExternalLink,
-  ArrowUp,
-  ArrowDown,
   Info,
   Calculator,
-  ArrowUpRight,
   CheckSquare,
   Calendar,
-  Type,
   Check,
   X,
-  MessageSquare,
   ChevronDown,
-  ArrowRight,
   Trophy,
   Save,
-  Minus,
   Globe,
   Pencil,
   Share2,
-  SlidersHorizontal,
   ImageDown,
   Copy,
   Link2,
@@ -76,9 +66,8 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "@/hooks/use-navigate";
-import { format, subDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert"; // AlertTriangle removed to avoid redeclaration
 import {
   Dialog,
@@ -494,7 +483,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast"; // Added useToast hook
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { ShareLinksPanel } from "@/features/dashboards/shared/share-links-panel";
-import { ShareSlugField, previewNormalizeSlug, suggestAvailableSlug } from "@/features/dashboards/shared/share-slug-field";
+import { previewNormalizeSlug, suggestAvailableSlug } from "@/features/dashboards/shared/share-slug-field";
 import { ShareCreateForm } from "@/features/dashboards/shared/share-create-form";
 import { useDashboardExport } from "@/features/dashboards/shared/use-dashboard-export";
 import { DashboardExportOverlay } from "@/features/dashboards/shared/dashboard-export-overlay";
@@ -527,12 +516,11 @@ import {
   type ManualDataEntry,
   type ShareConfig,
   MANUAL_WIDGET_MAP,
-  AlertsCenter,
-  formatDate,
   mergeManualData,
   generatePublicToken,
   buildShareUrl,
 } from "@/features/dashboards/shared/dashboard-common";
+import { useDashboardSystemAlerts } from "@/features/dashboards/shared/use-dashboard-system-alerts";
 
 /**
  * Metricas do Leader.
@@ -771,6 +759,9 @@ export const LEADER_WIDGET_LIBRARY: WidgetLibraryItem[] = [
   ];
 
 export default function AdminDashboardPage() {
+  // Alertas e registro do sistema: dados reais do usuário (nunca listas inventadas).
+  // (os alertas do líder já vêm de dados reais mais abaixo; aqui só o registro do sistema)
+  const { log: systemAlertsData } = useDashboardSystemAlerts();
   const { sidebarCollapsed } = useSidebar(); // Get sidebar collapse state
   const { toast } = useToast(); // Get toast function
   const navigate = useNavigate();
@@ -797,7 +788,7 @@ export default function AdminDashboardPage() {
         await Promise.all([
           apiClient.getLiderTaskCounts(),
           apiClient.getLiderTasks({ status: "LANCAMENTO_ENVIADO_PARA_ANALISE", limit: "1" }),
-          apiClient.getLiderTasks({ status: "ENTREGA_PENDENTE", limit: "1" }),
+          apiClient.getLiderTasks({ status: "EM_APROVACAO,ENTREGA_PENDENTE", limit: "1" }),
           apiClient.getLiderTasks({ status: "APROVADA", limit: "100" }),
           apiClient.getLiderTasks({ limit: "20" }),
           apiClient.getLiderNomades({ limit: "100" }),
@@ -2432,6 +2423,7 @@ export default function AdminDashboardPage() {
       LANCAMENTO_ENVIADO_PARA_ANALISE: { label: "Briefing para revisar", icon: FileText, color: "text-info", bgColor: "bg-info/10", to: "/leader/tarefas?filter=briefings" },
       EM_EXECUCAO: { label: "Tarefa em execução", icon: Activity, color: "text-primary", bgColor: "bg-primary/10", to: "/leader/tarefas" },
       ENTREGA_PENDENTE: { label: "Entrega aguardando análise", icon: CheckCircle2, color: "text-success", bgColor: "bg-success/10", to: "/leader/tarefas?filter=entregas" },
+      EM_APROVACAO: { label: "Entrega aguardando análise", icon: CheckCircle2, color: "text-success", bgColor: "bg-success/10", to: "/leader/tarefas?filter=entregas" },
       ENTREGA_ATRASADA: { label: "Tarefa atrasada", icon: AlertCircle, color: "text-warning", bgColor: "bg-warning/10", to: "/leader/tarefas?filter=atrasadas" },
       REPROVADA: { label: "Tarefa devolvida", icon: AlertCircle, color: "text-warning", bgColor: "bg-warning/10", to: "/leader/devolvidas" },
       APROVADA: { label: "Tarefa aprovada", icon: UserCheck, color: "text-primary", bgColor: "bg-primary/10", to: "/leader/historico" },
@@ -2512,174 +2504,9 @@ export default function AdminDashboardPage() {
   // Period-aware user distribution
   const usersByType = dashboardData.userDistribution;
 
-  const systemAlertsData = [
-    {
-      message: "Sistema de pagamentos funcionando normalmente",
-      type: "success",
-      time: "Agora",
-    },
-    {
-      message: "Pico de tráfego detectado (+45%)",
-      type: "info",
-      time: "5 min atrás",
-    },
-    {
-      message: "Backup automático concluído",
-      type: "success",
-      time: "1h atrás",
-    },
-    {
-      message: "2 disputas pendentes de resolução",
-      type: "warning",
-      time: "3h atrás",
-    },
-  ];
 
-  const adminProfilesData = [
-    {
-      name: "Master Admin",
-      permissions: "Acesso Total",
-      users: 1,
-      color:
-        "from-destructive/10 to-destructive/20 dark:from-destructive/5 dark:to-destructive/10",
-      description: "Controle completo da plataforma",
-    },
-    {
-      name: "Gestão Financeira",
-      permissions: "Financeiro",
-      users: 3,
-      color:
-        "from-success/10 to-success/20 dark:from-success/5 dark:to-success/10",
-      description: "Relatórios, pagamentos e receitas",
-    },
-    {
-      name: "Comercial",
-      permissions: "Vendas & Marketing",
-      users: 5,
-      color: "from-info/10 to-info/20 dark:from-info/5 dark:to-info/10",
-      description: "Gestão de clientes e campanhas",
-    },
-    {
-      name: "Gestão de Tarefas",
-      permissions: "Operacional",
-      users: 4,
-      color:
-        "from-primary/10 to-primary/20 dark:from-primary/5 dark:to-primary/10",
-      description: "Projetos, nômades e qualidade",
-    },
-  ];
 
-  const permissionMatrixData = [
-    {
-      module: "Usuários",
-      master: true,
-      financeiro: false,
-      comercial: true,
-      operacional: false,
-    },
-    {
-      module: "Financeiro",
-      master: true,
-      financeiro: true,
-      comercial: false,
-      operacional: false,
-    },
-    {
-      module: "Projetos",
-      master: true,
-      financeiro: false,
-      comercial: true,
-      operacional: true,
-    },
-    {
-      module: "Relatórios",
-      master: true,
-      financeiro: true,
-      comercial: true,
-      operacional: true,
-    },
-    {
-      module: "Configurações",
-      master: true,
-      financeiro: false,
-      comercial: false,
-      operacional: false,
-    },
-    {
-      module: "Disputas",
-      master: true,
-      financeiro: false,
-      comercial: false,
-      operacional: true,
-    },
-  ];
 
-  const managementToolsData = [
-    {
-      title: "Gerenciar Permissões",
-      description: "Criar e editar perfis administrativos",
-      color:
-        "from-destructive/10 to-destructive/20 dark:from-destructive/5 dark:to-destructive/10",
-      hoverColor:
-        "hover:from-destructive/20 hover:to-destructive/30 dark:hover:from-destructive/10 dark:hover:to-destructive/15",
-      textColor: "text-destructive-foreground",
-      subTextColor: "text-destructive",
-      href: "/admin/permissoes",
-    },
-    {
-      title: "Gerenciar Usuários",
-      description: "Criar, editar e desativar contas",
-      color: "from-info/10 to-info/20 dark:from-info/5 dark:to-info/10",
-      hoverColor:
-        "hover:from-info/20 hover:to-info/30 dark:hover:from-info/10 dark:hover:to-info/15",
-      textColor: "text-info-foreground",
-      subTextColor: "text-info",
-      href: "/admin/usuarios",
-    },
-    {
-      title: "Relatórios Financeiros",
-      description: "Visualizar receitas e pagamentos",
-      color:
-        "from-success/10 to-success/20 dark:from-success/5 dark:to-success/10",
-      hoverColor:
-        "hover:from-success/20 hover:to-success/30 dark:hover:from-success/10 dark:hover:to-success/15",
-      textColor: "text-success-foreground",
-      subTextColor: "text-success",
-      href: "/admin/relatorios",
-    },
-    {
-      title: "Configurações da Plataforma",
-      description: "Ajustar parâmetros do sistema",
-      color:
-        "from-primary/10 to-primary/20 dark:from-primary/5 dark:to-primary/10",
-      hoverColor:
-        "hover:from-primary/20 hover:to-primary/30 dark:hover:from-primary/10 dark:hover:to-primary/15",
-      textColor: "text-primary-foreground",
-      subTextColor: "text-primary",
-      href: "/admin/configuracoes",
-    },
-    {
-      title: "Resolver Disputas",
-      description: "Mediar conflitos entre usuários",
-      color:
-        "from-warning/10 to-warning/20 dark:from-warning/5 dark:to-warning/10",
-      hoverColor:
-        "hover:from-warning/20 hover:to-warning/30 dark:hover:from-warning/10 dark:hover:to-warning/15",
-      textColor: "text-warning-foreground",
-      subTextColor: "text-warning",
-      href: "/admin/disputas",
-    },
-    {
-      title: "Logs do Sistema",
-      description: "Monitorar atividades e erros",
-      color: "from-muted to-muted/50 dark:from-muted/50 dark:to-muted/30",
-      hoverColor:
-        "hover:from-muted/80 hover:to-muted/60 dark:hover:from-muted/60 dark:hover:to-muted/40",
-      textColor: "text-foreground",
-      subTextColor: "text-muted-foreground",
-      href: "/admin/logs",
-    },
-  ];
 
   const getAlertIcon = (type: string) => {
     switch (type) {
@@ -5654,7 +5481,7 @@ export default function AdminDashboardPage() {
           {/* ── Unified toolbar (inclui o título) ───────────────────────────── */}
           <div
             className="relative overflow-hidden flex-1 min-w-0 flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] lg:h-[65px]"
-            style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
+            style={{ background: "var(--app-brand-header, linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%))" }}
           >
 
             {/* Título + info */}
@@ -5748,8 +5575,8 @@ export default function AdminDashboardPage() {
                                 <span className={cn(
                                   "text-xs font-medium transition-colors truncate",
                                   isViewingTemplateDefault
-                                    ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                                    : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                    ? "bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]"
+                                    : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]"
                                 )}>
                                   {profileTemplate.name} (Padrão)
                                 </span>
@@ -5775,8 +5602,8 @@ export default function AdminDashboardPage() {
                                   <span className={cn(
                                     "text-xs font-medium transition-colors",
                                     isActive
-                                      ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                                      : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
+                                      ? "bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]"
+                                      : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]"
                                   )}>
                                     {db.name}
                                   </span>
@@ -5819,7 +5646,7 @@ export default function AdminDashboardPage() {
                             className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer hover:bg-muted/50 transition-all"
                           >
                             <Plus className="h-3.5 w-3.5 text-[#7d1b6a]" />
-                            <span className="bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]">
+                            <span className="bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]">
                               Criar novo dashboard
                             </span>
                           </DropdownMenuItem>
@@ -5877,7 +5704,7 @@ export default function AdminDashboardPage() {
                     }}
                     className={cn("group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "dark" }))}
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                     <RotateCcw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
                   </button>
                 </TooltipTrigger>
@@ -5933,7 +5760,7 @@ export default function AdminDashboardPage() {
                     onClick={() => openHistoricalModal()}
                     className={cn("group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "dark" }))}
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                     <History className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
                     {Object.keys(historicalData).length > 0 && (
                       <span className="absolute top-0.5 right-0.5 bg-amber-500 text-white rounded-full text-[8px] h-3.5 w-3.5 flex items-center justify-center">
@@ -5955,7 +5782,7 @@ export default function AdminDashboardPage() {
                     onClick={openDashboardPublicShare}
                     className={cn("group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "dark" }))}
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                     <Share2 className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
                   </button>
                 </TooltipTrigger>
@@ -5995,9 +5822,9 @@ export default function AdminDashboardPage() {
                     }}
                     className={cn("group relative flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all", dashboardToolbarControlClass({ theme: "dark" }))}
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                     <Pencil className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                    <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))] group-hover:[background-image:none] group-hover:text-white transition-colors">
                       Editar
                     </span>
                   </button>
@@ -6289,7 +6116,7 @@ export default function AdminDashboardPage() {
             className="px-6 pt-5 pb-4"
             style={{
               background:
-                "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)",
+                "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))",
             }}
           >
             <div className="flex items-center gap-3">

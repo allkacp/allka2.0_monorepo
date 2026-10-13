@@ -4818,8 +4818,8 @@ export function CompanyViewSlidePanel({
 
                     {/* Add Card Modal */}
                     {showAddCardModal && (
-                      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <Card className="w-full max-w-md">
+                      <div className="modal-celular-fundo fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                        <Card className="modal-celular-folha w-full max-w-md">
                           <div className="p-6">
                             <div className="flex items-center justify-between mb-4">
                               <h3 className="text-lg font-bold">Adicionar Cartão</h3>
@@ -4921,8 +4921,8 @@ export function CompanyViewSlidePanel({
 
       {/* Partner Migration Modal - Step 1: Confirm Migration */}
       {showMigrateModal && migrationStep === "confirm" && (
-        <div className="z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm fixed inset-0">
-          <div className="bg-white rounded-3xl max-w-md w-full mx-4 shadow-2xl p-8 text-center space-y-6">
+        <div className="modal-celular-fundo z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm fixed inset-0">
+          <div className="modal-celular-folha bg-white rounded-3xl max-w-md w-full mx-4 shadow-2xl p-8 max-sm:p-6 text-center space-y-6">
             <div className="flex justify-center">
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center shadow-lg">
                 <MessageSquare className="h-10 w-10 text-blue-600" />
@@ -4965,8 +4965,8 @@ export function CompanyViewSlidePanel({
 
       {/* Partner Migration Modal - Step 2: Partner Leader Invitation */}
       {showMigrateModal && migrationStep === "leader" && (
-        <div className="z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm fixed inset-0">
-          <div className="bg-white rounded-3xl max-w-md w-full mx-4 shadow-2xl overflow-hidden">
+        <div className="modal-celular-fundo z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm fixed inset-0">
+          <div className="modal-celular-folha bg-white rounded-3xl max-w-md w-full mx-4 shadow-2xl overflow-hidden">
             <div className="p-8 space-y-6">
               {/* Header */}
               <div className="flex items-center justify-between">

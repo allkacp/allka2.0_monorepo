@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Clock, Loader2, Plug, RefreshCw, Sparkles } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { StandardPageBanner } from "@/components/standard-page-shell";
 import { Input } from "@/components/ui/input";
 import { ConnectForm, METHOD_LABEL, NO_PASSWORD_MESSAGE, SCOPE_LABEL, StateBadge } from "./connection-forms";
 
@@ -253,12 +254,12 @@ export function ConnectionsHub({ role }: { role: HubRole }) {
   useEffect(() => { void load(); }, [load]);
   const external = role === "company" || role === "agency";
   return (
-    <div className="mx-auto h-full max-w-4xl space-y-4 overflow-y-auto p-4 md:p-6" data-testid="connections-hub">
-      <div>
-        <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-50">Conexões e acessos necessários</h1>
-        <p className="text-sm text-slate-600 dark:text-slate-300">{ROLE_TITLE[role]}</p>
-        {external && <p className="mt-1 rounded bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">{NO_PASSWORD_MESSAGE}</p>}
-      </div>
+    <div className="h-full space-y-4 overflow-y-auto" data-testid="connections-hub">
+      {/* Mesma faixa de título das outras telas (cor do tema). */}
+      <StandardPageBanner icon={Plug} title="Conexões e acessos necessários" description={ROLE_TITLE[role]} />
+      {external && (
+        <div className="px-1"><p className="mt-1 rounded bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">{NO_PASSWORD_MESSAGE}</p></div>
+      )}
       {oauth && <p className={`rounded px-2 py-1.5 text-xs ${oauth === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`} role="status">{oauth === "ok" ? "Autorização concluída. Estamos validando a conexão." : oauth === "oauth_cancelled" ? "A autorização foi cancelada. Nada foi conectado." : oauth === "oauth_expired" ? "O link de autorização expirou. Inicie a conexão novamente." : "Não foi possível concluir a autorização. Tente novamente."}</p>}
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800">
         {[["pendencias", `Pendências${data ? ` (${data.length})` : ""}`], ...(external ? [["conexoes", "Minhas conexões"]] : [])].map(([k, v]) => (

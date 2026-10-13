@@ -42,7 +42,7 @@ import type {
 import type React from "react";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import { PageLoader } from "@/components/ui/loading";
+import { PageLoader, ButtonLoader } from "@/components/ui/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -184,6 +184,7 @@ import { GlobalPeriodControl } from "@/features/dashboards/shared/global-period-
 import { dashboardToolbarControlClass } from "@/features/dashboards/shared/dashboard-toolbar";
 import { DashboardInfoHint } from "@/features/dashboards/shared/dashboard-info-hint";
 import { useGlobalDashboardPeriod } from "@/features/dashboards/shared/use-dashboard-period";
+import { useDashboardSystemAlerts } from "@/features/dashboards/shared/use-dashboard-system-alerts";
 
 const formatDate = (date: Date, formatStr: string) => {
   const pad = (n: number) => n.toString().padStart(2, "0");
@@ -413,6 +414,8 @@ export const ADMIN_WIDGET_LIBRARY: WidgetLibraryItem[] = [
 ];
 
 export function AdminDashboardPage() {
+  // Alertas e registro do sistema: dados reais do usuário (nunca listas inventadas).
+  const { alerts: systemAlerts, log: systemAlertsData } = useDashboardSystemAlerts();
   const { sidebarCollapsed } = useSidebar(); // Get sidebar collapse state
   const { toast } = useToast(); // Get toast function
   const {
@@ -2558,74 +2561,9 @@ export function AdminDashboardPage() {
           color: "text-primary",
           bgColor: "bg-primary/10",
         }))
-      : [
-          {
-            id: 1,
-            type: "user_registered",
-            title: "Novo usuário cadastrado",
-            description: "Maria Silva se cadastrou como Nômade",
-            time: "5 minutos atrás",
-            icon: Users,
-            color: "text-success",
-            bgColor: "bg-success/10",
-          },
-          {
-            id: 2,
-            type: "project_created",
-            title: "Novo projeto criado",
-            description: "TechCorp criou o projeto 'Desenvolvimento Mobile'",
-            time: "15 minutos atrás",
-            icon: Briefcase,
-            color: "text-info",
-            bgColor: "bg-info/10",
-          },
-          {
-            id: 3,
-            type: "user_updated",
-            title: "Perfil atualizado",
-            description: "João Costa atualizou suas informações",
-            time: "1 hora atrás",
-            icon: UserCheck,
-            color: "text-primary",
-            bgColor: "bg-primary/10",
-          },
-          {
-            id: 4,
-            type: "company_registered",
-            title: "Nova empresa cadastrada",
-            description: "InnovaTech se registrou na plataforma",
-            time: "2 horas atrás",
-            icon: Building2,
-            color: "text-chart-4",
-            bgColor: "bg-chart-4/10",
-          },
-        ];
+      : [];
 
   // Mock data for system alerts
-  const systemAlerts = [
-    {
-      id: 1,
-      type: "warning",
-      title: "Atualização de segurança disponível",
-      description:
-        "Recomendamos atualizar o sistema para a versão mais recente",
-      priority: "high",
-    },
-    {
-      id: 2,
-      type: "info",
-      title: "Manutenção programada",
-      description: "Manutenção agendada para domingo, 28/01 às 02:00",
-      priority: "medium",
-    },
-    {
-      id: 3,
-      type: "warning",
-      title: "Espaço de armazenamento",
-      description: "85% do espaço de armazenamento está sendo utilizado",
-      priority: "medium",
-    },
-  ];
 
   // Period-aware top performers
   const topPerformers = dashboardData.performers;
@@ -2633,28 +2571,6 @@ export function AdminDashboardPage() {
   // Period-aware user distribution
   const usersByType = dashboardData.userDistribution;
 
-  const systemAlertsData = [
-    {
-      message: "Sistema de pagamentos funcionando normalmente",
-      type: "success",
-      time: "Agora",
-    },
-    {
-      message: "Pico de tráfego detectado (+45%)",
-      type: "info",
-      time: "5 min atrás",
-    },
-    {
-      message: "Backup automático concluído",
-      type: "success",
-      time: "1h atrás",
-    },
-    {
-      message: "2 disputas pendentes de resolução",
-      type: "warning",
-      time: "3h atrás",
-    },
-  ];
 
   const adminProfilesData = [
     {
@@ -2735,72 +2651,6 @@ export function AdminDashboardPage() {
     },
   ];
 
-  const managementToolsData = [
-    {
-      title: "Gerenciar Permissões",
-      description: "Criar e editar perfis administrativos",
-      color:
-        "from-destructive/10 to-destructive/20 dark:from-destructive/5 dark:to-destructive/10",
-      hoverColor:
-        "hover:from-destructive/20 hover:to-destructive/30 dark:hover:from-destructive/10 dark:hover:to-destructive/15",
-      textColor: "text-destructive-foreground",
-      subTextColor: "text-destructive",
-      href: "/admin/permissoes",
-    },
-    {
-      title: "Gerenciar Usuários",
-      description: "Criar, editar e desativar contas",
-      color: "from-info/10 to-info/20 dark:from-info/5 dark:to-info/10",
-      hoverColor:
-        "hover:from-info/20 hover:to-info/30 dark:hover:from-info/10 dark:hover:to-info/15",
-      textColor: "text-info-foreground",
-      subTextColor: "text-info",
-      href: "/admin/usuarios",
-    },
-    {
-      title: "Relatórios Financeiros",
-      description: "Visualizar receitas e pagamentos",
-      color:
-        "from-success/10 to-success/20 dark:from-success/5 dark:to-success/10",
-      hoverColor:
-        "hover:from-success/20 hover:to-success/30 dark:hover:from-success/10 dark:hover:to-success/15",
-      textColor: "text-success-foreground",
-      subTextColor: "text-success",
-      href: "/admin/relatorios",
-    },
-    {
-      title: "Configurações da Plataforma",
-      description: "Ajustar parâmetros do sistema",
-      color:
-        "from-primary/10 to-primary/20 dark:from-primary/5 dark:to-primary/10",
-      hoverColor:
-        "hover:from-primary/20 hover:to-primary/30 dark:hover:from-primary/10 dark:hover:to-primary/15",
-      textColor: "text-primary-foreground",
-      subTextColor: "text-primary",
-      href: "/admin/configuracoes",
-    },
-    {
-      title: "Resolver Disputas",
-      description: "Mediar conflitos entre usuários",
-      color:
-        "from-warning/10 to-warning/20 dark:from-warning/5 dark:to-warning/10",
-      hoverColor:
-        "hover:from-warning/20 hover:to-warning/30 dark:hover:from-warning/10 dark:hover:to-warning/15",
-      textColor: "text-warning-foreground",
-      subTextColor: "text-warning",
-      href: "/admin/disputas",
-    },
-    {
-      title: "Logs do Sistema",
-      description: "Monitorar atividades e erros",
-      color: "from-muted to-muted/50 dark:from-muted/50 dark:to-muted/30",
-      hoverColor:
-        "hover:from-muted/80 hover:to-muted/60 dark:hover:from-muted/60 dark:hover:to-muted/40",
-      textColor: "text-foreground",
-      subTextColor: "text-muted-foreground",
-      href: "/admin/logs",
-    },
-  ];
 
   const getAlertIcon = (type: string) => {
     switch (type) {
@@ -5044,9 +4894,7 @@ export function AdminDashboardPage() {
           if (!dreData) {
             return (
               <div className="p-6 rounded-xl border border-dashed border-border/60 bg-muted/20 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Carregando dados...
-                </p>
+                <p className="text-sm text-muted-foreground"><ButtonLoader text="Carregando dados…" /></p>
               </div>
             );
           }
@@ -5355,9 +5203,7 @@ export function AdminDashboardPage() {
           if (!realNomads) {
             return (
               <div className="p-6 rounded-xl border border-dashed border-border/60 bg-muted/20 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Carregando dados...
-                </p>
+                <p className="text-sm text-muted-foreground"><ButtonLoader text="Carregando dados…" /></p>
               </div>
             );
           }
@@ -11397,7 +11243,7 @@ export function AdminDashboardPage() {
               className="relative overflow-hidden flex-1 min-w-0 flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] lg:h-[65px]"
               style={{
                 background:
-                  "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)",
+                  "var(--app-brand-header, linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%))",
               }}
             >
               {/* Título + info */}
@@ -11530,8 +11376,8 @@ export function AdminDashboardPage() {
                               className={cn(
                                 "text-xs font-medium transition-colors truncate",
                                 isViewingTemplateDefault
-                                  ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                                  : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]",
+                                  ? "bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]"
+                                  : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]",
                               )}
                             >
                               {profileTemplate.name} (Padrão)
@@ -11574,8 +11420,8 @@ export function AdminDashboardPage() {
                                 className={cn(
                                   "text-xs font-medium transition-colors",
                                   isActive
-                                    ? "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]"
-                                    : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]",
+                                    ? "bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]"
+                                    : "text-foreground group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]",
                                 )}
                               >
                                 {db.name}
@@ -11637,7 +11483,7 @@ export function AdminDashboardPage() {
                         className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium cursor-pointer hover:bg-muted/50 transition-all"
                       >
                         <Plus className="h-3.5 w-3.5 text-[#7d1b6a]" />
-                        <span className="bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]">
+                        <span className="bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]">
                           Criar novo dashboard
                         </span>
                       </DropdownMenuItem>
@@ -11728,7 +11574,7 @@ export function AdminDashboardPage() {
                             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                             style={{
                               background:
-                                "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                                "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                             }}
                           />
                           <RotateCcw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />

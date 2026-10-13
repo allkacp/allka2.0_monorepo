@@ -37,7 +37,6 @@ import {
   TrendingUp,
   TrendingDown,
   Clock,
-  BarChart3,
   Trash2,
   AlertCircle,
   Edit,
@@ -1123,7 +1122,7 @@ export default function UsuariosPage() {
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                   style={{
                     background:
-                      "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                      "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                   }}
                 />
                 <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
@@ -2428,9 +2427,9 @@ export default function UsuariosPage() {
                         }
                       >
                         {/* Body */}
-                        <div className="flex flex-1 overflow-hidden min-h-0">
+                        <div className="flex max-sm:flex-col flex-1 overflow-hidden min-h-0">
                           {/* Left — Saved Filters (compact, drag-drop, inline rename) */}
-                          <div className="w-44 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
+                          <div className="w-44 max-sm:w-full max-sm:max-h-36 max-sm:border-r-0 max-sm:border-b border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
                             <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1 flex-shrink-0">
                               <Filter className="h-3 w-3" /> Filtros Salvos
                             </p>
@@ -3317,7 +3316,7 @@ export default function UsuariosPage() {
                     onScroll={handleTableScroll}
                     className={`${usersView === "list" ? "overflow-x-auto" : "hidden"} allka-table-scroll-body`}
                   >
-                    <table className="tabela-cartao w-full text-xs min-w-[960px]">
+                    <table className="tabela-cartao w-full text-xs">
                       <thead>
                         <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                           <th
@@ -3340,13 +3339,12 @@ export default function UsuariosPage() {
                           ).map((col) => (
                             <th
                               key={col.key}
-                              className="relative py-2.5 px-4 text-[11px] font-bold text-[#365a91] dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
+                              className="relative py-2.5 px-3 text-[11px] font-bold text-[#365a91] dark:text-slate-400 uppercase tracking-[0.04em] select-none [&_button]:!text-[11px]"
                               style={{
                                 position: "sticky",
                                 top: 0,
                                 zIndex: 2,
                                 width: columnWidths[col.key],
-                                minWidth: columnWidths[col.key],
                                 background: "var(--table-head)",
                                 boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                                 borderRight: "1px solid rgba(148,163,184,0.16)",
@@ -3681,7 +3679,7 @@ export default function UsuariosPage() {
                               {visibleCols.has("usuario") && (
                                 <td
                                   data-rotulo="Usuário"
-                                  className="py-1.5 px-4"
+                                  className="py-1.5 px-3"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -4628,10 +4626,8 @@ export default function UsuariosPage() {
                 </SelectContent>
               </Select>
               {companiesLoading && (
-                <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Carregando lista
-                  de empresas...
-                </p>
+                <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5"><ButtonLoader text="Carregando lista
+                  de empresas…" /></p>
               )}
             </div>
           </div>

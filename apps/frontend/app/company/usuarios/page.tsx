@@ -21,6 +21,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { PageLoader } from "@/components/ui/loading";
 
 // Self-service: a própria Company cria/gerencia seus colaboradores via
 // /api/company/users. Não mostra company_id nem permite escolher outra
@@ -223,7 +224,7 @@ export default function CompanyUsuariosPage() {
         </div>
 
         {loading ? (
-          <div className="py-16 text-center text-sm text-slate-400">Carregando...</div>
+          <PageLoader text="Carregando usuários…" compact />
         ) : error ? (
           <div className="py-16 text-center text-sm text-rose-500">{error}</div>
         ) : users.length === 0 ? (

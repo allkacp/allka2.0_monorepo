@@ -51,13 +51,13 @@ export function CookieConsentBanner() {
   if (!visible) return null
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[9999] p-4 pointer-events-none">
+    <div className="fixed bottom-0 left-0 right-0 z-[9999] p-4 max-sm:p-2 max-sm:pb-[max(0.5rem,env(safe-area-inset-bottom))] pointer-events-none">
       <div
         className="pointer-events-auto max-w-3xl mx-auto bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
         style={{ animation: "slideUpFade 0.4s ease-out" }}
       >
         {/* Header row */}
-        <div className="flex items-start gap-3 px-6 pt-5 pb-3">
+        <div className="flex items-start gap-3 px-6 pt-5 pb-3 max-sm:px-4 max-sm:pt-4">
           <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
             <Cookie className="h-5 w-5 text-blue-600" />
           </div>
@@ -142,10 +142,10 @@ export function CookieConsentBanner() {
         )}
 
         {/* Action row */}
-        <div className="flex flex-wrap items-center gap-2 px-6 pb-5 pt-2">
+        <div className="flex flex-wrap items-center gap-2 px-6 pb-5 pt-2 max-sm:px-4 max-sm:pb-4">
           <button
             onClick={() => setExpanded((e) => !e)}
-            className="mr-auto flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+            className="mr-auto max-sm:w-full flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
           >
             {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
             {expanded ? "Ocultar configurações" : "Personalizar"}
@@ -153,7 +153,7 @@ export function CookieConsentBanner() {
           <Button
             variant="outline"
             size="sm"
-            className="text-xs h-8 px-4"
+            className="text-xs h-8 px-4 max-sm:flex-1"
             onClick={rejectNonEssential}
           >
             Rejeitar não essenciais
@@ -162,7 +162,7 @@ export function CookieConsentBanner() {
             <Button
               variant="outline"
               size="sm"
-              className="text-xs h-8 px-4"
+              className="text-xs h-8 px-4 max-sm:flex-1"
               onClick={saveCustom}
             >
               Salvar preferências
@@ -170,7 +170,7 @@ export function CookieConsentBanner() {
           )}
           <Button
             size="sm"
-            className="text-xs h-8 px-5 bg-blue-600 hover:bg-blue-700 text-white"
+            className="text-xs h-8 px-5 max-sm:flex-1 bg-blue-600 hover:bg-blue-700 text-white"
             onClick={acceptAll}
           >
             <Shield className="h-3.5 w-3.5 mr-1.5" />

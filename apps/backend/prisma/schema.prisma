@@ -3634,10 +3634,39 @@ model ChatMessage {
   // intencional em "Enviar", único no banco — retry/duplo-clique com o
   // mesmo valor nunca grava uma segunda mensagem.
   client_message_id String?      @unique
+  // Chat estilo WhatsApp Web (2026-10-12): mensagem pode ser texto, imagem,
+  // arquivo ou áudio gravado. O binário fica em uploads/chat/<conversa>/ e só
+  // sai pela rota com checagem de participante. `content` vira a legenda
+  // (pode ser vazia) quando há anexo.
+  type               String    @default("text")
+  // text | image | file | audio
+  attachment_name    String?
+  attachment_file    String?
+  attachment_mime    String?
+  attachment_size    Int?
+  audio_duration_sec Int?
+  // Resposta a outra mensagem da mesma sala (escalar solto: a mensagem
+  // citada pode ter sido apagada — a prévia mostra "mensagem apagada").
+  reply_to_id        String?
+  edited_at          DateTime?
+  // Apagar é lógico: o texto e o anexo somem para todos, a linha fica.
+  deleted_at         DateTime?
   created_at        DateTime     @default(now())
 
   @@index([conversation_id, created_at])
   @@map("chat_messages")
+}
+
+// Configurações do chat interno (áudio, anexos, tamanhos da janela, quem
+// usa…). Linha única, escrita só pelo Admin Master. Sem linha, valem os
+// padrões de lib/chat-settings.ts.
+model PlatformChatSettings {
+  id                 String   @id @default("default")
+  settings_json      String   @db.LongText
+  updated_by_user_id String?
+  updated_at         DateTime @updatedAt
+
+  @@map("platform_chat_settings")
 }
 
 // ─── Allkademy ────────────────────────────────────────────────────────────────
@@ -7542,6 +7571,17 @@ model PlatformWorkCalendar {
   updated_at         DateTime @updatedAt
 
   @@map("platform_work_calendar")
+}
+
+// Tema visual da plataforma (Personalizar Sidebar): um degradê só para todos os usuários. Linha única, escrita só pelo administrador.
+model PlatformTheme {
+  id                 String   @id @default("default")
+  settings_json      String   @db.LongText
+  presets_json       String?  @db.LongText
+  updated_by_user_id String?
+  updated_at         DateTime @updatedAt
+
+  @@map("platform_theme")
 }
 
 model PlatformHoliday {

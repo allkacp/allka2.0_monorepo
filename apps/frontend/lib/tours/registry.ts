@@ -156,7 +156,7 @@ export const TOURS: TourDefinition[] = [
       },
       { id: "participants", target: null, title: "Participantes", description: "Cada grupo tem membros reais da plataforma — nunca um contato externo avulso." },
       { id: "approval", target: null, title: "Aprovação", description: "Um líder solicita a criação de um grupo; só o Admin Master aprova ou rejeita, sempre com justificativa quando rejeita." },
-      { id: "chat", target: "chat-widget-button", title: "Conversa interna", description: "Um grupo aprovado ganha uma sala de conversa própria, dentro da plataforma.", placement: "bottom" },
+      { id: "chat", target: "chat-widget-button", title: "Conversa interna", description: "Um grupo aprovado ganha uma sala de conversa própria, dentro da plataforma.", placement: "left" },
       { id: "group-vs-permission", target: null, title: "Grupo não é permissão", description: "Um grupo só define quem é avisado e participa da conversa — nunca dá acesso a telas ou dados. Isso é configurado separadamente." },
       { id: "chat-honesty", target: null, title: "Situação atual do chat", description: "Esta conversa é interna da plataforma. Ainda não existe integração real com WhatsApp ou outro aplicativo externo." },
     ],

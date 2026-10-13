@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Bold, Italic, Smile, Paperclip, Type, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COMMENT_COLORS, COMMENT_SIZES, type CommentColor, type CommentSize } from "@/lib/share-api";
+import { ButtonLoader } from "@/components/ui/loading";
 
 const EmojiPicker = lazy(() => import("./emoji-picker"));
 
@@ -399,9 +400,7 @@ export const CommentEditor = React.forwardRef<
             <div ref={emojiPopover.contentRef} style={emojiPopover.style} className="shadow-lg rounded-xl overflow-hidden">
               <Suspense
                 fallback={
-                  <div className="w-[280px] h-[120px] flex items-center justify-center text-xs text-muted-foreground bg-popover border border-border/60 rounded-xl">
-                    Carregando…
-                  </div>
+                  <div className="w-[280px] h-[120px] flex items-center justify-center text-xs text-muted-foreground bg-popover border border-border/60 rounded-xl"><ButtonLoader text="Carregando emojis…" /></div>
                 }
               >
                 <EmojiPicker onSelect={insertEmoji} />

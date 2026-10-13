@@ -1221,8 +1221,10 @@
      declaração de gradiente para essa tela: Sidebar/Header/main/Footer
      recebem prop `transparent` e deixam de pintar o próprio fundo, para que
      este gradiente apareça contínuo atrás de todas as regiões. */
+  /* Fundo da moldura de todas as telas: segue o degradê escolhido em
+     "Personalizar Sidebar" (--app-brand-gradient, definido no SidebarProvider). */
   .admin-empresas-shell-bg {
-    background: linear-gradient(135deg, #071126 0%, #14245f 42%, #68236f 72%, #c51684 100%);
+    background: var(--app-brand-gradient, linear-gradient(135deg, #071126 0%, #14245f 42%, #68236f 72%, #c51684 100%));
   }
 
   /* Foco roxo/magenta de marca para Input/Select/Textarea SÓ dentro da tela
@@ -1426,6 +1428,15 @@
   [role="columnheader"], [role="cell"],
   .data-table th, .data-table td {
     font-size: var(--app-font-table, 0.7rem) !important;
+  }
+
+  /* No celular a tabela vira cartão e a fonte de tabela do desktop (0.7rem,
+     ~10px) fica pequena demais para ler no aparelho — piso de 0.8125rem. */
+  @media (max-width: 767px) {
+    html table th, html table td,
+    html [role="columnheader"], html [role="cell"] {
+      font-size: max(var(--app-font-table, 0.7rem), 0.8125rem) !important;
+    }
   }
 
   /* Superfície principal do sistema */
@@ -2008,6 +2019,17 @@
   height: 0;
 }
 
+/* Tabelas cujas colunas encolhem para caber na tela (fitColumnWidths):
+   o conteúdo que não couber na célula é cortado com "…", em vez de
+   empurrar a tabela para o lado. */
+@media (min-width: 768px) {
+  table.allka-fit-table th,
+  table.allka-fit-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 /* Barra de rolagem interna da tela de Usuários: discreta, no limite direito
    do conteúdo e alinhada ao degradê institucional. */
 .allka-users-scroll {
@@ -2084,6 +2106,90 @@
   html,
   body {
     overscroll-behavior-y: contain;
+  }
+}
+
+/* ─── Piso de fonte no celular ──────────────────────────────────────────────
+ *
+ * A plataforma usa tamanhos fixos em px para rótulos (text-[10px] aparece
+ * mais de 1.800 vezes, text-[9px] quase 200). No desktop a densidade é
+ * desejada; num aparelho de 390px, 9–10px é ilegível sem zoom. Aqui o piso
+ * sobe 1px por degrau, só abaixo de 768px — o desenho no desktop não muda.
+ */
+@media (max-width: 767px) {
+  .text-\[8px\],
+  .text-\[9px\] {
+    font-size: 10px;
+  }
+  .text-\[10px\],
+  .text-\[10\.5px\] {
+    font-size: 11px;
+  }
+  .text-\[11px\] {
+    font-size: 12px;
+  }
+
+  /*
+   * Telas deslizantes (Novo Projeto, detalhe de Empresa/Projeto/Usuário…)
+   * usam 50px de margem lateral fixa — num aparelho de 390px isso tirava
+   * 100px do formulário, que ficava espremido no meio de uma moldura cinza.
+   */
+  .px-\[50px\] {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  .py-\[50px\] {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+}
+
+/* ─── Botões flutuantes do celular somem com uma tela aberta ────────────────
+ *
+ * Ajuda, Alertas, Aura e Sugestões ficam empilhados no canto direito. Com uma
+ * tela deslizante aberta (Novo Projeto, Nova Especialidade, Cesta…) eles
+ * cobriam campos e o botão de salvar do formulário. A tela marca a si mesma
+ * com `data-tela-slide` e os botões (`fab-celular`) saem até ela fechar.
+ */
+@media (max-width: 1023px) {
+  body:has([data-tela-slide]) .fab-celular {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.8);
+    transition: opacity 0.15s, transform 0.15s;
+  }
+}
+
+/* ─── Popups feitos à mão viram folha no celular ────────────────────────────
+ *
+ * Os popups da biblioteca (Dialog/AlertDialog) já sobem da base no celular
+ * (ver lib/dialog-mobile-sheet.ts). Os poucos montados à mão com
+ * `fixed inset-0` aderem marcando o fundo com `modal-celular-fundo` e a caixa
+ * com `modal-celular-folha` — no desktop nada muda.
+ */
+@keyframes allka-folha-sobe {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@media (max-width: 639px) {
+  .modal-celular-fundo {
+    align-items: flex-end !important;
+    justify-content: stretch !important;
+    padding: 0 !important;
+  }
+  .modal-celular-folha {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    max-height: 92dvh !important;
+    border-radius: 1.25rem 1.25rem 0 0 !important;
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+    border-bottom: env(safe-area-inset-bottom) solid transparent !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    animation: allka-folha-sobe 0.28s cubic-bezier(0.2, 0, 0, 1);
   }
 }
 
@@ -2181,6 +2287,18 @@ a:focus-visible,
   table button,
   table [role="button"],
   table a[href] {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  /*
+   * Caixa de seleção, chave e opção redonda são <button> no Radix: com o
+   * mínimo de 44px acima viravam barras pretas altas (vistas em Configurar
+   * colunas). Elas têm tamanho próprio; o rótulo ao lado é o alvo de toque.
+   */
+  button[role="checkbox"],
+  button[role="switch"],
+  button[role="radio"] {
     min-height: 0;
     min-width: 0;
   }
@@ -2371,4 +2489,125 @@ a:focus-visible,
 .dark :where(.product-editor) :is(input, select, textarea):disabled {
   background-color: rgb(30 41 59);
   color: rgb(148 163 184);
+}
+
+/* ─── Chat estilo WhatsApp Web (components/chat-widget.tsx) ────────────────
+ *
+ * As cores seguem o tema da plataforma (Personalizar Sidebar, aplicado em
+ * sidebar-context.tsx): o balão de quem enviou e os botões de enviar usam o
+ * degradê dos botões (--app-brand-button); não lidas, filtro ativo e a barra
+ * do áudio usam a cor do item ativo (--app-brand-active). Trocou o tema, o
+ * chat acompanha. Também aqui: o fundo da conversa com textura discreta, o
+ * destaque rápido da mensagem citada e a barra do áudio pintada até o ponto
+ * em que está tocando (--chat-audio-pct vem do componente).
+ */
+.chat-brand {
+  background: var(--app-brand-button, var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)));
+  color: #fff;
+}
+
+.chat-accent-bg {
+  background-color: var(--app-brand-active, #c81a7f);
+  color: #fff;
+}
+
+.chat-accent-text {
+  color: var(--app-brand-active, #c81a7f);
+}
+
+.chat-accent-soft {
+  background-color: color-mix(in srgb, var(--app-brand-active, #c81a7f) 12%, #fff);
+  color: color-mix(in srgb, var(--app-brand-active, #c81a7f) 85%, #000);
+}
+
+.dark .chat-accent-text {
+  color: color-mix(in srgb, var(--app-brand-active, #c81a7f) 60%, #fff);
+}
+
+.dark .chat-accent-soft {
+  background-color: color-mix(in srgb, var(--app-brand-active, #c81a7f) 22%, #0f172a);
+  color: color-mix(in srgb, var(--app-brand-active, #c81a7f) 45%, #fff);
+}
+
+/* Dentro do balão em degradê a barra do áudio fica branca. */
+.chat-on-brand {
+  --chat-audio-fill: #fff;
+  --chat-audio-track: rgba(255, 255, 255, 0.35);
+}
+
+.chat-wallpaper {
+  background-color: #f3f4f8;
+  background-image:
+    radial-gradient(color-mix(in srgb, var(--app-brand-active, #c81a7f) 16%, transparent) 1px, transparent 1.4px),
+    radial-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1.4px);
+  background-size: 24px 24px, 24px 24px;
+  background-position: 0 0, 12px 12px;
+}
+
+.dark .chat-wallpaper {
+  background-color: #0b1020;
+  background-image:
+    radial-gradient(color-mix(in srgb, var(--app-brand-active, #c81a7f) 18%, transparent) 1px, transparent 1.4px),
+    radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1.4px);
+}
+
+@keyframes chat-msg-flash {
+  0%,
+  55% {
+    background-color: color-mix(in srgb, var(--app-brand-active, #c81a7f) 18%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.chat-msg-flash {
+  animation: chat-msg-flash 1.5s ease-out;
+}
+
+.chat-audio-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 9999px;
+  outline: none;
+  background: linear-gradient(
+    to right,
+    var(--chat-audio-fill, var(--app-brand-active, #c81a7f)) 0 var(--chat-audio-pct, 0%),
+    var(--chat-audio-track, rgba(100, 116, 139, 0.35)) var(--chat-audio-pct, 0%) 100%
+  );
+}
+
+.chat-audio-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--chat-audio-fill, var(--app-brand-active, #c81a7f));
+}
+
+.chat-audio-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--chat-audio-fill, var(--app-brand-active, #c81a7f));
+}
+
+.chat-audio-range:disabled {
+  cursor: default;
+}
+
+/*
+ * O chat já tem os tamanhos de toque do WhatsApp (botões de 40px). O mínimo
+ * de 44px do celular esticaria o botão de velocidade do áudio, o "x" da busca
+ * e a seta do menu do balão, desalinhando tudo.
+ */
+@media (max-width: 767px) and (pointer: coarse) {
+  [data-chat-root] button,
+  [data-chat-root] [role="button"] {
+    min-height: 0;
+    min-width: 0;
+  }
 }

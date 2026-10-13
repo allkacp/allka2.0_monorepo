@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Link2 } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
+import { TASK_STATUS_LABEL } from "@/lib/task-status-display"
 
 const STATE_LABEL: Record<string, string> = {
   bloqueada: "Bloqueada",
@@ -63,7 +64,7 @@ export function TaskDependenciesCard({ taskId, status }: { taskId: string; statu
             </div>
             <p className="mt-1 text-slate-700 dark:text-slate-200">{r.reason}</p>
             {r.blocks && !r.satisfied && <p className="text-xs font-semibold text-red-700">Bloqueia {r.blocks}.</p>}
-            {r.target_task && <p className="text-xs text-slate-500">Espera a tarefa "{r.target_task.title}" ({r.target_task.status}){r.responsible ? ` · responsável: ${r.responsible}` : ""}</p>}
+            {r.target_task && <p className="text-xs text-slate-500">Espera a tarefa "{r.target_task.title}" ({TASK_STATUS_LABEL[r.target_task.status] ?? r.target_task.status}){r.responsible ? ` · responsável: ${r.responsible}` : ""}</p>}
             {r.expected_deliverable && <p className="text-xs text-slate-500">Entregável esperado: <strong>{r.expected_deliverable}</strong></p>}
             {r.origin && <p className="text-[11px] text-slate-400">Origem: {r.origin}</p>}
             {r.released && <p className="mt-1 rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-800">Liberada manualmente{r.released.by ? ` por ${r.released.by}` : ""} em {new Date(r.released.at).toLocaleString("pt-BR")}. Motivo: {r.released.reason}</p>}

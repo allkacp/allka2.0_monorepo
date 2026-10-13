@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useNavigate } from "@/hooks/use-navigate";
 import { useSidebar } from "@/contexts/sidebar-context";
@@ -39,10 +39,13 @@ import {
 import { cn } from "@/lib/utils";
 import { isCatalogRoute } from "@/lib/catalog-access";
 import { useProjectBasket } from "@/contexts/project-basket-context";
-import { ProjectCreateNewPanel } from "@/components/project-create-new-panel";
-import { ProductDetailSheet } from "@/components/product-detail-sheet";
+import { MountWhenOpened } from "@/components/mount-when-opened";
 import { ButtonLoader } from "@/components/ui/loading";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+
+// Painéis pesados (criação de projeto, detalhe do produto): baixados só quando abertos.
+const ProjectCreateNewPanel = lazy(() => import("@/components/project-create-new-panel").then((m) => ({ default: m.ProjectCreateNewPanel })));
+const ProductDetailSheet = lazy(() => import("@/components/product-detail-sheet").then((m) => ({ default: m.ProductDetailSheet })));
 
 // ─── Category → icon map (mirrors product-catalog-view) ─────────────────────
 const CATEGORY_ICONS: Record<string, any> = {
@@ -1003,6 +1006,7 @@ export function ProjectBasketDrawer() {
         </div>
       </HeaderSlideScreen>
       {/* ── Project creation panel (same flow as Admin > Projetos > Novo Projeto) ── */}
+      <MountWhenOpened open={projectPanelOpen} loadingText="Carregando novo projeto…">
       <ProjectCreateNewPanel
         open={projectPanelOpen}
         onOpenChange={(v) => {
@@ -1070,8 +1074,10 @@ export function ProjectBasketDrawer() {
             .map((i) => [i.productId, i.commissionData]),
         )}
       />
+      </MountWhenOpened>
 
       {/* ── Product detail sheet (read-only "Ver detalhes" from a basket item) ── */}
+      <MountWhenOpened open={!!detailProduct} loadingText="Carregando detalhes do produto…">
       <ProductDetailSheet
         product={detailProduct}
         open={!!detailProduct}
@@ -1080,6 +1086,7 @@ export function ProjectBasketDrawer() {
         }}
         isSelected={true}
       />
+      </MountWhenOpened>
 
       {/* ── Confirmação dupla antes de limpar a cesta ─────────────────────── */}
       <ConfirmationDialog

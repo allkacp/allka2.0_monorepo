@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { hasAdminModulePermission } from "@/lib/admin-permissions";
 import { useOpenRoadmapPanel } from "@/hooks/use-open-roadmap-panel";
 import { CentralChamadosAccessPanel } from "@/components/central-chamados-access-panel";
+import { ButtonLoader } from "@/components/ui/loading";
 
 type Policy = "ALLOW_ALL_ACTIVE" | "DENY_ALL_EXCEPT_ALLOWED";
 
@@ -387,7 +388,7 @@ export default function AcessoAosChamadosPage() {
   const header = (
     <div
       className="relative overflow-hidden flex flex-wrap items-center gap-3 rounded-xl px-4 py-3 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] lg:h-[65px]"
-      style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
+      style={{ background: "var(--app-brand-header, linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%))" }}
     >
       <div className="flex items-center gap-2.5 min-w-0 flex-1">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15">
@@ -695,7 +696,7 @@ export default function AcessoAosChamadosPage() {
                 {isExpanded && (
                   <div className="border-t border-border/40 px-3 py-3">
                     <p className="text-[10px] font-semibold text-gray-500 mb-2">Membros</p>
-                    {groupMembersLoading && <p className="text-xs text-gray-400">Carregando...</p>}
+                    {groupMembersLoading && <p className="text-xs text-gray-400"><ButtonLoader text="Carregando membros…" /></p>}
                     {!groupMembersLoading && groupMembers.length === 0 && (
                       <p className="text-xs text-gray-400">Nenhum membro. Selecione usuários na tabela abaixo e use “Adicionar ao grupo”.</p>
                     )}

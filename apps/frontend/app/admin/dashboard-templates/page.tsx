@@ -192,7 +192,7 @@ export default function DashboardTemplatesPage() {
             título+ícone à esquerda, ação primária (btn-brand) à direita. */}
         <div
           className="relative overflow-hidden flex flex-wrap items-center gap-3 rounded-xl px-4 py-3 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] lg:h-[65px]"
-          style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
+          style={{ background: "var(--app-brand-header, linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%))" }}
         >
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15">
@@ -228,7 +228,7 @@ export default function DashboardTemplatesPage() {
           {PROFILES.map((p) => (
             <TabsContent key={p.role} value={p.role} className="mt-4">
               {state === "loading" && (
-                <p className="text-sm text-muted-foreground text-center py-16">Carregando templates...</p>
+                <PageLoader text="Carregando templates…" compact />
               )}
               {state === "error" && (
                 <div className="flex flex-col items-center gap-3 py-16">
@@ -302,7 +302,7 @@ export default function DashboardTemplatesPage() {
                             title="Definir como padrão"
                             className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50 shrink-0"
                           >
-                            <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                            <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                             <Star className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", t.is_default && "fill-amber-400 text-amber-400 group-hover:text-amber-300")} />
                           </button>
                           <button
@@ -311,7 +311,7 @@ export default function DashboardTemplatesPage() {
                             title="Duplicar"
                             className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50 shrink-0"
                           >
-                            <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                            <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                             <Copy className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
                           </button>
                           <button

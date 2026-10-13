@@ -4,11 +4,12 @@
 // contratados juntos; cada produto continua independente, e regras dizem quem espera
 // o quê (produto, tarefa, etapa, entregável, aprovação, acesso) e COMO espera.
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Loader2, Package, Plus } from "lucide-react"
+import { Package, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { apiClient } from "@/lib/api-client"
 import { DependencyRuleForm, type DependencyOptions } from "@/components/dependency-rule-form"
+import { InlineLoader } from "@/components/ui/loading";
 
 const BEHAVIOR_TONE: Record<string, string> = {
   block_start: "bg-red-100 text-red-800",
@@ -66,7 +67,7 @@ export default function AdminPacotesPage() {
     }
   }
 
-  if (loading) return <div className="flex items-center gap-2 p-10 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
+  if (loading) return <InlineLoader text="Carregando pacotes…" />
 
   return (
     <div className="space-y-6 p-4 md:p-6">

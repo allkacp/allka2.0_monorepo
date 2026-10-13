@@ -300,7 +300,7 @@ export function ApprovalGatesSection({ version, readOnly, act }: { version: any;
           <Input className="h-7 w-28 text-xs" placeholder="grupo (opcional)" value={n.group_key} onChange={(e) => setN({ ...n, group_key: e.target.value })} />
           <Input className="h-7 w-14 text-xs" type="number" min={0} aria-label="Ordem no grupo" value={n.sequence_no} onChange={(e) => setN({ ...n, sequence_no: e.target.value })} />
           <label className="inline-flex items-center gap-1"><input type="checkbox" checked={n.requires_comment} onChange={(e) => setN({ ...n, requires_comment: e.target.checked })} /> exige comentário</label>
-          <Button size="sm" className="h-7 bg-gradient-to-r from-violet-700 to-fuchsia-600" disabled={!n.name.trim() || !n.anchor_task_key} onClick={() => void act(() => apiClient.addCatalog2ApprovalGate(version.id, body()), "Portão adicionado.").then(() => { setN(blank); setAdding(false); })}><Plus className="mr-1 h-3 w-3" />Adicionar aprovação</Button>
+          <Button size="sm" className="h-7 bg-[image:var(--app-brand-button,linear-gradient(to_right,#6d28d9,#c026d3))]" disabled={!n.name.trim() || !n.anchor_task_key} onClick={() => void act(() => apiClient.addCatalog2ApprovalGate(version.id, body()), "Portão adicionado.").then(() => { setN(blank); setAdding(false); })}><Plus className="mr-1 h-3 w-3" />Adicionar aprovação</Button>
         </div>
       )}
     </section>
@@ -367,7 +367,7 @@ export function SlaRulesSection({ version, readOnly, act }: { version: any; read
           <select aria-label="Unidade" className={SEL} value={n.unit} onChange={(e) => setN({ ...n, unit: e.target.value })}>{(opts?.units ?? []).map((p: any) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>
           <select aria-label="Contado a partir de" className={SEL} value={n.anchor} onChange={(e) => setN({ ...n, anchor: e.target.value })}>{(opts?.anchors ?? []).map((p: any) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>
           <select aria-label="Modalidade" className={SEL} value={n.modality} onChange={(e) => setN({ ...n, modality: e.target.value })}>{(opts?.modalities ?? []).map((p: any) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>
-          <Button size="sm" className="h-7 bg-gradient-to-r from-violet-700 to-fuchsia-600" disabled={!n.name.trim() || !(Number(n.amount) > 0) || (needsTarget && !n.target_key)} onClick={() => void act(() => apiClient.addCatalog2SlaRule(version.id, { name: n.name.trim(), scope_kind: n.scope_kind, target_key: needsTarget ? n.target_key : null, modality: n.modality, amount: Number(n.amount), unit: n.unit, anchor: n.anchor }), "Prazo adicionado.").then(() => { setN(blank); setAdding(false); })}><Plus className="mr-1 h-3 w-3" />Adicionar prazo</Button>
+          <Button size="sm" className="h-7 bg-[image:var(--app-brand-button,linear-gradient(to_right,#6d28d9,#c026d3))]" disabled={!n.name.trim() || !(Number(n.amount) > 0) || (needsTarget && !n.target_key)} onClick={() => void act(() => apiClient.addCatalog2SlaRule(version.id, { name: n.name.trim(), scope_kind: n.scope_kind, target_key: needsTarget ? n.target_key : null, modality: n.modality, amount: Number(n.amount), unit: n.unit, anchor: n.anchor }), "Prazo adicionado.").then(() => { setN(blank); setAdding(false); })}><Plus className="mr-1 h-3 w-3" />Adicionar prazo</Button>
         </div>
       )}
     </section>

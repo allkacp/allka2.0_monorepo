@@ -181,9 +181,9 @@ export default function TermsManagementPage() {
                   onClick={() => setShowCreateModal(true)}
                   className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
                 >
-                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                  <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                   <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                  <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))] group-hover:[background-image:none] group-hover:text-white transition-colors">
                     Novo Termo
                   </span>
                 </button>

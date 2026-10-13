@@ -36,6 +36,7 @@ import {
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { apiClient } from "@/lib/api-client";
+import { PageLoader } from "@/components/ui/loading";
 
 /**
  * Nômade › Meu Perfil.
@@ -328,10 +329,7 @@ export default function NomadesPerfilPage() {
         <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="p-4 sm:p-6 space-y-5">
             {carregando ? (
-              <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Carregando seu perfil…</span>
-              </div>
+              <PageLoader text="Carregando seu perfil…" compact />
             ) : erro ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
                 <p className="text-sm text-amber-800 dark:text-amber-300">{erro}</p>

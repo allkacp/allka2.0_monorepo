@@ -37,7 +37,7 @@ import {
 import { GripVertical } from "lucide-react";
 import { NeonBadge } from "@/components/neon-badge";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
-import { PageLoader } from "@/components/ui/loading";
+import { PageLoader, InlineLoader } from "@/components/ui/loading";
 import { ExportButton } from "@/components/export-button";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { AdvancedDateFilter } from "@/components/advanced-date-filter";
@@ -1839,7 +1839,7 @@ export default function AdminFinanceiroPage() {
                     onClick={() => setActiveTab("faturas")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       activeTab === "faturas"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -1864,7 +1864,7 @@ export default function AdminFinanceiroPage() {
                     onClick={() => setActiveTab("saques")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       activeTab === "saques"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -1889,7 +1889,7 @@ export default function AdminFinanceiroPage() {
                     onClick={() => setActiveTab("despesas")}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       activeTab === "despesas"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -1914,7 +1914,7 @@ export default function AdminFinanceiroPage() {
                     onClick={() => setActiveTab("carteiras" as any)}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       activeTab === "carteiras"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -1939,7 +1939,7 @@ export default function AdminFinanceiroPage() {
                     onClick={() => setActiveTab("squad" as any)}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       activeTab === "squad"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -1964,7 +1964,7 @@ export default function AdminFinanceiroPage() {
                     onClick={() => setActiveTab("conciliacao" as any)}
                     className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                       activeTab === "conciliacao"
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                        ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                         : "hover:bg-background"
                     }`}
                   >
@@ -2200,7 +2200,7 @@ export default function AdminFinanceiroPage() {
                         )}
                         style={{
                           background:
-                            "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                            "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                         }}
                       />
                       <Cog
@@ -2434,9 +2434,7 @@ export default function AdminFinanceiroPage() {
                             <td
                               colSpan={invVisibleCols.size + 2}
                               className="py-12 text-center text-sm text-slate-400"
-                            >
-                              Carregando faturas…
-                            </td>
+                            ><InlineLoader text="Carregando faturas…" className="py-0" /></td>
                           </tr>
                         ) : filteredInvoices.length === 0 ? (
                           <tr>
@@ -2839,9 +2837,7 @@ export default function AdminFinanceiroPage() {
                             <td
                               colSpan={6}
                               className="py-12 text-center text-sm text-slate-400"
-                            >
-                              Carregando saques…
-                            </td>
+                            ><InlineLoader text="Carregando saques…" className="py-0" /></td>
                           </tr>
                         ) : pagedWithdrawals.length === 0 ? (
                           <tr>
@@ -3154,9 +3150,7 @@ export default function AdminFinanceiroPage() {
                             <td
                               colSpan={7}
                               className="py-12 text-center text-sm text-slate-400"
-                            >
-                              Carregando saques…
-                            </td>
+                            ><InlineLoader text="Carregando saques…" className="py-0" /></td>
                           </tr>
                         ) : pagedPartnerWithdrawals.length === 0 ? (
                           <tr>
@@ -3561,9 +3555,7 @@ export default function AdminFinanceiroPage() {
                               <td
                                 colSpan={8}
                                 className="py-12 text-center text-sm text-slate-400"
-                              >
-                                Carregando despesas…
-                              </td>
+                              ><InlineLoader text="Carregando despesas…" className="py-0" /></td>
                             </tr>
                           ) : expenses.length === 0 ? (
                             <tr>
@@ -4364,9 +4356,7 @@ export default function AdminFinanceiroPage() {
                               <td
                                 colSpan={7}
                                 className="py-12 text-center text-sm text-slate-400"
-                              >
-                                Carregando carteiras…
-                              </td>
+                              ><InlineLoader text="Carregando carteiras…" className="py-0" /></td>
                             </tr>
                           ) : wallets.length === 0 ? (
                             <tr>
@@ -4659,7 +4649,7 @@ export default function AdminFinanceiroPage() {
                         });
                         setSquadAddOpen(true);
                       }}
-                      className="h-8 gap-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xs"
+                      className="h-8 gap-1.5 bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white text-xs"
                     >
                       <Plus className="h-3.5 w-3.5" /> Adicionar empresa
                     </Button>
@@ -4744,9 +4734,7 @@ export default function AdminFinanceiroPage() {
                               <td
                                 colSpan={9}
                                 className="py-12 text-center text-sm text-slate-400"
-                              >
-                                Carregando Squad…
-                              </td>
+                              ><InlineLoader text="Carregando Squad…" className="py-0" /></td>
                             </tr>
                           ) : squadList.length === 0 ? (
                             <tr>
@@ -5291,9 +5279,7 @@ export default function AdminFinanceiroPage() {
                               <td
                                 colSpan={9}
                                 className="py-12 text-center text-sm text-slate-400"
-                              >
-                                Carregando conciliação…
-                              </td>
+                              ><InlineLoader text="Carregando conciliação…" className="py-0" /></td>
                             </tr>
                           ) : concilData.length === 0 ? (
                             <tr>
@@ -5759,7 +5745,7 @@ export default function AdminFinanceiroPage() {
                           setSquadFormLoading(false);
                         }
                       }}
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                      className="bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white"
                     >
                       {squadFormLoading
                         ? "Salvando…"
@@ -5789,9 +5775,7 @@ export default function AdminFinanceiroPage() {
                   </SheetTitle>
                 </SheetHeader>
                 {squadCycleLoading ? (
-                  <div className="py-12 text-center text-sm text-slate-400">
-                    Carregando ciclo…
-                  </div>
+                  <InlineLoader text="Carregando ciclo…" />
                 ) : !squadCurrentCycle ? (
                   <div className="py-12 text-center text-sm text-slate-400">
                     Nenhum ciclo aberto
@@ -5937,9 +5921,9 @@ export default function AdminFinanceiroPage() {
                 }
               >
                 {/* Body */}
-                <div className="flex flex-1 min-h-0 w-full">
+                <div className="flex max-sm:flex-col flex-1 min-h-0 w-full">
                   {/* Left: saved filters */}
-                  <div className="w-44 shrink-0 border-r border-slate-100 dark:border-slate-800 flex flex-col bg-slate-50 dark:bg-slate-800/50">
+                  <div className="w-44 max-sm:w-full max-sm:max-h-36 max-sm:border-r-0 max-sm:border-b shrink-0 border-r border-slate-100 dark:border-slate-800 flex flex-col bg-slate-50 dark:bg-slate-800/50">
                     <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800">
                       <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
                         Filtros Salvos
@@ -6954,9 +6938,7 @@ export default function AdminFinanceiroPage() {
                 {/* Lista de movimentações */}
                 <div className="flex-1 overflow-y-auto">
                   {ledgerLoading ? (
-                    <div className="py-12 text-center text-sm text-slate-400">
-                      Carregando extrato…
-                    </div>
+                    <InlineLoader text="Carregando extrato…" />
                   ) : ledger.length === 0 ? (
                     <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
                       <BarChart3 className="h-8 w-8 opacity-30" />
@@ -7171,9 +7153,7 @@ export default function AdminFinanceiroPage() {
 
                 <div className="flex-1 overflow-y-auto">
                   {globalLedgerLoading ? (
-                    <div className="py-12 text-center text-sm text-slate-400">
-                      Carregando movimentações…
-                    </div>
+                    <InlineLoader text="Carregando movimentações…" />
                   ) : globalLedger.length === 0 ? (
                     <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
                       <BarChart3 className="h-8 w-8 opacity-30" />

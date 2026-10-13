@@ -1958,16 +1958,19 @@ export function ProjectCreateNewPanel({
         }
         subtitle={cloneMode ? "Clonar projeto existente" : "Configure os dados do projeto"}
         footer={
-          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-start gap-2 sm:gap-3 w-full">
+          // No celular: "Próximo" em cima, largura inteira; Cancelar e
+          // Rascunho lado a lado embaixo — empilhados, os três botões
+          // ocupavam quase metade da tela e sobrava pouco para o formulário.
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:items-center sm:justify-start sm:gap-3 w-full">
             <Button
               variant="outline"
               onClick={handleClose}
               disabled={loading}
-              className="w-full sm:w-auto"
+              className="w-full sm:w-auto order-2 sm:order-none"
             >
               Cancelar
             </Button>
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex min-w-0 flex-col items-end gap-1 order-3 sm:order-none">
               <Button
                 variant="outline"
                 onClick={handleSaveDraftNow}
@@ -1991,7 +1994,7 @@ export function ProjectCreateNewPanel({
               )}
             </div>
             <Button
-              className="btn-brand w-full sm:w-auto"
+              className="btn-brand w-full sm:w-auto col-span-2 order-1 sm:order-none"
               onClick={handleSubmit}
               disabled={loading}
             >
@@ -2327,10 +2330,7 @@ export function ProjectCreateNewPanel({
                                 Selecione uma empresa para carregar os responsáveis
                               </div>
                             ) : loadingConsultants ? (
-                              <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400 gap-2">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                Carregando consultores...
-                              </div>
+                              <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400 gap-2"><ButtonLoader text="Carregando consultores…" /></div>
                             ) : localConsultants.length > 0 ? (
                               <SearchableSelect
                                 items={localConsultants.map((u) => ({
@@ -2438,10 +2438,7 @@ export function ProjectCreateNewPanel({
                             Admin responsável
                           </Label>
                           {loadingAdminResponsible ? (
-                            <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400 gap-2">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Carregando administradores...
-                            </div>
+                            <div className="h-8 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-xs text-slate-400 gap-2"><ButtonLoader text="Carregando administradores…" /></div>
                           ) : (
                             <SearchableSelect
                               items={adminResponsibleOptions.map((u) => ({

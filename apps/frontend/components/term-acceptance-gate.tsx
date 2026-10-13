@@ -97,8 +97,8 @@ export function TermAcceptanceGate({ pendingTerms, user, onAllAccepted }: TermAc
 
   return (
     /* Overlay que cobre toda a tela — z-[9999] garante que fica acima de tudo */
-    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[92vh]">
+    <div className="modal-celular-fundo fixed inset-0 z-9999 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="modal-celular-folha relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 flex flex-col max-h-[92vh]">
 
         {/* Cabeçalho fixo */}
         <div className="flex items-start gap-4 p-6 pb-4 border-b">

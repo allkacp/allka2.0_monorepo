@@ -4,12 +4,13 @@ import { withScreenHelp } from "@/components/with-screen-help"
 import { SECURE_BROWSER_HELP } from "@/lib/screen-help"
 // D3 — Navegador seguro: o dono guarda contas (consentimento), autoriza pessoas por tempo e acompanha/derruba sessões; quem foi autorizado abre a sessão.
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Clock, Loader2, Lock, Plus, ShieldCheck, Trash2 } from "lucide-react"
+import { Clock, Lock, Plus, ShieldCheck, Trash2 } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { RemoteBrowserCanvas } from "./remote-browser-canvas"
+import { ButtonLoader } from "@/components/ui/loading";
 
 export const fmtRemaining = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
 const fmt = (d?: string | null) => (d ? new Date(d).toLocaleString("pt-BR") : "—")
@@ -66,7 +67,7 @@ export function SessionViewer({ session, url, onClose, startUrl = "", hosts = []
   return (
     <div ref={root} className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-white ${full ? "h-screen w-screen" : "h-full rounded-xl border border-slate-200 shadow-sm"}`} style={full ? { width: "100vw", height: "100vh" } : undefined} data-testid="session-viewer">
       {full ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-white" style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }} data-testid="viewer-header">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-white" style={{ background: "var(--app-brand-header, linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%))" }} data-testid="viewer-header">
           <img src="/logo-allka-full.png" alt="Allka" className="h-6 shrink-0 object-contain" />
           <span className="hidden h-5 w-px bg-white/30 sm:block" />
           <div className="min-w-0">
@@ -220,7 +221,7 @@ function SecureBrowserHubBase({ canCreate = true, adminScope, isAdmin = false, o
         {canCreate && <ol className="mt-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-3" data-testid="sb-steps"><li className="rounded-lg bg-slate-50 p-2"><strong>1. Guardar e logar.</strong> Cadastre a conta e clique em “Logar na conta”: abre um navegador onde você digita o site e faz o login.</li><li className="rounded-lg bg-slate-50 p-2"><strong>2. Liberar acesso.</strong> Em “Autorizações e histórico”, escolha a pessoa e por quanto tempo ela pode usar.</li><li className="rounded-lg bg-slate-50 p-2"><strong>3. Testar.</strong> Clique em “Entrar já logado (testar)” — ou peça para a pessoa liberada abrir pelo menu Navegador seguro.</li></ol>}
         {err && <p role="alert" className="mt-2 rounded bg-red-50 px-2 py-1 text-xs text-red-700">{err}</p>}
       </div>
-      {!profiles ? <p className="flex items-center gap-2 text-xs text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Carregando…</p> : (
+      {!profiles ? <p className="flex items-center gap-2 text-xs text-slate-500"><ButtonLoader text="Carregando contas guardadas…" /></p> : (
         <>
           {granted.length > 0 && <section><h3 className="mb-2 text-sm font-bold">Acessos que você recebeu</h3><ul className="space-y-2">{granted.map((p) => <ProfileCard isAdmin={isAdmin} key={p.id} p={p} onChanged={load} onOpen={openViewer} />)}</ul></section>}
           <section><h3 className="mb-2 text-sm font-bold">{adminScope ? "Contas guardadas" : "Contas guardadas da sua conta"}</h3><ul className="space-y-2">{mine.map((p) => <ProfileCard isAdmin={isAdmin} key={p.id} p={p} onChanged={load} onOpen={openViewer} />)}{mine.length === 0 && <li className="rounded-lg bg-white p-4 text-center text-xs text-slate-500">Nenhuma conta guardada ainda.</li>}</ul></section>

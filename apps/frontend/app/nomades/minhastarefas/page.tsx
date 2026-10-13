@@ -28,6 +28,7 @@ import { TaskStatusPanel } from "@/components/task-status-panel";
 import { TaskAICard } from "@/components/task-ai-card";
 import { apiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { PageLoader } from "@/components/ui/loading";
 
 /**
  * Nômade › Minhas Tarefas.
@@ -76,6 +77,9 @@ interface Tarefa {
   etapa_atual: Etapa | null;
   valor_previsto: number;
   responsavel_pela_tarefa: boolean;
+  /** Última devolução da entrega (aprovação recusada), quando houver. */
+  reprovacao_motivo?: string | null;
+  reprovado_em?: string | null;
 }
 
 const fmtBRL = (v: number) =>
@@ -307,10 +311,7 @@ export default function MinhasTarefasPage() {
             )}
 
             {carregando ? (
-              <div className="flex items-center justify-center gap-2 py-16 text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Carregando suas tarefas…</span>
-              </div>
+              <PageLoader text="Carregando suas tarefas…" compact />
             ) : erro ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
                 <p className="text-sm text-amber-800 dark:text-amber-300">{erro}</p>
@@ -422,6 +423,21 @@ export default function MinhasTarefasPage() {
                       </div>
 
                       <TaskGuideCard taskId={t.id} className="mt-3" />
+
+                      {/* Entrega devolvida: o motivo precisa estar junto da
+                          etapa reaberta, senão ela só volta a "Para executar". */}
+                      {t.reprovacao_motivo && t.status === "EM_EXECUCAO" && (
+                        <div className="mt-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 dark:border-orange-900/40 dark:bg-orange-950/20">
+                          <p className="text-xs font-semibold text-orange-800 dark:text-orange-300">
+                            <AlertTriangle className="h-3 w-3 inline mr-1" />
+                            Entrega devolvida para ajuste
+                            {t.reprovado_em ? ` em ${fmtData(t.reprovado_em)}` : ""}
+                          </p>
+                          <p className="mt-0.5 text-xs text-orange-700 dark:text-orange-300 whitespace-pre-line">
+                            {t.reprovacao_motivo}
+                          </p>
+                        </div>
+                      )}
 
                       {/* Etapas atribuídas a este nômade */}
                       <div className="mt-3 space-y-2">
@@ -580,8 +596,8 @@ export default function MinhasTarefasPage() {
 
                       {t.total_etapas > t.minhas_etapas.length && (
                         <p className="mt-2 text-[11px] text-slate-400">
-                          Esta tarefa tem {t.total_etapas} etapas no total; as demais são de
-                          outros executores.
+                          Esta tarefa tem {t.total_etapas} etapas no total; aqui aparecem só
+                          as que estão com você agora.
                         </p>
                       )}
                     </div>

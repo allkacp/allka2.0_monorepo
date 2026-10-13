@@ -1,6 +1,7 @@
 import type React from "react";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { createPortal } from "react-dom";
+import { HeaderSlideScreen } from "@/components/header-slide-screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +28,8 @@ import {
   Plus,
 } from "lucide-react";
 import { useSidebar } from "@/contexts/sidebar-context";
+import { useToast } from "@/hooks/use-toast";
+import { useAccountType } from "@/contexts/account-type-context";
 import { cn } from "@/lib/utils";
 
 interface SidebarSettingsModalProps {
@@ -213,8 +216,33 @@ export function SidebarSettingsModal({
     updateSidebarSettings,
     applyFullTheme,
     sidebarCollapsed,
-    sidebarWidth,
+    savePlatformTheme,
   } = useSidebar();
+  // Só a administração altera o tema (o botão de paleta só aparece para ela).
+  const canEditPlatformTheme = useAccountType().accountType === "admin";
+  const { toast } = useToast();
+  // O tema vale para a plataforma inteira: salvar grava no servidor e todos
+  // os usuários passam a ver o mesmo degradê.
+  const persistPlatformTheme = async (
+    settings: typeof sidebarSettings,
+    presets: Array<{ id: string; name: string; value: string; preview: string }>,
+  ) => {
+    if (!canEditPlatformTheme) return true;
+    try {
+      await savePlatformTheme(settings, presets);
+      return true;
+    } catch (err) {
+      toast({
+        title: "Não foi possível salvar o tema",
+        description:
+          err instanceof Error && err.message
+            ? err.message
+            : "Tente de novo em instantes.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
   const originalSettingsRef = useRef(sidebarSettings);
   const [savedSnapshot, setSavedSnapshot] = useState(() =>
     JSON.stringify(sidebarSettings),
@@ -394,6 +422,8 @@ export function SidebarSettingsModal({
     } catch {}
     // Auto-commit the current theme
     originalSettingsRef.current = sidebarSettings;
+    setSavedSnapshot(JSON.stringify(sidebarSettings));
+    void persistPlatformTheme(sidebarSettings, updated);
     setPresetName("");
     setSavePresetOpen(false);
   };
@@ -404,6 +434,7 @@ export function SidebarSettingsModal({
     try {
       localStorage.setItem("allka_custom_presets", JSON.stringify(updated));
     } catch {}
+    void persistPlatformTheme(originalSettingsRef.current, updated);
   };
 
   // Sincronizar snapshot ao abrir o modal (garante "Salvo" no estado inicial)
@@ -455,7 +486,9 @@ export function SidebarSettingsModal({
     setConfirmAction("save");
   };
 
-  const confirmSave = () => {
+  const confirmSave = async () => {
+    setConfirmAction(null);
+    if (!(await persistPlatformTheme(sidebarSettings, customPresets))) return;
     // Atualizar snapshot para as novas mudanças (já foram aplicadas)
     originalSettingsRef.current = sidebarSettings;
     setSavedSnapshot(JSON.stringify(sidebarSettings));
@@ -588,25 +621,20 @@ export function SidebarSettingsModal({
   );
 
   return (
-    <Sheet
+    // Mesmo container das outras telas (Tela Slide no lugar do painel
+    // branco), abaixo do topo — não cobre o cabeçalho nem o menu.
+    // Vai direto no <body> com zIndex 45 para os diálogos de confirmação
+    // (z-50) ficarem por cima; dentro do menu ficariam escondidos.
+    createPortal(
+    <HeaderSlideScreen
       open={open}
-      onOpenChange={(next) => {
-        if (!next) handleAttemptClose();
-      }}
+      onClose={handleAttemptClose}
+      hideHeader
+      zIndex={45}
     >
-      <SheetContent
-        side="right"
-        hideOverlay={true}
-        className="p-0 h-screen bg-white shadow-2xl flex flex-col gap-0"
-        style={{
-          top: 0,
-          left: `${sidebarWidth}px`,
-          width: `calc(100vw - ${sidebarWidth}px)`,
-          maxWidth: `calc(100vw - ${sidebarWidth}px)`,
-        }}
-      >
+      <div className="flex flex-col w-full h-full min-h-0 gap-0">
         {/* Header */}
-        <header className="relative overflow-hidden shrink-0 app-brand-header">
+        <header className="relative overflow-hidden shrink-0 app-brand-header rounded-2xl lg:rounded-[1.25rem]">
           {/* Decorative background layers */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full bg-white/5" />
@@ -670,6 +698,14 @@ export function SidebarSettingsModal({
                 </div>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={handleAttemptClose}
+              aria-label="Fechar"
+              className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-all shrink-0"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </header>
 
@@ -1325,23 +1361,28 @@ export function SidebarSettingsModal({
                       onClick={() =>
                         applyPreview({
                           headerBg:
-                            sidebarSettings.headerBg === null
+                            sidebarSettings.headerBg == null
                               ? sidebarSettings.backgroundColor
                               : null,
                         })
                       }
                       className={`h-5 px-2 rounded-full border text-[10px] font-medium transition-all ${
-                        sidebarSettings.headerBg === null
+                        sidebarSettings.headerBg == null
                           ? "border-emerald-400/40 bg-emerald-50 text-emerald-700"
                           : "border-slate-200 bg-slate-50 text-slate-500"
                       }`}
                     >
-                      {sidebarSettings.headerBg === null
+                      {sidebarSettings.headerBg == null
                         ? "= Sidebar"
                         : "Personalizar"}
                     </button>
                   </div>
-                  {sidebarSettings.headerBg !== null && (
+                  {sidebarSettings.headerBg == null && (
+                    <p className="text-[11px] text-slate-500">
+                      As faixas de título usam o mesmo degradê do fundo. Clique em "= Sidebar" para escolher outro.
+                    </p>
+                  )}
+                  {sidebarSettings.headerBg != null && (
                     <div className="space-y-1.5">
                       <div className="flex flex-wrap gap-1">
                         {[
@@ -1432,23 +1473,28 @@ export function SidebarSettingsModal({
                       onClick={() =>
                         applyPreview({
                           buttonBg:
-                            sidebarSettings.buttonBg === null
+                            sidebarSettings.buttonBg == null
                               ? sidebarSettings.backgroundColor
                               : null,
                         })
                       }
                       className={`h-5 px-2 rounded-full border text-[10px] font-medium transition-all ${
-                        sidebarSettings.buttonBg === null
+                        sidebarSettings.buttonBg == null
                           ? "border-emerald-400/40 bg-emerald-50 text-emerald-700"
                           : "border-slate-200 bg-slate-50 text-slate-500"
                       }`}
                     >
-                      {sidebarSettings.buttonBg === null
+                      {sidebarSettings.buttonBg == null
                         ? "= Sidebar"
                         : "Personalizar"}
                     </button>
                   </div>
-                  {sidebarSettings.buttonBg !== null && (
+                  {sidebarSettings.buttonBg == null && (
+                    <p className="text-[11px] text-slate-500">
+                      As botões usam o mesmo degradê do fundo. Clique em "= Sidebar" para escolher outro.
+                    </p>
+                  )}
+                  {sidebarSettings.buttonBg != null && (
                     <div className="space-y-1.5">
                       <div className="flex flex-wrap gap-1">
                         {solidColors.map((color) => (
@@ -1848,7 +1894,9 @@ export function SidebarSettingsModal({
 
               <AlertDialogDescription>
                 {confirmAction === "save"
-                  ? "Tem certeza que deseja salvar as alterações no sidebar?"
+                  ? canEditPlatformTheme
+                    ? "O novo tema passa a valer para todos os usuários da plataforma."
+                    : "Tem certeza que deseja salvar as alterações no sidebar?"
                   : "Tem certeza que não deseja salvar as alterações?"}
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -2045,7 +2093,9 @@ export function SidebarSettingsModal({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </HeaderSlideScreen>,
+    document.body,
+    )
   );
 }

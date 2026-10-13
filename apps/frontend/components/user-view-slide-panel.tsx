@@ -121,6 +121,7 @@ import {
   MOCK_COMPANIES,
 } from "@/contexts/platform-users-context";
 import { apiClient } from "@/lib/api-client";
+import { tipoDaContaLogada } from "@/lib/conta-logada";
 import {
   ALL_PROJECT_PERMISSIONS,
   MOCK_COMPANY_PROJECTS,
@@ -586,7 +587,8 @@ export function UserViewSlidePanel({
   >([]);
 
   useEffect(() => {
-    if (!open) return;
+    // Só admin lê os perfis (a rota responde 403 aos demais): nem pede.
+    if (!open || tipoDaContaLogada() !== "admin") return;
     let cancelado = false;
     apiClient
       .getPermissionProfiles()

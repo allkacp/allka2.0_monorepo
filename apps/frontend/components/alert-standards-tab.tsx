@@ -22,6 +22,7 @@ import {
 import { AlertImageThumbnail } from "@/components/alert-image-lightbox";
 import { AlertImageField, isAlertImageFieldValid, type AlertImageFieldValue } from "@/components/alert-image-field";
 import { cn } from "@/lib/utils";
+import { ButtonLoader, InlineLoader } from "@/components/ui/loading";
 
 interface AlertStandard {
   id: string;
@@ -104,7 +105,7 @@ export function AlertStandardsTab() {
     <div className="flex flex-col h-full min-h-0">
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-3 pb-4">
         {error && <p className="text-sm text-red-500 text-center py-10">Não foi possível carregar os padrões agora.</p>}
-        {!error && loading && standards.length === 0 && <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>}
+        {!error && loading && standards.length === 0 && <InlineLoader text="Carregando padrões…" />}
         {!error && !loading && standards.length === 0 && <p className="text-sm text-slate-400 text-center py-10">Nenhum padrão cadastrado.</p>}
         {!error && (
           <div className="space-y-2">
@@ -187,7 +188,7 @@ export function AlertStandardsTab() {
 
       <StandardModalDialog open={previewing !== null} onClose={() => setPreviewing(null)} title="Prévia do padrão" subtitle="Dados fictícios — nenhum alerta real é criado" size="compact">
         <div className="p-6 space-y-3">
-          {previewLoading && <p className="text-sm text-slate-400">Carregando prévia...</p>}
+          {previewLoading && <p className="text-sm text-slate-400"><ButtonLoader text="Carregando prévia…" /></p>}
           {!previewLoading && previewData && (
             <>
               <p className="text-[10px] uppercase tracking-wide text-amber-600 font-medium">Exemplo — dados fictícios</p>

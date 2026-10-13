@@ -241,7 +241,7 @@ export function ProductContractView({
         <div className="shrink-0 relative overflow-hidden mb-3 rounded-2xl shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)]">
           <div
             className="absolute inset-0"
-            style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
+            style={{ background: "var(--app-brand-header, linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%))" }}
           />
           <div
             className="absolute inset-0 opacity-20 pointer-events-none"

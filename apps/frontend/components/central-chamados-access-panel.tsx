@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { apiClient } from "@/lib/api-client";
+import { InlineLoader } from "@/components/ui/loading";
 
 type Row = {
   id: string;
@@ -212,9 +213,7 @@ export function CentralChamadosAccessPanel() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="py-4 text-center text-gray-400">
-                  Carregando...
-                </td>
+                <td colSpan={6} className="py-4 text-center text-gray-400"><InlineLoader text="Carregando acessos…" className="py-0" /></td>
               </tr>
             )}
             {!loading && items.length === 0 && (

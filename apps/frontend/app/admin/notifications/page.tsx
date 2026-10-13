@@ -198,9 +198,9 @@ export default function NotificationsManagementPage() {
                       onClick={() => setShowHistoryModal(true)}
                       className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
                     >
-                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                       <Calendar className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                      <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))] group-hover:[background-image:none] group-hover:text-white transition-colors">
                         Histórico
                       </span>
                     </button>
@@ -215,9 +215,9 @@ export default function NotificationsManagementPage() {
                       onClick={() => setShowMessageModal(true)}
                       className="group relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
                     >
-                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                       <Plus className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-                      <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+                      <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))] group-hover:[background-image:none] group-hover:text-white transition-colors">
                         Novo Modelo
                       </span>
                     </button>
@@ -306,8 +306,11 @@ export default function NotificationsManagementPage() {
                   const enabledChannels = channels.filter(c => cfg[c.key])
                   return (
                     <div key={key} className={`rounded-xl border ${border} overflow-hidden`}>
-                      <button onClick={() => setExpandedType(isExpanded ? null : key)}
-                        className="w-full flex items-center gap-4 px-5 py-4 bg-white hover:bg-slate-50/60 transition-colors text-left">
+                      {/* div com papel de botão: os chips de canal abaixo já são <button>, e botão dentro de botão é HTML inválido. */}
+                      <div role="button" tabIndex={0} aria-expanded={isExpanded}
+                        onClick={() => setExpandedType(isExpanded ? null : key)}
+                        onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setExpandedType(isExpanded ? null : key) } }}
+                        className="w-full flex items-center gap-4 px-5 py-4 bg-white hover:bg-slate-50/60 transition-colors text-left cursor-pointer">
                         <div className={`p-2 rounded-lg ${bg} shrink-0`}><Icon className={`h-4 w-4 ${color}`} /></div>
                         <div className="flex-1">
                           <p className="text-sm font-semibold text-slate-800">{label}</p>
@@ -324,7 +327,7 @@ export default function NotificationsManagementPage() {
                           ))}
                         </div>
                         {isExpanded ? <ChevronUp className="h-4 w-4 text-slate-400 shrink-0" /> : <ChevronDown className="h-4 w-4 text-slate-400 shrink-0" />}
-                      </button>
+                      </div>
                       {isExpanded && (
                         <div className="border-t border-slate-100 bg-slate-50/40">
                           <div className="px-5 py-3 flex items-center gap-2">

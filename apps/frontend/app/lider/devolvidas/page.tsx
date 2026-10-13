@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   AlertTriangle,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
@@ -32,6 +31,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { PageLoader } from "@/components/ui/loading";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
@@ -294,10 +294,7 @@ export default function LiderDevolvidasPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-400">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
-            <span className="text-sm">Carregando tarefas…</span>
-          </div>
+          <PageLoader text="Carregando tarefas…" compact />
         )}
 
         {/* Empty — no data */}

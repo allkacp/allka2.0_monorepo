@@ -8,8 +8,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useNavigate } from "@/hooks/use-navigate";
-import {
-  Loader2, Search, ShoppingCart, Store, X, AlertTriangle, Trash2,
+import { Search, ShoppingCart, Store, X, AlertTriangle, Trash2,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -24,6 +23,7 @@ import { Catalog2BrowseToolbar, type Catalog2CategoryTab } from "@/components/ca
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
 import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
+import { PageLoader } from "@/components/ui/loading";
 
 type Portal = "admin" | "company" | "agency" | "leader";
 
@@ -251,7 +251,7 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
       />
 
       {loading ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-sm text-neutral-500"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>
+        <PageLoader text="Carregando catálogo…" compact />
       ) : filteredRows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-500 dark:border-neutral-700">
           Nenhum produto disponível com esses filtros.

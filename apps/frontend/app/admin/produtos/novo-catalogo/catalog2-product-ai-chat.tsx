@@ -97,7 +97,7 @@ export function ProductAiChatDialog({ open, onOpenChange, productId, readOnly, o
           </div>
         </div>
         <div className="flex items-center gap-3 border-t border-slate-200 px-5 py-3 dark:border-slate-800">
-          <Button type="button" disabled={!draft || busy || readOnly} className="bg-gradient-to-r from-violet-700 to-fuchsia-600 text-white" onClick={() => void apply()} data-testid="apply-draft">Aplicar no produto</Button>
+          <Button type="button" disabled={!draft || busy || readOnly} className="bg-[image:var(--app-brand-button,linear-gradient(to_right,#6d28d9,#c026d3))] text-white" onClick={() => void apply()} data-testid="apply-draft">Aplicar no produto</Button>
           {applied && <span role="status" className="text-xs font-semibold text-emerald-700">Aplicado e salvo. As tarefas e etapas sugeridas ficam para você cadastrar na aba Entrega.</span>}
           <Button type="button" variant="ghost" className="ml-auto" onClick={() => onOpenChange(false)}>Fechar</Button>
         </div>

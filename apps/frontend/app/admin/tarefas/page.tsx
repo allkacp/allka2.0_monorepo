@@ -102,7 +102,7 @@ import {
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
-import { useTableScrollSync } from "@/hooks/useTableScrollSync";
+import { fitColumnWidths, useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel";
@@ -562,6 +562,19 @@ const ALL_COLUMNS: {
     minW: 80,
   },
 ];
+
+// Mínimos usados quando a tabela encolhe para caber na tela.
+const FIT_MIN_WIDTHS: Partial<Record<ColKey, number>> = {
+  acoes: 99,
+  codigo: 80,
+  tarefa: 140,
+  projeto: 90,
+  cliente: 80,
+  produto: 80,
+  status: 110,
+  prazo: 90,
+  execucao: 90,
+};
 
 const DEFAULT_VISIBLE: ColKey[] = [
   "acoes",
@@ -1184,6 +1197,7 @@ export default function AdminTarefasPage({
     handleTableScroll,
     handleBottomBarScroll,
     hasHorizontalOverflow,
+    tableBoxWidth,
   } = useTableScrollSync([loading, visibleCols.size]);
 
   // Column resize
@@ -1199,6 +1213,13 @@ export default function AdminTarefasPage({
   } | null>(null);
 
   const visibleColumnsList = ALL_COLUMNS.filter((c) => visibleCols.has(c.key));
+  // Larguras que cabem na área visível, sem rolagem horizontal.
+  const fittedColWidths = fitColumnWidths(
+    colWidths,
+    tableBoxWidth,
+    64,
+    visibleColumnsList.map((c) => FIT_MIN_WIDTHS[c.key]),
+  );
 
   useEffect(() => {
     setColWidths(visibleColumnsList.map((c) => c.defaultW));
@@ -1850,7 +1871,7 @@ export default function AdminTarefasPage({
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                 style={{
                   background:
-                    "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                    "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                 }}
               />
               <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
@@ -2434,14 +2455,15 @@ export default function AdminTarefasPage({
                     className="overflow-x-auto allka-table-scroll-body"
                   >
                     <table
-                      className="text-sm"
+                      className="allka-fit-table text-sm"
                       style={{
                         tableLayout: "fixed",
-                        minWidth: colWidths.reduce((a, b) => a + b, 0),
+                        width: fittedColWidths.reduce((a, b) => a + b, 0),
+                        minWidth: "100%",
                       }}
                     >
                       <colgroup>
-                        {colWidths.map((w, i) => (
+                        {fittedColWidths.map((w, i) => (
                           <col key={i} style={{ width: w }} />
                         ))}
                       </colgroup>
@@ -2468,8 +2490,8 @@ export default function AdminTarefasPage({
                                 key={col.key}
                                 className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
                                 style={{
-                                  paddingLeft: isAcoes ? 8 : 20,
-                                  paddingRight: isAcoes ? 8 : 20,
+                                  paddingLeft: isAcoes ? 8 : 12,
+                                  paddingRight: isAcoes ? 8 : 12,
                                   textAlign: isAcoes ? "center" : "left",
                                   borderRight:
                                     "1px solid rgba(148,163,184,0.2)",
@@ -2815,7 +2837,7 @@ export default function AdminTarefasPage({
                               {/* ID */}
                               {visibleCols.has("id") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -2831,7 +2853,7 @@ export default function AdminTarefasPage({
                               {/* Código */}
                               {visibleCols.has("codigo") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -2881,7 +2903,7 @@ export default function AdminTarefasPage({
                               {/* Tarefa */}
                               {visibleCols.has("tarefa") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -2930,7 +2952,7 @@ export default function AdminTarefasPage({
                               {/* Projeto */}
                               {visibleCols.has("projeto") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -2959,7 +2981,7 @@ export default function AdminTarefasPage({
                               {/* Cliente */}
                               {visibleCols.has("cliente") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -2997,7 +3019,7 @@ export default function AdminTarefasPage({
                               {/* Agência */}
                               {visibleCols.has("agencia") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -3040,7 +3062,7 @@ export default function AdminTarefasPage({
                               {/* Produto */}
                               {visibleCols.has("produto") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -3079,7 +3101,7 @@ export default function AdminTarefasPage({
                               {/* Status */}
                               {visibleCols.has("status") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -3110,7 +3132,7 @@ export default function AdminTarefasPage({
                               {/* Nômade */}
                               {visibleCols.has("nomade") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -3159,7 +3181,7 @@ export default function AdminTarefasPage({
                               {/* Líder */}
                               {visibleCols.has("lider") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -3192,7 +3214,7 @@ export default function AdminTarefasPage({
                               {/* Prazo entrega */}
                               {visibleCols.has("prazo") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -3258,7 +3280,7 @@ export default function AdminTarefasPage({
                               {/* Prazo execução */}
                               {visibleCols.has("execucao") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -3291,7 +3313,7 @@ export default function AdminTarefasPage({
                               {/* Atraso */}
                               {visibleCols.has("atraso") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",
@@ -3359,7 +3381,7 @@ export default function AdminTarefasPage({
                               {/* Prioridade */}
                               {visibleCols.has("prioridade") && (
                                 <td
-                                  className="px-5 py-3.5"
+                                  className="px-3 py-3.5"
                                   style={{
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.15)",

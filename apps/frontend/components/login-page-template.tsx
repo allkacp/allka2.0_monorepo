@@ -244,6 +244,32 @@ export function LoginPageTemplate({ initialAccessType }: Props) {
   // rápido demais "voltando no tempo" a UI).
   const lastQueriedRef = useRef<string | null>(null);
   const requestIdRef = useRef(0);
+  // Último resultado de identificação já recebido (e-mail → perfil), usado
+  // pelo envio do formulário para não depender do debounce/transição.
+  const identifiedRef = useRef<{
+    email: string;
+    accessType: AccessTypeId;
+    perfilId: string;
+  } | null>(null);
+
+  const identify = async (trimmed: string) => {
+    const res: any = await apiClient.identifyAccount(trimmed);
+    const detected = res?.accessType as AccessTypeId | undefined;
+    if (!detected || !LOGIN_ROLE_CONFIGS[detected]) return null;
+    // Partner não tem accessType próprio (continua "AGENCY"), então a
+    // troca de sub-perfil dentro do card Agency também precisa disparar
+    // a transição — não só a troca de accessType.
+    const targetPerfilId =
+      detected === "AGENCY"
+        ? res.isPartner
+          ? "partner"
+          : "agency"
+        : (LOGIN_ROLE_CONFIGS[detected].perfis?.[0]?.id ?? "");
+    const result = { email: trimmed, accessType: detected, perfilId: targetPerfilId };
+    identifiedRef.current = result;
+    return result;
+  };
+
   useEffect(() => {
     const trimmed = email.trim().toLowerCase();
     if (!EMAIL_RE.test(trimmed)) return;
@@ -253,24 +279,14 @@ export function LoginPageTemplate({ initialAccessType }: Props) {
       lastQueriedRef.current = trimmed;
       const myRequestId = ++requestIdRef.current;
       try {
-        const res: any = await apiClient.identifyAccount(trimmed);
+        const found = await identify(trimmed);
         if (myRequestId !== requestIdRef.current) return; // resposta obsoleta
-        const detected = res?.accessType as AccessTypeId | undefined;
-        if (detected && LOGIN_ROLE_CONFIGS[detected]) {
-          // Partner não tem accessType próprio (continua "AGENCY"), então a
-          // troca de sub-perfil dentro do card Agency também precisa disparar
-          // a transição — não só a troca de accessType.
-          const targetPerfilId =
-            detected === "AGENCY"
-              ? res.isPartner
-                ? "partner"
-                : "agency"
-              : (LOGIN_ROLE_CONFIGS[detected].perfis?.[0]?.id ?? "");
-          if (detected !== accessType || targetPerfilId !== perfilId) {
+        if (found) {
+          if (found.accessType !== accessType || found.perfilId !== perfilId) {
             setTransitioning(true);
             setTimeout(() => {
-              setAccessType(detected);
-              setPerfilId(targetPerfilId);
+              setAccessType(found.accessType);
+              setPerfilId(found.perfilId);
               setTransitioning(false);
             }, 280);
           }
@@ -346,15 +362,29 @@ export function LoginPageTemplate({ initialAccessType }: Props) {
     }
 
     setLoading(true);
+    // Perfil usado no login: o já identificado para ESTE e-mail. Se o envio
+    // vier antes da identificação terminar (preenchimento automático + Enter
+    // logo em seguida), identifica agora — senão o login ia com o perfil
+    // anterior e falhava com "sem acesso".
+    let loginType: AccessTypeId = config.accessType;
+    const trimmedEmail = email.trim().toLowerCase();
+    let found =
+      identifiedRef.current?.email === trimmedEmail ? identifiedRef.current : null;
+    if (!found && EMAIL_RE.test(trimmedEmail)) {
+      found = await identify(trimmedEmail).catch(() => null);
+    }
+    if (found) {
+      loginType = found.accessType;
+      if (found.accessType !== accessType || found.perfilId !== perfilId) {
+        setAccessType(found.accessType);
+        setPerfilId(found.perfilId);
+      }
+    }
     try {
-      const res: any = await apiClient.login(
-        email,
-        password,
-        config.accessType,
-      );
+      const res: any = await apiClient.login(email, password, loginType);
       if (res?.token) {
         localStorage.setItem("allka_token", res.token);
-        localStorage.setItem("allka_last_access_type", config.accessType);
+        localStorage.setItem("allka_last_access_type", loginType);
         if (res.user)
           localStorage.setItem("allka_user", JSON.stringify(res.user));
         localStorage.removeItem("allka_logged_out");
@@ -366,8 +396,7 @@ export function LoginPageTemplate({ initialAccessType }: Props) {
       const msg = err?.message || "";
       if (msg === "ACCESS_FORBIDDEN") {
         const label =
-          ACCESS_TYPES.find((a) => a.id === config.accessType)?.label ??
-          config.accessType;
+          ACCESS_TYPES.find((a) => a.id === loginType)?.label ?? loginType;
         setErrorMsg(ui.errorForbidden(label));
       } else if (
         msg === "Failed to fetch" ||

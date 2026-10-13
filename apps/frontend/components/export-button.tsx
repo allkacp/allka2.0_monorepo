@@ -193,7 +193,7 @@ export function ExportButton({
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }}
                 />
                 {isExporting ? (
                   <Loader2 className="relative z-10 h-4 w-4 text-[#7d1b6a] animate-spin group-hover:text-white transition-colors" />

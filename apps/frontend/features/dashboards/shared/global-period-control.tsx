@@ -58,9 +58,9 @@ export interface GlobalPeriodControlProps {
   variant?: "light" | "dark";
 }
 
-const GRADIENT = "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)";
+const GRADIENT = "var(--app-brand-gradient, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))";
 const TEXT_GRADIENT =
-  "bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]";
+  "bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]";
 
 export function GlobalPeriodControl({
   periodLabel,
@@ -174,7 +174,7 @@ export function GlobalPeriodControl({
                           ? TEXT_GRADIENT
                           : cn(
                               "text-foreground",
-                              "group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]",
+                              "group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]",
                             ),
                       )}
                     >
@@ -197,7 +197,7 @@ export function GlobalPeriodControl({
                     ? TEXT_GRADIENT
                     : cn(
                         "text-foreground",
-                        "group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)]",
+                        "group-hover:bg-clip-text group-hover:text-transparent group-hover:[background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))]",
                       ),
                 )}
               >

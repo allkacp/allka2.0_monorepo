@@ -146,6 +146,7 @@ import {
   PROPOSAL_PLACEHOLDERS,
   PROPOSAL_LOOP_PLACEHOLDERS,
 } from "@/lib/proposal-export";
+import { PageLoader, InlineLoader } from "@/components/ui/loading";
 
 // O modal declarava um `Project` proprio, subconjunto do que o adapter
 // realmente entrega — e passar o projeto de verdade so funcionava com
@@ -277,7 +278,7 @@ export function ProjectManagementModal({
     {
       label: "Padrão",
       value: null,
-      preview: "linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%)",
+      preview: "var(--app-brand-gradient, linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%))",
     },
     {
       label: "Azul",
@@ -301,14 +302,17 @@ export function ProjectManagementModal({
     useState(false);
   const [showDadosProjCancelConfirm, setShowDadosProjCancelConfirm] =
     useState(false);
+  // Campos vazios ficam vazios: os valores de exemplo que existiam aqui
+  // ("Lamego Academy", "Florescer", e-mail/data fixos) apareciam como se
+  // fossem dados reais em todo projeto sem agência/cliente.
   const [dadosProjForm, setDadosProjForm] = useState({
     nomeProjeto: project?.name || "Novo Projeto",
     situacao: project?.status || "Ag. Pagamento",
-    agencia: project?.agency || "Lamego Academy",
-    consultor: project?.consultant || "Equipe Lamego",
-    emailConsultor: project?.consultantEmail || "contato@lamego.com.vc",
-    cliente: project?.client || "Florescer",
-    dataCriacao: project?.createdDate || project?.createdAt || "19/02/2025",
+    agencia: project?.agency || project?.ownerName || "",
+    consultor: project?.consultant || "",
+    emailConsultor: project?.consultantEmail || "",
+    cliente: project?.client || "",
+    dataCriacao: project?.createdDate || project?.createdAt || "",
     permitePortfolio: project?.portfolioPermission ?? false,
     sincronizadoBitrix: project?.bitrixSync ?? false,
     lifecycle: (project?.lifecycle === "mensal" ? "Mensal" : "Avulso") as
@@ -317,9 +321,7 @@ export function ProjectManagementModal({
     isAtivo: project?.isActive ?? true,
     diaCobranca: project?.billingConfig?.billingDay ?? 15,
     dataInicioCobranca: project?.billingConfig?.billingStartDate ?? "",
-    descricao:
-      project?.description ||
-      "Projeto de hospedagem e cuidados para idosos da empresa Florescer. Inclui desenvolvimento de website institucional, sistema de gestão de pacientes, e materiais de marketing digital para divulgação dos serviços.",
+    descricao: project?.description || "",
   });
 
   const DADOS_PROJECT_ACCORDIONS = [
@@ -343,11 +345,11 @@ export function ProjectManagementModal({
       setDadosProjForm({
         nomeProjeto: project.name || "Novo Projeto",
         situacao: project.status || "Ag. Pagamento",
-        agencia: project.agency || "Lamego Academy",
-        consultor: project.consultant || "Equipe Lamego",
-        emailConsultor: project.consultantEmail || "contato@lamego.com.vc",
-        cliente: project.client || "Florescer",
-        dataCriacao: project.createdDate || project.createdAt || "19/02/2025",
+        agencia: project.agency || project.ownerName || "",
+        consultor: project.consultant || "",
+        emailConsultor: project.consultantEmail || "",
+        cliente: project.client || "",
+        dataCriacao: project.createdDate || project.createdAt || "",
         permitePortfolio: project.portfolioPermission ?? false,
         sincronizadoBitrix: project.bitrixSync ?? false,
         lifecycle: (project.lifecycle === "mensal" ? "Mensal" : "Avulso") as
@@ -1401,7 +1403,7 @@ export function ProjectManagementModal({
               <div className="min-w-0 flex-1 text-sm font-bold text-white truncate">
                 {dadosProjForm.nomeProjeto}
                 <p className="text-[11px] font-normal text-white/60 mt-0.5 truncate">
-                  {dadosProjForm.agencia} · {dadosProjForm.cliente}
+                  {[dadosProjForm.agencia, dadosProjForm.cliente].filter(Boolean).join(" · ")}
                 </p>
               </div>
               <button
@@ -1510,18 +1512,24 @@ export function ProjectManagementModal({
                       </h2>
                     )}
                     <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      <span className="text-slate-500 dark:text-slate-400 text-xs flex items-center gap-1">
-                        <Building2 className="h-3 w-3" />
-                        {dadosProjForm.agencia}
-                      </span>
-                      <span className="text-slate-500 dark:text-slate-400 text-xs flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        {dadosProjForm.cliente}
-                      </span>
-                      <span className="text-slate-500 dark:text-slate-400 text-xs flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {dadosProjForm.dataCriacao}
-                      </span>
+                      {dadosProjForm.agencia && (
+                        <span className="text-slate-500 dark:text-slate-400 text-xs flex items-center gap-1">
+                          <Building2 className="h-3 w-3" />
+                          {dadosProjForm.agencia}
+                        </span>
+                      )}
+                      {dadosProjForm.cliente && (
+                        <span className="text-slate-500 dark:text-slate-400 text-xs flex items-center gap-1">
+                          <User className="h-3 w-3" />
+                          {dadosProjForm.cliente}
+                        </span>
+                      )}
+                      {dadosProjForm.dataCriacao && (
+                        <span className="text-slate-500 dark:text-slate-400 text-xs flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {dadosProjForm.dataCriacao}
+                        </span>
+                      )}
                     </div>
                     {/* Ativo/Inativo + Lifecycle badges */}
                     <div className="flex items-center gap-1.5 mt-1.5">
@@ -3141,10 +3149,7 @@ export function ProjectManagementModal({
 
                       {getSortedAndFilteredProducts().length === 0 &&
                         (loadingModalData ? (
-                          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-                            <Loader2 className="h-6 w-6 animate-spin mb-2" />
-                            <p className="text-xs">Carregando produtos...</p>
-                          </div>
+                          <PageLoader text="Carregando produtos…" compact />
                         ) : (
                           <div className="flex flex-col items-center justify-center py-16 text-center">
                             <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center mb-3">
@@ -4372,10 +4377,7 @@ export function ProjectManagementModal({
                               <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                                 {loadingModalData ? (
                                   <>
-                                    <Loader2 className="h-6 w-6 animate-spin mb-2" />
-                                    <p className="text-xs">
-                                      Carregando tarefas...
-                                    </p>
+                                    <InlineLoader text="Carregando tarefas…" className="py-0" />
                                   </>
                                 ) : (
                                   <>
@@ -5162,7 +5164,7 @@ export function ProjectManagementModal({
                                     <span className="font-medium text-xs">
                                       ALLKOIN
                                     </span>
-                                    <Badge className="bg-gradient-to-r from-blue-500 to-purple-600 text-white text-[9px] px-1.5 py-0">
+                                    <Badge className="bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white text-[9px] px-1.5 py-0">
                                       Novo
                                     </Badge>
                                   </div>
@@ -5242,12 +5244,7 @@ export function ProjectManagementModal({
 
                     {/* Timeline */}
                     {logLoading ? (
-                      <div className="flex items-center justify-center py-16">
-                        <Loader2 className="w-6 h-6 text-blue-400 animate-spin mr-2" />
-                        <span className="text-sm text-slate-400">
-                          Carregando histórico...
-                        </span>
-                      </div>
+                      <PageLoader text="Carregando histórico…" compact />
                     ) : logEntries.length === 0 ? (
                       <div className="flex flex-col items-center justify-center py-16 text-slate-400">
                         <ScrollText className="w-10 h-10 mb-3 opacity-30" />
@@ -6432,7 +6429,7 @@ export function ProjectManagementModal({
                   className="flex-1 h-9"
                   style={{
                     background:
-                      "linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                      "var(--app-brand-button, linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%))",
                   }}
                   disabled={
                     !newCredentialForm.title ||
@@ -6654,7 +6651,7 @@ export function ProjectManagementModal({
                   className="flex-1 h-9"
                   style={{
                     background:
-                      "linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                      "var(--app-brand-button, linear-gradient(135deg,#000 0%,#1a2a6f 45%,#c81a7f 100%))",
                   }}
                   onClick={handleSaveCredential}
                   disabled={

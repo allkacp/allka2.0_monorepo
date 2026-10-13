@@ -7,6 +7,7 @@ import {
   useCallback,
   useLayoutEffect,
   Fragment,
+  lazy,
 } from "react";
 import { Link } from "react-router-dom";
 import { useLocation } from "react-router-dom";
@@ -27,7 +28,7 @@ import {
 } from "@/components/ui/popover";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useSidebar } from "@/contexts/sidebar-context";
-import { SidebarSettingsModal } from "@/components/modals/sidebar-settings-modal";
+import { MountWhenOpened } from "@/components/mount-when-opened";
 import { apiClient } from "@/lib/api-client";
 import { useAgencia } from "@/contexts/agencia-context";
 import { canOpenRoadmapPanel } from "@/lib/admin-permissions";
@@ -78,6 +79,9 @@ import {
   LifeBuoy,
   Plug,
 } from "lucide-react";
+
+// Modal de configurações da barra lateral: baixado só quando aberto.
+const SidebarSettingsModal = lazy(() => import("@/components/modals/sidebar-settings-modal").then((m) => ({ default: m.SidebarSettingsModal })));
 
 const navigationConfig = {
   empresas: {
@@ -1590,6 +1594,8 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
             </div>
             {!collapsed && (
               <div className="flex items-center gap-0">
+                {/* O tema vale para a plataforma inteira: só a administração muda. */}
+                {accountType === "admin" && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1599,6 +1605,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                 >
                   <Palette className="h-4 w-4" />
                 </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1821,17 +1828,11 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                                     : "text-white/70 hover:bg-white/10 hover:text-white",
                                 )}
                               >
-                                {isNavigatingHere ? (
-                                  <span className="h-4 w-4 mr-3 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
-                                ) : (
-                                  <subitem.icon className="h-4 w-4 mr-3 shrink-0" />
-                                )}
+                                <subitem.icon className="h-4 w-4 mr-3 shrink-0" />
                                 <span className="flex-1 truncate">
                                   {subitem.name}
                                 </span>
-                                {isNavigatingHere ? (
-                                  <span className="text-[10px] text-white/50 animate-pulse">carregando...</span>
-                                ) : subitem.badge ? (
+                                {subitem.badge ? (
                                   <Badge
                                     variant="secondary"
                                     className={cn(
@@ -1954,20 +1955,14 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                                 }
                               >
                                 <GripVertical className="h-3 w-3 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab shrink-0" />
-                                {navigatingTo === subitem.href ? (
-                                  <span className="h-4 w-4 mr-2.5 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
-                                ) : (
-                                  <subitem.icon className="h-4 w-4 mr-2.5 shrink-0" />
-                                )}
+                                <subitem.icon className="h-4 w-4 mr-2.5 shrink-0" />
                                 <SidebarNavLabel
                                   text={subitem.name}
                                   navKey={`sub:${subitem.href}`}
                                   onTruncationChange={markNavTruncated}
                                   className="flex-1"
                                 />
-                                {navigatingTo === subitem.href ? (
-                                  <span className="text-[10px] text-white/50 animate-pulse">carregando...</span>
-                                ) : subitem.badge ? (
+                                {subitem.badge ? (
                                   <Badge
                                     variant="secondary"
                                     className={cn(
@@ -2115,18 +2110,11 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                         {!collapsed && (
                           <GripVertical className="h-3.5 w-3.5 mr-1 opacity-0 group-hover:opacity-50 transition-opacity cursor-grab shrink-0" />
                         )}
-                        {isNavigatingHere ? (
-                          <span
-                            className={cn(
-                              "h-5 w-5 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0",
-                              !collapsed && "mr-2.5",
-                            )}
-                          />
-                        ) : (
-                          <item.icon
-                            className={cn("h-5 w-5 shrink-0", !collapsed && "mr-2.5")}
-                          />
-                        )}
+                        {/* O carregamento da tela aparece só no centro (fallback
+                            do AppLayout); o item apenas fica destacado. */}
+                        <item.icon
+                          className={cn("h-5 w-5 shrink-0", !collapsed && "mr-2.5")}
+                        />
                         {!collapsed && (
                           <>
                             <SidebarNavLabel
@@ -2135,12 +2123,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                               onTruncationChange={markNavTruncated}
                               className="flex-1"
                             />
-                            {isNavigatingHere && (
-                              <span className="text-[10px] text-white/60 font-normal animate-pulse">
-                                carregando...
-                              </span>
-                            )}
-                            {!isNavigatingHere && item.badge && (
+                            {item.badge && (
                               <Badge
                                 variant="secondary"
                                 className={
@@ -2229,6 +2212,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                 Expandir Sidebar
               </TooltipContent>
             </Tooltip>
+            {accountType === "admin" && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -2247,15 +2231,18 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
                 Personalizar Cores
               </TooltipContent>
             </Tooltip>
+            )}
           </div>
         )}
       </div>
 
       {/* Modals */}
-      <SidebarSettingsModal
-        open={settingsModalOpen}
-        onClose={() => setSettingsModalOpen(false)}
-      />
+      <MountWhenOpened open={settingsModalOpen} loadingText="Carregando configurações…">
+        <SidebarSettingsModal
+          open={settingsModalOpen}
+          onClose={() => setSettingsModalOpen(false)}
+        />
+      </MountWhenOpened>
 
       {/* Agency Level Modal */}
       {accountType === "agencias" && (() => {

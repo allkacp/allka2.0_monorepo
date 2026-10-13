@@ -9,7 +9,6 @@ import {
 } from "react";
 import {
   Store,
-  Loader2,
   Lock,
   Package,
   Search,
@@ -86,6 +85,7 @@ import { useParams } from "react-router-dom";
 import { useNavigate } from "@/hooks/use-navigate";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { PaginationControls } from "@/app/admin/produtos/page";
+import { PageLoader } from "@/components/ui/loading";
 
 // Catálogo de Produtos — visão de APRESENTAÇÃO e conferência comercial dos
 // produtos catalog2 (reunião 2026-09, consolidação "catálogo2 como cadastro
@@ -708,9 +708,7 @@ export default function AdminCatalogoProdutosPage() {
   if (state === "loading") {
     return (
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-        <Centered>
-          <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
-        </Centered>
+        <PageLoader text="Carregando catálogo…" compact />
       </div>
     );
   }

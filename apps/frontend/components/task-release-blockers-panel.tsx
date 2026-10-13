@@ -12,6 +12,7 @@ import { Loader2, Lock, CheckCircle2, Circle, Clock, CreditCard, UserCog, Shield
 import { apiClient, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ButtonLoader } from "@/components/ui/loading";
 
 interface GateStatus {
   dependencies: { dependencyId: string; taskId: string; title: string; satisfied: boolean }[];
@@ -112,9 +113,7 @@ export function TaskReleaseBlockersPanel({
 
   if (loading && !gate) {
     return (
-      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-2 text-sm text-slate-500">
-        <Loader2 className="h-4 w-4 animate-spin" /> Carregando bloqueadores...
-      </div>
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 flex items-center gap-2 text-sm text-slate-500"><ButtonLoader text="Carregando bloqueadores…" /></div>
     );
   }
   if (!gate) return null;

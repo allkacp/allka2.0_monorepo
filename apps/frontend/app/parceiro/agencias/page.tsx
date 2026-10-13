@@ -536,7 +536,7 @@ function AgencyPanel({ agency, onClose }: {
       {/* Panel */}
       <div className="relative z-10 w-full max-w-xl bg-white dark:bg-slate-900 h-full flex flex-col shadow-2xl overflow-hidden">
         {/* Panel header */}
-        <div className="bg-linear-to-br from-slate-900 via-[#1a2a6f] to-[#c81a7f] px-6 py-5">
+        <div className="bg-[image:var(--app-brand-header,linear-gradient(to_bottom_right,#0f172a,#1a2a6f,#c81a7f))] px-6 py-5">
           <div className="flex items-start justify-between mb-4">
             <div>
               <p className="text-xs text-white/50 font-medium uppercase tracking-wider mb-1">Agência Liderada</p>
@@ -596,7 +596,7 @@ function AgencyPanel({ agency, onClose }: {
               <Button
                 size="sm"
                 onClick={() => setShowForm(true)}
-                className="flex items-center gap-1.5 bg-linear-to-br from-[#1a2a6f] to-[#c81a7f] text-white border-0 hover:opacity-90"
+                className="flex items-center gap-1.5 bg-[image:var(--app-brand-button,linear-gradient(to_bottom_right,#1a2a6f,#c81a7f))] text-white border-0 hover:opacity-90"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Novo relatório
@@ -662,7 +662,7 @@ function AgencyCard({ agency, onClick }: { agency: LedAgency; onClick: () => voi
       {/* Top row */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="h-10 w-10 rounded-xl bg-linear-to-br from-[#1a2a6f] to-[#c81a7f] flex items-center justify-center shrink-0">
+          <div className="h-10 w-10 rounded-xl bg-[image:var(--app-brand-button,linear-gradient(to_bottom_right,#1a2a6f,#c81a7f))] flex items-center justify-center shrink-0">
             <Building2 className="h-5 w-5 text-white" />
           </div>
           <div className="min-w-0">
@@ -801,7 +801,7 @@ export default function ParceiroAgencias() {
           label="Total Lideradas"
           value={String(ledAgencies.length)}
           sub={`${activeCount} ativas`}
-          color="bg-linear-to-br from-[#1a2a6f] to-[#c81a7f]"
+          color="bg-[image:var(--app-brand-button,linear-gradient(to_bottom_right,#1a2a6f,#c81a7f))]"
         />
         <KpiCard
           icon={TrendingUp}
@@ -845,7 +845,7 @@ export default function ParceiroAgencias() {
               variant={statusFilter === s ? "default" : "outline"}
               size="sm"
               onClick={() => setStatusFilter(s)}
-              className={`h-9 text-xs ${statusFilter === s ? "bg-linear-to-br from-[#1a2a6f] to-[#c81a7f] text-white border-0" : ""}`}
+              className={`h-9 text-xs ${statusFilter === s ? "bg-[image:var(--app-brand-button,linear-gradient(to_bottom_right,#1a2a6f,#c81a7f))] text-white border-0" : ""}`}
             >
               {s === "all" ? "Todos" : STATUS_CONFIG[s]?.label ?? s}
             </Button>

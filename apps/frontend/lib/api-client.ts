@@ -1336,6 +1336,9 @@ class ApiClient {
   saveWorkCalendar(body: { work_days: number[]; start_time: string; end_time: string }) { return this.put<any>("/work-calendar", body); }
   addHoliday(body: { date: string; name: string }) { return this.post<any>("/work-calendar/holidays", body); }
   deleteHoliday(id: string) { return this.del<any>(`/work-calendar/holidays/${id}`); }
+  // Tema da plataforma (Personalizar Sidebar): um só para todos; só o administrador salva.
+  getPlatformTheme() { return this.get<{ settings: Record<string, any> | null; presets: Array<{ id: string; name: string; value: string; preview: string }>; updated_at: string | null }>("/platform-theme"); }
+  savePlatformTheme(body: { settings: Record<string, any>; presets?: Array<{ id: string; name: string; value: string; preview: string }> }) { return this.put<any>("/platform-theme", body); }
   // Painel operacional da tarefa (A8b fase 5): etapas, portões de aprovação, prazos (SLA) e entradas de outros produtos.
   getTaskFlowPanel(taskId: string) { return this.get<any>(`/task-flow/${taskId}`); }
   decideStage(taskId: string, stageId: string, tipo: "qualificacao" | "especialista" | "aprovacao", decisao: "aprovar" | "reprovar" | "comentar", comentario?: string) {
@@ -2404,9 +2407,64 @@ class ApiClient {
 
   async sendMessage(
     conversationId: string | number,
-    body: { content: string; client_message_id?: string },
+    body: { content: string; client_message_id?: string; reply_to_id?: string },
   ) {
     return this.post(`/chat/conversations/${conversationId}/messages`, body);
+  }
+
+  // Chat estilo WhatsApp Web (2026-10-12): anexos, edição, exclusão, contatos
+  // e as configurações que o Admin Master define em Configurações > Chat.
+  async sendChatAttachment(
+    conversationId: string,
+    data: { file: Blob; fileName: string; kind: "image" | "file" | "audio"; caption?: string; duration_sec?: number; client_message_id?: string; reply_to_id?: string },
+  ) {
+    const form = new FormData();
+    form.append("file", data.file, data.fileName);
+    form.append("kind", data.kind);
+    if (data.caption) form.append("caption", data.caption);
+    if (data.duration_sec != null) form.append("duration_sec", String(data.duration_sec));
+    if (data.client_message_id) form.append("client_message_id", data.client_message_id);
+    if (data.reply_to_id) form.append("reply_to_id", data.reply_to_id);
+    const token = this.getToken();
+    const res = await fetch(`${API_BASE_URL}/chat/conversations/${conversationId}/attachments`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form,
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      let body: Record<string, any> | undefined;
+      try {
+        body = await res.json();
+        msg = body?.error || body?.message || msg;
+      } catch {}
+      throw new ApiError(msg, res.status, body);
+    }
+    return res.json();
+  }
+
+  async getChatAttachment(messageId: string) {
+    return this.downloadBlob(`/chat/messages/${messageId}/attachment`);
+  }
+
+  async editChatMessage(messageId: string, content: string) {
+    return this.patch(`/chat/messages/${messageId}`, { content });
+  }
+
+  async deleteChatMessage(messageId: string) {
+    return this.del(`/chat/messages/${messageId}`);
+  }
+
+  async getChatContacts(q?: string) {
+    return this.get<{ data: { id: string; name: string; avatar?: string | null; account_type: string; email?: string }[] }>("/chat/contacts", { q });
+  }
+
+  async getChatSettings() {
+    return this.get<{ settings: any; can_use: boolean; can_manage: boolean }>("/chat/settings");
+  }
+
+  async updateChatSettings(settings: Record<string, unknown>) {
+    return this.put<{ settings: any; can_use: boolean; can_manage: boolean }>("/chat/settings", { settings });
   }
 
   async markConversationRead(conversationId: string) {
@@ -2633,6 +2691,10 @@ class ApiClient {
   }
   async releaseProjectTask(id: string) {
     return this.patch(`/project-tasks/${id}/release`, {});
+  }
+  // Devolve o briefing em análise para quem lançou ajustar (Líder/Admin).
+  async returnTaskBriefing(id: string, motivo: string) {
+    return this.patch(`/lider/tasks/${id}/return`, { motivo });
   }
   // Transfere uma tarefa paga e não usada pra outro projeto — só admin, nunca
   // gera cobrança nova (ver POST /api/project-tasks/:id/transfer).

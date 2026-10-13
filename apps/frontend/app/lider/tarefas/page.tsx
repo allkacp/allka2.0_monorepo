@@ -5,7 +5,6 @@ import { useSearchParams } from "react-router-dom";
 import {
   Eye,
   AlertTriangle,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   RefreshCw,
@@ -37,6 +36,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { PageLoader } from "@/components/ui/loading";
 
 const FILTER_CONFIG: Record<string, { status: string; title: string; description: string }> = {
   briefings: {
@@ -45,7 +45,9 @@ const FILTER_CONFIG: Record<string, { status: string; title: string; description
     description: "Briefings aguardando revisão do líder",
   },
   entregas: {
-    status: "ENTREGA_PENDENTE",
+    // A entrega concluída pelo nômade vai para EM_APROVACAO (aceite do lado
+    // interno); ENTREGA_PENDENTE é o status antigo, mantido na mesma fila.
+    status: "EM_APROVACAO,ENTREGA_PENDENTE",
     title: "Entregas Aguardando Análise",
     description: "Entregas aguardando análise do líder",
   },
@@ -283,6 +285,7 @@ export default function LiderTarefasPage() {
         }}
         onStatusChange={() => load()}
         updatingId={null}
+        canReviewBriefing
       />
 
       <div className="shrink-0 -mb-[11px]">
@@ -421,10 +424,7 @@ export default function LiderTarefasPage() {
 
         {/* Loading */}
         {loading && (
-          <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-400">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
-            <span className="text-sm">Carregando tarefas…</span>
-          </div>
+          <PageLoader text="Carregando tarefas…" compact />
         )}
 
         {/* Empty — no data */}
@@ -465,17 +465,19 @@ export default function LiderTarefasPage() {
           <div className="overflow-x-auto allka-table-scroll">
             <table
               className="tabela-cartao text-sm"
-              style={{ tableLayout: "fixed", width: "100%", minWidth: 960 }}
+              // Colunas em % (antes larguras fixas somando 1200px): cabe no
+              // painel sem rolagem lateral também em telas de 1280px.
+              style={{ tableLayout: "fixed", width: "100%" }}
             >
               <colgroup>
-                <col style={{ width: 120 }} />
-                <col style={{ width: 240 }} />
-                <col style={{ width: 160 }} />
-                <col style={{ width: 160 }} />
-                <col style={{ width: 160 }} />
-                <col style={{ width: 120 }} />
-                <col style={{ width: 150 }} />
-                <col style={{ width: 90 }} />
+                <col style={{ width: "10.0%" }} />
+                <col style={{ width: "20.0%" }} />
+                <col style={{ width: "13.3%" }} />
+                <col style={{ width: "13.3%" }} />
+                <col style={{ width: "13.3%" }} />
+                <col style={{ width: "10.0%" }} />
+                <col style={{ width: "12.5%" }} />
+                <col style={{ width: "7.5%" }} />
               </colgroup>
               <thead>
                 <tr className="border-b border-slate-200/60 dark:border-slate-700/60">

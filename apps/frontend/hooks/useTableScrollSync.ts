@@ -18,6 +18,9 @@ export function useTableScrollSync(loadingDeps: React.DependencyList = []) {
   const bottomScrollRef = useRef<HTMLDivElement>(null);
   const isSyncingScroll = useRef(false);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+  // Largura visível da área da tabela, para quem quiser encolher as
+  // colunas até caber (sem rolagem lateral).
+  const [tableBoxWidth, setTableBoxWidth] = useState(0);
 
   // The mirror bars are narrow flex-1 strips sitting next to other
   // toolbar/footer controls, while the real table div spans the full card
@@ -59,10 +62,16 @@ export function useTableScrollSync(loadingDeps: React.DependencyList = []) {
     // A few px of slack (scrollbar-width rounding, border-collapse edge
     // cases) shouldn't count as "overflow" — only show the mirrors when
     // there's genuinely more to scroll than that.
-    const check = () => setHasHorizontalOverflow(el.scrollWidth > el.clientWidth + 8);
+    const check = () => {
+      setHasHorizontalOverflow(el.scrollWidth > el.clientWidth + 8);
+      setTableBoxWidth(el.clientWidth);
+    };
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
+    // A tabela dentro também muda de largura (colunas que encolhem para
+    // caber); sem isso a barra de cima ficaria presa em "tem rolagem".
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
     window.addEventListener("resize", check);
     return () => {
       ro.disconnect();
@@ -79,5 +88,42 @@ export function useTableScrollSync(loadingDeps: React.DependencyList = []) {
     handleTableScroll,
     handleBottomBarScroll,
     hasHorizontalOverflow,
+    tableBoxWidth,
   };
+}
+
+/**
+ * Encolhe as larguras das colunas na proporção até caberem em `available`
+ * (px), sem deixar nenhuma abaixo do seu mínimo (`mins[i]`, ou `min`).
+ * Usado para a tabela caber na tela sem barra de rolagem horizontal.
+ */
+export function fitColumnWidths(
+  widths: number[],
+  available: number,
+  min = 60,
+  mins: (number | undefined)[] = [],
+): number[] {
+  const minOf = (i: number) => Math.min(widths[i], mins[i] ?? min);
+  const total = widths.reduce((a, w) => a + w, 0);
+  if (available <= 0 || total <= available) return widths;
+  const pinned = new Set<number>();
+  for (let guard = 0; guard <= widths.length; guard++) {
+    const freeTotal = widths.reduce((a, w, i) => (pinned.has(i) ? a : a + w), 0);
+    const room =
+      available - [...pinned].reduce((a, i) => a + minOf(i), 0);
+    const scale = freeTotal > 0 ? Math.max(0, room) / freeTotal : 0;
+    let changed = false;
+    widths.forEach((w, i) => {
+      if (!pinned.has(i) && w * scale < minOf(i)) {
+        pinned.add(i);
+        changed = true;
+      }
+    });
+    if (!changed) {
+      return widths.map((w, i) =>
+        pinned.has(i) ? minOf(i) : Math.floor(w * scale),
+      );
+    }
+  }
+  return widths.map((_, i) => minOf(i));
 }

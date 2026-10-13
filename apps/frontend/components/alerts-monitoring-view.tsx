@@ -14,6 +14,7 @@ import {
 import { AlertDetailDrawer } from "@/components/alert-detail-drawer"
 import { useAccountType } from "@/contexts/account-type-context"
 import { cn } from "@/lib/utils"
+import { InlineLoader } from "@/components/ui/loading";
 
 // Aba "Monitoramento" da Central (ata 2026-08, bloco 2/5): alertas CRÍTICOS
 // de TERCEIROS dentro da autoridade real de quem pergunta. Só leitura —
@@ -147,7 +148,7 @@ export function AlertsMonitoringView() {
       <AlertFilterBar value={filters} onChange={applyFilters} onClear={clearFilters} showSituacao showOrigem showSeverity />
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-3 pb-4 space-y-2">
-        {status === "loading" && <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>}
+        {status === "loading" && <InlineLoader text="Carregando monitoramento…" />}
         {status === "error" && (
           <div className="text-center py-10">
             <p className="text-sm text-red-500">Não foi possível carregar o Monitoramento agora.</p>

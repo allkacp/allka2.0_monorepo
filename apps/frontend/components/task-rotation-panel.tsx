@@ -8,6 +8,7 @@ import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { ButtonLoader } from "@/components/ui/loading";
 
 // Situação do rodízio de ofertas de Nômade, para o responsável (Admin/Líder)
 // entender por que ninguém assumiu e reiniciar quando houver candidatos de
@@ -119,7 +120,7 @@ export function TaskRotationPanel({ taskId, category, taskAutomaticEnabled = tru
         </Button>
       </div>
 
-      {loading && !rotation && <p className="text-xs text-slate-400">Carregando…</p>}
+      {loading && !rotation && <p className="text-xs text-slate-400"><ButtonLoader text="Carregando rodízio…" /></p>}
       {error && (
         <div className="text-xs text-red-500">
           Não foi possível carregar o rodízio.{" "}

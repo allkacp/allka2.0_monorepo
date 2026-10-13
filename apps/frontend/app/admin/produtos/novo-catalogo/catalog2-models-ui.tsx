@@ -11,6 +11,7 @@ import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { ButtonLoader } from "@/components/ui/loading";
 
 export const EXEC_LABEL: Record<string, string> = { humano: "Humano", ia: "IA", hibrido: "Humano ou IA" };
 export const PURPOSE_LABEL: Record<string, string> = {
@@ -262,7 +263,7 @@ export function TaskModelInfoDialog({ id, onClose, kind = "task" }: { id: number
       <DialogContent className="max-h-[85vh] w-[95vw] max-w-2xl overflow-y-auto sm:max-w-2xl">
         <DialogTitle>{kind === "task" ? "Modelo global de tarefa" : "Modelo global de etapa"}{m ? ` #${m.id}` : ""}</DialogTitle>
         {err && <p role="alert" className="text-sm text-red-600">{err}</p>}
-        {!m && !err && <p className="flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>}
+        {!m && !err && <p className="flex items-center gap-2 text-sm text-neutral-500"><ButtonLoader text="Carregando modelos…" /></p>}
         {m && (
           <div className="space-y-3 text-sm">
             <div>

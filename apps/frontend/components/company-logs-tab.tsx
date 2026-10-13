@@ -807,13 +807,13 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
         )
 
         return (
-          <div className="fixed inset-0 z-200 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
+          <div className="modal-celular-fundo fixed inset-0 z-200 flex items-center justify-center p-4 bg-black/25 backdrop-blur-[3px]"
             onClick={(e) => {
               if (e.target !== e.currentTarget) return
               if (unsavedChanges) { setPendingClose(() => () => { setIsLogFilterModalOpen(false); setSelectedFilterId(null); setUnsavedChanges(false) }); return }
               setIsLogFilterModalOpen(false)
             }}>
-            <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-190 max-h-[80vh] border border-slate-200 flex flex-col overflow-hidden">
+            <div className="modal-celular-folha relative bg-white rounded-2xl shadow-2xl w-full max-w-190 max-h-[80vh] border border-slate-200 flex flex-col overflow-hidden">
 
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-3.5 shrink-0" style={getHeaderStyle()}>
@@ -827,10 +827,10 @@ export function CompanyLogsTab({ company }: CompanyLogsTabProps) {
               </div>
 
               {/* Body */}
-              <div className="flex flex-1 overflow-hidden min-h-0">
+              <div className="flex max-sm:flex-col flex-1 overflow-hidden min-h-0">
 
                 {/* Saved filters sidebar */}
-                <div className="w-44 border-r border-slate-200 shrink-0 bg-slate-50 flex flex-col overflow-hidden">
+                <div className="w-44 max-sm:w-full max-sm:max-h-36 max-sm:border-r-0 max-sm:border-b border-r border-slate-200 shrink-0 bg-slate-50 flex flex-col overflow-hidden">
                   <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1">
                     <Filter style={{width:10,height:10}} /> Filtros Salvos
                   </p>

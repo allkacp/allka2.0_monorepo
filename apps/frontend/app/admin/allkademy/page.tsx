@@ -46,6 +46,7 @@ import {
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PageLoader } from "@/components/ui/loading";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -228,9 +229,7 @@ function CourseDetailSheet({ courseId, open, onClose }) {
         <div className="flex-1 overflow-y-auto p-6 w-full">
 
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
-            <RefreshCw className="h-4 w-4 animate-spin" /> Carregando detalhes…
-          </div>
+          <PageLoader text="Carregando detalhes do curso…" compact />
         ) : detail ? (
           <div className="space-y-5">
             {/* meta */}
@@ -647,7 +646,7 @@ export default function AdminAllkademyPage() {
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }}
                 />
                 <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
               </button>
@@ -809,10 +808,7 @@ export default function AdminAllkademyPage() {
 
         {/* Table */}
         {loading ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-            <RefreshCw className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Carregando cursos...</span>
-          </div>
+          <PageLoader text="Carregando cursos…" compact />
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-muted-foreground">
             <BookOpen className="h-8 w-8 opacity-30" />

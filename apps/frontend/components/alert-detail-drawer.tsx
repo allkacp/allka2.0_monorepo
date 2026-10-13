@@ -12,7 +12,7 @@
  * padrão já estabelecido pro deep-link de tarefa.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bot, CheckCircle2, ExternalLink, Loader2, ShieldAlert } from "lucide-react";
+import { AlertTriangle, Bot, CheckCircle2, ExternalLink, ShieldAlert } from "lucide-react";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import {
   systemAlertLink, isSafeInternalPath, RESOLUTION_ACTION_LABEL,
 } from "@/components/alerts-header-icon";
 import type { AccountType } from "@/contexts/account-type-context";
+import { PageLoader } from "@/components/ui/loading";
 
 export interface AlertDetailDrawerProps {
   alertId: string | null;
@@ -252,10 +253,7 @@ export function AlertDetailDrawer({ alertId, open, onClose, accountType }: Alert
     >
       <div className="p-5 space-y-5">
         {status === "loading" && (
-          <div className="flex flex-col items-center justify-center min-h-60 gap-3 text-center" role="status" aria-label="Carregando detalhes">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-400" aria-hidden="true" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">Carregando detalhes...</p>
-          </div>
+          <PageLoader text="Carregando detalhes…" compact />
         )}
 
         {status === "not_found" && (

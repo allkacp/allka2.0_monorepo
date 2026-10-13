@@ -5,7 +5,6 @@ import {
   Search,
   Building2,
   User,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   Globe,
@@ -41,6 +40,8 @@ import {
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { apiClient } from "@/lib/api-client";
+import { podeConsultarAgencia, podeConsultarClientes } from "@/lib/conta-logada";
+import { PageLoader } from "@/components/ui/loading";
 
 // Tela somente leitura do Leader — mesma base real de clientes de
 // /admin/clientes e /agency/clientes, servida por /api/client-records
@@ -241,20 +242,24 @@ export default function LiderClientesPage() {
   }>({ agency: [], company: [], partner: [] });
 
   const loadLinkOptions = useCallback(async () => {
-    try {
-      const [ag, co, pa] = await Promise.all([
-        apiClient.getAgencies({ limit: "200" }),
-        apiClient.getCompanies({ limit: "200" }),
-        apiClient.getPartners({ limit: "200" }),
-      ]);
-      setLinkOptions({
-        agency: ((ag as any).data || []).map((a: any) => ({ id: a.id, name: a.name })),
-        company: ((co as any).data || []).map((c: any) => ({ id: c.id, name: c.name })),
-        partner: ((pa as any).data || []).map((p: any) => ({ id: p.id, name: p.user?.name || p.user?.email || p.id })),
-      });
-    } catch (err) {
-      console.error("[LiderClientes] Failed to load link options:", err);
-    }
+    // Cada lista é independente: o Líder não lê /agencies nem /clients (403),
+    // e com Promise.all uma recusa apagava também os nomes que carregaram.
+    const nada = Promise.resolve({ data: [] });
+    const [ag, co, pa] = await Promise.allSettled([
+      podeConsultarAgencia() ? apiClient.getAgencies({ limit: "200" }) : nada,
+      podeConsultarClientes() ? apiClient.getCompanies({ limit: "200" }) : nada,
+      apiClient.getPartners({ limit: "200" }),
+    ]);
+    const lista = (r: PromiseSettledResult<any>) =>
+      r.status === "fulfilled" ? ((r.value as any)?.data || []) : [];
+    for (const r of [ag, co, pa])
+      if (r.status === "rejected")
+        console.error("[LiderClientes] Failed to load link options:", r.reason);
+    setLinkOptions({
+      agency: lista(ag).map((a: any) => ({ id: a.id, name: a.name })),
+      company: lista(co).map((c: any) => ({ id: c.id, name: c.name })),
+      partner: lista(pa).map((p: any) => ({ id: p.id, name: p.user?.name || p.user?.email || p.id })),
+    });
   }, []);
 
   useEffect(() => {
@@ -439,7 +444,7 @@ export default function LiderClientesPage() {
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }}
                 />
                 <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
               </button>
@@ -575,10 +580,7 @@ export default function LiderClientesPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Carregando clientes...</span>
-          </div>
+          <PageLoader text="Carregando clientes…" compact />
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-red-500">
             <span className="text-sm font-medium">{error}</span>

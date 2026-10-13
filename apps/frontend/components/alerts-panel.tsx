@@ -6,7 +6,7 @@
 // direita (não mais ao lado do sino no cabeçalho). Este componente é
 // EXCLUSIVO de alertas: fonte de dados, loading, erro e filtros próprios —
 // nenhuma aba pra Notificações aqui.
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { AlertTriangle, Archive, ArchiveRestore, ArrowRight, Bot, CheckCircle2, Info, ShieldAlert, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -25,8 +25,6 @@ import {
 } from "@/components/alerts-header-icon"
 import { useAccountType } from "@/contexts/account-type-context"
 import { canManageAlertsAdmin } from "@/lib/admin-permissions"
-import { AlertsAdminCenter } from "@/components/alerts-admin-center"
-import { AlertsMonitoringView } from "@/components/alerts-monitoring-view"
 import {
   AlertFilterBar,
   EMPTY_ALERT_FILTERS,
@@ -36,6 +34,11 @@ import {
 } from "@/components/alert-filter-bar"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
+import { PageLoader, InlineLoader } from "@/components/ui/loading"
+
+// Gestão e monitoramento de alertas (só Admin Master / líderes): baixados só quando a aba é aberta.
+const AlertsAdminCenter = lazy(() => import("@/components/alerts-admin-center").then((m) => ({ default: m.AlertsAdminCenter })))
+const AlertsMonitoringView = lazy(() => import("@/components/alerts-monitoring-view").then((m) => ({ default: m.AlertsMonitoringView })))
 
 interface AlertsPanelProps {
   open?: boolean
@@ -395,9 +398,9 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
         )}
 
         {view === "monitor" && canMonitor ? (
-          <AlertsMonitoringView />
+          <Suspense fallback={<PageLoader text="Carregando monitoramento…" compact />}><AlertsMonitoringView /></Suspense>
         ) : view === "manage" && isMaster ? (
-          <AlertsAdminCenter />
+          <Suspense fallback={<PageLoader text="Carregando gestão de alertas…" compact />}><AlertsAdminCenter /></Suspense>
         ) : (
         <>
         <div className="flex items-center justify-between px-5 pt-3 gap-2 shrink-0">
@@ -457,7 +460,7 @@ export function AlertsPanel({ open = false, onClose }: AlertsPanelProps) {
             <p className="text-sm text-red-500 text-center py-10">Não foi possível carregar os alertas agora.</p>
           )}
           {!error && loading && alerts.length === 0 && (
-            <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>
+            <InlineLoader text="Carregando alertas…" />
           )}
           {!error && !loading && activeAlerts.length > 0 && visibleAlerts.length === 0 && (
             <p className="text-sm text-slate-400 text-center py-10">Nenhum alerta com essa criticidade.</p>

@@ -484,6 +484,21 @@ export function Header({
     [accountType, empresa.tasks, agencia.tasks],
   );
 
+  // Números reais do Nômade para as pílulas do topo (antes eram fixos:
+  // "R$ 3.280", "1.250 pts", "5 tarefas pendentes" para qualquer nômade).
+  const [resumoNomade, setResumoNomade] = useState<any>(null);
+  useEffect(() => {
+    if (accountType !== "nomades") return;
+    let vivo = true;
+    // Dentro do .then: qualquer falha (inclusive síncrona) só deixa as
+    // pílulas ocultas, nunca derruba o cabeçalho.
+    Promise.resolve()
+      .then(() => apiClient.getResumoNomade())
+      .then((r: any) => { if (vivo) setResumoNomade(r); })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, [accountType]);
+
   useEffect(() => {
     const t = setTimeout(() => doSearch(searchQuery), 300);
     return () => clearTimeout(t);
@@ -611,23 +626,31 @@ export function Header({
     }
     if (accountType === "nomades") {
       const name = userProfile.name || "Nômade";
+      const r = resumoNomade;
+      const nivel = r?.nomade?.level ? String(r.nomade.level) : null;
+      const emAberto = r?.etapas?.em_aberto ?? null;
       return {
         name,
         email: userProfile.email || "",
         initials: getInitials(name),
         roleLabel: "Nômade",
         levelBadge: null,
-        wallet: {
-          label: "Ganhos no mês",
-          value: "R$ 3.280",
-          icon: Wallet,
-          color: "text-amber-600",
-        },
-        stat: { label: "Pontos", value: "1.250 pts", icon: Star },
-        points: "1.250 pts",
-        level: "Bronze",
-        nextLevel: "Prata",
-        tasks: "5 tarefas pendentes",
+        wallet: r
+          ? {
+              label: "Ganhos no mês",
+              value: fmtBRL(r.ganhos?.no_mes ?? 0),
+              icon: Wallet,
+              color: "text-amber-600",
+            }
+          : null,
+        stat: null,
+        points: r ? `${Number(r.nomade?.score ?? 0).toLocaleString("pt-BR")} pts` : null,
+        level: nivel ? nivel.charAt(0).toUpperCase() + nivel.slice(1) : null,
+        nextLevel: null,
+        tasks:
+          emAberto === null
+            ? null
+            : `${emAberto} ${emAberto === 1 ? "etapa em aberto" : "etapas em aberto"}`,
         settingsPath: "/nomades/perfil",
       };
     }
@@ -682,7 +705,8 @@ export function Header({
   const greeting =
     hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
   // Ignora etiquetas entre colchetes (ex.: "[TESTE] Maria") no cumprimento.
-  const firstName = ctx.name.split(" ").find((w) => !(w.startsWith("[") && w.endsWith("]"))) ?? ctx.name.split(" ")[0];
+  const firstName =
+    ctx.name.replace(/\[[^\]]*\]/g, " ").trim().split(/\s+/)[0] || ctx.name.split(" ")[0];
   const today = new Date().toLocaleDateString("pt-BR", {
     weekday: "long",
     day: "numeric",
@@ -765,15 +789,16 @@ export function Header({
 
           <div className="flex-1" />
 
-          {/* Right actions */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Right actions — min-w-0: quando não cabe tudo, quem cede são as
+              pílulas (nunca o perfil/busca, que antes saíam da tela). */}
+          <div className="flex items-center gap-3 min-w-0">
             {/* Pílulas rápidas (pontos/stat/tarefas/carteira) — subiram pra
                 cá, do lado da busca, ao invés de uma segunda linha própria
                 (achado do usuário 2026-09-23: "subir lá pra do lado do
                 pesquisar", nunca remover — o cabeçalho vira sempre uma
                 linha só, ganhando altura em toda tela, não só no catálogo). */}
             {hasBottomStats && (
-              <div className="hidden xl:flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+              <div className="hidden xl:flex flex-wrap items-center gap-x-2 gap-y-4 h-[42px] overflow-hidden min-w-0">
                 {ctx.points && (
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/8 border border-white/10 hover:bg-white/12 transition-colors shrink-0">
                     <div className="h-6 w-6 rounded-lg bg-amber-400/20 flex items-center justify-center shrink-0">
@@ -823,7 +848,7 @@ export function Header({
                 )}
               </div>
             )}
-            <div ref={searchRef} className="relative">
+            <div ref={searchRef} className="relative shrink-0">
               {/* Input activo */}
               {searchOpen ? (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/30 text-white md:min-w-80">

@@ -16,7 +16,6 @@ import {
   Eye,
   Layers,
   ListChecks,
-  Loader2,
   Lock,
   MoreVertical,
   Package,
@@ -73,6 +72,7 @@ import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
+import { PageLoader } from "@/components/ui/loading";
 
 // Cadastro de Produtos — administração exclusiva dos produtos catalog2
 // (reunião 2026-09, consolidação "catálogo2 como cadastro definitivo"; e
@@ -644,9 +644,7 @@ export default function AdminProdutosPage() {
   if (state === "loading") {
     return (
       <div className={STANDARD_SHELL_PANEL_CLASS}>
-        <Centered>
-          <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
-        </Centered>
+        <PageLoader text="Carregando produtos…" compact />
       </div>
     );
   }
@@ -1234,9 +1232,7 @@ export default function AdminProdutosPage() {
               )}
 
               {listLoading ? (
-                <Centered>
-                  <Loader2 className="h-5 w-5 animate-spin" /> Carregando…
-                </Centered>
+                <PageLoader text="Carregando produtos…" compact />
               ) : listError ? (
                 <div className="flex flex-col items-center justify-center px-4 py-20">
                   <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-red-50 shadow-sm dark:bg-red-950/30">

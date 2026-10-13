@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiClient, ApiError } from "@/lib/api-client";
+import { ButtonLoader } from "@/components/ui/loading";
 
 // "Solicitar Grupo de Notificação" (Líder) — ata 2026-08, bloco 3/5. O
 // grupo fica Pendente e o Admin Master decide. Seletor de membros
@@ -164,7 +165,7 @@ export function NotificationGroupRequestModal({ open, onClose, onRequested }: Pr
             />
           </div>
           <div className="border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800 max-h-52 overflow-y-auto">
-            {loading && <p className="text-xs text-slate-400 p-3">Carregando...</p>}
+            {loading && <p className="text-xs text-slate-400 p-3"><ButtonLoader text="Carregando grupos…" /></p>}
             {!loading && members.length === 0 && (
               <p className="text-xs text-slate-400 p-3">Ninguém encontrado no seu escopo.</p>
             )}

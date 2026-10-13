@@ -130,7 +130,7 @@ export function Catalog2BrowseToolbar({
                   ? "text-white shadow-sm"
                   : "border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
               }`}
-              style={activeCategory === id ? { background: "linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%)" } : undefined}
+              style={activeCategory === id ? { background: "var(--app-brand-button, linear-gradient(135deg, #1a2a6f 0%, #c81a7f 100%))" } : undefined}
             >
               <Layers className="h-3 w-3" />
               {label}

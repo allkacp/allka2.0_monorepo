@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { AlertTriangle, Loader2, ChevronLeft, ChevronRight, Users } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
@@ -10,6 +10,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { InlineLoader } from "@/components/ui/loading";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
@@ -137,10 +138,7 @@ export default function LiderNomadesPage() {
 
       <div className="bg-white dark:bg-card rounded-xl border border-slate-200 dark:border-border overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-48 gap-2 text-slate-400">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Carregando…</span>
-          </div>
+          <InlineLoader text="Carregando nômades…" />
         ) : nomades.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-slate-400 gap-2">
             <Users className="h-8 w-8 opacity-40" />

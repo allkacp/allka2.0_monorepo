@@ -52,6 +52,7 @@ import { Catalog2DetailHeader } from "@/components/catalog2-detail-header";
 import { ProvisionalBadge } from "@/components/provisional-badge";
 import { useIallkaContext } from "@/contexts/iallka-context";
 import { AdminCheckoutModal } from "@/components/catalog2/admin-checkout-modal";
+import { PageLoader } from "@/components/ui/loading";
 
 type TabId = "detalhes" | "portfolio" | "nomades";
 
@@ -580,7 +581,7 @@ export function Catalog2ProductDetail({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full py-24 text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Carregando detalhe do produto…</div>
+      <PageLoader text="Carregando detalhe do produto…" compact />
     );
   }
   if (error || (!isClient && !product) || (isClient && !clientProduct)) {

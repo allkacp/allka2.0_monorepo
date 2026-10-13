@@ -3,10 +3,11 @@
 // Calendário de trabalho da plataforma (reunião 05/10, B2): dias úteis, expediente e feriados — uma vez só, nas configurações gerais.
 // Todos os prazos em horas úteis e dias úteis (SLA, prazos das etapas) usam este calendário.
 import { useCallback, useEffect, useState } from "react"
-import { CalendarDays, Loader2, Plus, Save, Trash2 } from "lucide-react"
+import { CalendarDays, Plus, Save, Trash2 } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ButtonLoader } from "@/components/ui/loading";
 
 const DAYS = [[1, "Seg"], [2, "Ter"], [3, "Qua"], [4, "Qui"], [5, "Sex"], [6, "Sáb"], [0, "Dom"]] as const
 
@@ -28,7 +29,7 @@ export function WorkCalendarSettings() {
     setBusy(true); setMsg(null)
     try { apply(await fn()); setMsg({ ok: true, text: ok }) } catch (e: any) { setMsg({ ok: false, text: e?.message ?? "Não foi possível salvar." }) } finally { setBusy(false) }
   }
-  if (!cal) return <p className="text-sm text-slate-500"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" />Carregando o calendário…</p>
+  if (!cal) return <p className="text-sm text-slate-500"><ButtonLoader text="Carregando o calendário…" /></p>
   const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0) }
   const perDay = Math.max(0, toMin(end) - toMin(start)) / 60
   const dirty = JSON.stringify([...days].sort()) !== JSON.stringify([...cal.work_days].sort()) || start !== cal.start_time || end !== cal.end_time

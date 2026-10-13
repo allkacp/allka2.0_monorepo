@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma";
 import { concluirEtapa, atribuirExecutorDaEtapa, atribuirExecutoresPendentes, garantirQualificador, garantirRevisor } from "../lib/stage-engine";
 import { kickDependenciesForTask } from "../lib/project-dependencies";
 import { verifyToken } from "../middleware/auth";
+import { getLiderAllowedCategories } from "../lib/lider-scope";
 import { reevaluateSuccessors } from "../lib/task-release-service";
 
 const router = Router();
@@ -59,23 +60,7 @@ router.get("/me", async (req: Request, res: Response, next: NextFunction) => {
 
 // ── Helper: get allowed categories for a lider ────────────────────────────────
 
-async function getAllowedCategories(userId: string, userRole: string): Promise<string[] | null> {
-  if (userRole === "admin") return null; // admin sees all
-  const areas = await prisma.liderArea.findMany({
-    where: { user_id: userId, ativo: true },
-    select: { categorias_permitidas: true },
-  });
-  const cats: string[] = [];
-  for (const area of areas) {
-    if (area.categorias_permitidas) {
-      try {
-        const parsed = JSON.parse(area.categorias_permitidas);
-        if (Array.isArray(parsed)) cats.push(...parsed);
-      } catch {}
-    }
-  }
-  return cats;
-}
+const getAllowedCategories = getLiderAllowedCategories;
 
 // ── GET /api/lider/tasks ──────────────────────────────────────────────────────
 
@@ -98,7 +83,12 @@ router.get("/tasks", async (req: Request, res: Response, next: NextFunction) => 
         }
       : {};
 
-    const statusFilter = status ? { status } : {};
+    // Aceita mais de um status separado por vírgula (ex.: a fila de entregas
+    // junta EM_APROVACAO, para onde o motor de etapas manda a entrega, com o
+    // ENTREGA_PENDENTE antigo).
+    const statusList = status ? status.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    const statusFilter =
+      statusList.length > 1 ? { status: { in: statusList } } : statusList.length === 1 ? { status: statusList[0] } : {};
 
     const where = {
       ...statusFilter,

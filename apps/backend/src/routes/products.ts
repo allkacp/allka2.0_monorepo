@@ -416,6 +416,9 @@ router.post(
 // que já é o módulo usado para ações de administração sensíveis. Admin
 // Master e admins sem perfil atribuído continuam liberados pela própria
 // regra de requirePermission() — nada mudou nesse comportamento.
+const PRODUCT_LINKED_ERROR =
+  "Este produto está vinculado a projetos, pedidos ou pacotes existentes e não pode ser excluído.";
+
 router.delete(
   "/:id",
   verifyToken,
@@ -429,15 +432,27 @@ router.delete(
         return;
       }
 
+      // Projetos, tarefas e pagamentos apontam para o produto com
+      // ON DELETE SET NULL (o vínculo é opcional por causa do catálogo 2),
+      // então o banco NÃO barra a exclusão: ela apagava o produto e soltava
+      // em silêncio o vínculo desses registros. Checa antes, com a mesma
+      // resposta 409 do bloqueio por chave estrangeira.
+      const [linkedProjects, linkedTasks, linkedPayments] = await Promise.all([
+        prisma.projectProduct.count({ where: { product_id: id } }),
+        prisma.projectTask.count({ where: { product_id: id } }),
+        prisma.paymentItem.count({ where: { product_id: id } }),
+      ]);
+      if (linkedProjects + linkedTasks + linkedPayments > 0) {
+        res.status(409).json({ error: PRODUCT_LINKED_ERROR });
+        return;
+      }
+
       await prisma.product.delete({ where: { id } });
       res.status(204).send();
     } catch (err) {
       const code = (err as { code?: string }).code;
       if (code === "P2003") {
-        res.status(409).json({
-          error:
-            "Este produto está vinculado a projetos, pedidos ou pacotes existentes e não pode ser excluído.",
-        });
+        res.status(409).json({ error: PRODUCT_LINKED_ERROR });
         return;
       }
       next(err);

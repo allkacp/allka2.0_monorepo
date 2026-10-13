@@ -6,6 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { useTelaEstreita } from "@/hooks/useTelaEstreita";
+import { fitColumnWidths } from "@/hooks/useTableScrollSync";
 import type {
   Company,
   CompanyType as CompanyEntityType,
@@ -16,7 +17,7 @@ import type {
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { useParams, useLocation } from "react-router-dom";
 import { useNavigate } from "@/hooks/use-navigate";
-import { PageLoader } from "@/components/ui/loading";
+import { PageLoader, ButtonLoader } from "@/components/ui/loading";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   STANDARD_SHELL_TABLE_CARD_CLASS,
@@ -951,6 +952,7 @@ export default function EmpresasPage() {
   // actually overflows its container — no point showing a scrollbar that
   // has nothing to scroll.
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+  const [tableBoxWidth, setTableBoxWidth] = useState(0);
   useEffect(() => {
     const el = tableScrollRef.current;
     // tableScrollRef is null while companiesLoading shows the early-return
@@ -962,17 +964,39 @@ export default function EmpresasPage() {
     // A few px of slack (scrollbar-width rounding, border-collapse edge
     // cases) shouldn't count as "overflow" — only show the mirrors when
     // there's genuinely more to scroll than that.
-    const check = () =>
+    const check = () => {
       setHasHorizontalOverflow(el.scrollWidth > el.clientWidth + 8);
+      setTableBoxWidth(el.clientWidth);
+    };
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
     window.addEventListener("resize", check);
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", check);
     };
   }, [colWidths, visibleCols, companiesLoading]);
+  // Mínimos para as colunas encolherem até caber na largura visível
+  // (sem barra de rolagem horizontal).
+  const fitMinWidths: Record<ColKey, number> = {
+    acoes: 99,
+    id: 64,
+    empresa: 180,
+    contato: 130,
+    cnpj: 120,
+    status: 100,
+    plano: 80,
+    tipo: 90,
+    membro_desde: 96,
+  };
+  const fittedColWidths = fitColumnWidths(
+    colWidths,
+    tableBoxWidth,
+    60,
+    visibleColumnsList.map((c) => fitMinWidths[c.key]),
+  );
   const dragState = useRef<{
     colIndex: number;
     startX: number;
@@ -1960,7 +1984,7 @@ export default function EmpresasPage() {
                 className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                 style={{
                   background:
-                    "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                    "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                 }}
               />
               <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
@@ -3025,7 +3049,7 @@ export default function EmpresasPage() {
                             active
                               ? {
                                   background:
-                                    "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                                    "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                                 }
                               : undefined
                           }
@@ -3118,7 +3142,7 @@ export default function EmpresasPage() {
                             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                             style={{
                               background:
-                                "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                                "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                             }}
                           />
                           <Filter className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
@@ -3144,7 +3168,7 @@ export default function EmpresasPage() {
                             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                             style={{
                               background:
-                                "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                                "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                             }}
                           />
                           <Settings2 className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
@@ -3310,14 +3334,14 @@ export default function EmpresasPage() {
                   className="overflow-x-auto empresas-table-body allka-table-scroll-body"
                 >
                   <table
-                    className="tabela-cartao w-full table-fixed text-xs"
+                    className="tabela-cartao allka-fit-table w-full table-fixed text-xs"
                     style={{
                       tableLayout: "fixed",
-                      width: Math.max(
-                        960,
-                        colWidths.reduce((total, width) => total + width, 0),
+                      width: fittedColWidths.reduce(
+                        (total, width) => total + width,
+                        0,
                       ),
-                      minWidth: 960,
+                      minWidth: "100%",
                     }}
                   >
                     <thead>
@@ -3335,8 +3359,7 @@ export default function EmpresasPage() {
                               background: "var(--table-head)",
                               boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                               borderRight: "1px solid rgba(148,163,184,0.16)",
-                              width: colWidths[i],
-                              minWidth: minColWidths[i],
+                              width: fittedColWidths[i],
                             }}
                           >
                             <TooltipProvider delayDuration={300}>
@@ -4564,9 +4587,9 @@ export default function EmpresasPage() {
                 }
               >
                 {/* Body */}
-                <div className="flex flex-1 overflow-hidden min-h-0">
+                <div className="flex max-sm:flex-col flex-1 overflow-hidden min-h-0">
                   {/* Left — Saved Filters */}
-                  <div className="w-44 border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
+                  <div className="w-44 max-sm:w-full max-sm:max-h-36 max-sm:border-r-0 max-sm:border-b border-r border-slate-200 dark:border-slate-700 flex-shrink-0 bg-slate-50 dark:bg-slate-800/50 flex flex-col overflow-hidden">
                     <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-3 pt-3 pb-2 flex items-center gap-1 flex-shrink-0">
                       <Filter className="h-3 w-3" /> Filtros Salvos
                     </p>
@@ -5492,7 +5515,7 @@ export default function EmpresasPage() {
                         Projetos
                       </h3>
                       {infoPanelLoading ? (
-                        <p className="text-xs text-slate-400">Carregando...</p>
+                        <p className="text-xs text-slate-400"><ButtonLoader text="Carregando projetos…" /></p>
                       ) : infoPanelSummary ? (
                         <>
                           <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">
@@ -5540,7 +5563,7 @@ export default function EmpresasPage() {
                         Usuários vinculados
                       </h3>
                       {infoPanelLoading ? (
-                        <p className="text-xs text-slate-400">Carregando...</p>
+                        <p className="text-xs text-slate-400"><ButtonLoader text="Carregando usuários vinculados…" /></p>
                       ) : infoPanelSummary &&
                         infoPanelSummary.users.length > 0 ? (
                         <div className="space-y-2">
@@ -6370,9 +6393,7 @@ export default function EmpresasPage() {
                 return (
                   <div className="mt-4">
                     {deleteDialogLoadingMembers ? (
-                      <p className="text-xs text-slate-400">
-                        Carregando usuários vinculados...
-                      </p>
+                      <p className="text-xs text-slate-400"><ButtonLoader text="Carregando usuários vinculados…" /></p>
                     ) : deleteDialogMembers.length > 0 ? (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between gap-2">

@@ -22,7 +22,7 @@
  * URL/query para trocar a identidade.
  */
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle} from "lucide-react";
 import { useAccountType } from "@/contexts/account-type-context";
 import { useEmpresa } from "@/contexts/empresa-context";
 import { useAgencia } from "@/contexts/agencia-context";
@@ -30,6 +30,7 @@ import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
 import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
+import { ButtonLoader } from "@/components/ui/loading";
 
 type ViewerRole = "admin" | "agency" | "company" | "nomad";
 
@@ -91,10 +92,7 @@ export default function SelfProfilePage() {
   if (loading) {
     return (
       <CardShell>
-        <div className="flex-1 flex items-center justify-center gap-2 text-slate-400" role="status" aria-label="Carregando seu perfil">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm">Carregando seu perfil…</span>
-        </div>
+        <div className="flex-1 flex items-center justify-center gap-2 text-slate-400" role="status" aria-label="Carregando seu perfil"><ButtonLoader text="Carregando seu perfil…" /></div>
       </CardShell>
     );
   }

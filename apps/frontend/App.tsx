@@ -36,7 +36,7 @@ import { MandatoryBannerGate } from "@/components/mandatory-banner-gate";
 import { usePresenceHeartbeat } from "@/hooks/use-presence-heartbeat";
 import { PinActivationListener } from "@/components/pin-activation-listener";
 import { ProductFeedbackWidget } from "@/components/product-feedback-widget";
-import { isStandardShellRoute } from "@/components/standard-page-shell";
+import { isStandardShellRoute, pageHasOwnShellPanel, STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
 import { OnboardingProvider } from "@/contexts/onboarding-context";
 import { HelpFloatingIcon } from "@/components/help-floating-icon";
 import { IallkaContextProvider } from "@/contexts/iallka-context";
@@ -106,6 +106,7 @@ const AgencyInternalTasksPage = React.lazy(() => import("@/app/agency/tarefas-in
 const CompanyInternalTasksPage = React.lazy(() => import("@/app/company/tarefas-internas/page"));
 const AdminInternalTasksPage = React.lazy(() => import("@/app/admin/tarefas-internas/page"));
 const SecureBrowserWindowPage = React.lazy(() => import("@/app/navegador-seguro/janela"));
+const ChatWindowPage = React.lazy(() => import("@/app/chat-janela/page"));
 const SecureBrowserPage = React.lazy(() => import("@/app/navegador-seguro/page").then((m) => ({ default: m.SecureBrowserPage })));
 const AdminSecureBrowserPage = React.lazy(() => import("@/app/navegador-seguro/page").then((m) => ({ default: m.AdminSecureBrowserPage })));
 const AdminTarefasPage = React.lazy(() => import("@/app/admin/tarefas/page"));
@@ -534,6 +535,12 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   // com o wrapper STANDARD_SHELL_PANEL_CLASS aplicado (senão ativa o fundo
   // gradiente sem o painel branco por baixo — visual quebrado).
   const isEmpresasRoute = isStandardShellRoute(location.pathname);
+  // Primeiros dois níveis da rota (ex.: /admin/produtos): troca de tela,
+  // não de detalhe/aba dentro da mesma tela.
+  const screenKey = location.pathname.split("/").slice(0, 3).join("/");
+  // Tela antiga sem painel branco próprio: o layout desenha o painel, com
+  // rolagem só na vertical, para ficar igual às demais.
+  const wrapInShellPanel = !pageHasOwnShellPanel(location.pathname);
 
   useEffect(() => {
     let cancelled = false;
@@ -630,7 +637,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                       // header-slide-screen.tsx e
                                       // catalog-cart-sticky-bar.tsx (retângulos que
                                       // precisam cair exatamente sobre este painel).
-                                      "flex-1 overflow-auto mx-0 py-4 px-4 sm:px-6 pb-mobile-nav",
+                                      "flex-1 overflow-y-auto overflow-x-hidden mx-0 py-4 px-4 sm:px-6 pb-mobile-nav",
                                       isEmpresasRoute
                                         ? "bg-transparent lg:pt-3 lg:pl-3 lg:pr-13 lg:!pb-3"
                                         : "bg-slate-200 dark:bg-background lg:pt-6 lg:pl-6 lg:pr-13 lg:!pb-6",
@@ -638,8 +645,28 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                   >
                                     <PageErrorBoundary>
                                       <GlobalScreenHelp>
-                                        <Suspense fallback={<PageLoader />}>
-                                          {children}
+                                        {/* key por tela: a navegação do React Router roda em
+                                            transição, e uma fronteira já visível não mostra o
+                                            fallback — a tela antiga ficava parada e só o item do
+                                            menu "carregava". Uma fronteira nova por tela mostra o
+                                            carregamento no centro na hora. */}
+                                        <Suspense
+                                          key={screenKey}
+                                          fallback={
+                                            <div className={STANDARD_SHELL_PANEL_CLASS}>
+                                              <PageLoader />
+                                            </div>
+                                          }
+                                        >
+                                          {wrapInShellPanel ? (
+                                            <div className={STANDARD_SHELL_PANEL_CLASS}>
+                                              <div className="h-full min-h-0 overflow-y-auto overflow-x-hidden">
+                                                {children}
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            children
+                                          )}
                                         </Suspense>
                                       </GlobalScreenHelp>
                                     </PageErrorBoundary>
@@ -829,6 +856,18 @@ export default function App() {
             <RequireAuth>
               <Suspense fallback={<PageLoader />}>
                 <SecureBrowserWindowPage />
+              </Suspense>
+            </RequireAuth>
+          }
+        />
+
+        {/* Chat aberto em outra janela: logado, mas sem o menu da plataforma */}
+        <Route
+          path="/chat-janela"
+          element={
+            <RequireAuth>
+              <Suspense fallback={<PageLoader />}>
+                <ChatWindowPage />
               </Suspense>
             </RequireAuth>
           }

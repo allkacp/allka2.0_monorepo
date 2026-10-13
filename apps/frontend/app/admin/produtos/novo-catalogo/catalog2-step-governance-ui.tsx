@@ -4,6 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ButtonLoader } from "@/components/ui/loading";
 
 // Aprovações, prazos (SLA) e histórico real DA ETAPA, na própria configuração da etapa (2026-10-06).
 // Os mesmos dados também aparecem na visão geral da aba "Aprovações e prazos" do produto.
@@ -43,7 +44,7 @@ export function StepPerformance({ stepId, hasModel }: { stepId: string; hasModel
     return () => { live = false; };
   }, [stepId]);
   if (err) return <p className="text-xs text-red-600">{err}</p>;
-  if (!data) return <p className="text-xs text-slate-500">Carregando histórico…</p>;
+  if (!data) return <p className="text-xs text-slate-500"><ButtonLoader text="Carregando histórico…" /></p>;
   const p = scope === "model" && data.model ? data.model : data.product;
   return (
     <div className="space-y-2 text-xs" data-testid="step-performance">
@@ -111,7 +112,7 @@ export function StepGovernance({ step, task, version, readOnly, act }: { step: a
                 <select aria-label="Posição da aprovação" className={SEL} value={g.position} onChange={(e) => setG({ ...g, position: e.target.value })}>{(gateOpts?.positions ?? []).map((p: any) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>
                 <select aria-label="Quem aprova esta etapa" className={SEL} value={g.approver_kind} onChange={(e) => setG({ ...g, approver_kind: e.target.value })}>{(gateOpts?.approvers ?? []).map((p: any) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>
                 <label className="inline-flex items-center gap-1"><input type="checkbox" checked={g.requires_comment} onChange={(e) => setG({ ...g, requires_comment: e.target.checked })} /> exige comentário</label>
-                <Button type="button" size="sm" className="h-7 bg-gradient-to-r from-violet-700 to-fuchsia-600" disabled={!g.name.trim()} onClick={() => void act(() => apiClient.addCatalog2ApprovalGate(version.id, { name: g.name.trim(), anchor_task_key: task.key, anchor_step_key: step.key, position: g.position, approver_kind: g.approver_kind, group_key: null, sequence_no: 0, group_mode: "sequence", rejection_return_step_key: step.key, requires_comment: g.requires_comment }), "Aprovação adicionada.").then(() => { setAddG(false); setG({ ...g, name: "" }); })}>Adicionar</Button>
+                <Button type="button" size="sm" className="h-7 bg-[image:var(--app-brand-button,linear-gradient(to_right,#6d28d9,#c026d3))]" disabled={!g.name.trim()} onClick={() => void act(() => apiClient.addCatalog2ApprovalGate(version.id, { name: g.name.trim(), anchor_task_key: task.key, anchor_step_key: step.key, position: g.position, approver_kind: g.approver_kind, group_key: null, sequence_no: 0, group_mode: "sequence", rejection_return_step_key: step.key, requires_comment: g.requires_comment }), "Aprovação adicionada.").then(() => { setAddG(false); setG({ ...g, name: "" }); })}>Adicionar</Button>
               </div>
             )}
           </section>
@@ -128,7 +129,7 @@ export function StepGovernance({ step, task, version, readOnly, act }: { step: a
                 <Input className="h-7 w-16 text-xs" type="number" min={1} aria-label="Quantidade do prazo da etapa" placeholder="qtd" value={r.amount} onChange={(e) => setR({ ...r, amount: e.target.value })} />
                 <select aria-label="Unidade do prazo da etapa" className={SEL} value={r.unit} onChange={(e) => setR({ ...r, unit: e.target.value })}>{(slaOpts?.units ?? []).map((p: any) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>
                 <select aria-label="Contado a partir de (etapa)" className={SEL} value={r.anchor} onChange={(e) => setR({ ...r, anchor: e.target.value })}>{(slaOpts?.anchors ?? []).map((p: any) => <option key={p.key} value={p.key}>{p.label}</option>)}</select>
-                <Button type="button" size="sm" className="h-7 bg-gradient-to-r from-violet-700 to-fuchsia-600" disabled={!r.name.trim() || !(Number(r.amount) > 0)} onClick={() => void act(() => apiClient.addCatalog2SlaRule(version.id, { name: r.name.trim(), scope_kind: "step", target_key: target, modality: "any", amount: Number(r.amount), unit: r.unit, anchor: r.anchor }), "Prazo adicionado.").then(() => { setAddR(false); setR({ ...r, name: "", amount: "" }); })}>Adicionar</Button>
+                <Button type="button" size="sm" className="h-7 bg-[image:var(--app-brand-button,linear-gradient(to_right,#6d28d9,#c026d3))]" disabled={!r.name.trim() || !(Number(r.amount) > 0)} onClick={() => void act(() => apiClient.addCatalog2SlaRule(version.id, { name: r.name.trim(), scope_kind: "step", target_key: target, modality: "any", amount: Number(r.amount), unit: r.unit, anchor: r.anchor }), "Prazo adicionado.").then(() => { setAddR(false); setR({ ...r, name: "", amount: "" }); })}>Adicionar</Button>
               </div>
             )}
           </section>

@@ -38,6 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { PageLoader } from "@/components/ui/loading";
 
 function currency(v: number) {
   return (v || 0).toLocaleString("pt-BR", {
@@ -334,10 +335,7 @@ export function ProductBundleManager({
               </div>
 
               {loading ? (
-                <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span className="text-sm">Carregando combos...</span>
-                </div>
+                <PageLoader text="Carregando combos…" compact />
               ) : error ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-2 text-red-500">
                   <span className="text-sm font-medium">{error}</span>

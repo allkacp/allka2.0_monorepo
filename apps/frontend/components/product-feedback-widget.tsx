@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { InlineLoader } from "@/components/ui/loading";
 
 type FeedbackType = "PROBLEM" | "IDEA" | "IMPROVEMENT";
 
@@ -280,7 +281,7 @@ export function ProductFeedbackWidget() {
         type="button"
         onClick={openForm}
         aria-label="Ajuda e sugestões"
-        className="lg:hidden fixed right-4 z-45 flex items-center justify-center h-14 w-14 rounded-full text-white shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform"
+        className="fab-celular lg:hidden fixed right-3 z-45 flex items-center justify-center h-12 w-12 rounded-full text-white shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform"
         style={{
           bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 12px)",
           background: "var(--app-brand-gradient, var(--brand-gradient, linear-gradient(135deg, #0a1628, #1e3a8a, #0a1628)))",
@@ -440,7 +441,7 @@ export function ProductFeedbackWidget() {
             <div className="space-y-3">
               {listError && <p className="text-xs text-red-600 dark:text-red-400">{listError}</p>}
               {loadingList && items.length === 0 && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-6">Carregando...</p>
+                <InlineLoader text="Carregando sugestões…" />
               )}
               {!loadingList && !listError && items.length === 0 && (
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-6">

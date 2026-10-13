@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { History, Search, Loader2, ChevronLeft, ChevronRight, Lock, X } from "lucide-react";
+import { History, Search, ChevronLeft, ChevronRight, Lock, X } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageLoader } from "@/components/ui/loading";
 
 // Consulta da Plataforma Anterior (sprint de produtos, bloco 1/6).
 // SOMENTE LEITURA. Nenhum botão de editar/excluir/reativar/copiar/salvar.
@@ -40,7 +41,7 @@ export default function AdminConsultaLegadoPage() {
   }, []);
 
   if (state === "loading") {
-    return <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>;
+    return <PageLoader text="Carregando dados da plataforma antiga…" compact />;
   }
   if (state === "forbidden") {
     return (
@@ -270,7 +271,7 @@ function ProdutosTab({ batchId }: { batchId: string }) {
       </div>
 
       {loading ? (
-        <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+        <PageLoader text="Carregando dados da plataforma antiga…" compact />
       ) : error ? (
         <div className="py-8 text-center text-sm text-red-600">
           Erro ao carregar. <button className="underline" onClick={load}>Tentar de novo</button>
@@ -328,9 +329,9 @@ function LegacyRecordDetail({ id, onClose }: { id: string; onClose: () => void }
   }, [id]);
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" role="dialog" aria-modal="true" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal-celular-fundo fixed inset-0 z-[110] flex items-center justify-center p-4" role="dialog" aria-modal="true" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
-      <div className="relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900">
+      <div className="modal-celular-folha relative flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-3 dark:border-neutral-800">
           <h2 className="font-semibold">Detalhe do registro histórico</h2>
           <button onClick={onClose} aria-label="Fechar" className="rounded p-1 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800">
@@ -341,7 +342,7 @@ function LegacyRecordDetail({ id, onClose }: { id: string; onClose: () => void }
           {error ? (
             <p className="text-red-600">Não foi possível carregar este registro.</p>
           ) : !data ? (
-            <Centered><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</Centered>
+            <PageLoader text="Carregando dados da plataforma antiga…" compact />
           ) : (
             <RecordBody data={data} />
           )}

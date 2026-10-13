@@ -2,10 +2,10 @@
 
 // P-11 (reunião 07/10): preço das alterações feitas por IA, calculado pela MÉDIA real de tokens/custo registrada. Fica em Configurações > Uso e Custos de IA.
 import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ButtonLoader } from "@/components/ui/loading";
 
 const brl = (v?: number | null) => (v == null ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(v));
 const usd = (v?: number | null) => (v == null ? "—" : `US$ ${v.toFixed(5)}`);
@@ -35,7 +35,7 @@ export function AiChangePricingPanel() {
   }
   const toggle = (f: string, on: boolean) => { const all = (data?.averages ?? []).map((a: any) => a.feature); const cur = features ?? all; const next = on ? [...cur, f] : cur.filter((x: string) => x !== f); setFeatures(next.length === all.length ? null : next); };
 
-  if (!data) return <div className="flex items-center gap-2 p-3 text-xs text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Carregando preço das alterações…</div>;
+  if (!data) return <div className="flex items-center gap-2 p-3 text-xs text-slate-500"><ButtonLoader text="Carregando preço das alterações…" /></div>;
   const all: string[] = data.averages.map((a: any) => a.feature);
   const F = "h-8 text-xs";
   return (

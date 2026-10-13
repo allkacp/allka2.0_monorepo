@@ -20,9 +20,10 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Copy, Lock, Ban, ArchiveX, RotateCcw, Pencil, Loader2, History } from "lucide-react";
+import { Copy, Lock, Ban, ArchiveX, RotateCcw, Pencil, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ShareCreateForm } from "./share-create-form";
+import { ButtonLoader } from "@/components/ui/loading";
 
 const STATUS_LABEL: Record<DashboardShareLink["status"], string> = {
   active: "Ativo",
@@ -320,9 +321,7 @@ export function ShareLinksPanel({
   return (
     <div className="space-y-3">
       {state === "loading" && (
-        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando links…
-        </p>
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5"><ButtonLoader text="Carregando links…" /></p>
       )}
       {state === "error" && (
         <div className="flex items-center justify-between gap-2 text-sm text-destructive">
@@ -510,9 +509,7 @@ export function ShareLinksPanel({
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1">
             {historyState === "loading" && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando histórico…
-              </p>
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5"><ButtonLoader text="Carregando histórico…" /></p>
             )}
             {historyState === "error" && (
               <p className="text-sm text-destructive">Não foi possível carregar o histórico.</p>

@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { apiClient } from "@/lib/api-client"
+import { ButtonLoader } from "@/components/ui/loading";
 
 export interface DependencyOptions {
   target_kinds: { key: string; label: string }[]
@@ -90,7 +91,7 @@ export function DependencyRuleForm({
     }
   }
 
-  if (!options) return <p className="text-xs text-slate-500">Carregando opções…</p>
+  if (!options) return <p className="text-xs text-slate-500"><ButtonLoader text="Carregando opções…" /></p>
   return (
     <div className="min-w-0 space-y-2 rounded-lg border border-dashed border-slate-300 p-2.5 text-xs dark:border-slate-700">
       <div className="flex flex-wrap items-end gap-2">

@@ -246,8 +246,8 @@ export function SendApprovalModal({
       />
 
       {/* Modal card */}
-      <div className="fixed inset-0 z-76 flex items-center justify-center p-4 pointer-events-none">
-        <div className="pointer-events-auto w-full max-w-3xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden bg-white">
+      <div className="modal-celular-fundo fixed inset-0 z-76 flex items-center justify-center p-4 pointer-events-none">
+        <div className="modal-celular-folha pointer-events-auto w-full max-w-3xl max-h-[92vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden bg-white">
           {/* ── Header ── */}
           <div
             className="relative shrink-0 px-6 py-4 overflow-hidden flex items-center justify-between"

@@ -43,7 +43,7 @@ import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
-import { useTableScrollSync } from "@/hooks/useTableScrollSync";
+import { fitColumnWidths, useTableScrollSync } from "@/hooks/useTableScrollSync";
 import {
   exportToCSV,
   exportToExcel,
@@ -421,6 +421,7 @@ export default function AdminProjetosPage({
     handleTableScroll,
     handleBottomBarScroll,
     hasHorizontalOverflow,
+    tableBoxWidth,
   } = useTableScrollSync([projectsLoading, visibleCols.length]);
 
   // column widths (resizable)
@@ -439,6 +440,19 @@ export default function AdminProjetosPage({
   };
   const [colWidths, setColWidths] =
     useState<Record<string, number>>(DEFAULT_COL_WIDTHS);
+  const FIT_MIN_COL_WIDTHS: Record<string, number> = {
+    name: 130,
+    created: 100,
+    status: 96,
+    budget: 84,
+  };
+  // Larguras que cabem na área visível (104px = coluna de ações).
+  const fittedColWidths = fitColumnWidths(
+    visibleCols.map((col) => colWidths[col] ?? DEFAULT_COL_WIDTHS[col] ?? 120),
+    tableBoxWidth > 0 ? tableBoxWidth - 104 : 0,
+    60,
+    visibleCols.map((col) => FIT_MIN_COL_WIDTHS[col]),
+  );
   const dragState = useRef<{
     col: string;
     startX: number;
@@ -1723,7 +1737,7 @@ export default function AdminProjetosPage({
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
                   style={{
                     background:
-                      "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)",
+                      "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                   }}
                 />
                 <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">
@@ -2973,7 +2987,7 @@ export default function AdminProjetosPage({
                           className="shrink-0 px-6 pt-6 pb-4"
                           style={{
                             background:
-                              "linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%)",
+                              "var(--app-brand-gradient, linear-gradient(to bottom, #0b1336 0%, #12205e 28%, #2d1a6e 52%, #7d1b6a 78%, #c81a7f 100%))",
                           }}
                         >
                           <div className="flex items-start justify-between mb-3">
@@ -3137,7 +3151,7 @@ export default function AdminProjetosPage({
                           onClick={() => setViewMode("accordion")}
                           className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                             (viewMode as string) === "accordion"
-                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                               : "hover:bg-background"
                           }`}
                         >
@@ -3154,7 +3168,7 @@ export default function AdminProjetosPage({
                           onClick={() => setViewMode("kanban")}
                           className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                             (viewMode as string) === "kanban"
-                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                               : "hover:bg-background"
                           }`}
                         >
@@ -3171,7 +3185,7 @@ export default function AdminProjetosPage({
                           onClick={() => setViewMode("planner")}
                           className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                             (viewMode as string) === "planner"
-                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                               : "hover:bg-background"
                           }`}
                         >
@@ -3285,28 +3299,19 @@ export default function AdminProjetosPage({
                       onScroll={handleTableScroll}
                       className="overflow-x-auto allka-table-scroll-body"
                     >
+                      {/* As colunas encolhem na proporção até caber na
+                          largura visível: sem barra de rolagem horizontal. */}
                       <table
-                        className="tabela-cartao w-full text-xs"
-                        style={{
-                          tableLayout: "fixed",
-                          minWidth: visibleCols.reduce(
-                            (acc, col) => acc + (colWidths[col] ?? 120),
-                            80,
-                          ),
-                        }}
+                        className="tabela-cartao allka-fit-table w-full text-xs"
+                        style={{ tableLayout: "fixed" }}
                       >
                         <colgroup>
                           {/* actions col — pinned left */}
-                          <col style={{ width: 99 }} />
-                          {visibleCols.map((col) => (
+                          <col style={{ width: 104 }} />
+                          {visibleCols.map((col, i) => (
                             <col
                               key={col}
-                              style={{
-                                width:
-                                  colWidths[col] ??
-                                  DEFAULT_COL_WIDTHS[col] ??
-                                  120,
-                              }}
+                              style={{ width: fittedColWidths[i] }}
                             />
                           ))}
                         </colgroup>
@@ -3319,7 +3324,7 @@ export default function AdminProjetosPage({
                                 left: 0,
                                 top: 0,
                                 zIndex: 3,
-                                minWidth: 99,
+                                minWidth: 104,
                                 background: "var(--table-head)",
                                 boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                                 borderRight: "1px solid rgba(100,116,139,0.18)",
@@ -3335,8 +3340,8 @@ export default function AdminProjetosPage({
                                   key={col}
                                   className="py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider select-none relative"
                                   style={{
-                                    paddingLeft: 20,
-                                    paddingRight: 20,
+                                    paddingLeft: 12,
+                                    paddingRight: 12,
                                     textAlign: "left",
                                     borderRight:
                                       "1px solid rgba(148,163,184,0.25)",
@@ -3451,13 +3456,13 @@ export default function AdminProjetosPage({
                                       position: "sticky",
                                       left: 0,
                                       zIndex: 1,
-                                      minWidth: 99,
+                                      minWidth: 104,
                                       borderRight:
                                         "1px solid rgba(100,116,139,0.18)",
                                     }}
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                                    <div className="flex items-center justify-center gap-1">
+                                    <div className="flex flex-wrap items-center justify-center gap-1">
                                       {project.isArchived ? (
                                         <Tooltip>
                                           <TooltipTrigger asChild>
@@ -3710,7 +3715,7 @@ export default function AdminProjetosPage({
                                   {visibleCols.includes("id") && (
                                     <td
                                       data-rotulo="#"
-                                      className="px-5 py-3.5"
+                                      className="px-3 py-3.5"
                                       style={{
                                         borderRight:
                                           "1px solid rgba(148,163,184,0.15)",
@@ -3733,7 +3738,7 @@ export default function AdminProjetosPage({
                                   {visibleCols.includes("name") && (
                                     <td
                                       data-rotulo="Projeto"
-                                      className="px-5 py-3.5"
+                                      className="px-3 py-3.5"
                                       style={{
                                         borderRight:
                                           "1px solid rgba(148,163,184,0.15)",
@@ -3781,7 +3786,7 @@ export default function AdminProjetosPage({
                                   {visibleCols.includes("client") && (
                                     <td
                                       data-rotulo="Cliente"
-                                      className="px-5 py-3.5"
+                                      className="px-3 py-3.5"
                                       style={{
                                         borderRight:
                                           "1px solid rgba(148,163,184,0.15)",
@@ -3801,7 +3806,7 @@ export default function AdminProjetosPage({
                                   {visibleCols.includes("owner") && (
                                     <td
                                       data-rotulo="Conta responsável"
-                                      className="px-5 py-3.5"
+                                      className="px-3 py-3.5"
                                       style={{
                                         borderRight:
                                           "1px solid rgba(148,163,184,0.15)",
@@ -3869,7 +3874,7 @@ export default function AdminProjetosPage({
                                   {visibleCols.includes("agency") && (
                                     <td
                                       data-rotulo="Empresa"
-                                      className="px-5 py-3.5"
+                                      className="px-3 py-3.5"
                                       style={{
                                         borderRight:
                                           "1px solid rgba(148,163,184,0.15)",
@@ -3910,7 +3915,7 @@ export default function AdminProjetosPage({
                                   {visibleCols.includes("type") && (
                                     <td
                                       data-rotulo="Tipo"
-                                      className="px-5 py-3.5"
+                                      className="px-3 py-3.5"
                                       style={{
                                         borderRight:
                                           "1px solid rgba(148,163,184,0.15)",
@@ -3927,7 +3932,7 @@ export default function AdminProjetosPage({
                                   {visibleCols.includes("status") && (
                                     <td
                                       data-rotulo="Status"
-                                      className="px-5 py-3.5"
+                                      className="px-3 py-3.5"
                                       style={{
                                         borderRight:
                                           "1px solid rgba(148,163,184,0.15)",
@@ -3968,7 +3973,7 @@ export default function AdminProjetosPage({
                                   {visibleCols.includes("progress") && (
                                     <td
                                       data-rotulo="Progresso"
-                                      className="px-5 py-3.5"
+                                      className="px-3 py-3.5"
                                       style={{
                                         borderRight:
                                           "1px solid rgba(148,163,184,0.15)",
@@ -4147,9 +4152,9 @@ export default function AdminProjetosPage({
                     }
                   >
                     {/* Modal body */}
-                    <div className="flex flex-1 min-h-0">
+                    <div className="flex max-sm:flex-col flex-1 min-h-0">
                       {/* Left: Saved filters */}
-                      <div className="w-44 flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50">
+                      <div className="w-44 max-sm:w-full max-sm:max-h-36 max-sm:border-r-0 max-sm:border-b flex-shrink-0 border-r border-slate-100 flex flex-col bg-slate-50">
                         <div className="px-3 py-2.5 border-b border-slate-100">
                           <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
                             Filtros Salvos
@@ -4924,7 +4929,7 @@ export default function AdminProjetosPage({
                           onClick={() => setViewMode("accordion")}
                           className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                             (viewMode as string) === "accordion"
-                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                               : "hover:bg-background"
                           }`}
                         >
@@ -4941,7 +4946,7 @@ export default function AdminProjetosPage({
                           onClick={() => setViewMode("kanban")}
                           className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                             (viewMode as string) === "kanban"
-                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                               : "hover:bg-background"
                           }`}
                         >
@@ -4958,7 +4963,7 @@ export default function AdminProjetosPage({
                           onClick={() => setViewMode("planner")}
                           className={`h-7 px-2.5 rounded-md transition-all text-xs ${
                             (viewMode as string) === "planner"
-                              ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-sm"
+                              ? "bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white shadow-sm"
                               : "hover:bg-background"
                           }`}
                         >

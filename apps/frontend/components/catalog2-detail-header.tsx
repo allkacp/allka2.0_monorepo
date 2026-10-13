@@ -53,7 +53,7 @@ export function Catalog2DetailHeader({
 }: Catalog2DetailHeaderProps) {
   return (
     <div className="shrink-0 relative overflow-hidden mb-2 rounded-xl shadow-[0_4px_18px_-5px_rgba(0,0,0,0.15)]">
-      <div className="absolute inset-0" style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }} />
+      <div className="absolute inset-0" style={{ background: "var(--app-brand-header, linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%))" }} />
       {/* Fechar — canto superior direito, padrão pedido pelo usuário
           2026-09-23 pra toda tela de detalhe (além do "voltar" no
           breadcrumb, que ficava pouco visível). Mesma ação (fecha o

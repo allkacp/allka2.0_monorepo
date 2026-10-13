@@ -8,6 +8,7 @@ import { Loader2, Plus, Save, Trash2 } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ButtonLoader } from "@/components/ui/loading";
 
 const SEL = "h-8 rounded-md border border-slate-300 bg-white px-1.5 text-xs dark:border-slate-700 dark:bg-slate-900"
 const ROLES: [string, string][] = [["vc", "Consultor (VC)"], ["ac", "Assistente Consultiva (AC)"], ["other", "Outro"]]
@@ -94,7 +95,7 @@ function PlacSettingsBase() {
         <div className="mt-2"><Button size="sm" onClick={() => void add()}><Plus className="mr-1 h-4 w-4" />Novo passo</Button></div>
         {msg && <p role={msg.ok ? "status" : "alert"} className={`mt-2 rounded px-2 py-1 text-xs font-semibold ${msg.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{msg.text}</p>}
       </div>
-      {!rows ? <p className="flex items-center gap-2 text-xs text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p> : (
+      {!rows ? <p className="flex items-center gap-2 text-xs text-slate-500"><ButtonLoader text="Carregando passos PLAC…" /></p> : (
         <ol className="space-y-2">{rows.map((t) => <Row key={t.key} t={t} all={rows} users={users} fourFs={fourFs} onChanged={load} onError={(m) => setMsg({ ok: false, text: m })} />)}</ol>
       )}
     </div>

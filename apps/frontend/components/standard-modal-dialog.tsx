@@ -33,6 +33,7 @@ import type { ReactNode, Ref } from "react";
 import { X } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
+import { useTelaEstreita } from "@/hooks/useTelaEstreita";
 import { cn } from "@/lib/utils";
 
 interface StandardModalDialogProps {
@@ -81,6 +82,11 @@ export function StandardModalDialog({
       ? sidebarWidth
       : parseInt(sidebarWidth as string) || 240;
   const resolvedMaxWidth = maxWidthPx ?? (size === "compact" ? 460 : 1090);
+  // No celular o popup vira a folha que sobe da base (ver
+  // lib/dialog-mobile-sheet.ts) — a posição calculada pela sidebar e a
+  // largura máxima do desktop, se aplicadas inline, venceriam as classes e
+  // deixariam o popup deslocado/cortado.
+  const celular = useTelaEstreita(640);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -96,22 +102,28 @@ export function StandardModalDialog({
         // slide — ex.: "Novo Grupo" dentro do painel de Notificações, que
         // tinha o mesmo problema latente.
         className="p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl flex flex-col w-[calc(100%-64px)] z-70"
-        style={{
-          // Centralizado na área de conteúdo (exclui a sidebar), não no
-          // viewport inteiro — por isso não usamos left-1/2 padrão.
-          left: `calc(${sidebarWidthPx}px + (100vw - ${sidebarWidthPx}px) / 2 - 15px)`,
-          top: "calc(50% + 30px)",
-          maxWidth: resolvedMaxWidth,
-          ...(size === "large"
-            ? { height: "68vh", maxHeight: "68vh" }
-            : { maxHeight: "85vh" }),
-        }}
+        style={
+          celular
+            ? size === "large"
+              ? { height: "88dvh" }
+              : undefined
+            : {
+                // Centralizado na área de conteúdo (exclui a sidebar), não no
+                // viewport inteiro — por isso não usamos left-1/2 padrão.
+                left: `calc(${sidebarWidthPx}px + (100vw - ${sidebarWidthPx}px) / 2 - 15px)`,
+                top: "calc(50% + 30px)",
+                maxWidth: resolvedMaxWidth,
+                ...(size === "large"
+                  ? { height: "68vh", maxHeight: "68vh" }
+                  : { maxHeight: "85vh" }),
+              }
+        }
       >
         {/* Cabeçalho recuado — 15px em cima/lados, igual o painel branco
             padrão recua o banner gradiente das outras telas. */}
-        <div className="shrink-0 pt-[15px] px-[15px]">
+        <div className="shrink-0 pt-[15px] px-[15px] max-sm:pt-3 max-sm:px-3">
           <div
-            className={cn("flex items-center gap-3 px-6 py-4 rounded-2xl", headerClassName)}
+            className={cn("flex items-center gap-3 px-6 py-4 max-sm:px-4 max-sm:py-3 rounded-2xl", headerClassName)}
             style={{
               background:
                 "var(--app-brand-gradient, var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628)))",
@@ -129,6 +141,7 @@ export function StandardModalDialog({
             </div>
             <button
               onClick={onClose}
+              aria-label="Fechar"
               className="text-white/80 hover:text-white hover:bg-white/20 rounded-lg p-2 transition-all shrink-0"
             >
               <X className="h-5 w-5" />
@@ -139,7 +152,7 @@ export function StandardModalDialog({
         <div ref={scrollRef} className="flex flex-col flex-1 min-h-0 overflow-y-auto">{children}</div>
 
         {footer && (
-          <div className="shrink-0 border-t border-slate-200/80 dark:border-slate-700/80 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm px-6 py-4">
+          <div className="shrink-0 border-t border-slate-200/80 dark:border-slate-700/80 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm px-6 py-4 max-sm:px-4 max-sm:py-3">
             {footer}
           </div>
         )}

@@ -40,6 +40,7 @@ import connectionsRouter from "./routes/connections";
 import approvalGatesRouter from "./routes/approval-gates";
 import slaRouter from "./routes/sla";
 import workCalendarRouter from "./routes/work-calendar";
+import platformThemeRouter from "./routes/platform-theme";
 import placRouter from "./routes/plac";
 import internalTasksRouter from "./routes/internal-tasks";
 import secureBrowserRouter from "./routes/secure-browser";
@@ -215,6 +216,8 @@ app.use("/api/connections", connectionsRouter);
 app.use("/api/approval-gates", approvalGatesRouter);
 app.use("/api/sla", slaRouter);
 app.use("/api/work-calendar", workCalendarRouter);
+// Tema visual da plataforma (Personalizar Sidebar): leitura para todos, escrita só do administrador.
+app.use("/api/platform-theme", platformThemeRouter);
 app.use("/api/plac", placRouter);
 app.use("/api/internal-tasks", internalTasksRouter);
 app.use("/api/secure-browser", secureBrowserRouter);

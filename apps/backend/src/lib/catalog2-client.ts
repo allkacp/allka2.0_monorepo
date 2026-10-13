@@ -1638,7 +1638,10 @@ export async function getCart(ctx: ClientContext) {
   const items = await prisma.catalog2CartItem.findMany({
     where: { account_kind: ctx.account_kind, account_id: ctx.account_id, user_id: ctx.user_id },
     orderBy: { created_at: "asc" },
-    include: { product: { select: { id: true, slug: true, internal_name: true, status: true, published_version_id: true, delivery_recurrence: true } } },
+    include: {
+      product: { select: { id: true, slug: true, internal_name: true, status: true, published_version_id: true, delivery_recurrence: true } },
+      version: { select: { title: true } },
+    },
   });
   const out = [];
   let anyStale = false;
@@ -1663,7 +1666,9 @@ export async function getCart(ctx: ClientContext) {
       id: it.id,
       product_id: it.product_id,
       slug: it.product.slug,
-      name: it.product.internal_name,
+      // Mesmo nome que o cliente vê no catálogo (título da versão); o nome
+      // interno era o que aparecia na cesta e no checkout.
+      name: it.version?.title || it.product.internal_name,
       version_id: it.version_id,
       selection: sel,
       period,

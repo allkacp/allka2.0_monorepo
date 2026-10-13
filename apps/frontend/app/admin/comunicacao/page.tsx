@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { InlineLoader } from "@/components/ui/loading";
 
 // Central Administrativa de Comunicação (ata 2026-08, bloco 5/5).
 // Canais (auditoria) · Campanhas/reengajamento · Banners obrigatórios.
@@ -628,9 +629,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 function Loading() {
   return (
-    <div className="flex items-center gap-2 py-8 text-sm text-neutral-500">
-      <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
-    </div>
+    <InlineLoader text="Carregando comunicações…" />
   );
 }
 function Empty({ text }: { text: string }) {

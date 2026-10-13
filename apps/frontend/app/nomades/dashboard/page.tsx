@@ -1739,7 +1739,7 @@ export default function NomadeDashboardPage() {
         {/* Dashboard Header — unified toolbar — mesma paleta gradiente do admin */}
         <div
           className="relative overflow-hidden flex flex-wrap items-center gap-x-1 gap-y-2 rounded-xl px-[13px] py-[10px] shadow-[0_4px_24px_-4px_rgba(0,0,0,0.15)] lg:h-[65px]"
-          style={{ background: "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)" }}
+          style={{ background: "var(--app-brand-header, linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%))" }}
         >
           {/* Title + info tooltip */}
           <div className="flex items-center gap-1 shrink-0 mr-2">
@@ -1778,7 +1778,7 @@ export default function NomadeDashboardPage() {
                     onClick={refetch}
                     className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                     <RefreshCw className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
                   </button>
                 </TooltipTrigger>
@@ -1796,7 +1796,7 @@ export default function NomadeDashboardPage() {
                       disabled={exportLoading}
                       className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
                     >
-                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                       <Download className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", exportLoading && "animate-pulse")} />
                     </button>
                   </TooltipTrigger>
@@ -1811,7 +1811,7 @@ export default function NomadeDashboardPage() {
                       disabled={exportLoading}
                       className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all disabled:opacity-50"
                     >
-                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                      <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                       <FileDown className={cn("relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors", exportLoading && "animate-pulse")} />
                     </button>
                   </TooltipTrigger>
@@ -1828,7 +1828,7 @@ export default function NomadeDashboardPage() {
                     onClick={openShareDialog}
                     className="group relative flex items-center justify-center h-8 w-8 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
                   >
-                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+                    <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
                     <Share2 className="relative z-10 h-4 w-4 text-[#7d1b6a] group-hover:text-white transition-colors" />
                   </button>
                 </TooltipTrigger>
@@ -1841,9 +1841,9 @@ export default function NomadeDashboardPage() {
               onClick={handleRequestCustomize}
               className="group relative flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg border border-border/60 hover:border-transparent overflow-hidden transition-all"
             >
-              <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }} />
+              <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }} />
               <Settings className="relative z-10 h-3.5 w-3.5 shrink-0 text-[#7d1b6a] group-hover:text-white transition-colors" />
-              <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%)] group-hover:[background-image:none] group-hover:text-white transition-colors">
+              <span className="relative z-10 text-xs font-semibold bg-clip-text text-transparent [background-image:var(--app-brand-button,linear-gradient(135deg,#1a2a6f_0%,#7d1b6a_55%,#c81a7f_100%))] group-hover:[background-image:none] group-hover:text-white transition-colors">
                 Personalizar
               </span>
             </button>
@@ -1868,7 +1868,7 @@ export default function NomadeDashboardPage() {
       <SheetContent side="right" className="w-full sm:max-w-xl p-0 flex flex-col overflow-hidden">
         <div
           className="px-6 pt-5 pb-4 shrink-0"
-          style={{ background: "linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%)" }}
+          style={{ background: "var(--app-brand-gradient, linear-gradient(135deg, #000000 0%, #1a2a6f 45%, #c81a7f 100%))" }}
         >
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center h-9 w-9 rounded-xl bg-white/15 shrink-0">

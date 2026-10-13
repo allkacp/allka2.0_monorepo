@@ -87,8 +87,8 @@ export function HelpFloatingIcon() {
         data-tour-id="help-button"
         onClick={() => setOpen(true)}
           aria-label="Tutoriais guiados"
-        className="lg:hidden fixed right-4 z-45 flex items-center justify-center h-14 w-14 rounded-full bg-slate-700 text-white shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform"
-        style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 164px)" }}
+        className="fab-celular lg:hidden fixed right-3 z-45 flex items-center justify-center h-12 w-12 rounded-full bg-slate-700 text-white shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform"
+        style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 132px)" }}
       >
         <MapIcon className="h-6 w-6 shrink-0" />
       </button>

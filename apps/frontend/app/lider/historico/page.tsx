@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, Loader2, ChevronLeft, ChevronRight, History } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
@@ -11,6 +11,7 @@ import {
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { InlineLoader } from "@/components/ui/loading";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
@@ -138,10 +139,7 @@ export default function LiderHistoricoPage() {
 
       <div className="bg-white dark:bg-card rounded-xl border border-slate-200 dark:border-border overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center h-48 gap-2 text-slate-400">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Carregando…</span>
-          </div>
+          <InlineLoader text="Carregando histórico…" />
         ) : tasks.length === 0 ? (
           <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
             Nenhuma tarefa encontrada.
@@ -151,34 +149,34 @@ export default function LiderHistoricoPage() {
             <table className="tabela-cartao w-full text-sm">
               <thead>
                 <tr className="text-xs text-slate-400 uppercase tracking-wide border-b border-slate-100 dark:border-border">
-                  <th className="px-5 py-3 text-left font-medium">Código</th>
-                  <th className="px-5 py-3 text-left font-medium">Tarefa</th>
-                  <th className="px-5 py-3 text-left font-medium">Produto</th>
-                  <th className="px-5 py-3 text-left font-medium">Projeto</th>
-                  <th className="px-5 py-3 text-left font-medium">Status</th>
-                  <th className="px-5 py-3 text-left font-medium">Data</th>
+                  <th className="px-3 py-3 text-left font-medium">Código</th>
+                  <th className="px-3 py-3 text-left font-medium">Tarefa</th>
+                  <th className="px-3 py-3 text-left font-medium">Produto</th>
+                  <th className="px-3 py-3 text-left font-medium">Projeto</th>
+                  <th className="px-3 py-3 text-left font-medium">Status</th>
+                  <th className="px-3 py-3 text-left font-medium">Data</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 dark:divide-border">
                 {tasks.map((task: any) => (
                   <tr key={task.id} className="hover:bg-slate-50 dark:hover:bg-muted/30 transition-colors">
-                    <td data-rotulo="Código" className="px-5 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
+                    <td data-rotulo="Código" className="px-3 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
                       {task.task_code ?? task.code_snapshot ?? "—"}
                     </td>
-                    <td data-rotulo="Tarefa" className="px-5 py-3 text-slate-800 dark:text-slate-100 max-w-[180px] truncate">
+                    <td data-rotulo="Tarefa" className="px-3 py-3 text-slate-800 dark:text-slate-100 max-w-[180px] truncate">
                       {task.title ?? task.name_snapshot ?? "—"}
                     </td>
-                    <td data-rotulo="Produto" className="px-5 py-3 text-slate-500 max-w-[130px] truncate whitespace-nowrap">
+                    <td data-rotulo="Produto" className="px-3 py-3 text-slate-500 max-w-[130px] truncate whitespace-nowrap">
                       {task.project_product?.product_name_snapshot ??
                         task.project_product?.product?.name ?? "—"}
                     </td>
-                    <td data-rotulo="Projeto" className="px-5 py-3 text-slate-500 whitespace-nowrap">
+                    <td data-rotulo="Projeto" className="px-3 py-3 text-slate-500 whitespace-nowrap">
                       {task.project?.name ?? "—"}
                     </td>
-                    <td data-rotulo="Status" className="px-5 py-3">
+                    <td data-rotulo="Status" className="px-3 py-3">
                       <StatusBadge status={task.status} />
                     </td>
-                    <td data-rotulo="Data" className="px-5 py-3 text-slate-500 whitespace-nowrap">
+                    <td data-rotulo="Data" className="px-3 py-3 text-slate-500 whitespace-nowrap">
                       {fmtDate(task.created_at)}
                     </td>
                   </tr>
@@ -189,7 +187,7 @@ export default function LiderHistoricoPage() {
         )}
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 dark:border-border">
+          <div className="flex items-center justify-between px-3 py-3 border-t border-slate-100 dark:border-border">
             <span className="text-xs text-slate-400">
               Página {page} de {totalPages} · {total} tarefa{total !== 1 ? "s" : ""}
             </span>

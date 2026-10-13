@@ -9,6 +9,7 @@ import { Loader2, AlertCircle, CheckCircle2, Sparkles, Wallet } from "lucide-rea
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { WalletTopupModal } from "@/components/wallet-topup-modal";
+import { ButtonLoader } from "@/components/ui/loading";
 
 export interface AiChangeQuote {
   project_product_id: string; free_total: number; used: number; free_left: number; is_free: boolean;
@@ -54,7 +55,7 @@ export function Catalog2AiChangesPanel({ projectId }: { projectId: string }) {
   const reload = useCallback(() => { void load(true); }, [load]);
 
   if (loading) {
-    return <div className="flex items-center gap-2 p-6 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando alterações por IA…</div>;
+    return <div className="flex items-center gap-2 p-6 text-sm text-neutral-500"><ButtonLoader text="Carregando alterações por IA…" /></div>;
   }
   const available = rows.filter((r) => r.quote);
   if (!error && available.length === 0) return null; // admin, equipe ou projeto sem itens do novo catálogo: nada a mostrar

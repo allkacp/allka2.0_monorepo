@@ -42,6 +42,7 @@ import { QuestionConfigFields, emptyQuestion, draftFromServer, draftFromSuggesti
 import { BillingSplitSection } from "@/components/catalog2-pricing-memory-popover";
 import { VariationSettings, OptionSettings, AddonSettings, ChargeScopeFields, chargeScopeLabel } from "./catalog2-choices-ui";
 import { CATALOG2_STATUSES, CATALOG2_STATUS_LABEL, CATALOG2_STATUS_MEANING, catalog2StatusLabel, catalog2StatusTone, type Catalog2Status } from "@/lib/catalog2-status";
+import { ButtonLoader, InlineLoader, PageLoader } from "@/components/ui/loading";
 
 // Construtor de produto do novo catálogo (sprint de produtos, bloco 3/6).
 // Ocupa o container padrão — SEM sobreposição grande sobre outra tela.
@@ -416,7 +417,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
     }
   }
 
-  if (loading) return <div className="flex items-center gap-2 p-10 text-sm text-neutral-500"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>;
+  if (loading) return <PageLoader text="Carregando produto…" compact />;
   if (!product) return <div className="flex flex-1 flex-col items-start gap-3 p-10 text-sm text-red-600">Produto não encontrado.<Button size="sm" variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar</Button></div>;
 
   return (
@@ -601,7 +602,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       <Dialog open={pricingOpen} onOpenChange={(o) => { if (o) setPricingOpen(true); else void closePricing(true, false); }}>
         <DialogContent showCloseButton={false} className="h-[94vh] w-[98vw] max-w-[1680px] overflow-y-auto border-0 bg-[#dde2f3] p-2 sm:p-3">
           <DialogTitle className="sr-only">Precificação</DialogTitle>
-          <Suspense fallback={<div className="flex items-center gap-2 p-10 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Carregando…</div>}>
+          <Suspense fallback={<InlineLoader text="Carregando precificação…" />}>
             <PricingPageLazy returnAfterSave={!!pricingReturnTaskId} onSaveComplete={() => void closePricing(true, true)} onClose={() => void closePricing(true, false)} />
           </Suspense>
         </DialogContent>
@@ -704,7 +705,7 @@ function AiFieldButton({ label, value, mode = "text", context, onResult, disable
             type="button"
             disabled={disabled || tooShort}
             title={tooShort ? "Informe o nome do produto (título comercial) ou escreva algo no campo para liberar a IA." : "Preencher ou melhorar com Inteligência Artificial"}
-            className={`inline-flex items-center rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50 ${compact ? "h-6 w-6 justify-center" : "gap-1 px-2 py-1 text-[11px]"}`}
+            className={`inline-flex items-center rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50 ${compact ? "h-6 w-6 justify-center" : "gap-1 px-2 py-1 text-[11px]"}`}
           >
             <Sparkles className="h-3 w-3" />{!compact && " IA"}
           </button>
@@ -997,7 +998,7 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
 
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-3 pt-1">
-          <button type="button" data-testid="open-ai-chat" onClick={() => setAiChatOpen(true)} title="A IA conversa com você e preenche o produto inteiro a partir de uma explicação" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:brightness-110"><Sparkles className="h-3.5 w-3.5" />Preencher o produto com IA</button>
+          <button type="button" data-testid="open-ai-chat" onClick={() => setAiChatOpen(true)} title="A IA conversa com você e preenche o produto inteiro a partir de uma explicação" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] px-3 text-xs font-semibold text-white shadow-sm transition hover:brightness-110"><Sparkles className="h-3.5 w-3.5" />Preencher o produto com IA</button>
           <SaveButton disabled={savingInfo || (f.summary.length > 500 && f.summary !== (version.summary ?? "")) || (f.full_description.length > 4000 && f.full_description !== (version.full_description ?? ""))} onClick={() => void saveInfo()}>{savingInfo ? "Salvando…" : "Salvar informações"}</SaveButton>
           {fmtUpdatedAt(version?.updated_at) && <span className="text-xs text-slate-500 dark:text-slate-400">Última atualização: {fmtUpdatedAt(version.updated_at)}</span>}
           <ProductAiChatDialog open={aiChatOpen} onOpenChange={setAiChatOpen} productId={product.id} readOnly={readOnly} onApply={applyAiDraft} />
@@ -1025,7 +1026,7 @@ function ChangeSummaryAiButton({ versionId, onResult, disabled, compact = false 
           finally { setBusy(false); }
         }}
         title="Gerar ou atualizar o resumo da mudança com IA"
-        className={`inline-flex items-center rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50 ${compact ? "h-6 w-6 justify-center" : "gap-1 px-2 py-1 text-[11px]"}`}
+        className={`inline-flex items-center rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-50 ${compact ? "h-6 w-6 justify-center" : "gap-1 px-2 py-1 text-[11px]"}`}
       >
         {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}{!compact && ` ${busy ? "Analisando…" : "Gerar com IA"}`}
       </button>
@@ -2153,7 +2154,7 @@ function QuestionnaireSection({ task, refs, act }: any) {
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={() => { setShowPicker((v) => !v); setShowCreate(false); }}><Link2 className="h-3.5 w-3.5" /> Selecionar questionário existente</Button>
         <Button size="sm" variant="outline" onClick={() => { setShowCreate((v) => !v); setShowPicker(false); setPrefill(null); }}><Plus className="h-3.5 w-3.5" /> Criar novo questionário</Button>
-        <button type="button" data-testid="ai-questionnaire" disabled={aiBusy} onClick={() => void generate()} title="A IA lê tudo o que está cadastrado no produto e sugere as perguntas. Você revisa antes de criar." className="inline-flex h-8 items-center gap-1 rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Gerar questionário com IA"}</button>
+        <button type="button" data-testid="ai-questionnaire" disabled={aiBusy} onClick={() => void generate()} title="A IA lê tudo o que está cadastrado no produto e sugere as perguntas. Você revisa antes de criar." className="inline-flex h-8 items-center gap-1 rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] px-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Gerar questionário com IA"}</button>
       </div>
       {aiErr && <p role="alert" className="text-[11px] font-semibold text-red-600">{aiErr}</p>}
       {showPicker && (
@@ -2323,7 +2324,7 @@ function EditQuestionnaireForm({ task, act, onDone, onCancel }: { task: any; act
         <Field label="nova pergunta"><Input value={nq.label} onChange={(e) => setNq({ ...nq, label: e.target.value })} /></Field>
         <label><input type="checkbox" checked={nq.is_required} onChange={(e) => setNq({ ...nq, is_required: e.target.checked })} /> obrigatória</label>
         <Button size="sm" variant="outline" onClick={addQuestion}>Adicionar pergunta</Button>
-        <button type="button" data-testid="ai-questionnaire-more" disabled={aiBusy} onClick={() => void suggestMore()} title="A IA lê tudo o que está cadastrado no produto e sugere perguntas que ainda não existem." className="inline-flex h-8 items-center gap-1 rounded-md bg-gradient-to-r from-violet-600 to-fuchsia-600 px-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Sugerir mais perguntas com IA"}</button>
+        <button type="button" data-testid="ai-questionnaire-more" disabled={aiBusy} onClick={() => void suggestMore()} title="A IA lê tudo o que está cadastrado no produto e sugere perguntas que ainda não existem." className="inline-flex h-8 items-center gap-1 rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] px-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Sugerir mais perguntas com IA"}</button>
       </div>
       {aiMsg && <p role={aiMsg.ok ? "status" : "alert"} className={`text-[11px] font-semibold ${aiMsg.ok ? "text-emerald-700" : "text-red-600"}`}>{aiMsg.text}</p>}
       <div className="flex items-center gap-2">
@@ -3003,7 +3004,7 @@ function HistoryTab({ version, product, readOnly, act, onResolveIssue }: any) {
   const [copyDraft, setCopyDraft] = useState(true);
   useEffect(() => { apiClient.validateCatalog2Version(version.id).then(setVal).catch(() => setVal(null)); }, [version.id, version.updated_at]);
   const previous = (product.versions ?? []).filter((item: any) => item.id !== version.id).sort((a: any, b: any) => b.version_number - a.version_number).slice(0, 3);
-  return <div className="mt-3 grid gap-3 md:grid-cols-2"><ReviewSurface><div className="flex items-center gap-2"><h2 className="text-base font-semibold">Versão atual</h2><Badge className="ml-auto border-0 bg-amber-100 text-amber-800">{version.state === "publicada" ? "Publicada" : "Não publicada"}</Badge></div><div className="mt-2 grid gap-2 sm:grid-cols-2"><select className="h-9 min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-xs" value={version.id} disabled><option>v{version.version_number} — {version.state === "publicada" ? "Publicada" : "Rascunho"}</option></select><span className="flex items-center text-[11px] text-slate-500"><CalendarClock className="mr-1 h-3.5 w-3.5" />Atualizada em {new Date(version.updated_at).toLocaleDateString("pt-BR")}</span></div><div className="mt-3 flex items-center justify-between px-2 text-[11px]"><span className="font-semibold text-violet-700">Rascunho</span><span className="h-px flex-1 bg-slate-200" /><span className="text-slate-400">Revisão</span><span className="h-px flex-1 bg-slate-200" /><span className="text-slate-400">Publicado</span></div><div className="mt-3 space-y-1"><ReviewLine icon={<FileText className="h-4 w-4" />} title="Resumo da versão" text="Principais configurações desta versão." compact /><ReviewLine icon={<ListChecks className="h-4 w-4" />} title="Alterações pendentes" text={val?.ok ? "Nenhuma pendência" : `${val?.issues?.length ?? 0} pendência(s) a revisar`} tone={val?.ok ? "ok" : "neutral"} compact /><ReviewLine icon={<Info className="h-4 w-4" />} title="Bloqueios para publicar" text={val?.ok ? "Sem bloqueios" : `${val?.issues?.length ?? 0} bloqueio(s)`} tone={val?.ok ? "ok" : "block"} compact /></div><div className="mt-2 flex gap-2"><Button size="sm" variant="outline" className="flex-1" disabled={readOnly} onClick={() => act(() => apiClient.updateCatalog2VersionInfo(version.id, {}), "Rascunho salvo.")}><Save className="h-3.5 w-3.5" />Salvar rascunho</Button><span className="flex-1"><PublishBtn versionId={version.id} canPublish={!!val?.ok} readOnly={readOnly} summary={summary} act={act} /></span></div></ReviewSurface><div className="space-y-3"><ReviewSurface><h2 className="text-base font-semibold">Criar nova versão</h2><p className="mt-1 text-[11px] text-slate-500">Continue evoluindo este produto.</p><Field label="Nome da versão"><Input className="h-9 text-xs" value={`v${(version.version_number ?? 0) + 1} — Nova versão`} disabled /></Field><label className="mt-2 flex items-center gap-2 text-xs"><button type="button" onClick={() => setCopyDraft(!copyDraft)} className={`relative h-5 w-9 rounded-full ${copyDraft ? "bg-violet-600" : "bg-slate-300"}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${copyDraft ? "left-4" : "left-0.5"}`} /></button>Copiar dados do rascunho</label><Button size="sm" className="mt-2 w-full bg-gradient-to-r from-violet-600 to-fuchsia-600" onClick={() => act(() => apiClient.newCatalog2Version(product.id), "Nova versão criada.")}><Plus className="h-3.5 w-3.5" />Criar versão</Button></ReviewSurface><ReviewSurface><h3 className="text-sm font-semibold">Versões anteriores</h3><div className="mt-2 space-y-1">{previous.length ? previous.map((item: any) => <div key={item.id} className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"><span className={`h-2 w-2 shrink-0 rounded-full ${item.state === "publicada" ? "bg-emerald-500" : "bg-amber-400"}`} /><span className="truncate font-medium">v{item.version_number} — {item.state === "publicada" ? "Publicada" : "Rascunho"}</span><span className="ml-auto shrink-0 text-[10px] text-slate-500">{new Date(item.updated_at).toLocaleDateString("pt-BR")}</span></div>) : <p className="text-xs text-slate-500">Ainda não há versões anteriores.</p>}</div></ReviewSurface></div></div>;
+  return <div className="mt-3 grid gap-3 md:grid-cols-2"><ReviewSurface><div className="flex items-center gap-2"><h2 className="text-base font-semibold">Versão atual</h2><Badge className="ml-auto border-0 bg-amber-100 text-amber-800">{version.state === "publicada" ? "Publicada" : "Não publicada"}</Badge></div><div className="mt-2 grid gap-2 sm:grid-cols-2"><select className="h-9 min-w-0 rounded-lg border border-slate-200 bg-white px-2 text-xs" value={version.id} disabled><option>v{version.version_number} — {version.state === "publicada" ? "Publicada" : "Rascunho"}</option></select><span className="flex items-center text-[11px] text-slate-500"><CalendarClock className="mr-1 h-3.5 w-3.5" />Atualizada em {new Date(version.updated_at).toLocaleDateString("pt-BR")}</span></div><div className="mt-3 flex items-center justify-between px-2 text-[11px]"><span className="font-semibold text-violet-700">Rascunho</span><span className="h-px flex-1 bg-slate-200" /><span className="text-slate-400">Revisão</span><span className="h-px flex-1 bg-slate-200" /><span className="text-slate-400">Publicado</span></div><div className="mt-3 space-y-1"><ReviewLine icon={<FileText className="h-4 w-4" />} title="Resumo da versão" text="Principais configurações desta versão." compact /><ReviewLine icon={<ListChecks className="h-4 w-4" />} title="Alterações pendentes" text={val?.ok ? "Nenhuma pendência" : `${val?.issues?.length ?? 0} pendência(s) a revisar`} tone={val?.ok ? "ok" : "neutral"} compact /><ReviewLine icon={<Info className="h-4 w-4" />} title="Bloqueios para publicar" text={val?.ok ? "Sem bloqueios" : `${val?.issues?.length ?? 0} bloqueio(s)`} tone={val?.ok ? "ok" : "block"} compact /></div><div className="mt-2 flex gap-2"><Button size="sm" variant="outline" className="flex-1" disabled={readOnly} onClick={() => act(() => apiClient.updateCatalog2VersionInfo(version.id, {}), "Rascunho salvo.")}><Save className="h-3.5 w-3.5" />Salvar rascunho</Button><span className="flex-1"><PublishBtn versionId={version.id} canPublish={!!val?.ok} readOnly={readOnly} summary={summary} act={act} /></span></div></ReviewSurface><div className="space-y-3"><ReviewSurface><h2 className="text-base font-semibold">Criar nova versão</h2><p className="mt-1 text-[11px] text-slate-500">Continue evoluindo este produto.</p><Field label="Nome da versão"><Input className="h-9 text-xs" value={`v${(version.version_number ?? 0) + 1} — Nova versão`} disabled /></Field><label className="mt-2 flex items-center gap-2 text-xs"><button type="button" onClick={() => setCopyDraft(!copyDraft)} className={`relative h-5 w-9 rounded-full ${copyDraft ? "bg-violet-600" : "bg-slate-300"}`}><span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${copyDraft ? "left-4" : "left-0.5"}`} /></button>Copiar dados do rascunho</label><Button size="sm" className="mt-2 w-full bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))]" onClick={() => act(() => apiClient.newCatalog2Version(product.id), "Nova versão criada.")}><Plus className="h-3.5 w-3.5" />Criar versão</Button></ReviewSurface><ReviewSurface><h3 className="text-sm font-semibold">Versões anteriores</h3><div className="mt-2 space-y-1">{previous.length ? previous.map((item: any) => <div key={item.id} className="flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs"><span className={`h-2 w-2 shrink-0 rounded-full ${item.state === "publicada" ? "bg-emerald-500" : "bg-amber-400"}`} /><span className="truncate font-medium">v{item.version_number} — {item.state === "publicada" ? "Publicada" : "Rascunho"}</span><span className="ml-auto shrink-0 text-[10px] text-slate-500">{new Date(item.updated_at).toLocaleDateString("pt-BR")}</span></div>) : <p className="text-xs text-slate-500">Ainda não há versões anteriores.</p>}</div></ReviewSurface></div></div>;
 }
 function PublishBtn({ versionId, canPublish, readOnly, summary, act }: any) {
   const [open, setOpen] = useState(false);
@@ -3146,7 +3147,7 @@ function ProductHistoryTab({ productId }: { productId: string }) {
 
       <div className="rounded-lg border border-neutral-200 dark:border-neutral-800">
         {loading ? (
-          <div className="flex items-center gap-2 p-4 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>
+          <div className="flex items-center gap-2 p-4 text-sm text-neutral-500"><ButtonLoader text="Carregando histórico…" /></div>
         ) : !result?.data?.length ? (
           <p className="p-4 text-sm text-neutral-500">Nenhum evento encontrado para os filtros selecionados.</p>
         ) : (
@@ -3213,7 +3214,7 @@ function OriginReviewTab({ productId, onChanged }: { productId: string; onChange
   }, [productId]);
   useEffect(() => { reload(); }, [reload]);
 
-  if (state === "loading") return <div className="mt-3 flex items-center gap-2 text-sm text-neutral-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</div>;
+  if (state === "loading") return <div className="mt-3 flex items-center gap-2 text-sm text-neutral-500"><ButtonLoader text="Carregando revisão de origem…" /></div>;
   if (state === "not_imported") return <p className="mt-3 rounded bg-neutral-100 px-3 py-2 text-sm text-neutral-500 dark:bg-neutral-800">Este produto não veio da importação dos 36 — foi criado manualmente no construtor.</p>;
   if (state === "error" || !data) return <p className="mt-3 text-sm text-red-600">Não foi possível carregar a origem.</p>;
 
@@ -3636,7 +3637,7 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
           {data?.error ? (
             <p className="text-sm text-red-600">Não foi possível carregar a prontidão.</p>
           ) : !data?.items ? (
-            <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>
+            <p className="flex items-center gap-2 text-sm text-slate-500"><ButtonLoader text="Carregando prontidão…" /></p>
           ) : (
             <>
               <div className="mb-2 flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtrar itens do checklist">

@@ -26,6 +26,7 @@ import { NotificationSoundSettings } from "@/components/notification-sound-setti
 import { apiClient } from "@/lib/api-client"
 import { alertIcon } from "@/components/alerts-header-icon"
 import { cn } from "@/lib/utils"
+import { InlineLoader } from "@/components/ui/loading";
 
 /* ─── Catálogo de tipos de evento (fixo, usado pela aba Preferências —
    NotificationPreference é a tabela real por trás dela). Exclusivo de
@@ -469,7 +470,7 @@ function InboxTab({
         <p className="text-sm text-red-500 text-center py-10">Não foi possível carregar as notificações agora.</p>
       )}
       {!error && loading && alerts.length === 0 && (
-        <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>
+        <InlineLoader text="Carregando notificações…" />
       )}
       {!error && !loading && alerts.length === 0 && (
         <p className="text-sm text-slate-400 text-center py-10">
@@ -653,7 +654,7 @@ function GroupsTab({
   onOpenChat: (g: GroupSummary) => void
 }) {
   if (loading && groups.length === 0) {
-    return <p className="text-xs text-slate-400 text-center py-10">Carregando...</p>
+    return <InlineLoader text="Carregando grupos…" />
   }
 
   if (role === "master") {

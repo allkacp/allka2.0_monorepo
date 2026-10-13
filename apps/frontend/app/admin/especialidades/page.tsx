@@ -33,6 +33,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PageLoader } from "@/components/ui/loading";
 
 // === AI Providers ============================================================
 
@@ -553,7 +554,7 @@ export default function AdminEspecialidadesPage() {
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }}
                 />
                 <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
               </button>
@@ -740,10 +741,7 @@ export default function AdminEspecialidadesPage() {
 
         {/* Table */}
         {loading ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Carregando especialidades...</span>
-          </div>
+          <PageLoader text="Carregando especialidades…" compact />
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-red-500">
             <span className="text-sm font-medium">{error}</span>

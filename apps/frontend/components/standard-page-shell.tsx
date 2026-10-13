@@ -42,7 +42,7 @@ export const STANDARD_SHELL_ROUTES = [
   "/admin/cadastro-produtos",
   "/admin/produtos",
   "/admin/combos",
-  "/admin/pacotes",
+  // "/admin/pacotes" saiu: a tela não desenha o painel branco; o AppLayout desenha.
   "/admin/precificacao",
   "/admin/modelos-tarefas",
   "/admin/campanhas-indicacao",
@@ -116,10 +116,33 @@ export const STANDARD_SHELL_ROUTES = [
   "/leader/clientes",
 ];
 
-export function isStandardShellRoute(pathname: string): boolean {
+// Telas que já desenham o próprio painel branco mas não estavam na lista
+// acima (por isso abriam com fundo cinza e menu de outra cor).
+STANDARD_SHELL_ROUTES.push(
+  "/conexoes",
+  "/admin/conexoes",
+  "/company/conexoes",
+  "/agency/conexoes",
+  "/nomades/conexoes",
+  "/leader/conexoes",
+  "/admin/relatos-ia",
+  "/admin/links-compartilhados",
+);
+
+/** A tela desenha o próprio painel branco (STANDARD_SHELL_PANEL_CLASS). */
+export function pageHasOwnShellPanel(pathname: string): boolean {
   return STANDARD_SHELL_ROUTES.some(
     (r) => pathname === r || pathname.startsWith(r + "/"),
   );
+}
+
+/**
+ * Toda tela logada usa a mesma moldura (fundo em gradiente, menu e topo
+ * transparentes, painel branco). As que ainda não desenham o painel branco
+ * recebem um do AppLayout (ver App.tsx) — por isso a moldura vale para todas.
+ */
+export function isStandardShellRoute(_pathname: string): boolean {
+  return true;
 }
 
 // Painel branco flutuante — wrapper mais externo da tela.
@@ -322,7 +345,7 @@ export function StandardPageBanner({
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%)",
+            "var(--app-brand-header, linear-gradient(90deg, #0a1628 0%, #3b1f6e 50%, #c81a7f 100%))",
         }}
       />
       <div
@@ -336,7 +359,7 @@ export function StandardPageBanner({
         className={`relative z-10 flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:px-4 sm:py-3 lg:h-[65px] ${contentClassName}`}
       >
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-fuchsia-600 shadow-md">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/25 shadow-md">
             <Icon className="h-4 w-4 text-white" />
           </div>
           <div className="min-w-0">

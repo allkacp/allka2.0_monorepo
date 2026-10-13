@@ -53,6 +53,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api-client";
+import { PageLoader } from "@/components/ui/loading";
 
 // Client é uma entidade real, separada de Company — servida por
 // /api/client-records (NÃO /api/clients, que é o legado sobre Company).
@@ -550,7 +551,7 @@ export function PortalClientesPage({ portal }: { portal: ClientesPortal }) {
               >
                 <span
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                  style={{ background: "linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%)" }}
+                  style={{ background: "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))" }}
                 />
                 <span className="relative z-10 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors">Ir</span>
               </button>
@@ -700,10 +701,7 @@ export function PortalClientesPage({ portal }: { portal: ClientesPortal }) {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span className="text-sm">Carregando clientes...</span>
-          </div>
+          <PageLoader text="Carregando clientes…" compact />
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-16 gap-2 text-red-500">
             <span className="text-sm font-medium">{error}</span>

@@ -78,6 +78,17 @@ interface SidebarContextType {
   setPreviewEnabled: (enabled: boolean) => void;
   setProjectColor: (color: string | null) => void;
   applyFullTheme: (theme: Partial<SidebarSettings>) => void;
+  savePlatformTheme: (
+    settings: SidebarSettings,
+    presets?: CustomGradientPreset[],
+  ) => Promise<void>;
+}
+
+export interface CustomGradientPreset {
+  id: string;
+  name: string;
+  value: string;
+  preview: string;
 }
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
@@ -107,6 +118,13 @@ function bgToCSS(bg: string): string {
     return bg.replace("custom-gradient:", "");
   if (BG_TO_CSS[bg]) return BG_TO_CSS[bg];
   return bg; // raw hex / rgb / any valid CSS value
+}
+
+// As variáveis de marca são usadas tanto em `background` quanto em
+// `background-image` (ex.: texto em degradê). Cor sólida não vale em
+// `background-image`, então vira um "degradê" de uma cor só.
+function asBrandBackground(css: string): string {
+  return /gradient\(|url\(/.test(css) ? css : `linear-gradient(${css}, ${css})`;
 }
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
@@ -254,6 +272,34 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     setIsMounted(true);
   }, []);
 
+  // O tema é um só para a plataforma: o salvo pelo administrador no servidor
+  // vale para todos e substitui o do navegador (que fica como cópia local
+  // para a tela já abrir na cor certa). Sem tema no servidor, segue o local.
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      if (!localStorage.getItem("allka_token")) return;
+    } catch {
+      return;
+    }
+    Promise.resolve()
+      .then(() => apiClient.getPlatformTheme())
+      .then((res) => {
+        if (cancelled || !res?.settings || typeof res.settings !== "object") return;
+        setSidebarSettings({ ...defaultSettings, ...res.settings });
+        try {
+          localStorage.setItem(
+            "allka_custom_presets",
+            JSON.stringify(Array.isArray(res.presets) ? res.presets : []),
+          );
+        } catch {}
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Salvar tema no localStorage sempre que mudar
   useEffect(() => {
     if (isMounted) {
@@ -357,9 +403,9 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     const root = document.documentElement;
 
     if (projectColor) {
-      root.style.setProperty("--app-brand-gradient", projectColor);
+      root.style.setProperty("--app-brand-gradient", asBrandBackground(projectColor));
       root.style.setProperty("--app-brand-solid", projectColor);
-      root.style.setProperty("--brand-gradient", projectColor);
+      root.style.setProperty("--brand-gradient", asBrandBackground(projectColor));
       return;
     }
 
@@ -371,12 +417,12 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
         ? bgToCSS(s.dominantImageColor)
         : bgToCSS(s.backgroundColor);
     const headerCss = s.headerBg ? bgToCSS(s.headerBg) : cssValue;
-    root.style.setProperty("--app-brand-gradient", cssValue);
-    root.style.setProperty("--app-brand-header", headerCss);
+    root.style.setProperty("--app-brand-gradient", asBrandBackground(cssValue));
+    root.style.setProperty("--app-brand-header", asBrandBackground(headerCss));
     root.style.setProperty("--app-brand-solid", cssValue);
-    root.style.setProperty("--brand-gradient", cssValue);
+    root.style.setProperty("--brand-gradient", asBrandBackground(cssValue));
     const buttonCss = s.buttonBg ? bgToCSS(s.buttonBg) : cssValue;
-    root.style.setProperty("--app-brand-button", buttonCss);
+    root.style.setProperty("--app-brand-button", asBrandBackground(buttonCss));
     const activeColor = s.activeItemColor || "#c81a7f";
     root.style.setProperty("--app-brand-active", activeColor);
     // Per-context font sizes
@@ -432,11 +478,11 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     const buttonCss = newSettings.buttonBg
       ? bgToCSS(newSettings.buttonBg)
       : cssValue;
-    root.style.setProperty("--app-brand-gradient", cssValue);
-    root.style.setProperty("--app-brand-header", headerCss);
+    root.style.setProperty("--app-brand-gradient", asBrandBackground(cssValue));
+    root.style.setProperty("--app-brand-header", asBrandBackground(headerCss));
     root.style.setProperty("--app-brand-solid", cssValue);
-    root.style.setProperty("--brand-gradient", cssValue);
-    root.style.setProperty("--app-brand-button", buttonCss);
+    root.style.setProperty("--brand-gradient", asBrandBackground(cssValue));
+    root.style.setProperty("--app-brand-button", asBrandBackground(buttonCss));
     const activeColor2 = newSettings.activeItemColor || "#c81a7f";
     root.style.setProperty("--app-brand-active", activeColor2);
     const fsMap2 = {
@@ -462,6 +508,16 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
       "--app-font-table",
       fsMap2[newSettings.fontSizeTable || "xs"],
     );
+  };
+
+  const savePlatformTheme = async (
+    settings: SidebarSettings,
+    presets?: CustomGradientPreset[],
+  ) => {
+    await apiClient.savePlatformTheme({
+      settings: settings as unknown as Record<string, any>,
+      ...(presets ? { presets } : {}),
+    });
   };
 
   const updateAgencyProfile = (profile: Partial<AgencyProfile>) => {
@@ -503,6 +559,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
         setPreviewEnabled,
         setProjectColor,
         applyFullTheme,
+        savePlatformTheme,
       }}
     >
       {children}

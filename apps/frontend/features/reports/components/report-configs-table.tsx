@@ -17,6 +17,7 @@ import { NeonBadge } from "@/components/neon-badge";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { apiClient } from "@/lib/api-client";
 import type { ReportConfig } from "../types";
+import { InlineLoader } from "@/components/ui/loading";
 
 // ─── Mapa: report_key → nome em português ────────────────────────────────────
 
@@ -405,10 +406,7 @@ export function ReportConfigsTable({
   if (loading) {
     return (
       <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
-        <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
-          <RefreshCw className="h-6 w-6 animate-spin opacity-40" />
-          <p className="text-sm">Carregando configurações…</p>
-        </div>
+        <InlineLoader text="Carregando configurações…" className="py-16" />
       </div>
     );
   }

@@ -21,6 +21,7 @@ import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { apiClient } from "@/lib/api-client";
 import { criticalityFromSeverity, criticalityLabel, criticalityIcon, criticalityBadgeColor } from "@/components/alerts-header-icon";
 import { cn } from "@/lib/utils";
+import { InlineLoader } from "@/components/ui/loading";
 
 type EntityType = "project_task" | "project_task_stage";
 
@@ -99,7 +100,7 @@ export function AlertRulesTab() {
     <div className="flex flex-col h-full min-h-0">
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pt-3 pb-4">
         {error && <p className="text-sm text-red-500 text-center py-10">Não foi possível carregar as regras agora.</p>}
-        {!error && loading && rules.length === 0 && <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>}
+        {!error && loading && rules.length === 0 && <InlineLoader text="Carregando regras…" />}
         {!error && !loading && rules.length === 0 && <p className="text-sm text-slate-400 text-center py-10">Nenhuma regra cadastrada.</p>}
         {!error && projectsMissingAdmin > 0 && rules.some((r) => r.recipient_roles.includes("admin_responsavel")) && (
           <p className="text-xs text-amber-700 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-2">

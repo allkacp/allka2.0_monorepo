@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { AlertTriangle, Loader2, User, Mail, Briefcase, Phone, Tag } from "lucide-react";
+import { AlertTriangle, User, Mail, Briefcase, Phone, Tag } from "lucide-react";
 import {
   STANDARD_SHELL_PANEL_CLASS,
   StandardPageBanner,
 } from "@/components/standard-page-shell";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
+import { InlineLoader } from "@/components/ui/loading";
 
 const API_BASE =
   (typeof import.meta !== "undefined" &&
@@ -97,10 +98,7 @@ export default function LiderPerfilPage() {
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-48 gap-2 text-slate-400">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span className="text-sm">Carregando…</span>
-        </div>
+        <InlineLoader text="Carregando perfil…" />
       ) : user ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Dados pessoais */}

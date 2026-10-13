@@ -91,8 +91,8 @@ export function IallkaFloatingIcon() {
         data-tour-id="iallka-icon-button"
         onClick={() => setOpen(true)}
         aria-label="Falar com a Aura"
-        className="lg:hidden fixed right-4 z-45 flex items-center justify-center h-14 w-14 rounded-full overflow-hidden ring-2 ring-white/40 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
-        style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 240px)" }}
+        className="fab-celular lg:hidden fixed right-3 z-45 flex items-center justify-center h-12 w-12 rounded-full overflow-hidden ring-2 ring-white/40 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-400"
+        style={{ bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 192px)" }}
       >
         <IallkaAuraAvatar className="h-full w-full" />
         {showBadge && (

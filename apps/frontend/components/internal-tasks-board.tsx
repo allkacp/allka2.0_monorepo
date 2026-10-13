@@ -9,6 +9,7 @@ import { apiClient } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { ButtonLoader } from "@/components/ui/loading";
 
 const COLUMNS: { key: string; label: string; tone: string }[] = [
   { key: "todo", label: "A fazer", tone: "border-t-slate-400" }, { key: "doing", label: "Fazendo", tone: "border-t-sky-500" },
@@ -105,7 +106,7 @@ function InternalTasksBoardBase({ scope, adminMode = false }: { scope?: { agency
   const shown = tasks.filter((t) => !q.trim() || `${t.title} ${t.description ?? ""}`.toLowerCase().includes(q.trim().toLowerCase()))
   const cols = groupByStatus(shown)
   const canCreate = !adminMode || !!(scope?.agency_id || scope?.company_id)
-  if (state === "loading") return <p className="flex items-center gap-2 text-xs text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando…</p>
+  if (state === "loading") return <p className="flex items-center gap-2 text-xs text-slate-500"><ButtonLoader text="Carregando tarefas internas…" /></p>
   if (state === "blocked") return <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Este módulo ainda não está liberado para a sua conta. A administração define quem pode usar.</p>
   if (state === "error") return <p role="alert" className="rounded bg-red-50 px-3 py-2 text-xs text-red-700">{msg}</p>
   return (

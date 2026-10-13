@@ -29,6 +29,7 @@ import { AlertImageThumbnail } from "@/components/alert-image-lightbox";
 import { AlertImageField, isAlertImageFieldValid, type AlertImageFieldValue } from "@/components/alert-image-field";
 import { describeSchedule } from "@/lib/describe-schedule";
 import { cn } from "@/lib/utils";
+import { ButtonLoader, InlineLoader } from "@/components/ui/loading";
 
 export interface AlertSchedule {
   id: string;
@@ -139,7 +140,7 @@ export function AlertSchedulesTab() {
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-4">
         {error && <p className="text-sm text-red-500 text-center py-10">Não foi possível carregar as programações agora.</p>}
-        {!error && loading && schedules.length === 0 && <p className="text-sm text-slate-400 text-center py-10">Carregando...</p>}
+        {!error && loading && schedules.length === 0 && <InlineLoader text="Carregando programações…" />}
         {!error && !loading && schedules.length === 0 && <p className="text-sm text-slate-400 text-center py-10">Nenhuma programação cadastrada.</p>}
 
         {!error && schedules.length > 0 && (
@@ -236,7 +237,7 @@ export function AlertSchedulesTab() {
 
       <StandardModalDialog open={previewing !== null} onClose={() => setPreviewing(null)} title="Prévia da programação" subtitle="Dados fictícios — nenhum alerta real é criado" size="compact">
         <div className="p-6 space-y-3">
-          {previewLoading && <p className="text-sm text-slate-400">Carregando prévia...</p>}
+          {previewLoading && <p className="text-sm text-slate-400"><ButtonLoader text="Carregando prévia…" /></p>}
           {!previewLoading && previewData && (
             <>
               <p className="text-[10px] uppercase tracking-wide text-amber-600 font-medium">Exemplo — dados fictícios</p>

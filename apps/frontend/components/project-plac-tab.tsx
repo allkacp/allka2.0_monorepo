@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react"
 import { CheckCircle2, Circle, Loader2 } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
+import { ButtonLoader } from "@/components/ui/loading";
 
 const STATUS_TONE: Record<string, string> = { pendente: "bg-slate-100 text-slate-700", em_andamento: "bg-sky-100 text-sky-800", concluida: "bg-emerald-100 text-emerald-800", dispensada: "bg-slate-200 text-slate-500" }
 const ROLE_TONE: Record<string, string> = { vc: "bg-violet-100 text-violet-800", ac: "bg-amber-100 text-amber-800", other: "bg-slate-100 text-slate-700" }
@@ -30,7 +31,7 @@ function ProjectPlacTabBase({ projectId }: { projectId: string }) {
   const generate = async () => { setBusy("gen"); try { await apiClient.generateProjectPlac(projectId); load() } catch (e: any) { setErr(e?.message ?? "Não foi possível gerar os passos.") } finally { setBusy(null) } }
 
   if (err && !data) return <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{err}</p>
-  if (!data) return <p className="flex items-center gap-2 text-xs text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Carregando os passos PLAC…</p>
+  if (!data) return <p className="flex items-center gap-2 text-xs text-slate-500"><ButtonLoader text="Carregando os passos PLAC…" /></p>
   const steps: any[] = data.steps ?? []
   const late = steps.filter((s) => s.overdue).length
   return (

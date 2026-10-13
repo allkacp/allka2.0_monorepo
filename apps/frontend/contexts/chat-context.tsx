@@ -9,6 +9,7 @@ import React, {
 import type { ChatRoom, ChatRoomMessage } from "@/types/chat";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useSoundOnIncrease } from "@/hooks/use-notification-sound";
+import { DEFAULT_CHAT_SETTINGS, type ChatSettings } from "@/lib/chat-settings";
 
 // ─── Chat interno restaurado (ata 2026-08, bloco 3/5) ───────────────────
 // Antes: contexto mock (ids fabricados `conv-<userId>`, sender fixo "admin",
@@ -18,6 +19,13 @@ import { useSoundOnIncrease } from "@/hooks/use-notification-sound";
 // WebSocket/SSE; não criamos uma segunda infraestrutura).
 
 const POLL_MS = 15_000;
+// Com uma conversa aberta na tela a resposta precisa aparecer rápido — sem
+// WebSocket, o intervalo cai enquanto a sala está à vista.
+const ACTIVE_ROOM_POLL_MS = 5_000;
+const MODE_KEY = "allka_chat_mode";
+
+export type ChatWindowMode = "compact" | "expanded";
+export type ChatAttachmentInput = { blob: Blob; fileName: string; kind: "image" | "file" | "audio"; caption?: string; duration_sec?: number };
 
 interface ChatContextValue {
   rooms: ChatRoom[];
@@ -40,8 +48,22 @@ interface ChatContextValue {
   backToList: () => void;
   refreshRooms: () => void;
   retryMessages: () => void;
-  sendMessage: (roomId: string, content: string) => void;
+  sendMessage: (roomId: string, content: string, replyToId?: string) => void;
   retrySend: (roomId: string, clientMessageId: string) => void;
+  /** Chat estilo WhatsApp Web (2026-10-12) */
+  sendAttachment: (roomId: string, input: ChatAttachmentInput, replyToId?: string) => void;
+  editMessage: (roomId: string, messageId: string, content: string) => Promise<string | null>;
+  deleteMessage: (roomId: string, messageId: string) => Promise<string | null>;
+  /** Até quando TODOS os outros participantes da sala aberta já leram (tiques azuis). */
+  readAllUntil: string | null;
+  settings: ChatSettings;
+  /** O perfil desta pessoa pode usar o chat (Configurações > Chat). */
+  canUse: boolean;
+  /** É Admin Master (pode mudar as configurações do chat). */
+  canManage: boolean;
+  reloadSettings: () => Promise<void>;
+  mode: ChatWindowMode;
+  setMode: (mode: ChatWindowMode) => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -68,9 +90,59 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useSoundOnIncrease("chat", soundUnread);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [messagesError, setMessagesError] = useState(false);
+  const [readAllByRoom, setReadAllByRoom] = useState<Record<string, string | null>>({});
+  const [settings, setSettings] = useState<ChatSettings>(DEFAULT_CHAT_SETTINGS);
+  const [canUse, setCanUse] = useState(true);
+  const [canManage, setCanManage] = useState(false);
+  const [mode, setModeState] = useState<ChatWindowMode>(() => {
+    try {
+      const v = localStorage.getItem(MODE_KEY);
+      return v === "expanded" || v === "compact" ? v : "compact";
+    } catch {
+      return "compact";
+    }
+  });
+  const modeChosenRef = useRef<boolean>(false);
+  try {
+    modeChosenRef.current = modeChosenRef.current || !!localStorage.getItem(MODE_KEY);
+  } catch {
+    /* sem storage: segue o padrão do servidor */
+  }
+
+  const setMode = useCallback((m: ChatWindowMode) => {
+    setModeState(m);
+    modeChosenRef.current = true;
+    try {
+      localStorage.setItem(MODE_KEY, m);
+    } catch {
+      /* preferência só desta sessão */
+    }
+  }, []);
+
+  const reloadSettings = useCallback(async () => {
+    try {
+      // Testes e o modo mock podem não ter esta rota: sem ela, valem os padrões.
+      const res: any = await (apiClient as any).getChatSettings?.();
+      if (!res?.settings) return;
+      const next: ChatSettings = { ...DEFAULT_CHAT_SETTINGS, ...res.settings };
+      setSettings(next);
+      setCanUse(res.can_use !== false);
+      setCanManage(!!res.can_manage);
+      if (!modeChosenRef.current) setModeState(next.default_mode);
+      if (!next.allow_expanded) setModeState("compact");
+    } catch {
+      /* falha de rede: mantém o último estado conhecido */
+    }
+  }, []);
+
+  useEffect(() => {
+    void reloadSettings();
+  }, [reloadSettings]);
 
   const activeRoomIdRef = useRef<string | null>(null);
   activeRoomIdRef.current = activeRoomId;
+  const messagesByRoomRef = useRef<Record<string, ChatRoomMessage[]>>({});
+  messagesByRoomRef.current = messagesByRoom;
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +157,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const canUseRef = useRef(true);
+  canUseRef.current = canUse;
+
   const loadRooms = useCallback(async (opts: { silent?: boolean } = {}) => {
+    if (!canUseRef.current) return;
     if (!opts.silent) setLoadingRooms(true);
     setRoomsError(false);
     try {
@@ -106,6 +182,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await apiClient.getMessages(roomId, { limit: 200 });
       const server = (res?.data ?? []) as ChatRoomMessage[];
+      setReadAllByRoom((prev) => ({ ...prev, [roomId]: ((res as any)?.read_all_until as string | null) ?? null }));
       setMessagesByRoom((prev) => {
         // Preserva otimistas ainda não confirmados (pending/failed) que o
         // servidor não devolveu (por client_message_id).
@@ -135,32 +212,41 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // Carga inicial + polling enquanto o chat está aberto.
   useEffect(() => {
-    void loadRooms();
-  }, [loadRooms]);
+    if (canUse) void loadRooms();
+    else setRooms([]);
+  }, [loadRooms, canUse]);
 
   useEffect(() => {
     if (!isOpen) return;
     const t = setInterval(() => {
       void loadRooms({ silent: true });
-      const active = activeRoomIdRef.current;
-      if (active) void loadMessages(active, { silent: true });
     }, POLL_MS);
     return () => clearInterval(t);
-  }, [isOpen, loadRooms, loadMessages]);
+  }, [isOpen, loadRooms]);
+
+  useEffect(() => {
+    if (!isOpen || !activeRoomId) return;
+    const t = setInterval(() => {
+      void loadMessages(activeRoomId, { silent: true });
+      void markRead(activeRoomId);
+    }, ACTIVE_ROOM_POLL_MS);
+    return () => clearInterval(t);
+  }, [isOpen, activeRoomId, loadMessages, markRead]);
 
   // Chat fechado: o polling acima não roda — confere em segundo plano pra o
   // som de mensagem nova tocar mesmo sem o chat aberto.
   useEffect(() => {
-    if (isOpen) return;
+    if (isOpen || !canUse) return;
     const t = setInterval(() => void loadRooms({ silent: true }), 30_000);
     return () => clearInterval(t);
-  }, [isOpen, loadRooms]);
+  }, [isOpen, loadRooms, canUse]);
 
   const openChat = useCallback(() => {
     setIsOpen(true);
     setIsMinimized(false);
     void loadRooms({ silent: true });
-  }, [loadRooms]);
+    void reloadSettings();
+  }, [loadRooms, reloadSettings]);
 
   const closeChat = useCallback(() => {
     setIsOpen(false);
@@ -204,8 +290,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [loadRooms, loadMessages, markRead],
   );
 
+  const replyPreviewFor = useCallback(
+    (roomId: string, replyToId?: string): ChatRoomMessage["reply_to"] => {
+      if (!replyToId) return null;
+      const m = (messagesByRoomRef.current[roomId] ?? []).find((x) => x.id === replyToId);
+      if (!m) return null;
+      return { id: m.id, content: m.content, type: m.type ?? "text", sender_name: m.sender?.name ?? null, deleted: !!m.deleted_at };
+    },
+    [],
+  );
+
   const doSend = useCallback(
-    async (roomId: string, content: string, clientMessageId: string) => {
+    async (roomId: string, content: string, clientMessageId: string, replyToId?: string) => {
       setMessagesByRoom((prev) => {
         const list = prev[roomId] ?? [];
         const idx = list.findIndex((m) => m.client_message_id === clientMessageId);
@@ -215,6 +311,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           sender_id: currentUserId ?? "me",
           sender: { id: currentUserId ?? "me", name: "Você" },
           content,
+          type: "text",
+          reply_to: replyPreviewFor(roomId, replyToId),
           created_at: new Date().toISOString(),
           client_message_id: clientMessageId,
           pending: true,
@@ -225,7 +323,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       });
 
       try {
-        const saved: any = await apiClient.sendMessage(roomId, { content, client_message_id: clientMessageId });
+        const saved: any = await apiClient.sendMessage(roomId, {
+          content,
+          client_message_id: clientMessageId,
+          ...(replyToId ? { reply_to_id: replyToId } : {}),
+        });
         setMessagesByRoom((prev) => ({
           ...prev,
           [roomId]: (prev[roomId] ?? []).map((m) =>
@@ -254,25 +356,136 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [currentUserId, loadRooms],
+    [currentUserId, loadRooms, replyPreviewFor],
+  );
+
+  const doSendAttachment = useCallback(
+    async (roomId: string, input: ChatAttachmentInput, clientMessageId: string, replyToId?: string) => {
+      setMessagesByRoom((prev) => {
+        const list = prev[roomId] ?? [];
+        const idx = list.findIndex((m) => m.client_message_id === clientMessageId);
+        const optimistic: ChatRoomMessage = {
+          id: `local-${clientMessageId}`,
+          conversation_id: roomId,
+          sender_id: currentUserId ?? "me",
+          sender: { id: currentUserId ?? "me", name: "Você" },
+          content: input.caption ?? "",
+          type: input.kind,
+          attachment: { name: input.fileName, mime: input.blob.type || null, size: input.blob.size, duration_sec: input.duration_sec ?? null },
+          reply_to: replyPreviewFor(roomId, replyToId),
+          created_at: new Date().toISOString(),
+          client_message_id: clientMessageId,
+          pending: true,
+          failed: false,
+          localFile: { blob: input.blob, fileName: input.fileName, kind: input.kind, duration_sec: input.duration_sec },
+        };
+        const next = idx >= 0 ? list.map((m, i) => (i === idx ? { ...optimistic } : m)) : [...list, optimistic];
+        return { ...prev, [roomId]: next };
+      });
+      try {
+        const saved: any = await apiClient.sendChatAttachment(roomId, {
+          file: input.blob,
+          fileName: input.fileName,
+          kind: input.kind,
+          caption: input.caption,
+          duration_sec: input.duration_sec,
+          client_message_id: clientMessageId,
+          reply_to_id: replyToId,
+        });
+        setMessagesByRoom((prev) => ({
+          ...prev,
+          [roomId]: (prev[roomId] ?? []).map((m) =>
+            // Mantém o arquivo local: a prévia aparece na hora, sem baixar de novo.
+            m.client_message_id === clientMessageId ? { ...saved, localFile: m.localFile, pending: false, failed: false } : m,
+          ),
+        }));
+        setRooms((prev) =>
+          prev.map((r) =>
+            r.id === roomId
+              ? {
+                  ...r,
+                  last_message: { id: saved.id, content: saved.content ?? "", created_at: saved.created_at, sender_id: saved.sender_id, type: input.kind, attachment_name: input.fileName },
+                  updated_at: saved.created_at,
+                }
+              : r,
+          ),
+        );
+        return null;
+      } catch (err) {
+        setMessagesByRoom((prev) => ({
+          ...prev,
+          [roomId]: (prev[roomId] ?? []).map((m) =>
+            m.client_message_id === clientMessageId ? { ...m, pending: false, failed: true } : m,
+          ),
+        }));
+        return err instanceof Error ? err.message : "Não foi possível enviar.";
+      }
+    },
+    [currentUserId, replyPreviewFor],
   );
 
   const sendMessage = useCallback(
-    (roomId: string, content: string) => {
+    (roomId: string, content: string, replyToId?: string) => {
       const trimmed = content.trim();
       if (!trimmed) return;
-      void doSend(roomId, trimmed, genId());
+      void doSend(roomId, trimmed, genId(), replyToId);
     },
     [doSend],
+  );
+
+  const sendAttachment = useCallback(
+    (roomId: string, input: ChatAttachmentInput, replyToId?: string) => {
+      void doSendAttachment(roomId, input, genId(), replyToId);
+    },
+    [doSendAttachment],
   );
 
   const retrySend = useCallback(
     (roomId: string, clientMessageId: string) => {
       const msg = (messagesByRoom[roomId] ?? []).find((m) => m.client_message_id === clientMessageId);
       if (!msg) return;
-      void doSend(roomId, msg.content, clientMessageId); // MESMO client_message_id → idempotente
+      // MESMO client_message_id → idempotente
+      if (msg.localFile) {
+        void doSendAttachment(roomId, { ...msg.localFile, caption: msg.content }, clientMessageId, msg.reply_to?.id);
+        return;
+      }
+      void doSend(roomId, msg.content, clientMessageId, msg.reply_to?.id);
     },
-    [messagesByRoom, doSend],
+    [messagesByRoom, doSend, doSendAttachment],
+  );
+
+  const replaceMessage = useCallback((roomId: string, saved: ChatRoomMessage) => {
+    setMessagesByRoom((prev) => ({
+      ...prev,
+      [roomId]: (prev[roomId] ?? []).map((m) => (m.id === saved.id ? { ...saved, localFile: undefined } : m)),
+    }));
+  }, []);
+
+  const editMessage = useCallback(
+    async (roomId: string, messageId: string, content: string) => {
+      try {
+        const saved: any = await apiClient.editChatMessage(messageId, content.trim());
+        replaceMessage(roomId, saved);
+        return null;
+      } catch (err) {
+        return err instanceof Error ? err.message : "Não foi possível editar.";
+      }
+    },
+    [replaceMessage],
+  );
+
+  const deleteMessage = useCallback(
+    async (roomId: string, messageId: string) => {
+      try {
+        const saved: any = await apiClient.deleteChatMessage(messageId);
+        replaceMessage(roomId, saved);
+        void loadRooms({ silent: true });
+        return null;
+      } catch (err) {
+        return err instanceof Error ? err.message : "Não foi possível apagar.";
+      }
+    },
+    [replaceMessage, loadRooms],
   );
 
   const totalUnread = rooms.reduce((s, r) => s + (r.unread_count || 0), 0);
@@ -304,6 +517,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         },
         sendMessage,
         retrySend,
+        sendAttachment,
+        editMessage,
+        deleteMessage,
+        readAllUntil: activeRoomId ? readAllByRoom[activeRoomId] ?? null : null,
+        settings,
+        canUse,
+        canManage,
+        reloadSettings,
+        mode: settings.allow_expanded ? mode : "compact",
+        setMode,
       }}
     >
       {children}

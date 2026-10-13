@@ -99,6 +99,7 @@ import {
   ArrowRight,
   UserSearch,
 } from "lucide-react";
+import { InlineLoader } from "@/components/ui/loading";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -190,6 +191,16 @@ const TASK_STATUS_CFG: Record<
     label: "Ag. Nômade",
     cls: "bg-purple-100 text-purple-700 border-purple-200",
     icon: UserSearch,
+  },
+  LANCAMENTO_ENVIADO_PARA_ANALISE: {
+    label: "Briefing em análise",
+    cls: "bg-violet-100 text-violet-700 border-violet-200",
+    icon: SendHorizonal,
+  },
+  DEVOLVIDA_PARA_AGENCIA: {
+    label: "Ajuste no briefing",
+    cls: "bg-orange-100 text-orange-700 border-orange-200",
+    icon: MessageSquare,
   },
 };
 
@@ -609,9 +620,7 @@ function TaskDetailDrawer({
                 )}
               </div>
               {loadingStages ? (
-                <div className="px-4 py-6 flex items-center justify-center text-slate-400 gap-2 text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Carregando etapas...
-                </div>
+                <InlineLoader text="Carregando etapas…" />
               ) : stages.length === 0 ? (
                 <div className="px-4 py-5 text-center text-slate-400 text-sm">
                   Nenhuma etapa registrada para esta tarefa.
@@ -895,10 +904,7 @@ function ProductLinkModal({
             </div>
 
             {loading ? (
-              <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                <span className="text-sm">Carregando produtos...</span>
-              </div>
+              <InlineLoader text="Carregando produtos…" />
             ) : filtered.length === 0 ? (
               <div className="text-center py-10 text-slate-400">
                 <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
@@ -1032,10 +1038,7 @@ function ProductLinkModal({
                 </div>
 
                 {loadingBundles ? (
-                  <div className="flex items-center justify-center py-10 gap-2 text-slate-400">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span className="text-sm">Carregando combos...</span>
-                  </div>
+                  <InlineLoader text="Carregando combos…" />
                 ) : filteredBundles.length === 0 ? (
                   <div className="text-center py-10 text-slate-400">
                     <Boxes className="h-8 w-8 mx-auto mb-2 opacity-40" />
@@ -1858,10 +1861,7 @@ export function ProjectViewSlidePanel({
                     </div>
 
                     {loadingProducts ? (
-                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 flex items-center justify-center gap-2 text-slate-400">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        <span className="text-sm">Carregando produtos...</span>
-                      </div>
+                      <InlineLoader text="Carregando produtos…" />
                     ) : projectProducts.length === 0 ? (
                       project.status === "awaiting-payment" ? (
                         <div className="bg-amber-50 rounded-xl border border-amber-200 p-12 flex flex-col items-center justify-center gap-4 text-center">
@@ -2255,10 +2255,7 @@ export function ProjectViewSlidePanel({
 
                     {/* ── States ── */}
                     {loadingTasks ? (
-                      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 flex items-center justify-center gap-2 text-slate-400">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        <span className="text-sm">Carregando tarefas...</span>
-                      </div>
+                      <InlineLoader text="Carregando tarefas…" />
                     ) : taskStats.total === 0 &&
                       [
                         "draft",
@@ -2428,6 +2425,24 @@ export function ProjectViewSlidePanel({
                                         : lancamentoExpired
                                           ? "Expirada"
                                           : "Lançar tarefa"}
+                                    </Button>
+                                  );
+                                } else if (
+                                  !awaitingPayment &&
+                                  task.status === "DEVOLVIDA_PARA_AGENCIA"
+                                ) {
+                                  // Briefing devolvido pelo Líder: a ação é revisar
+                                  // e reenviar — sem este botão só restava "Ver detalhes".
+                                  primaryBtn = (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2.5 text-[11px] gap-1 border-orange-300 text-orange-700 hover:bg-orange-50"
+                                      title={task.observations ?? undefined}
+                                      onClick={() => handleOpenLaunchDrawer(task)}
+                                    >
+                                      <FileText className="h-3 w-3" />
+                                      Ajustar briefing
                                     </Button>
                                   );
                                 } else if (task.status === "EM_EXECUCAO") {
@@ -2635,7 +2650,9 @@ export function ProjectViewSlidePanel({
                                                 task.status ===
                                                   "EM_LANCAMENTO" ||
                                                 task.status ===
-                                                  "AGUARDANDO_INFORMACOES") && (
+                                                  "AGUARDANDO_INFORMACOES" ||
+                                                task.status ===
+                                                  "DEVOLVIDA_PARA_AGENCIA") && (
                                               <DropdownMenuItem
                                                 onClick={() =>
                                                   handleOpenLaunchDrawer(task)
@@ -2827,12 +2844,7 @@ export function ProjectViewSlidePanel({
                       </div>
 
                       {loadingProducts ? (
-                        <div className="bg-white p-8 text-center">
-                          <BarChart3 className="h-8 w-8 animate-pulse text-slate-300 mx-auto mb-2" />
-                          <p className="text-xs text-slate-400">
-                            Carregando produtos...
-                          </p>
-                        </div>
+                        <div className="bg-white"><InlineLoader text="Carregando produtos…" /></div>
                       ) : projectProducts.length === 0 ? (
                         <div className="bg-white p-8 text-center">
                           <BarChart3 className="h-8 w-8 text-slate-300 mx-auto mb-2" />

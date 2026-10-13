@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageLoader } from "@/components/ui/loading";
+import { PageLoader, InlineLoader } from "@/components/ui/loading";
 import { PageHeader } from "@/components/page-header";
 import { SlidePanel } from "@/components/slide-panel";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
@@ -196,7 +196,7 @@ export default function PartnerProjetos() {
           </Button>
         </div>
         {ownLoading ? (
-          <div className="py-8 text-center text-sm text-slate-400">Carregando...</div>
+          <InlineLoader text="Carregando projetos…" />
         ) : ownProjects.length === 0 ? (
           <div className="py-8 text-center text-sm text-slate-400">Nenhum projeto próprio ainda</div>
         ) : (

@@ -57,10 +57,18 @@ export interface ChatRoomMessage {
   content: string
   created_at: string
   client_message_id?: string | null
+  /** text | image | file | audio (chat estilo WhatsApp Web, 2026-10-12) */
+  type?: "text" | "image" | "file" | "audio"
+  attachment?: { name: string | null; mime: string | null; size: number | null; duration_sec: number | null } | null
+  reply_to?: { id: string; content: string; type: string; sender_name: string | null; deleted: boolean } | null
+  edited_at?: string | null
+  deleted_at?: string | null
   /** UI local: aguardando confirmação do servidor */
   pending?: boolean
   /** UI local: envio falhou, pode tentar de novo */
   failed?: boolean
+  /** UI local: anexo ainda não enviado (para mostrar a prévia e reenviar) */
+  localFile?: { blob: Blob; fileName: string; kind: "image" | "file" | "audio"; duration_sec?: number }
 }
 
 export interface ChatRoom {
@@ -71,7 +79,15 @@ export interface ChatRoom {
   read_only: boolean
   notification_group?: { id: string; name: string; status: string } | null
   participants: ChatRoomParticipant[]
-  last_message: { id: string; content: string; created_at: string; sender_id: string } | null
+  last_message: {
+    id: string
+    content: string
+    created_at: string
+    sender_id: string
+    type?: string
+    deleted?: boolean
+    attachment_name?: string | null
+  } | null
   unread_count: number
   updated_at: string
 }

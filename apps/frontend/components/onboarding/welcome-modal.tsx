@@ -28,11 +28,14 @@ export function WelcomeModal({
           <Button className="w-full btn-brand border-0" onClick={onStart}>
             Começar tutorial
           </Button>
-          <div className="flex w-full gap-2">
-            <Button variant="outline" className="flex-1" onClick={onPostpone}>
+          {/* Em telas estreitas o texto longo do segundo botão não cabe ao
+              lado do primeiro (botão não quebra linha) e empurrava os dois
+              para fora do popup — então empilham no celular. */}
+          <div className="flex w-full flex-col gap-2 sm:flex-row">
+            <Button variant="outline" className="sm:flex-1" onClick={onPostpone}>
               Agora não
             </Button>
-            <Button variant="ghost" className="flex-1 text-slate-500" onClick={onDismiss}>
+            <Button variant="ghost" className="h-auto min-h-9 whitespace-normal text-slate-500 sm:flex-1" onClick={onDismiss}>
               Não quero ver mais este tutorial
             </Button>
           </div>

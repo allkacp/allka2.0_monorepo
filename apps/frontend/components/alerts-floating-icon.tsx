@@ -162,9 +162,9 @@ export function AlertsFloatingIcon() {
         data-tour-id="alerts-button"
         onClick={() => setOpen(true)}
         aria-label={ariaLabel}
-        className="lg:hidden fixed right-4 z-45 flex items-center justify-center h-14 w-14 rounded-full text-white shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform"
+        className="fab-celular lg:hidden fixed right-3 z-45 flex items-center justify-center h-12 w-12 rounded-full text-white shadow-[0_8px_24px_-4px_rgba(0,0,0,0.35)] active:scale-95 transition-transform"
         style={{
-          bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 88px)",
+          bottom: "calc(72px + env(safe-area-inset-bottom, 0px) + 72px)",
           background: MOBILE_BG[criticality],
         }}
       >

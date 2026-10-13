@@ -3,9 +3,10 @@
 // D-2 (reunião 07/10): produto SOB CONSULTA não contrata direto. O cliente responde ao questionário do produto e solicita o orçamento;
 // a equipe responde com valor e prazo; aqui o cliente acompanha o pedido e aprova ou recusa a proposta.
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, ClipboardList, Loader2 } from "lucide-react";
+import { CheckCircle2, ClipboardList} from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { ButtonLoader } from "@/components/ui/loading";
 
 export const REQUEST_STATUS_LABEL: Record<string, string> = {
   novo: "Recebido", aberta: "Recebido", em_analise: "Em análise", aguardando_cliente: "Aguardando você", proposta_preparada: "Em análise",
@@ -79,7 +80,7 @@ export function OnRequestBox({ productId, selection, period }: { productId: stri
     finally { setBusy(false); }
   }
 
-  if (!questions) return <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Carregando…</div>;
+  if (!questions) return <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground"><ButtonLoader text="Carregando questionário…" /></div>;
 
   return (
     <div id="catalog2-request-box" className="space-y-2 rounded-xl border border-violet-300 bg-violet-50 p-3 text-xs text-violet-950 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-100" data-testid="on-request-box">

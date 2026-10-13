@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Loader2, AlertCircle, CheckCircle2, Clock, XCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { ButtonLoader } from "@/components/ui/loading";
 
 function money(v: number | null | undefined, currency = "BRL") {
   if (v == null) return "A definir";
@@ -84,9 +85,7 @@ export function Catalog2AdditivesPanel({ projectId }: { projectId: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 p-6 text-sm text-neutral-500">
-        <Loader2 className="h-4 w-4 animate-spin" /> Carregando aditivos…
-      </div>
+      <div className="flex items-center gap-2 p-6 text-sm text-neutral-500"><ButtonLoader text="Carregando aditivos…" /></div>
     );
   }
 

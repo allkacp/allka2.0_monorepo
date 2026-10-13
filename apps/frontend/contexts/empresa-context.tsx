@@ -29,6 +29,8 @@ export interface EmpresaContractedProduct {
 export interface EmpresaProject {
   id: string;
   seq?: number | null;
+  /** Pedido do catálogo novo — enquanto "draft", está aguardando pagamento. */
+  catalog2Order?: boolean;
   name: string;
   category: string;
   status:
@@ -215,6 +217,7 @@ export function EmpresaProvider({ children }: { children: React.ReactNode }) {
           pList.map((p: any) => ({
             id: String(p.id),
             seq: p._seq ?? null,
+            catalog2Order: !!p.catalog2_checkout_client_action_id,
             name: p.title || p.name || "",
             category: p.type || p.category || "",
             status: p.status || "briefing",

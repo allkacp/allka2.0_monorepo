@@ -41,20 +41,22 @@ function SpinnerRing({
   const innerR = `calc(50% - ${thickness}px - 0.5px)`;
 
   return (
-    <div
+    // <span> com display block (mesmo visual): o spinner também aparece
+    // dentro de <p> e de botões, onde uma div seria HTML inválido.
+    <span
       aria-hidden="true"
-      className={cn("relative shrink-0", className)}
+      className={cn("relative block shrink-0", className)}
       style={{ width: size, height: size }}
     >
       {/* Track estático */}
-      <div
-        className="absolute inset-0 rounded-full"
+      <span
+        className="absolute inset-0 block rounded-full"
         style={{ border: `${thickness}px solid rgba(120,120,140,0.14)` }}
       />
 
       {/* Arco gradiente — rotaciona */}
-      <div
-        className="absolute inset-0 rounded-full animate-[allka-spin_0.85s_linear_infinite]"
+      <span
+        className="absolute inset-0 block rounded-full animate-[allka-spin_0.85s_linear_infinite]"
         style={{
           background: `conic-gradient(
             from 0deg at 50% 50%,
@@ -67,7 +69,7 @@ function SpinnerRing({
           mask: `radial-gradient(farthest-side, transparent ${innerR}, white ${innerR})`,
         }}
       />
-    </div>
+    </span>
   );
 }
 
