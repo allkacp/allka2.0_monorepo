@@ -234,6 +234,7 @@ const NomadesMinhasTarefasPage = React.lazy(
 const NomadesHistoricoPage = React.lazy(
   () => import("@/app/nomades/historico/page"),
 );
+const QualificacoesEtapasPage = React.lazy(() => import("@/app/qualificacoes/page"));
 const NomadesPerfilPage = React.lazy(() => import("@/app/nomades/perfil/page"));
 // "Meu Perfil" como página dedicada (ata 2026-08) — compartilhada por
 // Admin/Company/Agency/Partner; escolhe a fonte de identidade pelo
@@ -1131,6 +1132,9 @@ export default function App() {
                     path="/nomades/historico"
                     element={<NomadesHistoricoPage />}
                   />
+                  <Route path="/nomades/qualificacoes" element={<QualificacoesEtapasPage />} />
+                  <Route path="/leader/qualificacoes" element={<QualificacoesEtapasPage />} />
+                  <Route path="/admin/qualificacoes" element={<QualificacoesEtapasPage />} />
                   <Route
                     path="/nomades/perfil"
                     element={<NomadesPerfilPage />}

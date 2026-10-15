@@ -3194,9 +3194,7 @@ export function ProjectManagementModal({
 
                     {/* Loading state */}
                     {projectFilesLoading && (
-                      <div className="flex items-center justify-center py-16">
-                        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-                      </div>
+                      <InlineLoader text="Carregando…" />
                     )}
 
                     {/* Error state */}
@@ -3367,9 +3365,7 @@ export function ProjectManagementModal({
 
                     {/* Loading state */}
                     {projectDocumentsLoading && (
-                      <div className="flex items-center justify-center py-16">
-                        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-                      </div>
+                      <InlineLoader text="Carregando…" />
                     )}
 
                     {/* Empty state */}

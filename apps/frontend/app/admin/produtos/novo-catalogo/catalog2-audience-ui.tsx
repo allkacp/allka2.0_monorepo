@@ -50,7 +50,7 @@ export function audienceSummary(raw: string | null | undefined): string {
   return list.map((k) => AUDIENCE_CHECKS.find((c) => c.key === k)!.label).join(" + ");
 }
 
-export function AudienceCard({ product, readOnly, onDone }: { product: any; readOnly?: boolean; onDone?: () => void }) {
+export function AudienceCard({ product, readOnly, onDone, registerFlush }: { product: any; readOnly?: boolean; onDone?: () => void; registerFlush?: (fn: () => Promise<void>) => () => void }) {
   const saved = parseAudienceValue(product?.visibility_mode);
   const [levelOptions, setLevelOptions] = useState<LevelOption[]>([]);
   useEffect(() => { let live = true; Promise.resolve(apiClient.getCatalog2AgencyLevels?.()).then((r: any) => { if (live && Array.isArray(r?.data)) setLevelOptions(r.data); }).catch(() => {}); return () => { live = false; }; }, []);
@@ -73,9 +73,24 @@ export function AudienceCard({ product, readOnly, onDone }: { product: any; read
     catch (e: any) { lastSent.current = sig(saved, savedLv); setMsg({ ok: false, text: e?.message ?? "Não foi possível salvar o público." }); }
     finally { setBusy(false); }
   };
-  // Salva sozinho ~0,8 s depois da última marcação (uma vez por combinação; se falhar, o botão continua disponível).
+  // Dentro do editor (registerFlush): NÃO salva sozinho nem tem botão próprio — a marcação só vale depois de
+  // "Editar" e é gravada junto com "Salvar rascunho" / publicar (flush). Fora do editor mantém o salvar sozinho.
+  const latest = useRef({ sel, effLv, dirty, readOnly });
+  latest.current = { sel, effLv, dirty, readOnly };
   useEffect(() => {
-    if (readOnly || !dirty || busy || lastSent.current === sig(sel, effLv)) return;
+    if (!registerFlush) return;
+    return registerFlush(async () => {
+      const c = latest.current;
+      if (c.readOnly || !c.dirty || !product?.id) return;
+      lastSent.current = sig(c.sel, c.effLv);
+      try { await apiClient.setCatalog2ProductVisibility(product.id, c.sel, c.effLv); setMsg({ ok: true, text: "Público do produto salvo." }); onDone?.(); }
+      catch (e: any) { lastSent.current = sig(saved, savedLv); setMsg({ ok: false, text: e?.message ?? "Não foi possível salvar o público." }); }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registerFlush, product?.id]);
+  const manual = !!registerFlush;
+  useEffect(() => {
+    if (manual || readOnly || !dirty || busy || lastSent.current === sig(sel, effLv)) return;
     const t = setTimeout(() => { void save(); }, 800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,8 +109,9 @@ export function AudienceCard({ product, readOnly, onDone }: { product: any; read
             <input type="checkbox" aria-label={c.label} disabled={locked} checked={sel.includes(c.key)} onChange={(e) => setSel(toggleAudience(sel, c.key, e.target.checked))} /> {c.label}
           </label>
         ))}
-        {dirty && !readOnly && <Button type="button" size="sm" className="h-8 bg-violet-700 text-xs text-white" disabled={busy} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar agora"}</Button>}
-        {dirty && !readOnly && !busy && <span className="text-[11px] text-slate-500">salva sozinho em instantes…</span>}
+        {!manual && dirty && !readOnly && <Button type="button" size="sm" className="h-8 bg-violet-700 text-xs text-white" disabled={busy} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar agora"}</Button>}
+        {!manual && dirty && !readOnly && !busy && <span className="text-[11px] text-slate-500">salva sozinho em instantes…</span>}
+        {manual && dirty && !readOnly && <span className="text-[11px] text-slate-500">alteração pendente — vale ao clicar em “Salvar rascunho”.</span>}
       </div>
       {showLevels && levelOptions.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-100 pt-2 text-xs dark:border-slate-800" data-testid="agency-levels">

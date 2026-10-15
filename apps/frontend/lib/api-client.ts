@@ -1026,6 +1026,24 @@ class ApiClient {
     return this.c2<any>("GET", `/commercial-requests${query.size ? `?${query}` : ""}`);
   }
   updateCatalog2CommercialRequest(id: string, body: Record<string, any>) { return this.c2<any>("PATCH", `/commercial-requests/${id}`, body); }
+  /** Limpa a tarefa (etapas e entregáveis); a fotografia fica no histórico para restaurar. */
+  clearCatalog2Task(taskId: string, body: { confirm_name: string; confirm_phrase: "LIMPAR" }) { return this.c2<any>("POST", `/tasks/${taskId}/clear`, body); }
+  getCatalog2TaskClearSnapshots(taskId: string) { return this.c2<any>("GET", `/tasks/${taskId}/clear-snapshots`); }
+  restoreCatalog2Task(taskId: string, eventId: string) { return this.c2<any>("POST", `/tasks/${taskId}/restore`, { event_id: eventId }); }
+  /** Anexo (modelo do entregável) de um item do Resumo dos entregáveis. Devolve { file: { id, name, size, mime } }. */
+  async uploadCatalog2DeliverableFile(file: File): Promise<{ file: { id: string; name: string; size: number; mime: string } }> {
+    return this.uploadFile("/admin/catalog2/deliverable-files", file);
+  }
+  /** Baixa o anexo (com a sessão do usuário) e entrega ao navegador como arquivo. */
+  async downloadCatalog2DeliverableFile(ref: { id: string; name: string }): Promise<void> {
+    const token = this.getToken();
+    const res = await fetch(`${API_BASE_URL}/catalog2/deliverable-files/${encodeURIComponent(ref.id)}?name=${encodeURIComponent(ref.name)}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+    if (!res.ok) throw new Error(res.status === 404 ? "Arquivo não encontrado." : "Não foi possível baixar o arquivo.");
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url; a.download = ref.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
   setCatalog2ProductAiFreeChanges(productId: string, aiFreeChanges: number | null) { return this.c2<{ id: string; ai_free_changes: number | null }>("PATCH", `/products/${productId}/ai-free-changes`, { ai_free_changes: aiFreeChanges }); }
   generateCatalog2RequestContract(id: string) { return this.c2<{ quote_id: string; valid_until: string; renewed: boolean }>("POST", `/commercial-requests/${id}/generate-contract`, {}); }
   // tarefas / etapas
@@ -1122,8 +1140,8 @@ class ApiClient {
     return this.cc("POST", `/products/${encodeURIComponent(slug)}/configure${preview ? `?preview=1${versionId ? `&version=${encodeURIComponent(versionId)}` : ""}` : ""}`, { ...selection, ...(period ? { period } : {}) });
   }
   // P-11: alterações por IA — grátis até o limite da contratação; depois debita do saldo da carteira.
-  quoteAiChange(body: { project_product_id: string }) { return this.post<any>("/ai-changes/quote", body); }
-  chargeAiChange(body: { project_product_id: string; feature?: string; note?: string | null }) { return this.post<any>("/ai-changes/charge", body); }
+  quoteAiChange(body: { project_product_id: string; step_key?: string | null }) { return this.post<any>("/ai-changes/quote", body); }
+  chargeAiChange(body: { project_product_id: string; step_key?: string | null; feature?: string; note?: string | null }) { return this.post<any>("/ai-changes/charge", body); }
   // Pagamentos (Admin Master): gateways, chaves, teste e troca.
   listPaymentGateways() { return this.get<any>("/admin/payment-gateways"); }
   paymentGatewayHistory() { return this.get<any>("/admin/payment-gateways/history"); }
@@ -1343,6 +1361,12 @@ class ApiClient {
   getTaskFlowPanel(taskId: string) { return this.get<any>(`/task-flow/${taskId}`); }
   decideStage(taskId: string, stageId: string, tipo: "qualificacao" | "especialista" | "aprovacao", decisao: "aprovar" | "reprovar" | "comentar", comentario?: string) {
     return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/decisao`, { tipo, decisao, ...(comentario ? { comentario } : {}) });
+  }
+  // Tela única de qualificação de etapas (líder, qualificador específico, nômade qualificador, admin).
+  getQualificacoesPendentes() { return this.get<{ data: any[]; total: number }>("/qualificacoes/pendentes"); }
+  getQualificacaoEtapa(stageId: string) { return this.get<any>(`/qualificacoes/etapas/${stageId}`); }
+  decideQualificacao(stageId: string, decisao: "aprovar" | "reprovar" | "comentar", comentario?: string) {
+    return this.post<any>(`/qualificacoes/etapas/${stageId}/decisao`, { decisao, ...(comentario ? { comentario } : {}) });
   }
   warnStageClient(taskId: string, stageId: string, mensagem: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/avisar-cliente`, { mensagem }); }
   getStageHistory(taskId: string, stageId: string) { return this.get<{ data: any[] }>(`/project-tasks/${taskId}/etapas/${stageId}/historico`); }

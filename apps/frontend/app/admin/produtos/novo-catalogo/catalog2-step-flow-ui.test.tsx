@@ -17,8 +17,8 @@ const act = async (fn: () => Promise<any>) => fn();
 describe("Fluxo das etapas (A8) · editor", () => {
   it("padrão: em sequência; esforço total = soma; some quando há só 1 etapa", () => {
     const { container, rerender } = render(<StepFlowEditor task={{ id: "t", steps: mk() }} readOnly={false} act={act} startEditing />);
-    expect(screen.getByTestId("flow-summary").textContent).toMatch(/Em sequência/);
-    expect(screen.getByTestId("flow-summary").textContent).toMatch(/duração mínima 4 h 15 min · esforço total 4 h 15 min/);
+    expect(screen.getByTestId("flow-summary").textContent).toMatch(/Sequência/);
+    expect(screen.getByTestId("flow-summary").textContent).toMatch(/4 h 15 min totais\s*·\s*1 dia\(s\) útil\(eis\)/);
     rerender(<StepFlowEditor task={{ id: "t", steps: mk().slice(0, 1) }} readOnly={false} act={act} startEditing />);
     expect(container.querySelector("[data-testid=step-flow-editor]")).toBeNull();
   });
@@ -31,7 +31,7 @@ describe("Fluxo das etapas (A8) · editor", () => {
     fireEvent.change(screen.getByLabelText("Quando a etapa 4 começa"), { target: { value: "after" } });
     for (const box of screen.getAllByRole("checkbox")) fireEvent.click(box); // marca 1, 2 e 3 na etapa 4
     expect(screen.getByTestId("flow-summary").textContent).toMatch(/\[1 \+ 2 \+ 3\] → 4/);
-    expect(screen.getByTestId("flow-summary").textContent).toMatch(/duração mínima 2 h 45 min · esforço total 4 h 15 min/);
+    expect(screen.getByTestId("flow-summary").textContent).toMatch(/4 h 15 min totais\s*·\s*1 dia\(s\) útil\(eis\)/);
     fireEvent.click(screen.getByTestId("save-step-flow"));
     expect(saveFlow).toHaveBeenCalledTimes(1);
     const payload = (saveFlow.mock.calls[0] as unknown[])[1] as any[];

@@ -219,11 +219,12 @@ export const CHARGE_SCOPE_LABEL: Record<ChargeScope, string> = {
   per_quantity: "Por quantidade (multiplica)",
   implementation: "Só na implantação inicial",
 };
-interface ChargeMeta { scope: ChargeScope; start: number; end: number | null; qty: number | null; task: string | null; step: string | null; scaleByQuantity: boolean }
-const chargeMeta = (x: { charge_scope?: string | null; charge_start_cycle?: number | null; charge_end_cycle?: number | null; charge_quantity?: number | null; source_task_key?: string | null; source_step_key?: string | null; effort_scale_by_quantity?: boolean | null }): ChargeMeta => ({
+interface ChargeMeta { scope: ChargeScope; start: number; end: number | null; qty: number | null; task: string | null; step: string | null; scaleByQuantity: boolean; specialty: string | null }
+const chargeMeta = (x: { charge_scope?: string | null; charge_start_cycle?: number | null; charge_end_cycle?: number | null; charge_quantity?: number | null; source_task_key?: string | null; source_step_key?: string | null; effort_scale_by_quantity?: boolean | null; specialty_id?: string | null }): ChargeMeta => ({
   scope: (CHARGE_SCOPES as readonly string[]).includes(x.charge_scope ?? "") ? (x.charge_scope as ChargeScope) : "recurring",
   start: x.charge_start_cycle ?? 0, end: x.charge_end_cycle ?? null, qty: x.charge_quantity ?? null, task: x.source_task_key ?? null, step: x.source_step_key ?? null,
   scaleByQuantity: !!x.effort_scale_by_quantity,
+  specialty: x.specialty_id ?? null,
 });
 /** O item é cobrado no ciclo k (0 = primeira cobrança)? */
 export function chargeActiveAt(m: { scope: ChargeScope; start: number; end: number | null }, k: number): boolean {
@@ -547,7 +548,7 @@ async function computePricingCore(versionId: string, selection: PricingSelection
   for (const e of effects) {
     if (!isEffortEffect(e.type)) continue;
     if (!e.meta.task) { selectionIssues.push({ code: "effort_target_missing", message: `O efeito de esforço de ${e.from} não tem tarefa/etapa de destino.`, ref: e.from }); continue; }
-    effortItems.push({ from: e.from, mode: e.type === "replace_effort_minutes" ? "replace" : "add", minutes: effortMinutesOf(e.type, e.value), scale: e.scale, task: e.meta.task, step: e.meta.step, scope: e.meta.scope, start: e.meta.start, end: e.meta.end });
+    effortItems.push({ from: e.from, mode: e.type === "replace_effort_minutes" ? "replace" : "add", minutes: effortMinutesOf(e.type, e.value), scale: e.scale, task: e.meta.task, step: e.meta.step, scope: e.meta.scope, start: e.meta.start, end: e.meta.end, specialty_id: e.meta.specialty });
   }
   for (const n of addonNorm.chosen) {
     const per = n.addon.unit_minutes ?? 0;
@@ -821,6 +822,10 @@ async function computePricingCore(versionId: string, selection: PricingSelection
   const effortLines: EffortLine[] = [];
   const effortChargeItems: ChargeItem[] = [];
   const whenLabel = (it: EffortItem) => it.scope === "implementation" ? "implantação" : it.scope === "first_cycle" || it.scope === "one_time" ? "primeiro ciclo" : it.scope === "per_cycle" && it.end === it.start ? `ciclo ${it.start}` : it.end != null ? `ciclos ${it.start} a ${it.end}` : it.start > 0 ? `a partir do ciclo ${it.start}` : "todos os ciclos";
+  // Especialidade própria das horas extras (opção nova que o produto original não tem): usa o valor/hora dela.
+  const effortSpecIds = [...new Set(effortItems.map((i) => i.specialty_id).filter((x): x is string => !!x))];
+  const effortSpecs = effortSpecIds.length ? await prisma.catalog2Specialty.findMany({ where: { id: { in: effortSpecIds } } }) : [];
+  const effortSpecById = new Map(effortSpecs.map((sp) => [sp.id, sp]));
   for (const it of effortItems) {
     if (it.mode !== "add") continue;
     const tk = version.tasks.find((x) => x.key === it.task);
@@ -830,7 +835,7 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     if (!activeTaskKeys.has(tk.key)) { warnings.push({ code: "effort_target_inactive", message: `O esforço de ${it.from} aponta para a tarefa "${tk.name}", que não está ativa neste cenário — ignorado.` }); continue; }
     if (it.scope === "implementation" && !implementationApplicable) continue;
     const minutes = it.minutes * it.scale;
-    const spec = st?.specialty ?? tk.specialty;
+    const spec = (it.specialty_id ? effortSpecById.get(it.specialty_id) ?? null : null) ?? st?.specialty ?? tk.specialty;
     const { rate } = rateOf(spec);
     let human: number | null;
     if (tk.execution_mode === "ia") human = 0;

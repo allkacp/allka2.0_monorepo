@@ -2611,3 +2611,11 @@ a:focus-visible,
     min-width: 0;
   }
 }
+
+/*
+ * Campo escondido (sr-only) dentro de <label>: sem um pai posicionado, o navegador o coloca no canto da tela/painel e,
+ * ao focar, ROLA o painel inteiro até lá (a tela "pula" e o editor fica deslocado). Ancorar no próprio <label> evita isso.
+ */
+label:has(> input.sr-only) {
+  position: relative;
+}

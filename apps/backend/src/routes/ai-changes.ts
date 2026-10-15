@@ -8,7 +8,7 @@ import { AiChargeError, chargeAiChange, quoteAiChange } from "../lib/ai-change-c
 const router = Router();
 router.use(verifyToken);
 
-const bodySchema = z.object({ project_product_id: z.string().min(1).max(191), feature: z.string().min(2).max(60).optional(), note: z.string().max(500).nullish() });
+const bodySchema = z.object({ project_product_id: z.string().min(1).max(191), step_key: z.string().min(1).max(191).nullish(), feature: z.string().min(2).max(60).optional(), note: z.string().max(500).nullish() });
 
 async function accountOf(req: { user?: { id: string; account_type: string; role: string } }) {
   const ctx = await resolveClientContext(req.user!.id, req.user!.account_type, req.user!.role);
@@ -20,7 +20,7 @@ router.post("/quote", async (req, res, next) => {
   try {
     const d = bodySchema.parse(req.body ?? {});
     const { account } = await accountOf(req as never);
-    res.json(await quoteAiChange(d.project_product_id, account));
+    res.json(await quoteAiChange(d.project_product_id, account, d.step_key));
   } catch (e) { fail(e, res, next); }
 });
 
@@ -29,7 +29,7 @@ router.post("/charge", async (req, res, next) => {
     const d = bodySchema.parse(req.body ?? {});
     const { ctx, account } = await accountOf(req as never);
     if (!ctx.can_contract) throw new AiChargeError("Seu perfil não pode pedir alterações cobradas.", 403, "cannot_contract");
-    res.status(201).json(await chargeAiChange({ projectProductId: d.project_product_id, account, userId: ctx.user_id, feature: d.feature ?? "alteracao-ia", note: d.note }));
+    res.status(201).json(await chargeAiChange({ projectProductId: d.project_product_id, account, userId: ctx.user_id, feature: d.feature ?? "alteracao-ia", note: d.note, stepKey: d.step_key }));
   } catch (e) { fail(e, res, next); }
 });
 

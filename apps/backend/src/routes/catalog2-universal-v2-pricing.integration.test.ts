@@ -126,11 +126,23 @@ describe("Estrutura universal v2 · preço, esforço, opções e adicionais", ()
       assert.equal(mais.effort_breakdown[0].minutes, 60);
     });
 
+    it("U06b. horas extras com ESPECIALIDADE PRÓPRIA usam o valor/hora dela, não o da etapa", async () => {
+      const dev = await prisma.catalog2Specialty.create({ data: { key: `dev-${Date.now()}`, name: "Desenvolvedor", max_hourly_rate: 300, is_active: true } as never });
+      const { versionId } = await mkProduct({ name: "Esforço espec", tasks: [T1], variations: [{ key: "var", name: "V", is_required: true, selection_type: "single", options: { create: [{ key: "base", label: "Base", is_default: true }, { key: "mesma", label: "Mesma", effects: { create: [eff("add_effort_minutes", "60")] } }, { key: "propria", label: "Própria", effects: { create: [eff("add_effort_minutes", "60", { specialty_id: dev.id })] } }] } }] });
+      const sim = async (k: string) => (await simulate(ADMIN.token, versionId, { variation_option_keys: [k], addon_keys: [], quantity: 1 })).pricing;
+      const mesma = await sim("mesma");
+      const propria = await sim("propria");
+      assert.ok(propria.split.recurring.price > mesma.split.recurring.price, "especialidade mais cara = preço maior");
+      const line = propria.effort_breakdown[0];
+      assert.equal(line.specialty, "Desenvolvedor");
+      assert.equal(line.rate, 300);
+    });
+
     it("U07. substituir esforço troca os minutos da etapa; escopo único é recusado pela API", async () => {
       const { versionId } = await mkProduct({ name: "Esforço sub", tasks: [T1], variations: [{ key: "var", name: "V", is_required: true, selection_type: "single", options: { create: [{ key: "base", label: "Base", is_default: true }, { key: "curto", label: "Curto", effects: { create: [eff("replace_effort_minutes", "20")] } }] } }] });
       const curto = (await simulate(ADMIN.token, versionId, { variation_option_keys: ["curto"], addon_keys: [], quantity: 1 })).pricing;
       near(curto.split.recurring.price, priceOfMinutes(20), "só 20 min");
-      const optId = (await prisma.catalog2VariationOption.findFirstOrThrow({ where: { key: "base", variation: { version_id: versionId } } })).id;
+      const optId = (await prisma.catalog2VariationOption.findFirstOrThrow({ where: { key: "curto", variation: { version_id: versionId } } })).id;
       const bad = await adm(`/options/${optId}/effects`, "POST", { effect_type: "replace_effort_minutes", effect_value: "10", source_task_key: "t1", source_step_key: "s1", charge_scope: "one_time" });
       assert.equal(bad.status, 422, JSON.stringify(bad.json));
       assert.match(bad.json.error, /todos os ciclos/);

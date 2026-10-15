@@ -517,6 +517,8 @@ model Nomade {
   last_access                DateTime?
   terms_accepted             Boolean   @default(false)
   is_leader                  Boolean   @default(false)
+  // Grupo de nômades qualificadores: pode conferir (qualificar) etapas de outros nômades, nas áreas em que é habilitado.
+  is_qualifier               Boolean   @default(false)
   leader_id                  String?
   min_monthly_goal           Float?
   performance_avg_rating     Float     @default(0)
@@ -1956,6 +1958,8 @@ model ProjectTaskStage {
   // Qualificação do ESPECIALISTA (separada da do líder): quem qualifica é o usuário escolhido na etapa do cadastro.
   exige_qualificacao_especialista Boolean @default(false)
   especialista_id           String?
+  // A qualificação vai para o grupo de nômades qualificadores (escolhido em rodízio na hora da entrega).
+  qualificador_pool         Boolean   @default(false)
   qualificada_especialista_em DateTime?
   libera_proxima_auto       Boolean   @default(true)
   rodada_ajuste             Int       @default(0)
@@ -5720,6 +5724,9 @@ model Catalog2Variation {
   is_required    Boolean @default(true)
   sort_order     Int     @default(0)
   notes          String? @db.Text
+  // O produto ORIGINAL já inclui esta variação? Sim: uma opção pode ser o "padrão" (não soma custo) e as outras somam.
+  // Não: a variação é um acréscimo inteiro — nenhuma opção é padrão e todas somam.
+  base_included  Boolean @default(true)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -5755,6 +5762,11 @@ model Catalog2VariationOption {
   // cadastrada; icon_key mantém uma alternativa sem imagem de marca.
   media_url String? @db.Text
   icon_key String? @db.VarChar(60)
+  // Explicação curta para o CLIENTE entender a opção, links de exemplos de entregável e um arquivo-modelo do entregável
+  // (referência { id, name, size, mime } ao arquivo guardado; mesmo armazenamento do "Resumo dos entregáveis").
+  short_description String? @db.VarChar(500)
+  example_links_json String? @db.Text
+  example_file_json String? @db.Text
 }
 
 // Efeito de escolher uma OPCAO de variacao — vocabulario FECHADO, igual ao
@@ -5785,6 +5797,8 @@ model Catalog2OptionEffect {
   source_task_key String?
   source_step_key String?
   effort_scale_by_quantity Boolean @default(false)
+  // Especialidade PRÓPRIA das horas extras (esforço) desta opção: quando preenchida, o custo usa o valor/hora dela, não o da etapa.
+  specialty_id String? @db.VarChar(40)
 }
 
 // ADICIONAL = escolha OPCIONAL (add-on), diferente da variacao obrigatoria.
@@ -6054,6 +6068,16 @@ model Catalog2TaskStep {
   rework_hours                Int?
   // Prazo (horas) para o nômade PREFERIDO aceitar antes de a etapa abrir para os demais (A8b-3). Nulo = padrão da plataforma (2 h).
   executor_accept_hours       Int?
+  // Alterações por IA grátis DESTA etapa por contratação (cota própria da etapa). Nulo = a etapa não define cota.
+  // Substitui o número único do produto (Catalog2Product.ai_free_changes, mantido só como legado, sem uso na cobrança).
+  ai_free_changes             Int?
+  // Etapa "Humano ou IA" (execution_mode = hibrido): specialty_id + estimated_minutes são a opção HUMANA; estas duas são a opção IA.
+  // O cliente escolhe uma das duas na contratação (a troca depois da contratação é uma fase futura). Nulos nas demais etapas.
+  ai_specialty_id             String?
+  ai_estimated_minutes        Int?
+  // Quem qualifica (confere) a etapa quando ela exige qualificação: leader = líder da área · person = pessoa específica
+  // (specialist_user_id) · leader_person = líder e depois a pessoa · nomad_pool = nômades qualificadores.
+  qualifier_kind              String  @default("leader") @db.VarChar(20)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -7054,6 +7078,8 @@ model Catalog2ConnectionRequirement {
   reminder_limit      Int?
   escalate_after_reminders Int?
   visible_to_client   Boolean                @default(true)
+  // Acesso cadastrado dentro de UMA etapa: true = disponível para as outras etapas escolherem usar (aparece na lista delas).
+  shared_with_steps   Boolean                @default(false)
   sort_order          Int                    @default(0)
   created_at          DateTime               @default(now())
   updated_at          DateTime               @updatedAt
@@ -7827,6 +7853,8 @@ model AiChangeCharge {
   account_kind       String   @db.VarChar(20)
   account_id         String   @db.VarChar(191)
   project_product_id String   @db.VarChar(191)
+  // Etapa (Catalog2TaskStep.key) à qual a alteração pertence; nulo = cota geral da contratação (regra global).
+  step_key           String?  @db.VarChar(191)
   user_id            String   @db.VarChar(191)
   feature            String   @db.VarChar(60)
   is_free            Boolean  @default(false)
@@ -7837,6 +7865,7 @@ model AiChangeCharge {
 
   @@index([account_kind, account_id])
   @@index([project_product_id])
+  @@index([project_product_id, step_key])
   @@map("ai_change_charges")
 }
 

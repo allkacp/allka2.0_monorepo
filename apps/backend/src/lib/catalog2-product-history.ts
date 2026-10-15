@@ -110,7 +110,7 @@ export interface UnifiedCatalog2HistoryEvent {
 export const CATALOG2_HISTORY_CATEGORIES: Record<string, string[]> = {
   conteudo: ["content_updated", "classification_updated"],
   tarefas: [
-    "task_added", "task_updated", "task_removed",
+    "task_added", "task_updated", "task_removed", "task_cleared", "task_restored",
     "step_added", "step_updated", "step_removed",
     "questionnaire_linked", "questionnaire_unlinked", "questionnaire_content_updated",
   ],

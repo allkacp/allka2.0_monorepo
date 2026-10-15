@@ -21,9 +21,11 @@ const newId = () => `i-${Date.now().toString(36)}-${Math.random().toString(36).s
 
 export const checklistCount = (list?: ChecklistItem[] | null) => (Array.isArray(list) ? list.length : 0);
 
-export function StepChecklistDialog({ open, title, value, readOnly, saving, onClose, onSave }: { open: boolean; title: string; value: ChecklistItem[]; readOnly?: boolean; saving?: boolean; onClose: () => void; onSave: (list: ChecklistItem[]) => void }) {
+export function StepChecklistDialog({ open, title, value, readOnly, saving, onClose, onSave, qualificationEnabled = true }: { open: boolean; title: string; value: ChecklistItem[]; readOnly?: boolean; saving?: boolean; onClose: () => void; onSave: (list: ChecklistItem[]) => void; /** Só mostra o checklist de CONFERÊNCIA (qualificação) quando a etapa exige qualificação. Os itens já cadastrados ficam guardados. */ qualificationEnabled?: boolean }) {
   const [items, setItems] = useState<ChecklistItem[]>(value);
   const [kind, setKind] = useState<ChecklistKind>("execucao");
+  const visibleKinds = CHECKLIST_KINDS.filter((k) => qualificationEnabled || k.key !== "qualificacao");
+  useEffect(() => { if (!qualificationEnabled && kind === "qualificacao") setKind("execucao"); }, [qualificationEnabled, kind]);
   const [text, setText] = useState("");
   useEffect(() => { if (open) { setItems(value ?? []); setText(""); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const meta = CHECKLIST_KINDS.find((k) => k.key === kind)!;
@@ -46,7 +48,7 @@ export function StepChecklistDialog({ open, title, value, readOnly, saving, onCl
       <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl" data-testid="step-checklist-dialog">
         <DialogTitle className="flex items-center gap-2 text-base"><ListChecks className="h-5 w-5 text-sky-600" />Checklist da etapa — {title}</DialogTitle>
         <div className="flex flex-wrap gap-1.5" role="tablist">
-          {CHECKLIST_KINDS.map((k) => {
+          {visibleKinds.map((k) => {
             const n = items.filter((i) => i.kind === k.key).length;
             return (
               <button key={k.key} type="button" role="tab" aria-selected={kind === k.key} onClick={() => setKind(k.key)}
@@ -57,6 +59,7 @@ export function StepChecklistDialog({ open, title, value, readOnly, saving, onCl
           })}
         </div>
         <p className="text-xs text-slate-500">{meta.hint}</p>
+        {!qualificationEnabled && <p className="rounded-md bg-slate-50 px-2 py-1 text-[11px] text-slate-500" data-testid="no-qualification-note">O checklist de qualificação (conferência) aparece quando a etapa exige qualificação. Ligue “Esta etapa precisa de qualificação” para usá-lo.</p>}
         <ul className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
           {mine.length === 0 && <li className="rounded-lg border border-dashed border-slate-300 p-3 text-center text-xs text-slate-400">Nenhum item de {meta.label.toLowerCase()} ainda.</li>}
           {mine.map((it, idx) => (

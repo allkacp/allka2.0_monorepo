@@ -15,6 +15,13 @@ import { applyAssetGate } from "./client-assets";
 import { materializeDependencyRules } from "./project-dependencies";
 import { effectiveDeps, hasConfiguredFlow } from "./step-flow";
 import { ensureSubscription } from "./catalog2-subscription-core";
+/** A qualificação desta etapa vai para o grupo de nômades qualificadores? (humano com qualificação ligada ou IA pura; "Humano ou IA" ainda não decide a execução.) */
+export function stagePool(step: { qualifier_kind?: string | null; execution_mode?: string | null; requires_qualification?: boolean | null; step_model?: { execution_mode?: string | null } | null }): boolean {
+  const mode = step.execution_mode ?? step.step_model?.execution_mode ?? "humano";
+  if (mode === "hibrido" || step.qualifier_kind !== "nomad_pool") return false;
+  return !(mode === "humano" && step.requires_qualification === false);
+}
+
 import { planTaskForCycle, resolveCycleContext, logProjectDecision, CYCLE_TYPE_LABEL, type CycleKind, type CycleType } from "./catalog2-cycles";
 
 export interface GerarTarefasCatalog2Options {
@@ -406,8 +413,10 @@ async function materializeTasksForProjectProduct(
             // Quem recebe a etapa (fase 1 da execução por etapa): nômade (padrão), líder ou equipe interna; líder específico já nasce atribuído.
             visivel_ao_cliente: stageMode ? !step.internal_step : true,
             // P-14 (07/10): etapa feita por IA/híbrida SEMPRE tem qualificador — sem outro qualificador definido, o líder aprova.
-            exige_qualificacao: stageMode && (step.requires_qualification !== false || ((step.execution_mode ?? step.step_model?.execution_mode ?? "humano") !== "humano" && !(step.requires_specialist_qualification && step.specialist_user_id))),
-            exige_qualificacao_especialista: stageMode && !!step.requires_specialist_qualification && !!step.specialist_user_id,
+            // Nômades qualificadores: a conferência vai para o grupo (rodízio na hora da entrega); sem ninguém elegível, cai no líder.
+            exige_qualificacao: stageMode && !stagePool(step) && (step.requires_qualification !== false || ((step.execution_mode ?? step.step_model?.execution_mode ?? "humano") !== "humano" && !(step.requires_specialist_qualification && step.specialist_user_id))),
+            exige_qualificacao_especialista: stageMode && (stagePool(step) || (!!step.requires_specialist_qualification && !!step.specialist_user_id)),
+            qualificador_pool: stageMode && stagePool(step),
             especialista_id: stageMode && step.requires_specialist_qualification ? step.specialist_user_id ?? null : null,
             libera_proxima_auto: true, // sempre automático (D-4, 07/10)
             aprovacao_horas: stageMode ? step.approval_hours ?? null : null,
@@ -431,6 +440,8 @@ async function materializeTasksForProjectProduct(
               completion_criteria: step.completion_criteria ?? step.step_model?.completion_criteria ?? null,
               first_execution_only: !!(step.first_execution_only || step.step_model?.first_execution_only),
               skip_when_same_executor: !!(step.skip_when_same_executor || step.step_model?.skip_when_same_executor),
+              // Prompt da IA desta etapa (usado quando a execução é por IA).
+              ...(normalizeStepOps(step.ops)?.ai_prompt ? { ai_prompt: normalizeStepOps(step.ops)!.ai_prompt } : {}),
               // Etapa padrão de acessos: leva a lista de acessos que o produto exige (sem senha).
               // P-12: acessos desta etapa (cadastro único = exigências de conexão); o nômade só vê os da etapa dele.
               ...(step.step_model?.is_access_validation ? { is_access_validation: true } : {}),

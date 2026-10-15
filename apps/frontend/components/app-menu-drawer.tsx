@@ -109,6 +109,7 @@ const navigationConfig = {
       badge: "6",
       color: "from-green-500 to-green-600",
     },
+    { name: "Qualificações", href: "/nomades/qualificacoes", icon: CheckSquare, color: "from-violet-500 to-violet-600" },
     { name: "Habilitações", href: "/nomades/habilitacoes", icon: Award, color: "from-amber-500 to-amber-600" },
     { name: "Histórico", href: "/nomades/historico", icon: History, color: "from-orange-500 to-orange-600" },
     { name: "Programa", href: "/nomades/programa", icon: Star, color: "from-pink-500 to-pink-600" },

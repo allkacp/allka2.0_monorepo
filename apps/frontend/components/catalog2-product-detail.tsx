@@ -387,12 +387,12 @@ export function Catalog2ProductDetail({
   // ── Opções: CLIENT (real, achatadas por variação — mesma linha visual) ─
   const clientOptionRows = useMemo(() => {
     if (!isClient || !clientProduct) return [];
-    const rows: { key: string; variationKey: string; variationName: string; label: string; selectionType: string | null; isRequired: boolean; help: string | null }[] = [];
+    const rows: { key: string; variationKey: string; variationName: string; label: string; selectionType: string | null; isRequired: boolean; help: string | null; shortDescription: string | null; exampleLinks: { label: string | null; url: string }[]; exampleFile: { id: string; name: string; size: number } | null }[] = [];
     for (const va of clientProduct.variations ?? []) {
       // Variação por QUANTIDADE não lista opções: o cliente informa um número (bloco próprio abaixo).
       if (va.selection_type === "quantity") continue;
       for (const o of va.options ?? []) {
-        rows.push({ key: o.key, variationKey: va.key, variationName: va.name, label: o.label, selectionType: va.selection_type, isRequired: va.is_required, help: va.help_text ?? null });
+        rows.push({ key: o.key, variationKey: va.key, variationName: va.name, label: o.label, selectionType: va.selection_type, isRequired: va.is_required, help: va.help_text ?? null, shortDescription: o.short_description ?? null, exampleLinks: o.example_links ?? [], exampleFile: o.example_file ?? null });
       }
     }
     return rows;
@@ -957,20 +957,34 @@ export function Catalog2ProductDetail({
 
               {isClient && clientOptionRows.map((o) => {
                 const isSel = sel.variation_option_keys.includes(o.key);
+                const hasExamples = o.exampleLinks.length > 0 || !!o.exampleFile;
                 return (
-                  <button
-                    key={o.key}
-                    type="button"
-                    onClick={() => pickClientOption(o.variationKey, o.key, o.selectionType)}
-                    className={cn("w-full rounded-xl border-2 transition-all bg-background overflow-hidden text-left px-3 py-2.5 flex items-start gap-2.5", isSel ? "border-emerald-500 shadow-sm ring-2 ring-emerald-100 dark:ring-emerald-900/40" : "border-slate-200 dark:border-slate-700 hover:border-purple-300")}
-                  >
-                    {isSel ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" /> : <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0 mt-0.5" />}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{o.variationName}{o.isRequired && <span className="text-red-500"> *</span>}</p>
-                      <p className="text-xs font-bold leading-tight truncate">{o.label}</p>
-                      {o.help && <p className="truncate text-[10px] text-muted-foreground">{o.help}</p>}
-                    </div>
-                  </button>
+                  <div key={o.key} className="w-full">
+                    <button
+                      type="button"
+                      onClick={() => pickClientOption(o.variationKey, o.key, o.selectionType)}
+                      className={cn("w-full rounded-xl border-2 transition-all bg-background overflow-hidden text-left px-3 py-2.5 flex items-start gap-2.5", isSel ? "border-emerald-500 shadow-sm ring-2 ring-emerald-100 dark:ring-emerald-900/40" : "border-slate-200 dark:border-slate-700 hover:border-purple-300")}
+                    >
+                      {isSel ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" /> : <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0 mt-0.5" />}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">{o.variationName}{o.isRequired && <span className="text-red-500"> *</span>}</p>
+                        <p className="text-xs font-bold leading-tight truncate">{o.label}</p>
+                        {o.shortDescription && <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground" data-testid="option-short-description">{o.shortDescription}</p>}
+                        {o.help && <p className="truncate text-[10px] text-muted-foreground">{o.help}</p>}
+                      </div>
+                    </button>
+                    {hasExamples && (
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 text-[11px]" data-testid="option-examples-client">
+                        <span className="font-semibold text-muted-foreground">Exemplos:</span>
+                        {o.exampleLinks.map((l: { label: string | null; url: string }) => (
+                          <a key={l.url} href={l.url} target="_blank" rel="noopener noreferrer" className="font-medium text-purple-700 underline underline-offset-2 dark:text-purple-300">{l.label || "Ver exemplo"}</a>
+                        ))}
+                        {o.exampleFile && (
+                          <button type="button" className="font-medium text-purple-700 underline underline-offset-2 dark:text-purple-300" onClick={() => void apiClient.downloadCatalog2DeliverableFile(o.exampleFile!)}>Baixar modelo ({o.exampleFile.name})</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
 

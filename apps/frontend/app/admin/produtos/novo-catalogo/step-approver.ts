@@ -24,5 +24,5 @@ export function applyApprover(mode: ApproverMode): { requires_qualification: boo
 
 /** Etapa com IA/híbrida nunca fica sem qualificador: se estiver "sem qualificação", passa a ser o líder. */
 export function enforceApprover<T extends Flags>(f: T): T {
-  return f.execution_mode && f.execution_mode !== "humano" && approverOf(f) === "none" ? { ...f, ...applyApprover("leader") } : f;
+  return f.execution_mode === "ia" && approverOf(f) === "none" ? { ...f, ...applyApprover("leader") } : f;
 }

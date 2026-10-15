@@ -1,3 +1,4 @@
+import { PageLoader } from "@/components/ui/loading";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Button } from "@/components/ui/button";
@@ -1183,10 +1184,7 @@ export function TaskLaunchDrawer({
       <div className="flex flex-col flex-1 min-h-0 w-full">
         {initializing ? (
           /* Loading state */
-          <div className="flex-1 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-            <p className="text-sm text-slate-500">Preparando lançamento…</p>
-          </div>
+          <PageLoader text="Preparando lançamento…" compact />
         ) : (
           <>
             {/* ════════════════ HEADER ════════════════ */}

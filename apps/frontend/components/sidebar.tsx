@@ -260,6 +260,12 @@ const navigationConfig = {
       current: false,
     },
     {
+      name: "Qualificações",
+      href: "/nomades/qualificacoes",
+      icon: CheckSquare,
+      current: false,
+    },
+    {
       name: "Habilitações",
       href: "/nomades/habilitacoes",
       icon: Award,
@@ -309,6 +315,12 @@ const navigationConfig = {
     {
       name: "Para Qualificar",
       href: "/leader/qualificacao",
+      icon: CheckSquare,
+      current: false,
+    },
+    {
+      name: "Etapas p/ Qualificar",
+      href: "/leader/qualificacoes",
       icon: CheckSquare,
       current: false,
     },
@@ -414,6 +426,12 @@ const navigationConfig = {
         {
           name: "Tarefas",
           href: "/admin/tarefas",
+          icon: CheckSquare,
+          current: false,
+        },
+        {
+          name: "Etapas p/ Qualificar",
+          href: "/admin/qualificacoes",
           icon: CheckSquare,
           current: false,
         },

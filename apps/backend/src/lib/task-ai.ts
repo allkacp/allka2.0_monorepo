@@ -108,7 +108,7 @@ async function loadConfig(taskId: string) {
     select: {
       id: true, title: true, description: true, status: true, project_id: true, lider_responsavel_id: true, briefing_snapshot: true, catalog2_task_id: true,
       project: { select: { admin_responsible_user_id: true } },
-      stages: { orderBy: [{ ordem: "asc" }], select: { id: true, titulo: true, ordem: true, status: true } },
+      stages: { orderBy: [{ ordem: "asc" }], select: { id: true, titulo: true, ordem: true, status: true, config_snapshot: true } },
     },
   });
   if (!task) throw new TaskAIError("Tarefa não encontrada.", 404, "task_not_found");
@@ -198,7 +198,10 @@ export async function runTaskAI(input: RunInput) {
   if (mode === "autonoma" && (!openStage || !OPEN_STAGE.includes(openStage.status))) throw new TaskAIError("Não há etapa aberta para a IA executar.", 409, "no_open_stage");
 
   const ctx = await buildContext(task.id, task, input.inputs ?? {});
-  const instructions = [profile.base_instructions?.trim(), ai.instructions?.trim()].filter(Boolean).join("\n\n");
+  // Prompt específico da ETAPA (cadastrado na etapa do produto): entra depois das instruções do perfil e da tarefa.
+  let stagePrompt = "";
+  try { stagePrompt = String((JSON.parse(openStage?.config_snapshot ?? "{}") as { ai_prompt?: unknown }).ai_prompt ?? "").trim(); } catch { stagePrompt = ""; }
+  const instructions = [profile.base_instructions?.trim(), ai.instructions?.trim(), stagePrompt ? `INSTRUÇÕES DESTA ETAPA:\n${stagePrompt}` : ""].filter(Boolean).join("\n\n");
   const systemInstruction = `${SAFETY_RULES}\n\n${instructions}`.trim();
   const prompt = [
     `MODO: ${mode}${openStage ? ` · ETAPA: ${openStage.titulo}` : ""}`,

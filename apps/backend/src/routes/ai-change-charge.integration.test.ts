@@ -69,16 +69,27 @@ describe("Cobrança das alterações por IA no saldo da carteira (P-11)", () => 
     assert.equal(await saldo(), 3);
   });
 
-  it("CHG03. o produto pode ter sua própria cota grátis (sobrescreve a global); vazio volta a valer a global", async () => {
+  it("CHG03. a cota grátis é de cada ETAPA: o produto mostra a soma, cada etapa consome só a sua, e é preciso escolher a etapa", async () => {
     const c = await contratacao("C");
     await credita(0);
-    assert.equal((await api(`/api/admin/catalog2/products/${c.product.id}/ai-free-changes`, { method: "PATCH", token: ADMIN.token, body: { ai_free_changes: 3 } })).status, 200);
-    for (let i = 0; i < 3; i++) assert.equal((await post("/charge", { project_product_id: c.ppId })).json.charge.is_free, true, `grátis ${i + 1}`);
-    assert.equal((await post("/charge", { project_product_id: c.ppId })).status, 402, "4ª já é cobrada");
-    assert.equal((await api(`/api/admin/catalog2/products/${c.product.id}/ai-free-changes`, { method: "PATCH", token: ADMIN.token, body: { ai_free_changes: null } })).status, 200);
+    const pp = await prisma.projectProduct.findUniqueOrThrow({ where: { id: c.ppId }, select: { catalog2_version_id: true } });
+    const task = await prisma.catalog2Task.findFirstOrThrow({ where: { version_id: pp.catalog2_version_id! } });
+    const e1 = await prisma.catalog2TaskStep.create({ data: { task_id: task.id, key: "e1", name: "Criação", sort_order: 1, ai_free_changes: 3 } });
+    const e2 = await prisma.catalog2TaskStep.create({ data: { task_id: task.id, key: "e2", name: "Revisão", sort_order: 2, ai_free_changes: 1 } });
     const q = await post("/quote", { project_product_id: c.ppId });
-    assert.equal(q.json.free_total, 1, "voltou para a regra global");
-    assert.equal((await api(`/api/admin/catalog2/products/${c.product.id}/ai-free-changes`, { method: "PATCH", token: ADMIN.token, body: { ai_free_changes: -1 } })).status >= 400, true);
+    assert.equal(q.status, 200, JSON.stringify(q.json));
+    assert.deepEqual([q.json.stages.length, q.json.free_total], [2, 4], "soma das etapas");
+    const sem = await post("/charge", { project_product_id: c.ppId });
+    assert.equal(sem.status, 422); assert.equal(sem.json.code, "step_required");
+    for (let i = 0; i < 3; i++) assert.equal((await post("/charge", { project_product_id: c.ppId, step_key: e1.id })).json.charge.is_free, true, `etapa 1, grátis ${i + 1}`);
+    assert.equal((await post("/charge", { project_product_id: c.ppId, step_key: e1.id })).status, 402, "4ª da etapa 1 já é cobrada");
+    assert.equal((await post("/charge", { project_product_id: c.ppId, step_key: e2.id })).json.charge.is_free, true, "a etapa 2 tem cota própria");
+    assert.equal((await post("/charge", { project_product_id: c.ppId, step_key: e2.id })).status, 402);
+    assert.equal((await post("/quote", { project_product_id: c.ppId, step_key: "outra" })).status, 422, "etapa que não é desta contratação");
+    // sem cota nas etapas, volta a valer a regra global por contratação
+    await prisma.catalog2TaskStep.updateMany({ where: { id: { in: [e1.id, e2.id] } }, data: { ai_free_changes: null } });
+    const g = await post("/quote", { project_product_id: c.ppId });
+    assert.deepEqual([g.json.stages.length, g.json.free_total], [0, 1], "regra global");
   });
 
   it("CHG04. outra empresa não consulta nem cobra a contratação alheia", async () => {

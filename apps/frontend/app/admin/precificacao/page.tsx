@@ -220,7 +220,7 @@ function PrecificacaoPage({ returnAfterSave = false, onSaveComplete, onClose }: 
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                <span className="text-sm font-medium">Revisão humana (% do custo humano)</span>
+                <span className="text-sm font-medium">Custo do qualificador (% do custo da etapa) <span className="font-normal text-slate-500">— padrão 20%; quem qualifica recebe esse percentual sobre o custo da etapa. Cada tarefa pode ter um percentual próprio.</span></span>
                 <Input aria-label="Percentual de revisão humana" className="w-20" type="number" value={review} onChange={(e) => setReview(e.target.value)} /> %
                 {review.trim() === "" && <span className="text-[11px] text-amber-600">aguardando definição</span>}
               </div>

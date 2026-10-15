@@ -13,6 +13,7 @@
 //     + versão publicada + produto disponível + zero pendência obrigatória.
 
 import { clientCommercialView } from "./catalog2-commercial-fields";
+import { parseOptionExamples, parseOptionExampleFile } from "./catalog2-option-examples";
 import { prisma } from "./prisma";
 import { audienceWhere, productVisibleTo as audienceAllows, viewerFromContext } from "./catalog2-audience";
 import { config } from "../config";
@@ -635,7 +636,7 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
     description: version.full_description ?? version.summary ?? null,
     short_description: version.summary ?? null,
     // Só o que está marcado como visível ao cliente (observações internas NUNCA saem daqui).
-    commercial: clientCommercialView(version as unknown as Record<string, unknown>),
+    commercial: clientCommercialView(version as unknown as Record<string, unknown>, ctx.account_kind),
     pillar: product.pillar ? { key: product.pillar.key, name: product.pillar.name } : null,
     category: product.category ? { key: product.category.key, name: product.category.name } : null,
     four_f: product.four_f.map((l) => ({ key: l.four_f.key, name: l.four_f.name })).sort((a, b) => a.key.localeCompare(b.key)),
@@ -669,7 +670,7 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
         selection_type: va.selection_type,
         notes: va.notes,
         help_text: va.notes,
-        options: va.options.filter((o) => o.is_active).map((o) => ({ key: o.key, label: o.label, is_default: o.is_default, availability: o.availability, availability_note: o.availability_note, selectable: o.availability !== "unavailable", requires_commercial_request: ["custom_quote", "commercial_review", "assisted_only"].includes(o.availability) })),
+        options: va.options.filter((o) => o.is_active).map((o) => ({ key: o.key, label: o.label, is_default: o.is_default, short_description: o.short_description ?? null, example_links: parseOptionExamples(o.example_links_json), example_file: parseOptionExampleFile(o.example_file_json), availability: o.availability, availability_note: o.availability_note, selectable: o.availability !== "unavailable", requires_commercial_request: ["custom_quote", "commercial_review", "assisted_only"].includes(o.availability) })),
       })),
     addons: version.addons
       .filter((a) => a.is_active)

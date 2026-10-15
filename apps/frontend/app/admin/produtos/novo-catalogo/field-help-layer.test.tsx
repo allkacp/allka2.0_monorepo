@@ -29,6 +29,26 @@ describe("ajuda por campo (ícone i)", () => {
     await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
   });
 
+  it("só o ícone mostra ajuda: o title nativo some do rótulo/campo (sem tooltip duplicado) e vira o texto do ícone", async () => {
+    const { container } = render(
+      <FieldHelpLayer>
+        <label title="Texto nativo que duplicava" data-testid="lbl">Campo sem ajuda cadastrada<input aria-label="x" title="outro" /></label>
+        <section title="Cartão inteiro" data-testid="card"><span>Público-alvo</span></section>
+        <button type="button" title="Salvar" aria-label="Salvar"><svg /></button>
+        <p className="truncate" title="Texto cortado inteiro">Texto cortado</p>
+      </FieldHelpLayer>,
+    );
+    await waitFor(() => expect(container.querySelectorAll(".field-info").length).toBe(2));
+    expect(container.querySelector("[data-testid=lbl]")?.hasAttribute("title")).toBe(false);
+    expect(container.querySelector("input")?.hasAttribute("title")).toBe(false);
+    expect(container.querySelector("[data-testid=card]")?.hasAttribute("title")).toBe(false);
+    expect(container.querySelector("button")?.getAttribute("title")).toBe("Salvar"); // botão só de ícone mantém
+    expect(container.querySelector("p")?.getAttribute("title")).toBe("Texto cortado inteiro"); // truncado mantém
+    const icons = Array.from(container.querySelectorAll(".field-info"));
+    expect(icons.some((i) => i.getAttribute("data-help") === "Texto nativo que duplicava")).toBe(true); // campo antes sem "i" agora tem
+    expect(icons.some((i) => /Para quem este produto foi feito/.test(i.getAttribute("data-help") ?? ""))).toBe(true); // Público-alvo cadastrado
+  });
+
   it("campos novos de 07/10 têm explicação (níveis de agência, especialista, prazos da etapa, IA nas etapas)", async () => {
     const { helpFor } = await import("./field-help");
     for (const t of ["Níveis de agência:", "Quem aprova esta etapa", "Alterações por IA grátis neste produto", "Especialista que qualifica", "Prazo de aprovação do cliente (h úteis)", "Prazo de refação (h úteis)", "Prazo de aceite do preferido (h)", "Descrição (o que acontece nesta etapa)", "Critério de conclusão", "Etapa interna (o cliente não vê nem aprova)"]) {

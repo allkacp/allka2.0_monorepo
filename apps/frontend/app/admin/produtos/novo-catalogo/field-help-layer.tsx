@@ -12,7 +12,34 @@ const CSS = `
 `;
 const SKIP = "button, option, select, textarea, input, script, style, [role=tab], [role=tablist], [data-no-info], .field-info";
 
+// Regra única de tooltip: SÓ o ícone "i" mostra ajuda. O `title` nativo do navegador (que aparecia em cima do card/campo e
+// duplicava o tooltip do "i") é retirado de tudo que não é botão só de ícone; o texto vira `data-help-title` e alimenta o "i"
+// dos campos que ainda não tinham ajuda cadastrada. Textos cortados (truncate) mantêm o title para dar para ler o conteúdo inteiro.
+const KEEP_TITLE = "button, a, summary, [role=button], .truncate, [data-keep-title]";
+function stripNativeTitles(root: Element) {
+  const nodes: Element[] = root.matches?.("[title]") ? [root] : [];
+  nodes.push(...Array.from(root.querySelectorAll("[title]")));
+  for (const el of nodes) {
+    const title = el.getAttribute("title");
+    if (title == null) continue;
+    if (el.matches(KEEP_TITLE) && !(el.matches("button, a, summary, [role=button]") && (el.textContent ?? "").trim() !== "" && !el.matches(".truncate"))) continue;
+    if (title.trim()) el.setAttribute("data-help-title", title.trim());
+    el.removeAttribute("title");
+  }
+}
+/** Ajuda vinda do antigo `title` do próprio rótulo (ou do <label> que o envolve / do campo dentro dele). */
+function titleHelpFor(el: HTMLElement): string | null {
+  const own = el.getAttribute("data-help-title");
+  if (own) return own;
+  const label = el.closest("label");
+  const fromLabel = label?.getAttribute("data-help-title");
+  if (fromLabel) return fromLabel;
+  const field = label?.querySelector("[data-help-title]");
+  return field?.getAttribute("data-help-title") ?? null;
+}
+
 function ensureIcons(root: HTMLElement, helpOf: (t: string) => string | null, strict = false) {
+  stripNativeTitles(root);
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const found: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -25,10 +52,12 @@ function ensureIcons(root: HTMLElement, helpOf: (t: string) => string | null, st
     if (next && next.nodeType === 1 && next.classList?.contains("field-info")) continue;
     // strict (camada geral): só o texto que é o rótulo inteiro do elemento (aceita * e :), nunca um pedaço de frase como "4 empresas".
     if (strict && (el.textContent ?? "").replace(/[\s*:]+$/g, "").trim() !== v.replace(/[\s*:]+$/g, "").trim()) continue;
-    if (helpOf(v)) found.push(t);
+    if (helpOf(v)) { found.push(t); continue; }
+    // Sem ajuda cadastrada: usa o antigo title do rótulo, mas só quando o texto é o rótulo inteiro (nunca um pedaço de frase).
+    if (v.trim().length <= 70 && (el.textContent ?? "").replace(/[\s*:]+$/g, "").trim() === v.replace(/[\s*:]+$/g, "").trim() && titleHelpFor(el)) found.push(t);
   }
   for (const t of found) {
-    const help = helpOf(t.nodeValue ?? "");
+    const help = helpOf(t.nodeValue ?? "") ?? (t.parentElement ? titleHelpFor(t.parentElement) : null);
     if (!help) continue;
     const i = document.createElement("span");
     i.className = "field-info";
@@ -60,12 +89,13 @@ export function FieldHelpLayer({ children, help = helpFor, strict = false }: { c
         }
       } finally {
         pending.clear();
-        obs.observe(root, { childList: true, subtree: true, characterData: true });
+        obs.observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["title"] });
       }
     };
     const obs = new MutationObserver((records) => {
       for (const r of records) {
-        if (r.type === "characterData") pending.add(r.target);
+        if (r.type === "attributes") { if (r.target.nodeType === 1 && !(r.target as Element).closest(".field-info")) pending.add(r.target); }
+        else if (r.type === "characterData") pending.add(r.target);
         else r.addedNodes.forEach((n) => { if (n.nodeType === 1 || n.nodeType === 3) pending.add(n); });
       }
       if (pending.size && !timer) timer = window.setTimeout(flush, 120);
@@ -89,7 +119,7 @@ export function FieldHelpLayer({ children, help = helpFor, strict = false }: { c
       <style>{CSS}</style>
       {children}
       {tip && typeof document !== "undefined" && createPortal(
-        <div role="tooltip" style={{ position: "fixed", left: tip.x, top: tip.y, transform: "translateX(-50%)", maxWidth: 320, zIndex: 9999 }} className="pointer-events-none rounded-lg bg-slate-900 px-3 py-2 text-xs leading-snug text-white shadow-xl">
+        <div role="tooltip" style={{ position: "fixed", left: tip.x, top: tip.y, transform: "translateX(-50%)", maxWidth: 320, zIndex: 9999, whiteSpace: "pre-line" }} className="pointer-events-none rounded-lg bg-slate-900 px-3 py-2 text-xs leading-snug text-white shadow-xl">
           {tip.text}
         </div>,
         document.body,

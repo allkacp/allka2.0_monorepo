@@ -24,6 +24,25 @@ describe("acessos por etapa (P-12)", () => {
     fireEvent.click(screen.getByLabelText("Google Ads"));
     expect(onChange).toHaveBeenLastCalledWith({ access_scope: "some", access_keys: [] });
   });
+  it("acesso de outra etapa marcado como disponível aparece à vista para marcar; o que não foi compartilhado não aparece", () => {
+    const onChange = vi.fn();
+    const reqs = [
+      { key: "geral", label: "Site do cliente" },
+      { key: "ads", label: "Google Ads", when_step_key: "etapa-1", shared_with_steps: true },
+      { key: "crm", label: "CRM", when_step_key: "etapa-1", shared_with_steps: false },
+      { key: "meu", label: "Instagram", when_step_key: "etapa-2", shared_with_steps: false },
+    ];
+    const { rerender } = render(<StepAccessPicker requirements={reqs} stepKey="etapa-2" stepNames={{ "etapa-1": "Briefing" }} value={{ access_scope: "some", access_keys: ["meu"] }} onChange={onChange} />);
+    expect(screen.getByTestId("shared-accesses").textContent).toMatch(/Google Ads/);
+    expect(screen.getByTestId("shared-accesses").textContent).toMatch(/etapa Briefing/);
+    expect(screen.queryByLabelText("CRM")).toBeNull();
+    fireEvent.click(screen.getByLabelText(/Google Ads/));
+    expect(onChange).toHaveBeenLastCalledWith({ access_scope: "some", access_keys: ["meu", "ads"] });
+    // no padrão, marcar um compartilhado já muda a etapa para "só os que eu escolher"
+    rerender(<StepAccessPicker requirements={reqs} stepKey="etapa-2" value={null} onChange={onChange} />);
+    fireEvent.click(screen.getByLabelText(/Google Ads/));
+    expect(onChange).toHaveBeenLastCalledWith({ access_scope: "some", access_keys: ["ads"] });
+  });
   it("sem acessos cadastrados avisa onde cadastrar", () => {
     render(<StepAccessPicker requirements={[]} value={{ access_scope: "some", access_keys: [] }} onChange={() => {}} />);
     expect(screen.getByText(/ainda não tem acessos cadastrados/)).toBeTruthy();

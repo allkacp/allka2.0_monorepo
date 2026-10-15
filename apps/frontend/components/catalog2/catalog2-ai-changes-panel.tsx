@@ -11,9 +11,12 @@ import { Button } from "@/components/ui/button";
 import { WalletTopupModal } from "@/components/wallet-topup-modal";
 import { ButtonLoader } from "@/components/ui/loading";
 
+export interface AiChangeStage { step_key: string; step_name: string; task_name: string; free_total: number; used: number; free_left: number }
 export interface AiChangeQuote {
   project_product_id: string; free_total: number; used: number; free_left: number; is_free: boolean;
   price_brl: number; balance_brl: number; enough_balance: boolean; missing_brl: number;
+  // Alterações grátis por ETAPA: vazio = vale a regra global da contratação.
+  step_key?: string | null; stages?: AiChangeStage[];
 }
 
 export function brl(n: number) {
@@ -22,8 +25,9 @@ export function brl(n: number) {
 
 /** Texto que diz ao cliente o que vai acontecer ao pedir a próxima alteração. */
 export function aiChangeSummary(q: AiChangeQuote): string {
-  if (q.is_free) return `Alterações grátis restantes: ${q.free_left} de ${q.free_total}.`;
-  return `As ${q.free_total} alterações grátis acabaram. Cada alteração extra custa ${brl(q.price_brl)}, debitado do seu saldo.`;
+  const where = q.step_key ? " nesta etapa" : "";
+  if (q.is_free) return `Alterações grátis restantes${where}: ${q.free_left} de ${q.free_total}.`;
+  return `As ${q.free_total} alterações grátis${where} acabaram. Cada alteração extra custa ${brl(q.price_brl)}, debitado do seu saldo.`;
 }
 
 export function Catalog2AiChangesPanel({ projectId }: { projectId: string }) {
@@ -76,17 +80,29 @@ export function Catalog2AiChangesPanel({ projectId }: { projectId: string }) {
   );
 }
 
-function AiChangeRow({ id, name, quote, onDone }: { id: string; name: string; quote: AiChangeQuote; onDone: () => void }) {
+function AiChangeRow({ id, name, quote: baseQuote, onDone }: { id: string; name: string; quote: AiChangeQuote; onDone: () => void }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [topup, setTopup] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const stages = baseQuote.stages ?? [];
+  const [stepKey, setStepKey] = useState<string>(stages.length === 1 ? stages[0].step_key : "");
+  const [stageQuote, setStageQuote] = useState<AiChangeQuote | null>(null);
+  // Com cota por etapa, o preço/saldo vêm do servidor já para a etapa escolhida.
+  useEffect(() => {
+    let live = true;
+    if (!stepKey) { setStageQuote(null); return; }
+    apiClient.quoteAiChange({ project_product_id: id, step_key: stepKey }).then((q: any) => { if (live) setStageQuote(q as AiChangeQuote); }).catch(() => { if (live) setStageQuote(null); });
+    return () => { live = false; };
+  }, [id, stepKey, baseQuote]);
+  const quote = stages.length > 0 && stepKey && stageQuote ? stageQuote : baseQuote;
+  const needStep = stages.length > 0 && !stepKey;
 
   async function submit() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await apiClient.chargeAiChange({ project_product_id: id, note: note.trim() || null });
+      const res = await apiClient.chargeAiChange({ project_product_id: id, step_key: stepKey || null, note: note.trim() || null });
       setMsg({ ok: true, text: res?.charge?.is_free ? "Alteração registrada (grátis)." : `Alteração contratada: ${brl(quote.price_brl)} debitado do saldo.` });
       setNote("");
       onDone();
@@ -101,7 +117,20 @@ function AiChangeRow({ id, name, quote, onDone }: { id: string; name: string; qu
   return (
     <li className="rounded-lg border border-neutral-200 bg-white p-4 space-y-2">
       <p className="text-sm font-medium text-neutral-800">{name}</p>
-      <p className="text-xs text-neutral-600">{aiChangeSummary(quote)}</p>
+      {stages.length > 0 && (
+        <div className="space-y-1" data-testid="ai-stage-quotas">
+          <ul className="text-xs text-neutral-600">
+            {stages.map((s) => <li key={s.step_key}>{s.step_name} ({s.task_name}): {s.free_left} de {s.free_total} grátis</li>)}
+          </ul>
+          {stages.length > 1 && (
+            <select aria-label="Etapa da alteração" className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm" value={stepKey} onChange={(e) => setStepKey(e.target.value)}>
+              <option value="">Escolha a etapa da alteração…</option>
+              {stages.map((s) => <option key={s.step_key} value={s.step_key}>{s.step_name} — {s.task_name}</option>)}
+            </select>
+          )}
+        </div>
+      )}
+      {!needStep && <p className="text-xs text-neutral-600">{aiChangeSummary(quote)}</p>}
       {!quote.is_free && (
         <p className="flex items-center gap-1.5 text-xs text-neutral-600"><Wallet className="h-3.5 w-3.5" /> Saldo disponível: {brl(quote.balance_brl)}</p>
       )}
@@ -117,7 +146,7 @@ function AiChangeRow({ id, name, quote, onDone }: { id: string; name: string; qu
         placeholder="O que você quer alterar? (opcional)" value={note} onChange={(e) => setNote(e.target.value)}
       />
       <div className="flex items-center gap-3">
-        <Button size="sm" onClick={submit} disabled={busy || blocked}>
+        <Button size="sm" onClick={submit} disabled={busy || blocked || needStep}>
           {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {quote.is_free ? "Pedir alteração" : `Contratar mais uma alteração (${brl(quote.price_brl)})`}
         </Button>

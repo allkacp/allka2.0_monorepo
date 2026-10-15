@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { buildProductRequirementBody } from "./catalog2-connections-ui";
+import { AccessLogo } from "./access-logo";
 
 // Catálogo de tipos de acesso (2026-10-06): escolher um acesso para o produto, CRIAR tipos novos (ex.: Tray) com os campos que o cliente preenche
 // e/ou liberação por API, e (Admin Master) excluir. Tudo fica salvo no catálogo global para os outros produtos.
@@ -29,8 +30,9 @@ export function typeSummary(t: any, methodLabel: (k: string) => string) {
   };
 }
 
-function TypeForm({ initial, vocab, onCancel, onSaved }: { initial: any | null; vocab: any; onCancel: () => void; onSaved: () => void }) {
+export function TypeForm({ initial, vocab, onCancel, onSaved }: { initial: any | null; vocab: any; onCancel: () => void; onSaved: () => void }) {
   const editing = !!initial;
+  const [icon, setIcon] = useState<string>(/^https?:\/\//i.test(String(initial?.icon ?? "")) ? String(initial.icon) : "");
   const [name, setName] = useState<string>(initial?.name ?? "");
   const [key, setKey] = useState<string>(initial?.key ?? "");
   const [keyTouched, setKeyTouched] = useState(false);
@@ -49,6 +51,8 @@ function TypeForm({ initial, vocab, onCancel, onSaved }: { initial: any | null; 
   const save = async () => {
     setBusy(true); setErr(null);
     const body = {
+      // Logo: endereço (http/https) da imagem. Vazio mantém o selo na cor da marca (ou o ícone antigo do tipo, se houver).
+      ...(icon.trim() ? { icon: icon.trim() } : /^https?:\/\//i.test(String(initial?.icon ?? "")) ? { icon: null } : {}),
       name: name.trim(), description: description.trim() || null, default_instructions: instructions.trim() || null, allowed_methods: methods,
       permission_levels: levels.map((l) => ({ key: l.key, label: l.label.trim() })), is_active: active,
       fields: fields.map((f) => ({ key: f.key, label: f.label.trim(), type: f.type, required: f.required, help: f.help.trim() || null })),
@@ -70,6 +74,9 @@ function TypeForm({ initial, vocab, onCancel, onSaved }: { initial: any | null; 
       </div>
       <label className="block font-semibold text-slate-600 dark:text-slate-300">Descrição (opcional)
         <Input aria-label="Descrição do acesso" className="mt-0.5 h-8 text-xs" value={description} onChange={(e) => setDescription(e.target.value)} />
+      </label>
+      <label className="block font-semibold text-slate-600 dark:text-slate-300">Logo do acesso (endereço da imagem, opcional)
+        <Input aria-label="Logo do acesso" className="mt-0.5 h-8 text-xs" value={icon} placeholder="https://…/logo.png — vazio usa o selo na cor da marca" onChange={(e) => setIcon(e.target.value)} />
       </label>
       <fieldset className="rounded-lg border border-slate-200 p-2 dark:border-slate-700">
         <legend className="px-1 font-semibold text-slate-700 dark:text-slate-200">Como o cliente pode liberar este acesso</legend>
@@ -134,7 +141,8 @@ function Pill({ children, tone = "bg-slate-100 text-slate-700 dark:bg-slate-800 
 // Total de acessos do produto: os fixos (lista antiga) + os adicionados pelo catálogo de acessos (conexões). Alimenta o selo e o checklist do editor.
 export const accessCount = (v: any) => v?.connection_requirements?.length ?? 0;
 
-export function AccessCatalogDialog({ open, onOpenChange, version, readOnly, act }: { open: boolean; onOpenChange: (v: boolean) => void; version: any; readOnly: boolean; act: Act }) {
+/** mode "manage" = só configurar os tipos pré-definidos (criar/editar: logo, como o cliente libera, o que informa, instruções); não adiciona ao produto. */
+export function AccessCatalogDialog({ open, onOpenChange, version, readOnly, act, mode = "add" }: { open: boolean; onOpenChange: (v: boolean) => void; version: any; readOnly: boolean; act: Act; mode?: "add" | "manage" }) {
   const [types, setTypes] = useState<any[]>([]);
   const [vocab, setVocab] = useState<any>(null);
   const [view, setView] = useState<{ form: true; type: any | null } | null>(null);
@@ -174,10 +182,10 @@ export function AccessCatalogDialog({ open, onOpenChange, version, readOnly, act
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl" data-testid="access-catalog-dialog">
         <div className="border-b border-slate-200 px-5 pb-3 pt-4 dark:border-slate-800">
-          <DialogTitle className="text-base">{view ? (view.type ? `Editar tipo de acesso — ${view.type.name}` : "Novo tipo de acesso") : "Adicionar acesso ao produto"}</DialogTitle>
+          <DialogTitle className="text-base">{view ? (view.type ? `Editar tipo de acesso — ${view.type.name}` : "Novo tipo de acesso") : mode === "manage" ? "Tipos de acesso pré-definidos" : "Adicionar acesso ao produto"}</DialogTitle>
           {!view && (
             <>
-              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Escolha um acesso do catálogo para este produto ou crie um tipo novo (uma plataforma que ainda não existe). O que você criar fica salvo e vale para os outros produtos.</p>
+              <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{mode === "manage" ? "Aqui ficam os acessos pré-definidos que aparecem na lista das etapas: logo, como o cliente libera (API, convite por e-mail, login…), o que ele informa e as instruções. O que for salvo vale para todos os produtos." : "Escolha um acesso do catálogo para este produto ou crie um tipo novo (uma plataforma que ainda não existe). O que você criar fica salvo e vale para os outros produtos."}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <div className="relative min-w-[14rem] flex-1"><Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-slate-400" /><Input aria-label="Buscar acesso" className="h-9 pl-8 text-xs" placeholder="Buscar acesso (Google Ads, CRM, Tray…)" value={q} onChange={(e) => setQ(e.target.value)} /></div>
                 <div className="flex gap-1" role="group" aria-label="Filtrar acessos">
@@ -202,7 +210,7 @@ export function AccessCatalogDialog({ open, onOpenChange, version, readOnly, act
                 return (
                   <li key={t.id} className={`flex flex-col rounded-xl border bg-white p-3 text-xs shadow-sm dark:bg-slate-900 ${mine ? "border-emerald-300" : "border-slate-200 dark:border-slate-700"} ${t.is_active ? "" : "opacity-70"}`} data-testid={`access-type-${t.key}`}>
                     <div className="flex items-start gap-2">
-                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-sm font-bold ${PROVIDER_TONE[t.provider ?? ""] ?? "bg-violet-50 text-violet-700"}`}>{(t.name as string).slice(0, 1).toUpperCase()}</span>
+                      <AccessLogo type={t} size={36} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold text-slate-900 dark:text-slate-100" title={t.name}>{t.name}</p>
                         <p className="line-clamp-2 min-h-[2rem] text-[11px] text-slate-500" title={t.description ?? ""}>{t.description || "Sem descrição."}</p>
@@ -217,7 +225,7 @@ export function AccessCatalogDialog({ open, onOpenChange, version, readOnly, act
                     </div>
                     {!readOnly && (
                       <div className="mt-auto flex items-center gap-1.5 pt-3">
-                        <Button type="button" size="sm" className="h-8 flex-1 text-xs" disabled={!t.is_active || mine} onClick={() => void add(t)}><Plus className="mr-1 h-3.5 w-3.5" />{mine ? "Já adicionado" : "Adicionar ao produto"}</Button>
+                        {mode === "add" ? <Button type="button" size="sm" className="h-8 flex-1 text-xs" disabled={!t.is_active || mine} onClick={() => void add(t)}><Plus className="mr-1 h-3.5 w-3.5" />{mine ? "Já adicionado" : "Adicionar ao produto"}</Button> : <span className="flex-1 text-[11px] text-slate-500">{t.is_active ? "Disponível nas etapas" : "Inativo"}</span>}
                         <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0" title="Editar este tipo de acesso" aria-label={`Editar ${t.name}`} onClick={() => setView({ form: true, type: t })}><Pencil className="h-3.5 w-3.5" /></Button>
                         <Button type="button" size="sm" variant="outline" className="h-8 w-8 p-0 text-red-600 hover:bg-red-50" title="Excluir do catálogo (só Admin Master; só se ninguém usa)" aria-label={`Excluir ${t.name}`} onClick={() => void remove(t)}><Trash2 className="h-3.5 w-3.5" /></Button>
                       </div>

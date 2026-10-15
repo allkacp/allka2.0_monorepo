@@ -1,3 +1,4 @@
+import { PageLoader } from "@/components/ui/loading";
 // Lançamento em lote — para produtos "pacote" (2+ ProjectTask do mesmo
 // ProjectProduct). Mesma ideia do TaskLaunchDrawer (apps/frontend/components/
 // task-launch-drawer.tsx), mas operando sobre VÁRIAS tarefas de uma vez: um
@@ -602,10 +603,7 @@ export function BulkTaskLaunchDrawer({
     <EmbeddedSlideScreen open={true} onClose={onClose} hideHeader>
       <div className="flex flex-col flex-1 min-h-0 w-full">
         {initializing ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
-            <p className="text-sm text-slate-500">Preparando lançamento em lote…</p>
-          </div>
+          <PageLoader text="Preparando lançamento em lote…" compact />
         ) : (
           <>
             <div

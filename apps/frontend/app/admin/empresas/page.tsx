@@ -112,6 +112,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { useCompanies } from "@/hooks/useCompanies";
 import { apiClient } from "@/lib/api-client";
+import { NomadQualifierToggle } from "./nomad-qualifier-toggle";
 
 const gradientMap: Record<string, string> = {
   "bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-900":
@@ -1646,6 +1647,7 @@ export default function EmpresasPage() {
       state: n.state || "",
       pix_key: n.pix_key || "",
       pix_type: n.pix_key_type || "",
+      is_qualifier: !!n.is_qualifier,
     })) as Company[];
 
     setCompanies([...mapped, ...mappedAgencies, ...mappedNomades]);
@@ -5429,6 +5431,9 @@ export default function EmpresasPage() {
               >
                 <div className="flex-1 overflow-y-auto p-5">
                   <div className="max-w-3xl mx-auto space-y-6">
+                    {company.type === "nomad" && company._apiId && (
+                      <NomadQualifierToggle nomadId={String(company._apiId)} initial={!!(company as any).is_qualifier} />
+                    )}
                     {/* Dados completos da empresa */}
                     <div>
                       <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">

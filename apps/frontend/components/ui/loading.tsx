@@ -150,7 +150,7 @@ export function ButtonLoader({ text = "Processando…" }: { text?: string }) {
  *
  * @param text     Mensagem principal
  * @param subtext  Mensagem secundária opcional
- * @param compact  Reduz a altura mínima para sub-seções
+ * @param compact  (mantido por compatibilidade; a geometria é a mesma em todo lugar)
  */
 export function PageLoader({
   text = "Carregando…",
@@ -167,8 +167,9 @@ export function PageLoader({
       aria-label={text}
       aria-busy="true"
       className={cn(
-        "flex flex-col items-center justify-center",
-        compact ? "min-h-[280px] py-20" : "min-h-[460px]",
+        // Geometria ÚNICA (compact ou não): quando um carregamento troca por outro (rota → página → painel) ele fica
+        // exatamente no mesmo lugar, em vez de parecer um segundo "carregando" no canto ou duplicado.
+        "flex w-full flex-1 flex-col items-center justify-center min-h-[420px] py-12",
       )}
     >
       {/* Cartão de vidro fosco — garante contraste em qualquer fundo (branco,

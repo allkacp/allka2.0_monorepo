@@ -19,6 +19,8 @@ export interface RequirementInput {
   reason?: string | null; instructions?: string | null; default_grant_scope?: string; validation_mode?: string;
   asset_rule?: string; revalidate_days?: number | null; light_check?: boolean;
   reminder_interval_hours?: number | null; reminder_limit?: number | null; escalate_after_reminders?: number | null; visible_to_client?: boolean;
+  /** Acesso cadastrado dentro de uma etapa: true = fica disponível para as outras etapas escolherem usar. */
+  shared_with_steps?: boolean;
   dependents?: DependentInput[];
   /** Ativação por gatilhos (variação, opção, adicional, tarefa, etapa, resposta, produto vinculado). Sem isto: modo manual (como sempre). */
   activation_mode?: string;
@@ -39,6 +41,7 @@ export function serializeRequirement(r: RequirementRow) {
       reminder_interval_hours: r.reminder_interval_hours, reminder_limit: r.reminder_limit, escalate_after_reminders: r.escalate_after_reminders,
       visible_to_client: r.visible_to_client,
     },
+    shared_with_steps: r.shared_with_steps,
     dependents: r.dependencies.map((d) => ({ id: d.id, task_key: d.task_key, step_key: d.step_key, kind: d.kind })),
     activation: { mode: r.activation_mode, triggers: (r.triggers ?? []).map((t) => ({ id: t.id, kind: t.kind, ref_key: t.ref_key, ref_value: t.ref_value, operator: t.operator })) },
     sort_order: r.sort_order,
@@ -142,7 +145,7 @@ export async function createRequirement(db: Db, versionId: string, input: Requir
       reason: input.reason?.trim() || null, instructions: input.instructions?.trim() || null, default_grant_scope: n.scope, validation_mode: n.validation,
       asset_rule: n.assetRule, revalidate_days: n.revalidate, light_check: !!input.light_check,
       reminder_interval_hours: input.reminder_interval_hours ?? null, reminder_limit: input.reminder_limit ?? null, escalate_after_reminders: input.escalate_after_reminders ?? null,
-      visible_to_client: input.visible_to_client !== false, sort_order: count + 1,
+      visible_to_client: input.visible_to_client !== false, shared_with_steps: input.shared_with_steps === true, sort_order: count + 1,
       activation_mode: activationMode,
       triggers: { create: trg.map((t, i) => ({ kind: t.kind, ref_key: t.ref_key ?? null, ref_value: t.ref_value ?? null, operator: t.operator ?? "selected", sort_order: i })) },
       dependencies: { create: deps.map((d) => ({ task_key: d.task_key, step_key: d.step_key ?? null, kind: d.kind ?? "start", dep_key: dependencyKey(d.task_key, d.step_key) })) },
@@ -175,6 +178,7 @@ export async function updateRequirement(db: Db, id: string, input: RequirementIn
       ...(input.reminder_limit !== undefined ? { reminder_limit: input.reminder_limit } : {}),
       ...(input.escalate_after_reminders !== undefined ? { escalate_after_reminders: input.escalate_after_reminders } : {}),
       ...(input.visible_to_client !== undefined ? { visible_to_client: input.visible_to_client } : {}),
+      ...(input.shared_with_steps !== undefined ? { shared_with_steps: input.shared_with_steps } : {}),
     },
   });
   if (trg) await replaceTriggers(db, id, trg);

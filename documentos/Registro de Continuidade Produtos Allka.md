@@ -1,5 +1,5 @@
 # Registro de Continuidade Produtos Allka
-Atualizado em: 2026-10-13
+Atualizado em: 2026-10-14
 
 ## Como retomar
 - Abra a IA (Claude ou ChatGPT/Codex) na pasta do projeto `allka-plataforma/allka-2026` e diga: "Leia o documento documentos/Registro de Continuidade Produtos Allka.md e continue de onde paramos."
@@ -10,6 +10,9 @@ Atualizado em: 2026-10-13
 - O documento final detalhado (todos os itens e o que cada um faz) só deve ser feito no FIM do escopo de outubro, na hora de subir. Não fazer antes.
 
 ## Estado atual
+- 15/10 (tarde, local): itens 8 e 9 conferidos pelo usuário; itens 2, 3, 4, 6 verdes; 5 (layout) fora do farol por decisão dele (revisão geral de telas depois). Feitos: padrão = o que o produto original já inclui (variação com base_included; opção padrão sem horas extras, servidor recusa e remove ao virar padrão); horas extras escolhem etapa/tarefa inteira + especialidade própria (specialty_id no efeito; preço usa o valor/hora dela); custo do qualificador dentro da etapa (percentual global padrão 20%, configurável em Precificação, migração preenche vazios); grupo de nômades qualificadores (Nomade.is_qualifier + rodízio, ProjectTaskStage.qualificador_pool); tela ÚNICA de qualificação de etapas /qualificacoes (nômade, líder, admin) com API /api/qualificacoes; loader padronizado (PageLoader com geometria única + trocas de spinners soltos). Migrações: 20261015120000, 130000, 140000, 150000. Testes: tela 88 (editor), servidor 29 (preço v2), 9 (variações/acessos), 2 (qualificações), 4 (pool).
+- 14/10 (manhã e tarde, local): cadastro do produto refinado — acessos por etapa (lista a partir do catálogo de tipos, compartilhar com outras etapas, guardar ao desligar, transferir a etapa mãe), resumo por acesso embaixo, limpar tarefa com restauração, resumo único da tarefa, etapa Humano ou IA (duas opções), cota de alterações por IA por etapa, anexos nos entregáveis, quem vê cada campo. Migrações aplicadas no banco local: ai_free_changes_per_step, access_shared_with_steps, step_hybrid_ai_option, step_qualifier_kind, variation_option_description_examples.
+- 14/10 (noite, após reunião das 18h09): feitos 1–9 da ata — prompt da IA por etapa (ops.ai_prompt, vai para a etapa do projeto e para a execução da IA), salvar rascunho mantém a edição ativa, classificação sem botão salvar/divergência (salva com o rascunho), qualificação liga/desliga + quem qualifica (líder, pessoa, líder e pessoa, nômades qualificadores) e execução por etapa na tarefa, checklist de conferência só com qualificação ligada, prévia do checklist/orientações, variações com horas extras por etapa, descrição curta, links e arquivo-modelo por opção (também visíveis ao cliente).
 - 13/10: chat novo (estilo WhatsApp: mídia, apagar mensagem, janela destacada, configurações do Admin) e tema da plataforma salvo no servidor estão prontos no local. Migrações 20261011120000_platform_theme e 20261012150000_chat_whatsapp aplicadas no banco local; backend sobe sem erro; Chat > Nova conversa retorna usuários para Admin, Agência, Empresa e Nômade (testado pela API).
 - Código salvo no GitHub na branch `revisao-plataforma-2026-10-11` (repositório allkacp/allka2.0_monorepo, commit 6f94554). Sem merge na main e sem deploy. Para publicar: abrir PR para main ou `git push allka2 HEAD:main`, só com ordem do usuário.
 - allka.store (QA) está com a versão de 08/10 (espelho completo do local naquela data). Tudo de 10/10 a 13/10 (revisão de desempenho, chat, tema, modais/fontes/mobile) ainda NÃO foi ao ar.
@@ -86,9 +89,10 @@ Atualizado em: 2026-10-13
 - Por último: P-2 (Neko) e, só com ordem, o espelho completo local → online (A12).
 
 ## Próximo passo
-Aguardar o usuário voltar ("boa tarde, vamos continuar"): conferir/abrir o Docker, subir os containers, confirmar que backend e frontend respondem e perguntar o que ele quer testar ou ajustar. Ele vai pedir itens novos.
+O usuário vai revisar os itens 1–9 da reunião de 14/10 um por um. Pendências conhecidas: fase 2 do Humano ou IA (cliente escolher/trocar na contratação), grupo de nômades qualificadores (hoje cai no líder), bloqueio por tipo de evidência, evidência obrigatória em revisão posterior, e a 'Inicialização rápida' do Windows (Docker).
 
 ## Histórico
+- **2026-10-14:** Ajustes da reunião de 14/10 (itens 1–9) implementados e testados no local; revisão item a item pelo usuário pendente.
 - **2026-10-02:** 13 correções universais (estrutura universal v2) implementadas e testadas; commitadas e implantadas em 2026-10-04.
 - **2026-10-05:** Reunião de cadastro de produtos: lista de decisões convertida em checklist. Feito o bloco A (A1-A4, A7): produto individual × composto, tarefa única, checklist da tarefa, custo por etapa.
 - **2026-10-05 (2):** Ajustes pedidos pelo Vinicius: aba Tarefa e etapas (singular) com tarefa aberta, botão de composto removido, checklist por etapa em janelinha, novo layout da edição de etapa.

@@ -4,7 +4,7 @@
 // e quem executa (novo/automático ou o mesmo de outra etapa). Opcional: sem configurar, a tarefa segue a sequência de sempre.
 // Todo cálculo de preço/prazo continua no backend; aqui só se monta e valida o desenho do fluxo.
 import { useEffect, useMemo, useState } from "react";
-import { GitBranch, Pencil, Save } from "lucide-react";
+import { ArrowRight, Clock, GitBranch, ListOrdered, Pencil, Play, Save, Settings2, ChevronDown, Timer, User } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 
@@ -133,6 +133,44 @@ export function stepFlowSentences(step: any, steps: any[], opts: { stageMode?: b
   return { starts, who, flags, minutes: Math.max(0, step.estimated_minutes ?? 0) };
 }
 
+/** Visão rápida do fluxo: um cartão por fase, ligados por setas (o detalhe fica em "Configurações avançadas do fluxo"). */
+function FlowPhases({ steps, stageMode }: { steps: any[]; stageMode: boolean }) {
+  const ord = sortSteps(steps);
+  const sum = flowSummary(steps);
+  const num = (k: string) => ord.findIndex((x) => x.key === k) + 1;
+  return (
+    <div className="mt-3 flex flex-wrap items-stretch gap-3" data-testid="flow-phases">
+      {sum.waves.map((wave, wi) => {
+        const prev = wi === 0 ? null : sum.waves[wi - 1].map(num).sort((a, b) => a - b);
+        return (
+          <div key={wi} className="flex min-w-[20rem] flex-1 items-center gap-3">
+            {wi > 0 && <ArrowRight className="h-5 w-5 shrink-0 text-violet-500" aria-hidden="true" />}
+            <div className="min-w-0 flex-1 space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-900/40" data-testid={`flow-phase-${wi + 1}`}>
+              <span className="inline-block rounded-md bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-950/50 dark:text-violet-200">Fase {wi + 1}</span>
+              {wave.map((k) => {
+                const st = ord.find((x) => x.key === k)!;
+                const t = stepFlowSentences(st, steps, { stageMode });
+                return (
+                  <div key={k} className="flex flex-wrap items-start gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-500 text-lg font-bold text-white">{num(k)}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{st.name}</p>
+                      <div className="mt-1.5 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
+                        <span className="flex items-start gap-2"><Play className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" /><span><span className="block font-semibold text-slate-800 dark:text-slate-100">Início</span><span className="block text-slate-500">{prev ? `Após a etapa ${prev.join(" + ")}` : "Começa quando a tarefa inicia"}</span></span></span>
+                        <span className="flex items-start gap-2"><User className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" /><span><span className="block font-semibold text-slate-800 dark:text-slate-100">Executor</span><span className="block text-slate-500">{t.who}</span></span></span>
+                        <span className="flex items-start gap-2"><Clock className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" /><span><span className="block font-semibold text-slate-800 dark:text-slate-100">Duração</span><span className="block text-slate-500">{(st.estimated_minutes ?? 0) > 0 ? fmtMin(st.estimated_minutes) : "a definir"}</span></span></span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 function FlowOverview({ steps, stageMode }: { steps: any[]; stageMode: boolean }) {
   const ord = sortSteps(steps);
   const sum = flowSummary(steps);
@@ -174,7 +212,7 @@ function FlowOverview({ steps, stageMode }: { steps: any[]; stageMode: boolean }
   );
 }
 
-export function StepFlowEditor({ task, readOnly, act, startEditing = false, allowEdit = false }: { task: any; readOnly: boolean; act: Act; startEditing?: boolean; allowEdit?: boolean }) {
+export function StepFlowEditor({ task, readOnly, act, startEditing = false, allowEdit = false, hoursPerDay = 8 }: { task: any; readOnly: boolean; act: Act; startEditing?: boolean; allowEdit?: boolean; hoursPerDay?: number }) {
   // O fluxo se edita direto em cada etapa (StepFlowControls); aqui só se mostra o resultado. O editor completo só abre se pedido (testes/uso interno).
   const [editing, setEditing] = useState(startEditing);
   const steps: any[] = task.steps ?? [];
@@ -206,14 +244,25 @@ export function StepFlowEditor({ task, readOnly, act, startEditing = false, allo
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50/40 p-3 dark:border-indigo-900/60 dark:bg-indigo-950/10" data-testid="step-flow-editor">
+    <div className="mt-3 rounded-2xl border border-slate-200 border-l-4 border-l-violet-500 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/60" data-testid="step-flow-editor">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-indigo-800 dark:text-indigo-200"><GitBranch className="h-4 w-4" />Fluxo das etapas <span className="font-normal normal-case text-slate-500">(resultado do que você configurou em cada etapa)</span></h4>
-        <span className="text-[11px] text-slate-600 dark:text-slate-300" data-testid="flow-summary">
-          {sum.configured || dirty ? `Ordem: ${sum.waves.map((w) => (w.length > 1 ? `[${w.map(numOf).join(" + ")}]` : String(numOf(w[0])))).join(" → ")}` : "Em sequência (padrão)"} · duração mínima {fmtMin(sum.criticalMinutes)} · esforço total {fmtMin(sum.totalMinutes)}
+        <h4 className="flex items-center gap-2 text-[13px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300"><GitBranch className="h-4 w-4" />Fluxo das etapas<span className="field-info" data-help="Resultado do que você configurou em cada etapa: em que ordem elas acontecem, quem executa e quanto tempo leva cada uma. Para mudar o fluxo, use “Começa” e “Quem executa” dentro de cada etapa." aria-hidden="true">i</span></h4>
+        <span className="flex flex-wrap items-center gap-x-2 text-xs font-medium text-slate-600 dark:text-slate-300" data-testid="flow-summary">
+          <ListOrdered className="h-3.5 w-3.5 text-violet-600" aria-hidden="true" />
+          <span className="font-semibold text-violet-700 dark:text-violet-300">{sum.configured || dirty ? `Ordem: ${sum.waves.map((w) => (w.length > 1 ? `[${w.map(numOf).join(" + ")}]` : String(numOf(w[0])))).join(" → ")}` : "Sequência"}</span>
+          <span aria-hidden="true">·</span>
+          <Timer className="h-3.5 w-3.5 text-violet-600" aria-hidden="true" /><span>{fmtMin(sum.totalMinutes)} totais</span>
+          <span aria-hidden="true">·</span>
+          <span>{sum.criticalMinutes > 0 ? `${Math.max(1, Math.ceil(sum.criticalMinutes / (Math.max(1, hoursPerDay) * 60)))} dia(s) útil(eis)` : "prazo a definir"}</span>
         </span>
       </div>
-      {!editing && <FlowOverview steps={steps} stageMode={task.stage_execution === "stage"} />}
+      {!editing && <FlowPhases steps={steps} stageMode={task.stage_execution === "stage"} />}
+      {!editing && (
+        <details className="group mt-2 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60" data-testid="flow-advanced">
+          <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5 text-[13px] font-semibold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden"><Settings2 className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" /><span className="flex-1">Configurações avançadas do fluxo</span><ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
+          <div className="border-t border-slate-100 px-3 pb-3 dark:border-slate-800"><FlowOverview steps={steps} stageMode={task.stage_execution === "stage"} /></div>
+        </details>
+      )}
       {!editing && !readOnly && allowEdit && <div className="mt-2"><Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)} data-testid="edit-step-flow"><Pencil className="mr-1.5 h-4 w-4" />Editar fluxo</Button></div>}
       {editing && <>
       <p className="mt-1 text-[11px] text-slate-500">Escolha quando cada etapa começa e quem a executa. Padrão: cada etapa começa quando a anterior termina. Etapas que começam juntas contam o tempo só uma vez na duração mínima; o custo continua sendo a soma de todas.</p>

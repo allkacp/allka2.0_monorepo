@@ -37,6 +37,20 @@ describe("Público do produto: salva sozinho (P-4)", () => {
     expect(api.setCatalog2ProductVisibility).toHaveBeenCalledWith("p2", ["agency"], ["elite"]);
   });
 
+  it("dentro do editor: não salva sozinho, sem botão próprio; grava só quando o editor pede (Salvar rascunho)", async () => {
+    let flush: () => Promise<void> = async () => {};
+    const registerFlush = (fn: () => Promise<void>) => { flush = fn; return () => {}; };
+    render(<AudienceCard product={{ id: "p4", visibility_mode: "all", visibility_agency_levels: null }} registerFlush={registerFlush} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    fireEvent.click(screen.getByLabelText("Company"));
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(api.setCatalog2ProductVisibility).not.toHaveBeenCalled();
+    expect(screen.queryByText("Salvar agora")).toBeNull();
+    await act(async () => { await flush(); });
+    expect(api.setCatalog2ProductVisibility).toHaveBeenCalledTimes(1);
+    expect(api.setCatalog2ProductVisibility).toHaveBeenCalledWith("p4", ["company"], []);
+  });
+
   it("somente leitura nunca grava", async () => {
     render(<AudienceCard product={{ id: "p3", visibility_mode: "all" }} readOnly />);
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });

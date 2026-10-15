@@ -2628,6 +2628,43 @@ async function etapaDaTarefa(taskId: string, stageId: string) {
   });
 }
 
+/** Aplica a decisão (qualificação/aprovação) de uma etapa e todos os efeitos: tarefa concluída, repasses, próximos executores. */
+export async function aplicarDecisaoEtapa(args: {
+  etapa: { id: string };
+  task: { id: string; project_id: string; nomade_responsavel_id: string | null; task_code: string | null };
+  tipo: "qualificacao" | "especialista" | "aprovacao";
+  decisao: "aprovar" | "reprovar" | "comentar";
+  comentario?: string;
+  userId: string;
+}) {
+  const { etapa, task, tipo, decisao, comentario, userId } = args;
+    const resultado = await prisma.$transaction(async (tx) => {
+      const r = await decidirEtapa(tx, etapa.id, { tipo, decisao, userId: userId, comentario });
+      if (r.tarefaConcluida) {
+        await recordApprovedTask({ projectId: task.project_id, projectTaskId: task.id, approvedAt: new Date(), approvedByUserId: userId, idempotencyKey: `memory-approved-task:${task.id}` }, tx);
+        await reevaluateSuccessors(task.id, tx);
+      }
+      return r;
+    });
+    // Repasse do nômade quando a tarefa fecha (modo "no fim": soma de todas as etapas) — mesma regra e chave de idempotência do aceite da tarefa.
+    if (resultado.tarefaConcluida && task.nomade_responsavel_id && (await taskPaysAtEnd(task.id))) {
+      const stages = await prisma.projectTaskStage.findMany({ where: { project_task_id: task.id }, select: { valor_nomade: true, nomade_id: true } });
+      const totalNomade = stages.filter((st) => !st.nomade_id || st.nomade_id === task.nomade_responsavel_id).reduce((sum, st) => sum + (st.valor_nomade ?? 0), 0);
+      await pagarOutrosNomadesNoFim(task.id, userId);
+      if (totalNomade > 0) {
+        await recordWalletEvent("nomad", task.nomade_responsavel_id, {
+          type: "task_payout", direction: "credit", amount: totalNomade, description: `Repasse — tarefa ${task.task_code ?? task.id} concluída e aprovada`,
+          idempotencyKey: `task_payout_${task.id}`, referenceType: "project_task", referenceId: task.id, createdBy: userId, metadata: { project_id: task.project_id },
+        });
+      }
+    }
+    await pagarEtapasConcluidas(task.id, userId).catch((err) => console.error("[stage-payout]", err));
+    atribuirExecutoresPendentes(task.id).catch((err) => console.error("[stage-engine] atribuir executor:", err));
+    if (resultado.enviadaParaQualificacao) garantirQualificador(task.id).catch((err) => console.error("[stage-engine] qualificador:", err));
+    kickDependencies(task.project_id);
+  return resultado;
+}
+
 router.post(
   "/:id/etapas/:stageId/decisao",
   verifyToken,
@@ -2655,30 +2692,7 @@ router.post(
         if (!ladoOk) { res.status(403).json({ error: "Somente quem contratou (agência ou empresa) aprova a etapa." }); return; }
         if (!etapa.visivel_ao_cliente && !admin) { res.status(403).json({ error: "Esta é uma etapa interna: o cliente não a aprova." }); return; }
       }
-      const resultado = await prisma.$transaction(async (tx) => {
-        const r = await decidirEtapa(tx, etapa.id, { tipo, decisao, userId: req.user!.id, comentario });
-        if (r.tarefaConcluida) {
-          await recordApprovedTask({ projectId: task.project_id, projectTaskId: task.id, approvedAt: new Date(), approvedByUserId: req.user!.id, idempotencyKey: `memory-approved-task:${task.id}` }, tx);
-          await reevaluateSuccessors(task.id, tx);
-        }
-        return r;
-      });
-      // Repasse do nômade quando a tarefa fecha (modo "no fim": soma de todas as etapas) — mesma regra e chave de idempotência do aceite da tarefa.
-      if (resultado.tarefaConcluida && task.nomade_responsavel_id && (await taskPaysAtEnd(task.id))) {
-        const stages = await prisma.projectTaskStage.findMany({ where: { project_task_id: task.id }, select: { valor_nomade: true, nomade_id: true } });
-        const totalNomade = stages.filter((st) => !st.nomade_id || st.nomade_id === task.nomade_responsavel_id).reduce((sum, st) => sum + (st.valor_nomade ?? 0), 0);
-        await pagarOutrosNomadesNoFim(task.id, req.user!.id);
-        if (totalNomade > 0) {
-          await recordWalletEvent("nomad", task.nomade_responsavel_id, {
-            type: "task_payout", direction: "credit", amount: totalNomade, description: `Repasse — tarefa ${task.task_code ?? task.id} concluída e aprovada`,
-            idempotencyKey: `task_payout_${task.id}`, referenceType: "project_task", referenceId: task.id, createdBy: req.user!.id, metadata: { project_id: task.project_id },
-          });
-        }
-      }
-      await pagarEtapasConcluidas(task.id, req.user!.id).catch((err) => console.error("[stage-payout]", err));
-      atribuirExecutoresPendentes(task.id).catch((err) => console.error("[stage-engine] atribuir executor:", err));
-      if (resultado.enviadaParaQualificacao) garantirQualificador(task.id).catch((err) => console.error("[stage-engine] qualificador:", err));
-      kickDependencies(task.project_id);
+      const resultado = await aplicarDecisaoEtapa({ etapa, task, tipo, decisao, comentario, userId: req.user!.id });
       res.json(resultado);
     } catch (err) {
       if (err instanceof EtapaDecisaoError) { res.status(err.httpStatus).json({ error: err.message }); return; }

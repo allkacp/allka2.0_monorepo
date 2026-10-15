@@ -92,6 +92,10 @@ export const CHECKLIST_TEXT_MAX = 300;
 
 export const EVIDENCE_OWNERS = ["executor", "leader", "client"] as const;
 export type EvidenceOwner = (typeof EVIDENCE_OWNERS)[number];
+/** Que tipo de prova a etapa exige (pode marcar mais de um). Aparece para quem executa e facilita pedir a evidência certa. */
+export const EVIDENCE_TYPES = ["print", "arquivo", "pdf", "relatorio", "link", "texto"] as const;
+export type EvidenceType = (typeof EVIDENCE_TYPES)[number];
+export const EVIDENCE_TYPE_LABEL: Record<EvidenceType, string> = { print: "Print da tela", arquivo: "Arquivo anexo", pdf: "PDF", relatorio: "Relatório", link: "Link", texto: "Texto / descrição" };
 
 export interface StepOps {
   checklist?: ChecklistItem[];
@@ -101,10 +105,22 @@ export interface StepOps {
   /** A etapa só conclui depois de anexar uma evidência (usa o mesmo bloqueio já existente de "exige anexo"). */
   evidence_required?: boolean;
   evidence_hint?: string;
+  /** Prompt/instrução específica para a IA executar ESTA etapa (só vale quando o executor é IA ou "humano ou IA"). Nunca aparece para o cliente. */
+  ai_prompt?: string;
+  /** "Humano ou IA": quem qualifica quando a IA executa (a opção IA SEMPRE é qualificada; a da opção humana fica nas colunas da etapa). */
+  ai_qualifier_kind?: "leader" | "person" | "leader_person" | "nomad_pool";
+  ai_qualifier_user_id?: string;
+  /** Tipos de prova aceitos (print, PDF, relatório…). Só vale com evidence_required. */
+  evidence_types?: EvidenceType[];
   /** P-12 (08/10): quais acessos do produto esta etapa usa. Ausente = padrão (a etapa de validação de acessos usa todos; as demais, nenhum). */
   access_scope?: "all" | "some";
   /** Chaves das exigências de conexão escolhidas (quando access_scope = "some"). */
   access_keys?: string[];
+  /**
+   * Acessos GUARDADOS quando a etapa foi desligada em "Esta etapa precisa de acesso": as exigências próprias (para recriar
+   * ao ligar de novo) e as chaves dos acessos de outras etapas que ela usava. Nada disso vale em execução enquanto guardado.
+   */
+  access_parked?: { reqs: Record<string, unknown>[]; keys: string[] };
   visibility?: Partial<Record<StepOpsTextField | "completion_criteria", Visibility>>;
 }
 
@@ -130,8 +146,13 @@ export const stepOpsSchema = z
     instructions: text(STEP_TEXT_MAX.instructions),
     evidence_required: z.boolean().nullish(),
     evidence_hint: text(STEP_TEXT_MAX.evidence_hint),
+    ai_prompt: text(8000),
+    ai_qualifier_kind: z.enum(["leader", "person", "leader_person", "nomad_pool"]).nullish(),
+    ai_qualifier_user_id: z.string().max(60).nullish(),
+    evidence_types: z.array(z.enum(EVIDENCE_TYPES)).max(EVIDENCE_TYPES.length).nullish(),
     access_scope: z.enum(["all", "some"]).nullish(),
     access_keys: z.array(z.string().max(60)).max(40).nullish(),
+    access_parked: z.object({ reqs: z.array(z.record(z.string(), z.unknown())).max(40), keys: z.array(z.string().max(60)).max(40) }).nullish(),
     visibility: z.record(z.string(), visibilityEnum).nullish(),
   })
   .strict()
@@ -168,7 +189,18 @@ export function normalizeStepOps(raw: unknown): StepOps | null {
     const v = typeof r[f] === "string" ? (r[f] as string).trim() : "";
     if (v) out[f] = v.slice(0, STEP_TEXT_MAX[f]);
   }
+  const aiPrompt = typeof r.ai_prompt === "string" ? r.ai_prompt.trim() : "";
+  if (aiPrompt) out.ai_prompt = aiPrompt.slice(0, 8000);
+  if (["leader", "person", "leader_person", "nomad_pool"].includes(r.ai_qualifier_kind as string)) {
+    out.ai_qualifier_kind = r.ai_qualifier_kind as StepOps["ai_qualifier_kind"];
+    const au = typeof r.ai_qualifier_user_id === "string" ? r.ai_qualifier_user_id.trim() : "";
+    if (au && (out.ai_qualifier_kind === "person" || out.ai_qualifier_kind === "leader_person")) out.ai_qualifier_user_id = au.slice(0, 60);
+  }
   if (r.evidence_required === true) out.evidence_required = true;
+  if (r.evidence_required === true && Array.isArray(r.evidence_types)) {
+    const types = EVIDENCE_TYPES.filter((t) => (r.evidence_types as unknown[]).includes(t));
+    if (types.length) out.evidence_types = [...types];
+  }
   if ((EVIDENCE_OWNERS as readonly string[]).includes(r.evidence_owner as string) && r.evidence_owner !== "executor") out.evidence_owner = r.evidence_owner as EvidenceOwner;
   if (Array.isArray(r.checklist)) {
     const seen = new Set<string>();
@@ -191,6 +223,12 @@ export function normalizeStepOps(raw: unknown): StepOps | null {
     const keys = Array.from(new Set(r.access_keys.filter((k): k is string => typeof k === "string").map((k) => k.trim().slice(0, 60)).filter(Boolean))).slice(0, 40);
     out.access_scope = "some";
     out.access_keys = keys;
+  }
+  const parked = r.access_parked as { reqs?: unknown; keys?: unknown } | undefined;
+  if (parked && typeof parked === "object") {
+    const reqs = Array.isArray(parked.reqs) ? (parked.reqs.filter((x) => x && typeof x === "object" && !Array.isArray(x)).slice(0, 40) as Record<string, unknown>[]) : [];
+    const keys = Array.isArray(parked.keys) ? Array.from(new Set(parked.keys.filter((k): k is string => typeof k === "string").map((k) => k.trim().slice(0, 60)).filter(Boolean))).slice(0, 40) : [];
+    if (reqs.length || keys.length) out.access_parked = { reqs: JSON.parse(JSON.stringify(reqs)), keys };
   }
   const vis = cleanVisibility(r.visibility, [...STEP_OPS_TEXT_FIELDS, "completion_criteria"] as const);
   if (vis) out.visibility = vis;
@@ -244,6 +282,7 @@ export function visibleStepGuide(ops: StepOps | null | undefined, viewer: Visibi
   };
   push("instructions", STEP_OPS_LABEL.instructions, ops?.instructions);
   push("completion_criteria", STEP_OPS_LABEL.completion_criteria, extra?.completion_criteria?.trim() || null);
-  push("evidence_hint", STEP_OPS_LABEL.evidence_hint, ops?.evidence_hint);
+  const typesText = ops?.evidence_types?.length ? `Tipo: ${ops.evidence_types.map((t) => EVIDENCE_TYPE_LABEL[t]).join(", ")}` : "";
+  push("evidence_hint", STEP_OPS_LABEL.evidence_hint, [typesText, ops?.evidence_hint].filter(Boolean).join(" — ") || null);
   return { items, evidence_required: !!ops?.evidence_required };
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, lazy, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin, Tag, Layers, ListChecks, CheckSquare, ListOrdered, DollarSign, CalendarClock, Info, Sparkles, UploadCloud, Undo2, Pencil, Lock, Eye, Check, Globe2 } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin, Tag, Layers, ListChecks, CheckSquare, ListOrdered, DollarSign, CalendarClock, Info, Sparkles, UploadCloud, Undo2, Pencil, Lock, Eye, Check, Globe2, AlertCircle, Lightbulb, ExternalLink, User } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePinEntry, type PinnedEntry } from "@/contexts/open-screens-context";
 import { apiClient } from "@/lib/api-client";
@@ -23,11 +23,20 @@ import { TaskDeliverablesEditor } from "./catalog2-deliverables-ui";
 import { AiConfig } from "./catalog2-ai-ui";
 import { CommercialConsistencyBanner } from "./commercial-consistency";
 import { CommercialFieldsCard } from "./catalog2-commercial-ui";
-import { ConnectionsSection } from "./catalog2-connections-ui";
+import { ConnectionsSection, AccessesSummary } from "./catalog2-connections-ui";
+import { TaskSummaryCard } from "./task-summary";
+import { ClearTaskButton, RestoreTaskPanel } from "./task-clear";
+import { createPortal } from "react-dom";
+import { SpecialtyCombobox } from "./specialty-combobox";
+import { OptionExamples } from "./option-examples-ui";
+import { OptionStepAdjustments } from "./option-step-adjust-ui";
+import { StepDetailsSummary } from "./step-details-summary";
+import { UnsavedChangesDialog, type UnsavedMode } from "./unsaved-dialog";
+import { ConfirmDeleteButton, EditableVariationName } from "./variation-actions-ui";
 import { StepChecklistDialog, checklistCount, type ChecklistItem } from "./catalog2-step-checklist-ui";
 import { AudienceCard } from "./catalog2-audience-ui";
 import { AiFreeChangesCard } from "./catalog2-ai-free-changes";
-import { StepAccessPicker } from "./step-access-picker";
+import { accessPatch } from "./step-access-picker";
 import { APPROVER_OPTIONS, applyApprover, approverOf, enforceApprover, type ApproverMode } from "./step-approver";
 import { FieldHelpLayer } from "./field-help-layer";
 import { AccessCatalogDialog, accessCount, typeSummary } from "./catalog2-access-catalog-ui";
@@ -71,12 +80,30 @@ const EXEC_MODES = [["humano", "Humano"], ["ia", "IA"], ["hibrido", "Humano ou I
 
 export function ProductEditor({ productId, onBack, pin, notice }: { productId: string; onBack: () => void; pin?: PinnedEntry; notice?: React.ReactNode }) {
   const [product, setProduct] = useState<any>(null);
-  const [refs, setRefs] = useState<{ pillars: any[]; fourF: any[]; categories: any[]; specialties: any[]; questionnaires: any[] }>({ pillars: [], fourF: [], categories: [], specialties: [], questionnaires: [] });
-  const [selectedVersionId, setSelectedVersionId] = useState<string>("");
-  const [editorTab, setEditorTab] = useState("info");
+  const [refs, setRefs] = useState<{ pillars: any[]; fourF: any[]; categories: any[]; specialties: any[]; questionnaires: any[]; qualifierPercent: number | null }>({ pillars: [], fourF: [], categories: [], specialties: [], questionnaires: [], qualifierPercent: null });
+  // Posição na tela: ao dar F5 (ou Ctrl+R) a pessoa volta exatamente para o passo, a sub-aba, a versão, o modo de edição
+  // e a rolagem onde estava. Guardado na sessão da aba (some ao fechar a aba) — não vai para o servidor.
+  const stateKey = `allka:product-editor:${productId}`;
+  const restored = useRef<{ tab?: string; sub?: Record<string, string>; ver?: string; edit?: boolean; y?: number; win?: number } | null>(null);
+  if (restored.current === null) {
+    let s: any = null;
+    try { s = JSON.parse(typeof window !== "undefined" ? window.sessionStorage.getItem(stateKey) ?? "null" : "null"); } catch { s = null; }
+    restored.current = s && typeof s === "object" ? s : {};
+  }
+  const [selectedVersionId, setSelectedVersionId] = useState<string>(restored.current?.ver ?? "");
+  const [editorTab, setEditorTab] = useState(restored.current?.tab && ["info", "entrega", "opcoes", "precos", "revisao"].includes(restored.current.tab) ? restored.current.tab : "info");
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
   const [highlightTaskIds, setHighlightTaskIds] = useState<string[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
+  // Aviso visível de salvamento: "Salvando…" (azul), salvo (verde) e erro (vermelho, fica até fechar).
+  const [toast, setToast] = useState<{ kind: "saving" | "ok" | "error"; text: string } | null>(null);
+  const toastTimer = useRef<number | null>(null);
+  const showToast = useCallback((kind: "saving" | "ok" | "error", text: string) => {
+    if (toastTimer.current) { window.clearTimeout(toastTimer.current); toastTimer.current = null; }
+    setToast({ kind, text });
+    if (kind === "ok") toastTimer.current = window.setTimeout(() => setToast(null), 3500);
+  }, []);
+  useEffect(() => () => { if (toastTimer.current) window.clearTimeout(toastTimer.current); }, []);
   const [screenNotifications, setScreenNotifications] = useState<{ id: string; content: React.ReactNode }[]>([]);
   const [screenNotificationsOpen, setScreenNotificationsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,7 +111,14 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   // à aba/sub-aba/campo certo e destaca em amarelo até o item ficar resolvido.
   const [loadCount, setLoadCount] = useState(0);
   const [accessCatalogOpen, setAccessCatalogOpen] = useState(false);
-  const [subTabs, setSubTabs] = useState({ opcoes: "class", entrega: "tarefas", revisao: "preview" });
+  // "add" = adicionar acesso geral ao produto · "manage" = só configurar os tipos pré-definidos (aberto pelo botão da lista das etapas).
+  const [accessCatalogMode, setAccessCatalogMode] = useState<"add" | "manage">("add");
+  useEffect(() => {
+    const open = () => { setAccessCatalogMode("manage"); setAccessCatalogOpen(true); };
+    window.addEventListener("catalog2:manage-access-types", open);
+    return () => window.removeEventListener("catalog2:manage-access-types", open);
+  }, []);
+  const [subTabs, setSubTabs] = useState<{ opcoes: string; entrega: string; revisao: string }>({ opcoes: "class", entrega: "tarefas", revisao: "preview", ...(restored.current?.sub ?? {}) });
   const entregaInfo = {
     tarefas: { title: "Tarefas e etapas", text: "Roxo identifica tarefas e seus números; azul identifica as etapas. Verde indica modelo global ou configuração válida." },
     cond: { title: "Prazos e condições", text: "Cadastre regras reais de gatilho e efeito. Elas podem alterar prazo, preço, tarefas, etapas ou entregáveis conforme a contratação." },
@@ -117,11 +151,44 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
     return () => window.removeEventListener("allka:open-pricing", open);
   }, []);
   const autoDraftRef = useRef<{ promise: Promise<void> | null; draftId: string | null; baseId: string | null }>({ promise: null, draftId: null, baseId: null });
+  // "Salvar rascunho" só fica ativo depois que algo mudou desde o último salvamento (ou desde que a tela abriu).
+  const [dirty, setDirtyState] = useState(false);
+  const dirtyRef = useRef(false);
+  // Marca "tem alteração" FORA do evento de digitação (adiado): o campo que está sendo digitado não é re-renderizado junto
+  // com o editor inteiro no primeiro caractere.
+  const markDirty = useCallback(() => {
+    if (dirtyRef.current) return;
+    dirtyRef.current = true;
+    window.setTimeout(() => setDirtyState(true), 0);
+  }, []);
+  const setDirty = useCallback((v: boolean) => { dirtyRef.current = v; setDirtyState(v); }, []);
+  const [starting, setStarting] = useState(false);
+  // Largura da barra de rolagem da área de conteúdo: o cabeçalho (fora da rolagem) usa a mesma folga à direita,
+  // para cabeçalho, checklist, passos e cartões terem exatamente a mesma largura e as mesmas margens.
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [barW, setBarW] = useState(0);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) { setBarW(0); return; }
+    const measure = () => setBarW(Math.max(0, el.offsetWidth - el.clientWidth));
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  });
   const [pubDlg, setPubDlg] = useState<{ val: any } | null>(null);
   // Saída com rascunho novo NÃO salvo e com alterações: pergunta antes de descartar.
   const [leaveDlg, setLeaveDlg] = useState<"close" | "lock" | null>(null);
   // Visualização do cliente DENTRO do editor (mostra a versão aberta, rascunho ou publicada).
   const [previewOpen, setPreviewOpen] = useState(false);
+  const forms = useRef(new Map<string, OpenFormApi>());
+  const registerForm = useCallback((id: string, api: OpenFormApi) => { forms.current.set(id, api); return () => { if (forms.current.get(id) === api) forms.current.delete(id); }; }, []);
+  const dirtyForms = () => [...forms.current.values()].filter((f) => f.isDirty());
+  const [unsavedDlg, setUnsavedDlg] = useState<UnsavedMode | null>(null);
+  const [unsavedBusy, setUnsavedBusy] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
   const flushers = useRef(new Set<() => Promise<void>>());
   const registerFlusher = useCallback((fn: () => Promise<void>) => { flushers.current.add(fn); return () => { flushers.current.delete(fn); }; }, []);
   async function flushPending() { for (const fn of [...flushers.current]) await fn(); }
@@ -190,23 +257,71 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   }, [product?.internal_name, productId, setIallkaScreenContext]);
 
   const load = useCallback(async () => {
-    const [p, pil, ff, cat, sp, qn] = await Promise.all([
+    const [p, pil, ff, cat, sp, qn, ps] = await Promise.all([
       apiClient.getCatalog2Product(productId),
       apiClient.getCatalog2Pillars(),
       apiClient.getCatalog2FourF(),
       apiClient.getCatalog2Categories(),
       apiClient.getCatalog2Specialties(),
       apiClient.getCatalog2Questionnaires(),
+      Promise.resolve(apiClient.getCatalog2PricingSettings()).catch(() => null),
     ]);
     const cur = p;
     setProduct(cur);
-    setRefs({ pillars: pil.data, fourF: ff.data, categories: cat.data, specialties: sp.data, questionnaires: qn.data });
+    setRefs({ pillars: pil.data, fourF: ff.data, categories: cat.data, specialties: sp.data, questionnaires: qn.data, qualifierPercent: (ps as any)?.human_review_percent ?? null });
     setSelectedVersionId((sel) => sel && cur.versions.some((v: any) => v.id === sel) ? sel : (cur.versions.find((v: any) => v.state === "rascunho")?.id ?? cur.versions.find((v: any) => v.id === cur.published_version_id)?.id ?? cur.versions[0]?.id ?? ""));
     setLoading(false);
     setLoadCount((c) => c + 1);
   }, [productId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // ── Guardar/restaurar a posição (F5 volta para o mesmo lugar) ────────────
+  const scrollPos = useRef({ y: restored.current?.y ?? 0, win: restored.current?.win ?? 0 });
+  const persistState = useCallback(() => {
+    try {
+      window.sessionStorage.setItem(stateKey, JSON.stringify({ tab: editorTab, sub: subTabs, ver: selectedVersionId, edit: editMode, y: scrollPos.current.y, win: scrollPos.current.win }));
+    } catch { /* sessão indisponível: segue sem restaurar */ }
+  }, [stateKey, editorTab, subTabs, selectedVersionId, editMode]);
+  useEffect(() => { if (!loading) persistState(); }, [loading, persistState]);
+  useEffect(() => {
+    const scrollParent = (el: HTMLElement | null): HTMLElement | null => {
+      for (let n = el?.parentElement ?? null; n; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight) return n;
+      }
+      return null;
+    };
+    let t = 0;
+    const onScroll = () => {
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        const sp = scrollParent(document.getElementById("catalog2-editor-tabs"));
+        scrollPos.current = { y: sp?.scrollTop ?? scrollPos.current.y, win: window.scrollY };
+        persistState();
+      }, 150);
+    };
+    document.addEventListener("scroll", onScroll, true);
+    return () => { document.removeEventListener("scroll", onScroll, true); window.clearTimeout(t); };
+  }, [persistState]);
+  // Depois do primeiro carregamento: reabre a edição (só se a versão guardada for um RASCUNHO, sem criar nada) e volta a rolagem.
+  const didRestore = useRef(false);
+  useEffect(() => {
+    if (didRestore.current || loading || !product) return;
+    didRestore.current = true;
+    const r = restored.current ?? {};
+    const ver = product.versions.find((v: any) => v.id === selectedVersionId);
+    if (r.edit && ver?.state === "rascunho") setEditMode(true);
+    const apply = () => {
+      const el = document.getElementById("catalog2-editor-tabs");
+      for (let n = el?.parentElement ?? null; n; n = n.parentElement) {
+        const oy = getComputedStyle(n).overflowY;
+        if ((oy === "auto" || oy === "scroll") && n.scrollHeight > n.clientHeight) { n.scrollTop = r.y ?? 0; break; }
+      }
+      if (r.win) window.scrollTo(0, r.win);
+    };
+    if ((r.y ?? 0) > 0 || (r.win ?? 0) > 0) [120, 500, 1200].forEach((ms) => window.setTimeout(apply, ms));
+  }, [loading, product, selectedVersionId]);
 
   // Prévia local: os chips da tarefa precisam acompanhar a escolha antes do
   // salvamento. Persistência continua exclusivamente no botão de salvar; ao
@@ -292,7 +407,11 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   // há rascunho, cria o próximo (v2, v3…) — se ninguém mudar nada, é descartado
   // ao fechar (ver closeEditor).
   async function startEditing() {
+    if (starting) return;
     setMsg(null);
+    setStarting(true);
+    const needsNewVersion = version?.state === "publicada" && !product.versions.some((v: any) => v.state === "rascunho");
+    if (needsNewVersion) showToast("saving", "Preparando a edição… aguarde um instante antes de digitar.");
     try {
       if (version?.state === "publicada") {
         const draft = product.versions.find((v: any) => v.state === "rascunho");
@@ -307,8 +426,12 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         }
       }
       setEditMode(true);
+      if (needsNewVersion) setToast(null);
     } catch (e: any) {
       setMsg(e?.message ?? "Não foi possível iniciar a edição.");
+      if (needsNewVersion) showToast("error", e?.message ?? "Não foi possível iniciar a edição.");
+    } finally {
+      setStarting(false);
     }
   }
 
@@ -370,15 +493,26 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   }
 
   async function closeEditor() {
+    // Itens abertos sem salvar, ou rascunho ainda não guardado: pergunta antes de sair.
+    if (dirty || dirtyForms().length > 0) { setUnsavedDlg("close"); return; }
+    await closeNow();
+  }
+  async function closeNow() {
     await flushPending();
     const st = await unsavedDraftStatus();
     if (st === "changed") { setLeaveDlg("close"); return; }
     if (st === "unchanged") await discardUnsavedDraft();
+    try { window.sessionStorage.removeItem(stateKey); window.sessionStorage.removeItem(OPEN_STORE_KEY); openStoreCache = null; } catch { /* ok */ }
     onBack();
   }
 
   // "Travar edição": volta ao modo leitura; se o rascunho é novo e não foi salvo, some e volta a publicada.
   async function stopEditing() {
+    // Etapa aberta sem salvar, ou rascunho ainda não guardado: confirma antes de travar.
+    if (dirty || dirtyForms().length > 0) { setUnsavedDlg("lock"); return; }
+    await lockNow();
+  }
+  async function lockNow() {
     await flushPending();
     const st = await unsavedDraftStatus();
     if (st === "changed") { setLeaveDlg("lock"); return; }
@@ -392,27 +526,79 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
     setEditMode(false);
   }
 
-  // "Salvar rascunho": mantém o rascunho (não será mais descartado ao sair) e trava a edição.
-  async function saveDraft() {
-    await flushPending();
-    const n = version?.version_number;
-    autoDraftRef.current = { promise: null, draftId: null, baseId: null };
-    setEditMode(false);
-    setMsg(`Rascunho v${n} salvo. Ele aparece no seletor de versões e continua aqui quando você voltar; a versão publicada segue igual até você publicar.`);
+  // "Salvar rascunho": grava tudo o que está aberto e mantém o rascunho (não será mais descartado ao sair).
+  // A edição CONTINUA ATIVA: dá para seguir configurando e passar de um passo a outro sem clicar em "Editar" de novo.
+  // Para travar, use "Travar edição".
+  async function saveDraft(confirmed = false): Promise<boolean> {
+    const pend = dirtyForms();
+    // Há etapa(s) aberta(s) com alteração não salva: avisa que o rascunho salva tudo junto.
+    if (pend.length > 0 && !confirmed) { setUnsavedDlg("draft"); return false; }
+    showToast("saving", "Salvando rascunho…");
+    try {
+      for (const f of pend) await f.save();
+      await flushPending();
+      const n = version?.version_number;
+      autoDraftRef.current = { promise: null, draftId: null, baseId: null };
+      setDirty(false);
+      const text = `Rascunho v${n} salvo. Você pode continuar editando; use “Travar edição” quando terminar. A versão publicada segue igual até você publicar.`;
+      setMsg(text);
+      showToast("ok", `Rascunho v${n} salvo com sucesso`);
+      return true;
+    } catch (e: any) {
+      const message = e?.message ?? "Não foi possível salvar o rascunho.";
+      setMsg(message);
+      showToast("error", `Não foi possível salvar: ${message}`);
+      return false;
+    }
+  }
+
+  // Respostas da confirmação de itens não salvos.
+  async function unsavedSave() {
+    const mode = unsavedDlg; setUnsavedBusy(true);
+    try {
+      const ok = await saveDraft(true);
+      setUnsavedDlg(null);
+      if (!ok) return;
+      if (mode === "lock") await lockNow();
+      else if (mode === "close") await closeNow();
+    } finally { setUnsavedBusy(false); }
+  }
+  async function unsavedDiscard() {
+    const mode = unsavedDlg; setUnsavedBusy(true);
+    try {
+      for (const f of dirtyForms()) f.discard();
+      setUnsavedDlg(null);
+      const hadNewVersion = !!autoDraftRef.current.draftId;
+      if (hadNewVersion) await discardUnsavedDraft();
+      if (mode === "close") {
+        try { window.sessionStorage.removeItem(stateKey); window.sessionStorage.removeItem(OPEN_STORE_KEY); openStoreCache = null; } catch { /* ok */ }
+        onBack();
+        return;
+      }
+      await load();
+      if (hadNewVersion) setSelectedVersionId(product?.published_version_id ?? product?.versions.find((v: any) => v.state === "publicada")?.id ?? "");
+      setDirty(false);
+      setResetKey((k) => k + 1); // remonta a tela: campos voltam ao que está guardado
+      setEditMode(false);
+    } finally { setUnsavedBusy(false); }
   }
 
   async function act(fn: () => Promise<any>, ok?: string | ((r: any) => string | undefined), opts?: { rethrow?: boolean }) {
     setMsg(null);
+    showToast("saving", "Salvando…");
     try {
       const r = await fn();
       const okMsg = typeof ok === "function" ? ok(r) : ok;
       if (okMsg) setMsg(okMsg);
+      showToast("ok", okMsg || "Salvo com sucesso");
+      markDirty();
       await load();
       return r;
     }
     catch (e: any) {
       const message = e?.message ?? "Falha na operação.";
       setMsg(message);
+      showToast("error", message);
       if (opts?.rethrow) throw e instanceof Error ? e : new Error(message);
     }
   }
@@ -423,9 +609,26 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   return (
     <RingCtx.Provider value={ringOf}>
     <FlushCtx.Provider value={registerFlusher}>
+    <FormsCtx.Provider value={registerForm}>
+    <RefsCtx.Provider value={refs}>
     <FieldHelpLayer>
-    <div className="product-editor relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-[#dfe5f6] p-3 dark:bg-slate-950">
-      {!previewOpen && <EditorHeader
+    <div key={resetKey} className="product-editor relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-[#dfe5f6] p-3 dark:bg-slate-950"
+      onChangeCapture={() => { if (editMode) markDirty(); }} onInputCapture={() => { if (editMode) markDirty(); }}>
+      {/* Aviso de salvamento: no CENTRO da tela e por cima de tudo (fora do editor, direto no <body>, para nenhuma camada cobrir). */}
+      {toast && typeof document !== "undefined" && createPortal(
+        <div className="pointer-events-none fixed inset-0 z-[2147483000] flex items-center justify-center p-4">
+          <div role={toast.kind === "error" ? "alert" : "status"} aria-live="polite" data-testid={`save-toast-${toast.kind}`}
+            className={`pointer-events-auto flex max-w-lg items-center gap-3 rounded-2xl border-2 px-6 py-4 text-base font-bold shadow-2xl ${toast.kind === "ok" ? "border-emerald-400 bg-emerald-50 text-emerald-900" : toast.kind === "error" ? "border-red-400 bg-red-50 text-red-900" : "border-sky-400 bg-sky-50 text-sky-900"}`}>
+            {toast.kind === "saving" ? <Loader2 className="h-6 w-6 shrink-0 animate-spin" /> : toast.kind === "ok" ? <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600" /> : <X className="h-6 w-6 shrink-0 text-red-600" />}
+            <span className="min-w-0 flex-1 break-words">{toast.text}</span>
+            {toast.kind === "error" && <button type="button" aria-label="Fechar aviso" className="ml-1 shrink-0 rounded-md p-1 hover:bg-red-100" onClick={() => setToast(null)}><X className="h-4 w-4" /></button>}
+          </div>
+        </div>,
+        document.body,
+      )}
+      <UnsavedChangesDialog mode={unsavedDlg} labels={dirtyForms().map((f) => f.label)} hasNewVersion={!!autoDraftRef.current.draftId} draftChanged={dirty} busy={unsavedBusy}
+        onSave={() => void unsavedSave()} onDiscard={() => void unsavedDiscard()} onCancel={() => setUnsavedDlg(null)} />
+      {!previewOpen && <div className="shrink-0" style={{ marginRight: barW }} data-testid="editor-header-wrap"><EditorHeader
         product={product}
         selectedVersionId={selectedVersionId}
         onSelectVersion={setSelectedVersionId}
@@ -446,7 +649,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         canNewVersion={!!product.published_version_id && !product.versions.some((v: any) => v.state === "rascunho")}
         onNewVersion={() => act(() => apiClient.newCatalog2Version(productId), "Nova versão rascunho criada.")}
         pin={pin}
-      />}
+      /></div>}
       <ConfirmationDialog
         open={leaveDlg !== null}
         onClose={() => setLeaveDlg(null)}
@@ -472,8 +675,8 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         </div>
       )}
       <div className={`min-h-0 flex-1 flex-col ${previewOpen ? "hidden" : "flex"}`}>
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 pb-3">
-      <ProductReadinessPanel productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onGoDetail={goToReadinessAdjustment} onItems={setReadinessItems} onData={setReadinessData} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} detailTargetFor={(key: string, index: number) => readinessDetailTargets(key, product, version, readinessItems?.[key]?.note)[index]} />
+      <div ref={scrollerRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-3">
+      <ProductReadinessPanel taskName={(version?.tasks ?? [])[0]?.name} productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onGoDetail={goToReadinessAdjustment} onItems={setReadinessItems} onData={setReadinessData} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} detailTargetFor={(key: string, index: number) => readinessDetailTargets(key, product, version, readinessItems?.[key]?.note)[index]} />
 
       {version && (
         <Tabs value={editorTab} onValueChange={setEditorTab}>
@@ -481,8 +684,8 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
               continuam todas aqui — reagrupadas, nada removido. */}
           <Stepper current={editorTab} onSelect={(t: string) => { void flushPending().then(() => setEditorTab(t)); }} items={readinessItems} />
 
-          <KeepTabsContent value="info" className="mt-3">
-            <div className="mb-3 space-y-2"><ProductCounts version={version} /><AudienceCard product={product} readOnly={!product} onDone={() => void load()} /><AiFreeChangesCard key={product?.id ?? "novo"} product={product} readOnly={!product} /></div>
+          <KeepTabsContent value="info" className="mt-2">
+            <div className="mb-3 space-y-2"><ProductCounts version={version} /><AudienceCard product={product} readOnly={!product || readOnly} registerFlush={registerFlusher} onDone={() => void load()} /><AiFreeChangesCard version={version} /></div>
             <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} />
           </KeepTabsContent>
 
@@ -495,23 +698,22 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
                 <TabsTrigger value="add" className={SUB_TAB}><Plus className="h-3.5 w-3.5" />Adicionais</TabsTrigger>
                 <TabsTrigger value="cond" className={SUB_TAB}><Clock className="h-3.5 w-3.5" />Prazos e condições</TabsTrigger>
               </TabsList>
-              <KeepTabsContent value="class"><ClassTab product={product} refs={refs} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></KeepTabsContent>
+              <KeepTabsContent value="class"><ClassTab readOnly={readOnly} product={product} refs={refs}highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></KeepTabsContent>
               <KeepTabsContent value="var"><div id="sec-var" className={secRing("sec-var")}><VariationsTab version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
               <KeepTabsContent value="add"><div id="sec-add" className={secRing("sec-add")}><AddonsTab version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
               <KeepTabsContent value="cond"><EmergencyCard version={version} readOnly={readOnly} act={act} /><ConditionsTab version={version} readOnly={readOnly} act={act} /><div className="mt-4 space-y-4"><p className="rounded-lg bg-white/70 px-3 py-2 text-xs text-slate-600 dark:bg-slate-900/40 dark:text-slate-300">Aprovações e prazos GERAIS do produto (implantação, ciclo recorrente, relatório, publicação…). A aprovação e o prazo de cada etapa se configuram dentro da própria etapa (aba Tarefa e etapas).</p><ApprovalGatesSection version={version} readOnly={readOnly} act={act} /><SlaRulesSection version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
             </Tabs>
           </KeepTabsContent>
 
-          <KeepTabsContent value="entrega" className="mt-3 space-y-3">
+          <KeepTabsContent value="entrega" className="mt-2 space-y-2">
             <div className="mb-3 space-y-3">
               <DeliveryCommercialOverview version={version} readOnly={readOnly} act={act} ringOf={ringOf} locked={!editMode} />
-              <AccessCatalogDialog open={accessCatalogOpen} onOpenChange={setAccessCatalogOpen} version={version} readOnly={readOnly} act={act} />
-              <PersistDetails persistKey="d1" id="sec-connections" className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[30px] cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Lock className="h-4 w-4" /></span>Acessos necessários{!readOnly && <button type="button" data-testid="add-access-header" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setAccessCatalogOpen(true); }} className="ml-2 inline-flex h-7 items-center gap-1 rounded-lg border border-violet-300 bg-white px-2.5 text-[11px] font-semibold text-violet-700 hover:bg-violet-50"><Plus className="h-3.5 w-3.5" />Adicionar acesso</button>}<span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-semibold ${accessCount(version) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{accessCount(version) > 0 ? `${accessCount(version)} configurado${accessCount(version) === 1 ? "" : "s"}` : "1 acesso pendente"}</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3 min-w-0 space-y-4"><ConnectionsSection version={version} readOnly={readOnly} act={act} /></div></PersistDetails>
+              <AccessCatalogDialog open={accessCatalogOpen} onOpenChange={setAccessCatalogOpen} version={version} readOnly={readOnly} act={act} mode={accessCatalogMode} />
             </div>
             <Tabs value={subTabs.entrega} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, entrega: v }))}>
               <div className="flex items-center gap-3">
                 <TabsList className={`${SUB_TABS_LIST} !gap-0.5 !p-0.5`}>
-                  <TabsTrigger value="tarefas" className={`${SUB_TAB} !px-2.5 !py-1 !text-xs`}><ListOrdered className="h-3.5 w-3.5" />{product?.task_structure === "single" ? "Tarefa e etapas" : "Tarefas e etapas"}</TabsTrigger>
+                  <TabsTrigger value="tarefas" className={`${SUB_TAB} !px-2.5 !py-1 !text-xs`}><ListOrdered className="h-3.5 w-3.5" />{product?.task_structure === "single" ? "Tarefa" : "Tarefas"}</TabsTrigger>
                 </TabsList>
                 <span className="min-w-0 flex-1 truncate text-[11px] text-violet-900 dark:text-violet-100" data-testid="task-structure-banner" title={product?.task_structure === "single" ? "Produto individual: uma tarefa principal. Todo o trabalho é dividido em etapas dentro da tarefa. Várias tarefas só existem em combos (tela de Combos)." : "Cada tarefa é um bloco de trabalho; as etapas são o passo a passo de cada uma."}><strong>{product?.task_structure === "single" ? "Produto individual: uma tarefa principal." : "Produto composto (combo): várias tarefas."}</strong> {product?.task_structure === "single" ? "Todo o trabalho é dividido em etapas." : "As etapas são o passo a passo de cada tarefa."}</span>
                 <div className="ml-auto flex items-center gap-1 text-[11px]">
@@ -522,6 +724,8 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
               </div>
               <KeepTabsContent value="tarefas"><TasksTab taskStructure={product?.task_structure ?? "multiple"} version={version} productId={productId} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} editTaskId={taskEditRequest} onOpenPricing={openPricingFromTask} /></KeepTabsContent>
             </Tabs>
+            {/* Acessos necessários: fica DEPOIS das tarefas. Os acessos são cadastrados dentro de cada etapa; aqui é o resumo de tudo o que foi pedido. */}
+            <PersistDetails persistKey="d1" id="sec-connections" className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[30px] cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Lock className="h-4 w-4" /></span><span>Acessos necessários<span className="field-info" data-help="Resumo de todos os acessos pedidos no produto: onde cada um foi cadastrado, em quais etapas é usado e se está disponível para outras etapas. Para pedir um acesso, cadastre dentro da etapa (Conexões e acessos desta etapa)." aria-hidden="true">i</span></span><span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-semibold ${accessCount(version) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{accessCount(version) > 0 ? `${accessCount(version)} configurado${accessCount(version) === 1 ? "" : "s"}` : "nenhum pedido"}</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3 min-w-0 space-y-2"><p className="text-[11px] text-slate-500">Resumo, só leitura: os acessos de cada etapa. Para pedir um acesso, abra a etapa e use “Conexões e acessos desta etapa”.</p><AccessesSummary version={version} act={act} readOnly={readOnly} /></div></PersistDetails>
           </KeepTabsContent>
 
           <KeepTabsContent value="precos" className={TAB_CARD}>
@@ -559,19 +763,19 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         return (
           <div className="flex h-[52px] shrink-0 items-center gap-2 border-t border-white/70 bg-[#dfe5f6] px-1 pt-2 dark:border-slate-700/60 dark:bg-slate-950">
             <div className="flex min-w-0 items-center gap-1.5">
-              <Button variant="outline" className="h-8 gap-1 px-2.5 text-xs" disabled={!prev} onClick={() => prev && go(prev.id)}><ArrowLeft className="h-3.5 w-3.5" /> {prev ? "Voltar" : "Início"}</Button>
-              <span className="text-xs font-medium text-slate-500">Passo {idx + 1} de {EDITOR_STEPS.length}</span>
+              {/* Navegação direta: "Início" só aparece no passo 2; do passo 3 em diante volta para o passo anterior; no passo 1 só há o "próximo". */}
+              {prev && <Button variant="outline" className="h-8 gap-1 px-2.5 text-xs" onClick={() => go(prev.id)}><ArrowLeft className="h-3.5 w-3.5" /> {idx === 1 ? "Início" : `Passo ${idx}: ${prev.label.split(":")[0]}`}</Button>}
               <Button style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="h-8 gap-1 px-2.5 text-xs text-white shadow-md hover:brightness-110 disabled:opacity-55" disabled={!next} onClick={() => next && go(next.id)}>{next ? `Passo ${idx + 2}: ${next.label.split(":")[0]}` : "Fim"} <ChevronRight className="h-3.5 w-3.5" /></Button>
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-1.5">
               <Button variant="outline" onClick={() => setScreenNotificationsOpen((open) => !open)} className="relative h-8 gap-1.5 px-2.5 text-xs" title="Avisos desta tela"><ListChecks className="h-3.5 w-3.5" /> Avisos{screenNotifications.length > 0 && <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold text-white">{screenNotifications.length}</span>}</Button>
               {fmtUpdatedAt(version.updated_at ?? product.updated_at) && <span className="hidden text-[11px] text-slate-500 2xl:inline">Atualizado: {fmtUpdatedAt(version.updated_at ?? product.updated_at)}</span>}
               {!editMode ? (
-                <Button onClick={() => void startEditing()} className="h-8 gap-1.5 bg-[#1b2559] px-3 text-xs text-white hover:bg-[#253277]"><Pencil className="h-3.5 w-3.5" /> Editar</Button>
+                <Button onClick={() => void startEditing()} disabled={starting} className="h-8 gap-1.5 bg-[#1b2559] px-3 text-xs text-white hover:bg-[#253277]">{starting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />} {starting ? "Abrindo…" : "Editar"}</Button>
               ) : (
                 <>
                   <Button variant="outline" onClick={() => void stopEditing()} className="h-8 gap-1.5 px-2.5 text-xs"><Lock className="h-3.5 w-3.5" /> Travar edição</Button>
-                  {version.state !== "publicada" && <Button onClick={() => void saveDraft()} className="h-8 gap-1.5 bg-[#1b2559] px-3 text-xs text-white hover:bg-[#253277]"><Save className="h-3.5 w-3.5" /> Salvar rascunho</Button>}
+                  {version.state !== "publicada" && <Button onClick={() => void saveDraft()} disabled={!dirty} title={dirty ? "Salvar as alterações como rascunho" : "Já está salvo — nenhuma alteração desde o último salvamento"} className="h-8 gap-1.5 bg-[#1b2559] px-3 text-xs text-white hover:bg-[#253277] disabled:opacity-50"><Save className="h-3.5 w-3.5" /> {dirty ? "Salvar rascunho" : "Rascunho salvo"}</Button>}
                   {canPublish && <Button onClick={() => void requestPublish()} style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="h-8 gap-1.5 px-3 text-xs text-white shadow-md hover:brightness-110"><UploadCloud className="h-3.5 w-3.5" /> Publicar</Button>}
                 </>
               )}
@@ -646,6 +850,8 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         );
       })()}
     </FieldHelpLayer>
+    </RefsCtx.Provider>
+    </FormsCtx.Provider>
     </FlushCtx.Provider>
     </RingCtx.Provider>
   );
@@ -906,6 +1112,11 @@ const RingCtx = createContext<(id: string) => string>(() => "");
 // Campos com botão "Salvar" próprio se registram aqui: o editor grava o que está digitado
 // antes de salvar rascunho, abrir a prévia, trocar de etapa, publicar ou sair.
 const FlushCtx = createContext<(fn: () => Promise<void>) => () => void>(() => () => {});
+// Formulários com botão próprio de salvar (ex.: "Salvar etapa"): o editor sabe quais estão abertos com alteração NÃO salva.
+export interface OpenFormApi { label: string; isDirty: () => boolean; save: () => Promise<void>; discard: () => void }
+const FormsCtx = createContext<(id: string, api: OpenFormApi) => () => void>(() => () => {});
+// Cadastros de apoio (especialidades etc.) para componentes fundos que só precisam consultar.
+const RefsCtx = createContext<any>(null);
 
 function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clearHighlight }: any) {
   const ringOf = useContext(RingCtx);
@@ -999,7 +1210,8 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
       {!readOnly && (
         <div className="flex flex-wrap items-center gap-3 pt-1">
           <button type="button" data-testid="open-ai-chat" onClick={() => setAiChatOpen(true)} title="A IA conversa com você e preenche o produto inteiro a partir de uma explicação" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] px-3 text-xs font-semibold text-white shadow-sm transition hover:brightness-110"><Sparkles className="h-3.5 w-3.5" />Preencher o produto com IA</button>
-          <SaveButton disabled={savingInfo || (f.summary.length > 500 && f.summary !== (version.summary ?? "")) || (f.full_description.length > 4000 && f.full_description !== (version.full_description ?? ""))} onClick={() => void saveInfo()}>{savingInfo ? "Salvando…" : "Salvar informações"}</SaveButton>
+          {/* Sem botão "Salvar informações": o texto é gravado junto com "Salvar rascunho" (rodapé), publicar ou ao trocar de passo. */}
+          {savingInfo && <span role="status" className="text-xs text-slate-500">Salvando…</span>}
           {fmtUpdatedAt(version?.updated_at) && <span className="text-xs text-slate-500 dark:text-slate-400">Última atualização: {fmtUpdatedAt(version.updated_at)}</span>}
           <ProductAiChatDialog open={aiChatOpen} onOpenChange={setAiChatOpen} productId={product.id} readOnly={readOnly} onApply={applyAiDraft} />
           {infoSaved && <p role="status" className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">✓ Informações salvas.</p>}
@@ -1035,8 +1247,9 @@ function ChangeSummaryAiButton({ versionId, onResult, disabled, compact = false 
 }
 
 // ── 2. Classificações ─────────────────────────────────────────────────
-function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight }: any) {
+function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight, readOnly }: any) {
   const ringOf = useContext(RingCtx);
+  const registerFlusher = useContext(FlushCtx);
   const [pillar, setPillar] = useState(product.pillar?.id ?? "");
   const [category, setCategory] = useState(product.category?.id ?? "");
   const [fourF, setFourF] = useState<string[]>(product.four_f.map((f: any) => f.id));
@@ -1045,46 +1258,71 @@ function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight }: an
     if (category) clearHighlight("catalog2-field-category");
     if (fourF.length > 0) clearHighlight("catalog2-field-four-f");
   });
+  // Sem botão "Salvar classificação": grava junto com "Salvar rascunho", publicar ou ao trocar de passo (como os outros campos).
+  const savedKey = JSON.stringify([product.pillar?.id ?? "", product.category?.id ?? "", [...product.four_f.map((f: any) => f.id)].sort()]);
+  const currentKey = JSON.stringify([pillar, category, [...fourF].sort()]);
+  const stateRef = useRef({ dirty: false, save: saveClassifications, readOnly: !!readOnly });
+  stateRef.current = { dirty: currentKey !== savedKey, save: saveClassifications, readOnly: !!readOnly };
+  useEffect(() => registerFlusher(async () => {
+    const s = stateRef.current;
+    if (s.readOnly || !s.dirty) return;
+    await s.save();
+  }), [registerFlusher]);
   const fourFDescription = (name: string, index: number) => {
     const code = (name.match(/F\s*([1-4])/i)?.[1] ?? String(index + 1));
     return ({ "1": "Estrutura e base", "2": "Aquisição e tráfego", "3": "Oferta e conversão", "4": "Retenção e crescimento" } as Record<string, string>)[code] ?? "Classificação comercial";
   };
   return (
     <div id="catalog2-classification" className="mt-3 scroll-mt-6">
-      <SectionCard icon={Layers} title="Classificação do produto" subtitle="Pilar, categoria e classificações 4F" defaultOpen>
+      <SectionCard icon={Layers} title="Classificação do produto" subtitle="Defina a base comercial e as classificações aplicáveis" defaultOpen>
       <div className="grid items-start gap-4 md:grid-cols-2">
       <section className="space-y-2 md:border-r md:border-slate-200 md:pr-4 dark:md:border-slate-800">
-        <div><h4 className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Base comercial</h4><p className="text-[11px] text-slate-500">Defina o pilar e a categoria do produto.</p></div>
+        <div><h4 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">Base comercial</h4><p className="text-xs text-slate-500">Defina o pilar e a categoria do produto.</p></div>
         <div className="grid gap-3 sm:grid-cols-2">
         <div id="catalog2-field-pillar" className={ringOf("catalog2-field-pillar")}><Field label="Pilar">
-        <select className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value={pillar} onChange={(e) => setPillar(e.target.value)}>
+        <select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 shadow-sm disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value={pillar} onChange={(e) => setPillar(e.target.value)}>
           <option value="">—</option>{refs.pillars.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </Field></div>
       <div id="catalog2-field-category" className={ringOf("catalog2-field-category")}><Field label="Categoria">
-        <select className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value={category} onChange={(e) => setCategory(e.target.value)}>
+        <select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 shadow-sm disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">—</option>{refs.categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </Field></div>
         </div>
       </section>
       <section className="space-y-2">
-        <div><h4 className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Classificações 4F</h4><p className="text-[11px] text-slate-500">Selecione as classificações que se aplicam ao produto.</p></div>
+        <div><h4 className="text-[15px] font-bold text-slate-900 dark:text-slate-100">Classificações 4F<span className="field-info" data-help="As classificações 4F do produto (Fundação, Fluxo, Força e Fidelização). Servem para filtrar e agrupar produtos no catálogo; pode marcar mais de uma." aria-hidden="true">i</span></h4><p className="text-xs text-slate-500">Selecione as classificações que se aplicam ao produto.</p></div>
         <div id="catalog2-field-four-f" className={`grid grid-cols-1 gap-2 sm:grid-cols-2 ${ringOf("catalog2-field-four-f")}`}>
           {refs.fourF.map((f: any, index: number) => {
             const selected = fourF.includes(f.id);
-            return <label key={f.id} className={`flex min-h-[52px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 transition ${selected ? "border-violet-500 bg-violet-50 text-violet-950 shadow-[inset_0_0_0_1px_rgba(124,58,237,.08)] dark:bg-violet-950/30 dark:text-violet-100" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"}`}>
-              <input type="checkbox" className="sr-only" checked={selected} onChange={(e) => setFourF(e.target.checked ? [...fourF, f.id] : fourF.filter((x) => x !== f.id))} />
+            return <label key={f.id} className={`flex min-h-[60px] cursor-pointer items-center gap-3 rounded-xl border-2 px-3.5 py-2 transition ${selected ? "border-violet-500 bg-violet-50/70 text-violet-950 dark:bg-violet-950/30 dark:text-violet-100" : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"}`}>
+              <input type="checkbox" className="sr-only" disabled={readOnly} checked={selected} onChange={(e) => setFourF(e.target.checked ? [...fourF, f.id] : fourF.filter((x) => x !== f.id))} />
               <span className={`grid h-5 w-5 shrink-0 place-items-center rounded border ${selected ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800"}`}>{selected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}</span>
-              <span className="min-w-0"><span className="block text-[12px] font-semibold leading-tight">{f.name}</span><span className="block truncate pt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{fourFDescription(f.name, index)}</span></span>
+              <span className="min-w-0"><span className="block text-[13px] font-bold leading-tight">{f.name}</span><span className="block truncate pt-0.5 text-xs text-slate-500 dark:text-slate-400">{fourFDescription(f.name, index)}</span></span>
             </label>
           })}
         </div>
       </section>
       </div>
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
-        <span className="font-semibold">Divergência encontrada:</span><span>a classificação da planilha principal precisa de decisão comercial.</span><button type="button" className="font-semibold text-violet-700 underline underline-offset-2 dark:text-violet-300">Ver detalhes</button>
-        <span className="ml-auto"><SaveButton onClick={saveClassifications}>Salvar classificação</SaveButton></span>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-800/40" data-testid="class-summary">
+        <span className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
+          <span className={"flex h-7 w-7 items-center justify-center rounded-full text-white " + (fourF.length > 0 ? "bg-emerald-500" : "bg-slate-300")}><Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" /></span>
+          {fourF.length} de {refs.fourF.length} classificações selecionadas
+        </span>
+        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 md:border-l md:border-slate-200 md:pl-4 dark:md:border-slate-700">
+          {refs.fourF.filter((f: any) => fourF.includes(f.id)).map((f: any) => (
+            <span key={f.id} className="inline-flex h-8 items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 text-xs font-semibold text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200">
+              {String(f.name).split(/\s·\s|\s-\s/)[0]}
+              {!readOnly && <button type="button" aria-label={"Remover " + f.name} className="rounded-full p-0.5 hover:bg-violet-200/70" onClick={() => setFourF(fourF.filter((x) => x !== f.id))}><X className="h-3.5 w-3.5" /></button>}
+            </span>
+          ))}
+        </span>
+        {!readOnly && (
+          <span className={"ml-auto flex items-center gap-1.5 text-xs " + (currentKey !== savedKey ? "text-amber-700" : "text-slate-500")} data-testid={currentKey !== savedKey ? "class-pending" : "class-saved"}>
+            {currentKey !== savedKey ? "Alteração pendente — vale ao clicar em “Salvar rascunho”." : <><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />Alterações salvas</>}
+          </span>
+        )}
       </div>
       </SectionCard>
     </div>
@@ -1094,7 +1332,9 @@ function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight }: an
 // ── 3. Variações ─────────────────────────────────────────────────────
 function VariationsTab({ version, readOnly, act }: any) {
   const [nv, setNv] = useState({ name: "" });
+  const [nvInBase, setNvInBase] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [varErr, setVarErr] = useState("");
   const keyFromName = (name: string) => name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   return (
     <div className="mt-3 space-y-3">
@@ -1105,15 +1345,22 @@ function VariationsTab({ version, readOnly, act }: any) {
       {version.variations.map((va: any, vi: number) => (
         <section key={va.id} className="rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
           <div className="flex min-h-[58px] items-center justify-between gap-2 px-3">
-            <div className="flex min-w-0 items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200"><Layers className="h-4 w-4" /></span><span className="min-w-0"><span className="block truncate font-semibold text-slate-800 dark:text-slate-100">{va.name}</span><span className="block text-[11px] text-slate-500">{va.options.length === 1 ? "1 opção disponível" : `${va.options.length} opções disponíveis`}</span></span><Badge className={va.is_required ? "border-0 bg-amber-100 text-amber-800" : "border-0 bg-slate-100 text-slate-600"}>{va.is_required ? "Obrigatória" : "Opcional"}</Badge>{va.options.find((o: any) => o.is_default) && <Badge className="border-0 bg-blue-100 text-blue-700">Padrão: {va.options.find((o: any) => o.is_default)?.label}</Badge>}<Badge className={va.options.some((o: any) => (o.effects ?? []).length > 0) ? "border-0 bg-emerald-100 text-emerald-700" : "border-0 bg-slate-100 text-slate-500"}>{va.options.some((o: any) => (o.effects ?? []).length > 0) ? "Configurada" : "A configurar"}</Badge>{va.is_active === false && <Badge className="border-0 bg-neutral-200 text-neutral-600">Inativa</Badge>}</div>
-            <span className="flex items-center gap-1">{!readOnly && <DeleteBtn label="Remover variação?" tip="Remover esta variação" onConfirm={() => act(() => apiClient.deleteCatalog2Variation(va.id), "Variação removida.")} />}</span>
+            <div className="flex min-w-0 items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200"><Layers className="h-4 w-4" /></span><span className="min-w-0"><EditableVariationName name={va.name} readOnly={readOnly} onRename={(next) => act(() => apiClient.updateCatalog2Variation(va.id, { name: next }), "Nome da variação salvo.")} /><span className="block text-[11px] text-slate-500">{va.options.length === 1 ? "1 opção disponível" : `${va.options.length} opções disponíveis`}</span></span><Badge className={va.is_required ? "border-0 bg-amber-100 text-amber-800" : "border-0 bg-slate-100 text-slate-600"}>{va.is_required ? "Obrigatória" : "Opcional"}</Badge>{va.options.find((o: any) => o.is_default) && <Badge className="border-0 bg-blue-100 text-blue-700">Padrão: {va.options.find((o: any) => o.is_default)?.label}</Badge>}<Badge className={va.options.some((o: any) => (o.effects ?? []).length > 0) ? "border-0 bg-emerald-100 text-emerald-700" : "border-0 bg-slate-100 text-slate-500"}>{va.options.some((o: any) => (o.effects ?? []).length > 0) ? "Configurada" : "A configurar"}</Badge>{va.is_active === false && <Badge className="border-0 bg-neutral-200 text-neutral-600">Inativa</Badge>}</div>
+            <span className="flex flex-wrap items-center justify-end gap-2">
+              <CheckPill disabled={readOnly} checked={va.base_included !== false}
+                hint={"Marcado: o produto ORIGINAL já inclui esta variação. Uma das opções pode ser o 'padrão' (não soma custo) e as outras somam.\nDesmarcado: a variação NÃO existe no produto original; nenhuma opção é padrão e TODAS somam custo."}
+                onChange={(v) => void act(() => apiClient.updateCatalog2Variation(va.id, { base_included: v }), v ? "A variação passa a existir no produto original." : "A variação não existe no produto original: todas as opções somam custo.")}>
+                Já no produto original
+              </CheckPill>
+              {!readOnly && <ConfirmDeleteButton testId="variation-delete" label="Excluir variação" title="Excluir esta variação?" message="A variação e todas as suas opções serão removidas. Esta ação não pode ser desfeita." onConfirm={() => act(() => apiClient.deleteCatalog2Variation(va.id), "Variação removida.")} />}
+            </span>
           </div>
           <VariationEditor va={va} index={vi} list={version.variations} version={version} readOnly={readOnly} act={act} />
         </section>
       ))}
       {!readOnly && adding && (
         <div className="flex flex-wrap items-end gap-2 rounded-[14px] border border-dashed border-violet-300 bg-white p-3 dark:border-violet-800 dark:bg-slate-900/60">
-          <MiniField label="Nome da nova variação"><Input className="h-9 w-72 max-w-full" placeholder="Ex.: Número de campanhas simultâneas" value={nv.name} onChange={(e) => setNv({ name: e.target.value })} /></MiniField><AddBtn onClick={() => nv.name.trim() && act(() => apiClient.addCatalog2Variation(version.id, { key: keyFromName(nv.name), name: nv.name.trim() }), "Variação criada.").then(() => { setNv({ name: "" }); setAdding(false); })}>Criar variação</AddBtn>
+          <MiniField label="Nome da nova variação"><Input className="h-9 w-72 max-w-full" placeholder="Ex.: Número de campanhas simultâneas" value={nv.name} onChange={(e) => { setNv({ name: e.target.value }); setVarErr(""); }} /></MiniField><label className="flex max-w-md items-start gap-2 pb-1 text-xs text-slate-700 dark:text-slate-200"><input type="checkbox" className="mt-0.5 h-4 w-4" checked={nvInBase} onChange={(e) => setNvInBase(e.target.checked)} data-testid="new-variation-in-base" /><span><strong>O produto original já inclui esta variação</strong><br /><span className="text-slate-500">Marcado: uma opção será o “padrão” (já está no produto, não soma custo) e as outras somam. Desmarcado: a variação é um acréscimo e todas as opções somam custo.</span></span></label><AddBtn onClick={() => !nv.name.trim() ? setVarErr("Digite o nome da nova variação antes de clicar em Criar variação.") : (setVarErr(""), act(() => apiClient.addCatalog2Variation(version.id, { key: keyFromName(nv.name), name: nv.name.trim(), base_included: nvInBase }), "Variação criada.").then(() => { setNv({ name: "" }); setAdding(false); }))}>Criar variação</AddBtn>{varErr && <span role="alert" data-testid="add-variation-error" className="text-xs font-semibold text-red-600">{varErr}</span>}
         </div>
       )}
     </div>
@@ -1129,24 +1376,27 @@ function EffectChips({ effects }: { effects: any[] }) {
 function VariationEditor({ va, index, list, version, readOnly, act }: any) {
   const [help, setHelp] = useState(va.notes ?? "");
   const [newLabel, setNewLabel] = useState("");
+  const [addErr, setAddErr] = useState("");
   const putVariation = (body: any, ok: string) => act(() => apiClient.updateCatalog2Variation(va.id, body), ok);
   const type = va.selection_type ?? "single";
   return <div className="space-y-3 border-t border-slate-100 px-3 py-3 dark:border-slate-800">
     <div className="flex flex-wrap items-center gap-3 text-xs">
-      <label className="inline-flex items-center gap-1.5"><span className="font-semibold text-slate-700 dark:text-slate-200">Tipo de escolha</span><select disabled={readOnly} className="h-10 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={type} onChange={(e) => void putVariation({ selection_type: e.target.value }, "Tipo de escolha atualizado.")}><option value="single">Uma opção</option><option value="multiple">Várias opções</option><option value="quantity">Quantidade</option></select></label>
-      <CheckPill disabled={readOnly} checked={!!va.is_required} onChange={(v) => void putVariation({ is_required: v }, "Obrigatoriedade atualizada.")}>Obrigatória</CheckPill>
-      <CheckPill disabled={readOnly} checked={va.is_active !== false} onChange={(v) => void putVariation({ is_active: v }, "Variação atualizada.")}>Ativa</CheckPill>
+      <label className="inline-flex items-center gap-1.5"><span className="font-semibold text-slate-700 dark:text-slate-200">Tipo de escolha<span className="field-info" data-help="Uma opção: o cliente escolhe só uma. Várias opções: pode marcar mais de uma. Quantidade: o cliente informa um número." aria-hidden="true">i</span></span><select disabled={readOnly} className="h-10 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={type} onChange={(e) => void putVariation({ selection_type: e.target.value }, "Tipo de escolha atualizado.")}><option value="single">Uma opção</option><option value="multiple">Várias opções</option><option value="quantity">Quantidade</option></select></label>
+      <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200"><Switch aria-label="Obrigatória" disabled={readOnly} checked={!!va.is_required} onCheckedChange={(v) => void putVariation({ is_required: !!v }, "Obrigatoriedade atualizada.")} />Obrigatória<span className="field-info" data-help="Obrigatória: o cliente precisa escolher uma opção desta variação para contratar." aria-hidden="true">i</span></label>
+      <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200"><Switch aria-label="Ativa" disabled={readOnly} checked={va.is_active !== false} onCheckedChange={(v) => void putVariation({ is_active: !!v }, "Variação atualizada.")} />Ativa<span className="field-info" data-help="Desligada, a variação não aparece para o cliente, mas continua cadastrada." aria-hidden="true">i</span></label>
       {!readOnly && <span className="ml-auto"><IconBtn label="Reordenar variação" onClick={() => void putVariation({ sort_order: Math.max(1, (va.sort_order ?? index + 1) - 1) }, "Ordem atualizada.")}><ListOrdered className="h-4 w-4" /></IconBtn></span>}
     </div>
-    <label className="block"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Ajuda para o cliente</span><Input disabled={readOnly} className="h-10 text-xs" maxLength={2000} value={help} onChange={(e) => setHelp(e.target.value)} onBlur={() => { if (help !== (va.notes ?? "")) void putVariation({ notes: help.trim() || null }, "Ajuda salva."); }} placeholder="Explique como o cliente deve escolher" /></label>
+    <label className="block"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Ajuda para o cliente<span className="field-info" data-help="Texto curto que explica ao cliente como escolher entre as opções desta variação." aria-hidden="true">i</span></span><Input disabled={readOnly} className="h-10 text-xs" maxLength={2000} value={help} onChange={(e) => setHelp(e.target.value)} onBlur={() => { if (help !== (va.notes ?? "")) void putVariation({ notes: help.trim() || null }, "Ajuda salva."); }} placeholder="Explique como o cliente deve escolher" /></label>
     <ul className="space-y-2">
       {va.options.map((option: any, optionIndex: number) => <VariationOptionRow key={option.id} option={option} variation={va} index={optionIndex} list={va.options} version={version} readOnly={readOnly} act={act} />)}
     </ul>
-    {!readOnly && <div className="flex flex-wrap items-center justify-between gap-2 pt-1"><div className="flex items-center gap-2"><Input className="h-8 w-56 text-xs" placeholder="Título da nova opção" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} /><AddBtn onClick={() => newLabel.trim() && act(() => apiClient.addCatalog2Option(va.id, { key: newLabel.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""), label: newLabel.trim() }), "Opção adicionada.").then(() => setNewLabel(""))}>Adicionar opção</AddBtn></div><SaveButton onClick={() => void putVariation({ notes: help.trim() || null }, "Variação salva.")}>Salvar variação</SaveButton></div>}
+    {!readOnly && <div className="flex flex-wrap items-center justify-between gap-2 pt-1"><div className="flex items-center gap-2"><Input className="h-8 w-56 text-xs" placeholder="Título da nova opção" value={newLabel} onChange={(e) => { setNewLabel(e.target.value); setAddErr(""); }} /><AddBtn onClick={() => !newLabel.trim() ? setAddErr("Digite o título da nova opção antes de clicar em Adicionar opção.") : (setAddErr(""), act(() => apiClient.addCatalog2Option(va.id, { key: newLabel.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""), label: newLabel.trim() }), "Opção adicionada.").then(() => setNewLabel("")))}>Adicionar opção</AddBtn>{addErr && <span role="alert" data-testid="add-option-error" className="text-xs font-semibold text-red-600">{addErr}</span>}</div><SaveButton onClick={() => void putVariation({ notes: help.trim() || null }, "Variação salva.")}>Salvar variação</SaveButton></div>}
   </div>;
 }
 
 function VariationOptionRow({ option, variation, index, list, version, readOnly, act }: any) {
+  const refsCtx = useContext(RefsCtx);
+  const [detailOpen, setDetailOpen] = usePersistedFlag(`opt-detail:${option.id}`, false);
   const [label, setLabel] = useState(option.label);
   const [message, setMessage] = useState(option.availability_note ?? "");
   const put = (body: any, ok: string) => act(() => apiClient.updateCatalog2Option(option.id, body), ok);
@@ -1159,19 +1409,88 @@ function VariationOptionRow({ option, variation, index, list, version, readOnly,
   };
   const mediaIcon = option.icon_key === "globe" ? <Globe2 className="h-4 w-4" /> : option.icon_key === "tag" ? <Tag className="h-4 w-4" /> : <Layers className="h-4 w-4" />;
   return <li className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/20">
-    <div className="grid items-center gap-2 lg:grid-cols-[20px_40px_20px_minmax(11rem,1fr)_minmax(11rem,1fr)_minmax(9rem,1fr)_74px_26px]">
-      <span className="cursor-grab text-center text-slate-400" title="A ordem pode ser ajustada pelo menu da opção">⠿</span>
-      <TooltipProvider delayDuration={160}><Tooltip><TooltipTrigger asChild><label className="grid h-9 w-9 cursor-pointer place-items-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-white text-slate-400 hover:border-violet-400 hover:text-violet-600 dark:border-slate-700 dark:bg-slate-900"><input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" disabled={readOnly} onChange={(e) => { const file = e.target.files?.[0]; if (file) saveImage(file); e.currentTarget.value = ""; }} />{option.media_url ? <img className="h-full w-full object-cover" src={option.media_url} alt="Mídia da opção" /> : option.icon_key ? mediaIcon : <UploadCloud className="h-4 w-4" />}<span className="sr-only">Adicionar ícone ou imagem</span></label></TooltipTrigger><TooltipContent side="top" className="text-xs">Adicionar ícone ou imagem</TooltipContent></Tooltip></TooltipProvider>
-      <label className="grid h-5 w-5 cursor-pointer place-items-center rounded-full border border-violet-600 bg-white"><input type="radio" className="sr-only" name={`default-${variation.id}`} disabled={readOnly || typeIsQuantity(variation)} checked={!!option.is_default} onChange={() => void put({ is_default: true }, "Opção padrão definida.")} />{option.is_default && <span className="h-2.5 w-2.5 rounded-full bg-violet-600" />}</label>
-      <div className="min-w-0"><Input disabled={readOnly} aria-label="Título da opção" className="h-10 text-xs" maxLength={160} value={label} onChange={(e) => setLabel(e.target.value)} onBlur={() => { if (label.trim() && label !== option.label) void put({ label: label.trim() }, "Título salvo."); }} />{option.is_default && <span className="mt-1 inline-block text-[10px] font-semibold text-violet-700">Padrão</span>}</div>
-      <label className="min-w-0"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Disponibilidade</span><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={option.availability ?? "auto"} onChange={(e) => void put({ availability: e.target.value }, "Disponibilidade atualizada.")}><option value="auto">Contratação automática</option><option value="commercial_review">Exige revisão comercial</option><option value="custom_quote">Orçamento personalizado</option><option value="assisted_only">Só com atendimento</option><option value="unavailable">Indisponível</option></select></label>
-      <div className="min-w-0"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Impactos</span><EffectChips effects={option.effects ?? []} /></div>
-      <CheckPill disabled={readOnly} checked={option.is_active !== false} onChange={(v) => void put({ is_active: v }, "Opção atualizada.")}>Ativa</CheckPill>
-      <DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Mais ações da opção"><MoreVertical className="h-4 w-4" /></button></DropdownMenuTrigger><DropdownMenuContent align="end">{!readOnly && <><DropdownMenuItem onClick={() => void put({ icon_key: "layers", media_url: null }, "Ícone definido.")}>Usar ícone de camadas</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "globe", media_url: null }, "Ícone definido.")}>Usar ícone de globo</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "tag", media_url: null }, "Ícone definido.")}>Usar ícone de etiqueta</DropdownMenuItem>{(option.media_url || option.icon_key) && <DropdownMenuItem onClick={() => void put({ icon_key: null, media_url: null }, "Mídia removida.")}>Manter sem mídia</DropdownMenuItem>}<DropdownMenuItem className="text-red-600" onClick={() => void act(() => apiClient.deleteCatalog2Option(option.id), "Opção removida.")}>Remover opção</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu>
+    <div className="flex flex-wrap items-start gap-x-3 gap-y-2" data-testid="option-row">
+      <label title="Clique para enviar uma imagem (PNG, JPG ou WEBP até 1 MB). Para usar um ícone, abra o menu ⋮ da opção." className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-lg border border-violet-200 bg-white text-violet-600 hover:border-violet-400 dark:border-violet-900 dark:bg-slate-900">
+        <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" disabled={readOnly} onChange={(e) => { const file = e.target.files?.[0]; if (file) saveImage(file); e.currentTarget.value = ""; }} />
+        {option.media_url ? <img className="h-full w-full object-cover" src={option.media_url} alt="Mídia da opção" /> : option.icon_key ? <span data-testid="option-icon" className="[&>svg]:h-5 [&>svg]:w-5">{mediaIcon}</span> : <UploadCloud className="h-4 w-4 text-slate-400" />}
+        <span className="sr-only">Adicionar ícone ou imagem</span>
+      </label>
+      <div className="min-w-[12rem] flex-1">
+        <Input id={`option-title-${option.id}`} disabled={readOnly} aria-label="Título da opção" className="h-10 text-xs" maxLength={160} value={label} onChange={(e) => setLabel(e.target.value)} onBlur={() => { if (label.trim() && label !== option.label) void put({ label: label.trim() }, "Título salvo."); }} />
+        <div className="mt-1 flex flex-wrap items-center gap-1" data-testid="option-actions">
+          {!readOnly && <button type="button" data-testid="option-rename" onClick={() => { const el = document.getElementById(`option-title-${option.id}`) as HTMLInputElement | null; el?.focus(); el?.select(); }} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"><Pencil className="h-3 w-3" />Editar nome</button>}
+          {!readOnly && <ConfirmDeleteButton size="sm" testId="option-delete" label="Excluir" title="Excluir esta opção?" message={`A opção “${option.label}” será removida. Esta ação não pode ser desfeita.`} onConfirm={() => act(() => apiClient.deleteCatalog2Option(option.id), "Opção removida.")} />}
+        </div></div>
+      <div className="w-52 shrink-0"><label className="min-w-0"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Disponibilidade</span><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={option.availability ?? "auto"} onChange={(e) => void put({ availability: e.target.value }, "Disponibilidade atualizada.")}><option value="auto">Contratação automática</option><option value="commercial_review">Exige revisão comercial</option><option value="custom_quote">Orçamento personalizado</option><option value="assisted_only">Só com atendimento</option><option value="unavailable">Indisponível</option></select></label></div>
+      <div className="min-w-[7rem] max-w-[16rem] shrink-0"><div className="min-w-0"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Impactos</span><div className="flex flex-wrap items-center gap-2"><EffectChips effects={option.effects ?? []} /><button type="button" aria-expanded={detailOpen} onClick={() => setDetailOpen((v) => !v)} data-testid="option-detail-toggle" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:bg-slate-900"><Settings2 className="h-3.5 w-3.5" />{detailOpen ? "Fechar detalhes" : "Configurar impactos"}</button></div></div></div>
+      {!typeIsQuantity(variation) && (
+        <div className="pt-5" data-testid="option-default-box">
+          <CheckPill disabled={readOnly || variation.base_included === false} checked={!!option.is_default}
+            hint={variation.base_included === false ? "Esta variação não existe no produto original: nenhuma opção é padrão, todas somam custo." : "Marque se o produto original JÁ inclui esta opção: ela vira o ponto de partida e não soma custo nem horas. As outras opções somam em cima."}
+            onChange={(v) => void put({ is_default: v }, v ? "Opção padrão definida." : "Opção deixou de ser padrão.")}>
+            Padrão<span className="field-info" data-help="Padrão (já no produto original): a opção que o produto original já inclui. Ela não soma custo nem horas; as outras somam em cima." aria-hidden="true">i</span>
+          </CheckPill>
+        </div>
+      )}
+      <div className="pt-5"><label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200"><Switch aria-label="Opção ativa" disabled={readOnly} checked={option.is_active !== false} onCheckedChange={(v) => void put({ is_active: !!v }, "Opção atualizada.")} />Ativa</label></div>
+      <div className="pt-5"><DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Mais ações da opção"><MoreVertical className="h-4 w-4" /></button></DropdownMenuTrigger><DropdownMenuContent align="end">{!readOnly && <><DropdownMenuItem onClick={() => void put({ icon_key: "layers", media_url: null }, "Ícone de camadas definido.")}>{option.icon_key === "layers" ? "✓ " : ""}Usar ícone de camadas</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "globe", media_url: null }, "Ícone de globo definido.")}>{option.icon_key === "globe" ? "✓ " : ""}Usar ícone de globo</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "tag", media_url: null }, "Ícone de etiqueta definido.")}>{option.icon_key === "tag" ? "✓ " : ""}Usar ícone de etiqueta</DropdownMenuItem>{(option.media_url || option.icon_key) && <DropdownMenuItem onClick={() => void put({ icon_key: null, media_url: null }, "Mídia removida.")}>Manter sem mídia</DropdownMenuItem>}<DropdownMenuItem className="text-red-600" onClick={() => void act(() => apiClient.deleteCatalog2Option(option.id), "Opção removida.")}>Remover opção</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div>
     </div>
     {customQuote && <label className="mt-2 block pl-[60px]"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Mensagem ao cliente (opcional)</span><Input disabled={readOnly} className="h-8 text-xs" maxLength={1000} placeholder="Explique como o cliente receberá o orçamento" value={message} onChange={(e) => setMessage(e.target.value)} onBlur={() => { if (message !== (option.availability_note ?? "")) void put({ availability_note: message.trim() || null }, "Mensagem salva."); }} /></label>}
-    <div className="mt-2 border-t border-slate-200 pt-2"><EffectList version={version} effects={option.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2OptionEffect(option.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2OptionEffect(id), "Impacto removido.")} /></div>
+    {detailOpen && (
+      <div className="mt-3 grid gap-x-6 gap-y-3 border-t border-slate-100 pt-3 md:grid-cols-2 dark:border-slate-800" data-testid="option-detail">
+        <div className="min-w-0 space-y-2">
+          <p className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><User className="h-4 w-4 text-violet-600" aria-hidden="true" />Para o cliente</p>
+          <OptionExamples option={option} readOnly={readOnly} put={put} />
+        </div>
+        <div className="min-w-0 space-y-2 md:border-l md:border-slate-200 md:pl-6 dark:md:border-slate-700">
+          <p className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><Layers className="h-4 w-4 text-violet-600" aria-hidden="true" />Impactos da opção</p>
+          <OptionImpactSummary effects={option.effects ?? []} />
+          <details open className="group rounded-xl border border-slate-200 dark:border-slate-700" data-testid="option-hours-accordion">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[13px] font-bold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden"><Clock className="h-4 w-4 text-violet-600" aria-hidden="true" /><span className="flex-1">Horas extras</span><ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
+            <div className="border-t border-slate-100 px-3 pb-3 dark:border-slate-800"><OptionStepAdjustments option={option} version={version} specialties={refsCtx?.specialties ?? []} readOnly={readOnly} act={act} /></div>
+          </details>
+          <details className="group rounded-xl border border-slate-200 dark:border-slate-700" data-testid="option-deadline-accordion">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[13px] font-bold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden"><CalendarClock className="h-4 w-4 text-violet-600" aria-hidden="true" /><span className="flex-1">Prazo e outros impactos desta opção</span><span className="text-xs font-normal text-slate-500">{impactSummary(option.effects ?? []).deadline}</span><ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
+            <div className="border-t border-slate-100 px-3 pb-3 pt-2 dark:border-slate-800"><div><EffectList version={version} effects={option.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2OptionEffect(option.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2OptionEffect(id), "Impacto removido.")} /></div></div>
+          </details>
+        </div>
+      </div>
+    )}
   </li>;
+}
+
+/** Resumo curto dos impactos de uma opção (Preço, Prazo, Tarefas, Entregáveis, Horas extras). */
+function impactSummary(effects: any[]) {
+  const by = (types: string[]) => effects.filter((e) => types.includes(e.effect_type));
+  const price = by(["add_fixed_amount", "add_percent"]);
+  const days = by(["add_deadline_days"]);
+  const tasks = by(["add_task", "remove_task", "add_step"]);
+  const deliverables = by(["add_deliverable", "require_info"]);
+  const effort = by(["add_effort_hours", "add_effort_minutes", "replace_effort_minutes"]);
+  const n = (l: any[], one: string, many: string) => (l.length === 0 ? "Sem alteração" : `${l.length} ${l.length === 1 ? one : many}`);
+  const totalDays = days.reduce((a, e) => a + (Number(e.effect_value) || 0), 0);
+  return {
+    price: n(price, "alteração", "alterações"),
+    deadline: days.length === 0 ? "Sem alteração de prazo" : `+${totalDays} dia(s)`,
+    tasks: n(tasks, "alteração", "alterações"),
+    deliverables: n(deliverables, "alteração", "alterações"),
+    effort: effort.length,
+    configured: effects.length,
+  };
+}
+function OptionImpactSummary({ effects }: { effects: any[] }) {
+  const s = impactSummary(effects);
+  const Item = ({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) => (
+    <span className="flex min-w-0 flex-1 items-center gap-2 px-2 first:pl-0"><Icon className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" /><span className="min-w-0"><span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span><span className="block truncate text-[11px] text-slate-500">{value}</span></span></span>
+  );
+  return (
+    <div className="flex divide-x divide-slate-200 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900" data-testid="option-impact-summary">
+      <Item icon={DollarSign} label="Preço" value={s.price} />
+      <Item icon={CalendarClock} label="Prazo" value={s.deadline === "Sem alteração de prazo" ? "Sem alteração" : s.deadline} />
+      <Item icon={ListChecks} label="Tarefas" value={s.tasks} />
+      <Item icon={Layers} label="Entregáveis" value={s.deliverables} />
+    </div>
+  );
 }
 
 function typeIsQuantity(variation: any) { return (variation.selection_type ?? "single") === "quantity"; }
@@ -1287,8 +1606,8 @@ function SetupCard({ icon: Icon, title, summary, help, children, defaultOpen = f
     <details open={readOpen("setup:" + title, defaultOpen) || undefined} onToggle={(e) => { writeOpen("setup:" + title, (e.currentTarget as HTMLDetailsElement).open); onToggle?.(e); }} className="group h-full min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
       <summary className="flex cursor-pointer select-none list-none items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"><Icon className="h-3.5 w-3.5" /></span>
-        <span className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">{title}</span>
-        {help && <TooltipProvider delayDuration={120}><Tooltip><TooltipTrigger asChild><span onClick={(e) => e.preventDefault()} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-violet-700"><Info className="h-3.5 w-3.5" /></span></TooltipTrigger><TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">{help}</TooltipContent></Tooltip></TooltipProvider>}
+        <span data-no-info={help ? "" : undefined} className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">{title}</span>
+        {help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}
         {summary != null && <span title={typeof summary === "string" ? summary : undefined} className="min-w-0 flex-1 truncate text-xs text-slate-500 dark:text-slate-400">{summary}</span>}
         <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
       </summary>
@@ -1299,7 +1618,7 @@ function SetupCard({ icon: Icon, title, summary, help, children, defaultOpen = f
 // Botãozinho com quadradinho de marcar.
 function CheckPill({ checked, onChange, disabled, hint, children }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; hint?: string; children: React.ReactNode }) {
   return (
-    <label title={hint} className={`inline-flex select-none items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${checked ? "border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-200" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"} ${disabled ? "cursor-default opacity-70" : "cursor-pointer"}`}>
+    <label title={hint} className={`relative inline-flex select-none items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${checked ? "border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-200" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"} ${disabled ? "cursor-default opacity-70" : "cursor-pointer"}`}>
       <input type="checkbox" className="sr-only" disabled={disabled} checked={!!checked} onChange={(e) => onChange(e.target.checked)} />
       <span className={`flex h-4 w-4 items-center justify-center rounded border ${checked ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800"}`}>{checked && <Check className="h-3 w-3" strokeWidth={3} />}</span>
       {children}
@@ -1384,7 +1703,46 @@ function ContractModesSection({ version, readOnly, act, compact = false }: any) 
   const set = (patch: Partial<typeof f>) => setF((cur: any) => ({ ...cur, ...patch }));
   const modalidades = [f.accepts_one_time && "Avulso", f.accepts_recurring && "Mensal"].filter(Boolean).join(" e ") || "nenhuma modalidade";
   const summary = `Modalidade: ${modalidades} · ${f.has_initial_implementation ? "com implementação inicial no 1º mês" : "sem implementação inicial"}${f.sell_mode === "package_only" ? " · somente em pacote" : ""}`;
-  if (compact) return <><label className="flex h-[52px] min-w-0 flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-700 dark:bg-slate-800/40"><span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Tipo de preço</span><select disabled={readOnly} className="mt-0.5 w-full bg-transparent text-xs text-slate-800 outline-none dark:text-slate-100" value={f.pricing_mode} onChange={(e) => set({ pricing_mode: e.target.value })}><option value="calculated">Calculado pelas tarefas (custo + taxas)</option><option value="manual_fixed">Preço fixo informado</option><option value="on_request">Sob consulta</option></select></label><label className="flex h-[52px] min-w-0 flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-700 dark:bg-slate-800/40"><span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">Implementação roda</span><select disabled={readOnly || !f.has_initial_implementation} className="mt-0.5 w-full bg-transparent text-xs text-slate-800 outline-none disabled:opacity-50 dark:text-slate-100" value={f.implementation_rule} onChange={(e) => set({ implementation_rule: e.target.value })}>{Object.entries(IMPLEMENTATION_RULE_LABEL).map(([v, l]) => <option key={v} value={v}>{l as string}</option>)}</select></label><div className="col-span-full mt-1"><p className="mb-1.5 text-xs font-bold text-slate-800 dark:text-slate-100">Modalidades de contratação</p><div className="grid gap-2 sm:grid-cols-3">{([{ key: "accepts_one_time", label: "Avulso", hint: "Compra única" }, { key: "accepts_recurring", label: "Assinatura mensal recorrente", hint: "Contrato contínuo" }, { key: "has_initial_implementation", label: "Implementação inicial", hint: "Configuração e onboarding" }] as const).map((mode) => <label key={mode.key} className={`flex min-w-0 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 ${f[mode.key] ? "border-violet-400 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/30" : "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}`}><input type="checkbox" disabled={readOnly} checked={!!f[mode.key]} onChange={(e) => set({ [mode.key]: e.target.checked })} className="sr-only" /><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${f[mode.key] ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 text-transparent"}`}>✓</span><span className="min-w-0"><span className="block truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{mode.label}</span><span className="block truncate text-[10px] text-slate-500">{mode.hint}</span></span></label>)}</div></div>{!readOnly && <div className="col-span-full mt-1 flex items-center justify-end gap-3"><span className={`text-[11px] ${JSON.stringify(f) === sig ? "text-slate-400" : "text-amber-700"}`}>{JSON.stringify(f) === sig ? "Alterações salvas" : "Alterações não salvas"}</span><Button type="button" onClick={() => void act(() => apiClient.updateCatalog2VersionInfo(version.id, f), "Alterações salvas.")} className="h-8 bg-violet-700 px-3 text-xs text-white hover:bg-fuchsia-700">Salvar alterações</Button></div>}</>;
+  if (compact) {
+    const CARD = "flex h-full min-w-0 flex-col gap-2.5 px-1 md:border-l md:border-slate-200 md:pl-5 dark:md:border-slate-700";
+    const ICON = "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300";
+    const FIELD = "h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
+    const priceHint = f.pricing_mode === "calculated" ? "Custo humano, de IA, taxas e prazo vêm das tarefas e etapas." : f.pricing_mode === "manual_fixed" ? "Vale como avulso, primeira cobrança e renovação. Exige preço e prazo." : "Sem compra automática nem cotação pública.";
+    const modes = [
+      { key: "accepts_one_time", label: "Avulso", hint: "Compra única, sem renovação" },
+      { key: "accepts_recurring", label: "Assinatura mensal", hint: "Cobra e renova todo mês" },
+    ] as const;
+    return <>
+      <div className={CARD} data-testid="price-type-card">
+        <div className="flex items-start gap-2.5"><span className={ICON}><DollarSign className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100">Preço desta versão<span className="field-info" data-help="Como o preço desta versão é definido: calculado pelas tarefas (custo + taxas), preço fixo informado ou sob consulta (sem compra automática nem cotação pública)." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Como o preço desta versão é definido</span></span></div>
+        <select aria-label="Tipo de preço" disabled={readOnly} className={FIELD} value={f.pricing_mode} onChange={(e) => set({ pricing_mode: e.target.value })}>
+          <option value="calculated">Calculado pelas tarefas (custo + taxas)</option>
+          <option value="manual_fixed">Preço fixo informado</option>
+          <option value="on_request">Sob consulta</option>
+        </select>
+        {f.pricing_mode === "manual_fixed" && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Preço (R$)</span><input disabled={readOnly} type="number" min={0} step="0.01" aria-label="Preço fixo" className={FIELD} value={f.manual_price ?? ""} onChange={(e) => set({ manual_price: e.target.value === "" ? null : Number(e.target.value) })} /></label>
+            <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Prazo (dias)</span><input disabled={readOnly} type="number" min={1} aria-label="Prazo fixo em dias" className={FIELD} value={f.manual_deadline_days ?? ""} onChange={(e) => set({ manual_deadline_days: e.target.value === "" ? null : Number(e.target.value) })} /></label>
+          </div>
+        )}
+        <p className="mt-auto text-[11px] leading-snug text-slate-500">{priceHint}</p>
+      </div>
+      <div className={CARD} data-testid="modalities-card">
+        <div className="flex items-start gap-2.5"><span className={ICON}><Settings2 className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100">Modalidade<span className="field-info" data-help="Como o cliente pode contratar: Avulso (compra única, sem renovação) e/ou Assinatura mensal (renova todo mês). Pode marcar as duas; pelo menos uma precisa estar marcada." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Escolha como o cliente pode contratar</span></span></div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {modes.map((mode) => (
+            <label key={mode.key} className={`relative flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border-2 px-3.5 py-3 transition ${f[mode.key] ? "border-violet-500 bg-violet-50/70 dark:border-violet-600 dark:bg-violet-950/30" : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900"} ${readOnly ? "cursor-default opacity-80" : ""}`}>
+              <input type="checkbox" disabled={readOnly} checked={!!f[mode.key]} onChange={(e) => set({ [mode.key]: e.target.checked })} className="sr-only" />
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${f[mode.key] ? "border-violet-600" : "border-slate-300"}`}>{f[mode.key] && <span className="h-2.5 w-2.5 rounded-full bg-violet-600" />}</span>
+              <span className="min-w-0"><span className="block text-[13px] font-bold text-slate-900 dark:text-slate-100">{mode.label}</span><span className="block text-[11px] leading-snug text-slate-500">{mode.hint}</span></span>
+            </label>
+          ))}
+        </div>
+        {!readOnly && <p className={`mt-auto flex items-center justify-end gap-1.5 text-xs ${JSON.stringify(f) === sig ? "text-slate-500" : "text-amber-700"}`}>{JSON.stringify(f) === sig ? <><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />Alterações salvas</> : "Alteração pendente — vale ao clicar em “Salvar rascunho”."}</p>}
+      </div>
+    </>;
+  }
   return (
     <SetupCard icon={Settings2} title="Modalidades de contratação" summary={summary} help="Define como este produto pode ser contratado e cobrado. Não cria tarefas nem muda o prazo das entregas; essas configurações ficam nas próprias tarefas e etapas.">
       <CommercialConsistencyBanner version={version} readOnly={readOnly} act={act} />
@@ -1449,28 +1807,39 @@ function ContractModesSection({ version, readOnly, act, compact = false }: any) 
 }
 
 function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked }: any) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = usePersistedFlag("commercial-overview", false);
   const tasks = version.tasks ?? [];
   const dependencyCount = tasks.reduce((n: number, task: any) => n + (task.depends_on?.length ?? 0), 0);
+  // Cada parte diz exatamente o que falta (aparece no "i" ao lado do nome). Completa = nada faltando.
+  const listNames = (names: string[]) => names.slice(0, 4).join(", ") + (names.length > 4 ? ` e mais ${names.length - 4}` : "");
+  const structureMissing = [!version.title && "o título comercial", !version.summary && "a descrição curta"].filter(Boolean) as string[];
+  const tasksMissing: string[] = [];
+  if (tasks.length === 0) tasksMissing.push("Nenhuma tarefa cadastrada.");
+  else {
+    const noSteps = tasks.filter((t: any) => (t.steps ?? []).length === 0).map((t: any) => t.name || "Tarefa sem nome");
+    if (noSteps.length) tasksMissing.push(`Tarefa${noSteps.length > 1 ? "s" : ""} sem etapas: ${listNames(noSteps)}.`);
+    const noTime = tasks.flatMap((t: any) => (t.steps ?? []).filter((s: any) => !s.estimated_minutes).map((s: any) => `${s.name || "Etapa"} (${t.name || "tarefa"})`));
+    if (noTime.length) tasksMissing.push(`Etapa${noTime.length > 1 ? "s" : ""} sem tempo estimado: ${listNames(noTime)}.`);
+  }
   const readyParts = [
-    { label: "Estrutura comercial", ok: !!version.title && !!version.summary },
-    { label: "Tarefas e etapas", ok: tasks.length > 0 },
-    { label: "Acessos necessários", ok: accessCount(version) > 0 },
+    { label: "Estrutura comercial", ok: structureMissing.length === 0, help: structureMissing.length ? `Falta preencher: ${structureMissing.join(" e ")} (Passo 1, Informações do produto).` : "Título comercial e descrição curta preenchidos." },
+    { label: "Tarefas e etapas", ok: tasksMissing.length === 0, help: tasksMissing.length ? `Falta: ${tasksMissing.join(" ")}` : `${tasks.length} tarefa${tasks.length === 1 ? "" : "s"}, todas com etapas e tempo estimado.` },
+    { label: "Acessos necessários", ok: accessCount(version) > 0, help: accessCount(version) > 0 ? `${accessCount(version)} acesso${accessCount(version) === 1 ? "" : "s"} configurado${accessCount(version) === 1 ? "" : "s"}.` : "Nenhum acesso configurado. Adicione os acessos que o cliente precisa liberar em “Acessos necessários”." },
   ];
   const ready = readyParts.filter((part) => part.ok).length;
   const percent = Math.round((ready / readyParts.length) * 100);
   return <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
     <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-start gap-2.5 text-left">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/40"><CalendarClock className="h-4 w-4" /></span>
-      <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Entrega comercial</span><span className="block text-[11px] text-slate-500">Defina prazo, preço, modalidades, implementação e prontidão.</span></span>
+      <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Entrega comercial<span className="field-info" data-help="Reúne o prazo prometido ao cliente, o tipo de preço, as modalidades de contratação e a prontidão da entrega (o que já está completo e o que falta)." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Defina prazo, preço, modalidades e prontidão.</span></span>
       {open ? <ChevronUp className="mt-2 h-4 w-4 text-slate-500" /> : <ChevronDown className="mt-2 h-4 w-4 text-slate-500" />}
     </button>
-    {open && <div className="mt-3 space-y-3">
-      <div className="grid items-start gap-2 lg:grid-cols-3"><DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={locked} compact /><ContractModesSection version={version} readOnly={readOnly} act={act} compact /></div>
+    {open && <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+      <div className="grid items-stretch gap-4 md:grid-cols-3"><DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={locked} compact /><ContractModesSection version={version} readOnly={readOnly} act={act} compact /></div>
       <section className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20 lg:grid-cols-[auto_minmax(9rem,1fr)_repeat(3,minmax(0,1fr))] lg:items-center">
         <div className="flex items-center gap-2"><span className="flex h-12 w-12 items-center justify-center rounded-full border-[5px] border-emerald-500 bg-white text-sm font-extrabold text-slate-900 dark:bg-slate-900 dark:text-slate-100">{percent}%</span><span><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Prontidão da entrega</span><span className="block text-[10px] text-slate-500">Produto configurado para entrega.</span></span></div>
         <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${percent}%` }} /></div>
-        {readyParts.map((part) => <div key={part.label} className={`flex min-w-0 items-center gap-1.5 border-l border-emerald-100 pl-2 text-[11px] dark:border-emerald-900/40 ${part.ok ? "text-emerald-800 dark:text-emerald-200" : "text-amber-800 dark:text-amber-200"}`}><CheckCircle2 className="h-4 w-4 shrink-0" /><span className="min-w-0"><span className="block truncate">{part.label}</span><strong className="block text-[10px]">{part.ok ? "OK" : "REVISAR"}</strong></span></div>)}
+        {readyParts.map((part) => <div key={part.label} className={`flex min-w-0 items-center gap-1.5 border-l border-emerald-100 pl-2 text-[11px] dark:border-emerald-900/40 ${part.ok ? "text-emerald-800 dark:text-emerald-200" : "text-amber-800 dark:text-amber-200"}`}><CheckCircle2 className="h-4 w-4 shrink-0" /><span className="min-w-0"><span className="block" data-no-info="">{part.label}<span className="field-info" data-help={part.help} aria-hidden="true">i</span></span><strong className="block text-xs">{part.ok ? "OK" : "REVISAR"}</strong></span></div>)}
       </section>
     </div>}
   </section>;
@@ -1524,6 +1893,17 @@ function stepCostEstimate(step: any, task: any, refs: any): number | null {
   if ((step.estimated_minutes ?? 0) <= 0 || rate == null) return null;
   return (step.estimated_minutes / 60) * Number(rate);
 }
+/** Custo da etapa com o qualificador: executor + percentual do qualificador sobre o custo da etapa (padrão 20%, configurável em Precificação). */
+function stepQualifierCost(step: any, task: any, refs: any): { human: number; qualifier: number; total: number; pct: number } | null {
+  const human = stepCostEstimate(step, task, refs);
+  if (human == null) return null;
+  const mode = step.execution_mode ?? "humano";
+  const qualifies = mode !== "humano" || step.requires_qualification !== false || !!step.requires_specialist_qualification;
+  if (!qualifies) return null;
+  const pct = Number(refs?.qualifierPercent ?? 20);
+  const qualifier = Math.round(human * (pct / 100) * 100) / 100;
+  return { human, qualifier, total: Math.round((human + qualifier) * 100) / 100, pct };
+}
 const brl2 = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function taskStagesPrice(task: any, refs: any) {
@@ -1534,6 +1914,25 @@ function taskStagesPrice(task: any, refs: any) {
     const rate = (refs?.specialties ?? []).find((item: any) => item.id === (step.specialty_id ?? task.specialty?.id))?.max_hourly_rate;
     if ((step.estimated_minutes ?? 0) <= 0 || rate == null) return null;
     total += (step.estimated_minutes / 60) * Number(rate);
+  }
+  return total;
+}
+
+/** Custo da opção IA de uma etapa "Humano ou IA" (horas da IA × valor/hora da especialidade de IA). */
+function stepAiCostEstimate(step: any, refs: any): number | null {
+  const rate = (refs?.specialties ?? []).find((item: any) => item.id === step.ai_specialty_id)?.max_hourly_rate;
+  if ((step.ai_estimated_minutes ?? 0) <= 0 || rate == null) return null;
+  return (step.ai_estimated_minutes / 60) * Number(rate);
+}
+/** Total da tarefa se as etapas "Humano ou IA" forem feitas por IA (as demais etapas custam o mesmo). */
+function taskStagesPriceAi(task: any, refs: any) {
+  const steps = task.steps ?? [];
+  if (steps.length === 0) return null;
+  let total = 0;
+  for (const step of steps) {
+    const c = step.execution_mode === "hibrido" ? stepAiCostEstimate(step, refs) : stepCostEstimate(step, task, refs);
+    if (c == null) return null;
+    total += c;
   }
   return total;
 }
@@ -1598,48 +1997,60 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
                 {t.task_model_id != null && <button type="button" title="Ver o modelo global desta tarefa" onClick={() => setViewModel(t.task_model_id)} className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700 hover:bg-violet-200 dark:bg-violet-900/40 dark:text-violet-200">Tarefa #{t.task_model_id}</button>}
                 <ModelStatusChips model={t.model} readOnly={readOnly} onSync={() => act(() => apiClient.syncCatalog2TaskModel(t.id), "Tarefa atualizada para a revisão atual do modelo global.")} />
               </div>
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
-                <MetaChip title="Quem executa">{EXEC_LABEL[t.execution_mode] ?? t.execution_mode}</MetaChip>
-                {t.stage_execution === "stage" && <MetaChip title="Cada etapa é qualificada e aprovada antes de liberar a próxima">Execução por etapa</MetaChip>}
-                <MetaChip title="Especialidade">{t.specialty?.name ?? "sem especialidade"}</MetaChip>
-                <MetaChip title="Total das etapas"><Clock className="h-3 w-3" /> {formatStageHours((t.steps ?? []).reduce((sum: number, step: any) => sum + (step.estimated_minutes ?? 0), 0))} nas etapas</MetaChip>
-                {flowSummary(t.steps ?? []).criticalMinutes > 0 && <MetaChip title="Prazo calculado pelas etapas, em horas úteis do calendário da plataforma. Etapas em paralelo contam só a mais longa."><Clock className="h-3 w-3" /> Prazo pelas etapas: {fmtBusinessMinutes(flowSummary(t.steps).criticalMinutes)} úteis (≈ {businessDaysOf(flowSummary(t.steps).criticalMinutes, wc.business_hours_per_day).toLocaleString("pt-BR")} dia(s) útil(eis))</MetaChip>}
-                <MetaChip title="Soma do custo estimado de todas as etapas (horas × valor/hora, sem taxas e margem)">Custo total estimado: {taskStagesPrice(t, refs) == null ? "a definir" : brl2(taskStagesPrice(t, refs)!)}</MetaChip>
-                <MetaChip title="Etapas desta tarefa">{t.steps.length} etapa{t.steps.length === 1 ? "" : "s"}</MetaChip>
-                {t.questionnaire && <MetaChip title="Questionário vinculado">questionário: {t.questionnaire.name}</MetaChip>}
-                <TaskIndicators task={t} />
-              </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              {!readOnly && <button
-                type="button"
-                aria-expanded={advancedTask === t.id}
-                aria-label={`${advancedTask === t.id ? "Fechar" : "Editar"} tarefa ${t.name}`}
-                onClick={() => toggleAdvancedTask(t.id)}
-                className={`inline-flex h-7 items-center gap-1 rounded-lg border px-2 text-[10px] font-semibold transition-colors ${advancedTask === t.id ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}
-              >
-                <Pencil className="h-3.5 w-3.5" /> {advancedTask === t.id ? "Fechar edição" : "Editar tarefa"}
-              </button>}
               {!readOnly && (
               <div className="flex gap-1">
                 {!single && <IconBtn label="Mover tarefa para cima — ela passa a ser executada antes da anterior" disabled={i === 0} onClick={() => act(() => apiClient.reorderCatalog2Tasks(version.id, move(tasks.map((x: any) => x.id), i, -1)))}><ChevronUp className="h-4 w-4" /></IconBtn>}
                 {!single && <IconBtn label="Mover tarefa para baixo — ela passa a ser executada depois da próxima" disabled={i === tasks.length - 1} onClick={() => act(() => apiClient.reorderCatalog2Tasks(version.id, move(tasks.map((x: any) => x.id), i, 1)))}><ChevronDown className="h-4 w-4" /></IconBtn>}
                 {!single && <IconBtn label="Duplicar esta tarefa (cria uma cópia dela neste produto)" onClick={() => act(() => apiClient.duplicateCatalog2Task(t.id), "Tarefa duplicada.")}><Copy className="h-4 w-4" /></IconBtn>}
-                <DeleteBtn label="Remover tarefa deste produto?" onConfirm={() => act(() => apiClient.deleteCatalog2Task(t.id), "Tarefa removida do produto.")} />
+                {/* Não se exclui tarefa (todo produto tem ao menos uma): ela é LIMPA com dupla confirmação e pode ser restaurada. */}
+                <ClearTaskButton task={t} act={act} />
               </div>
               )}
             </div>
           </div>
+          {/* Resumo ÚNICO da tarefa, na largura inteira: tudo vem das etapas cadastradas abaixo (quem executa, especialidades, horas, prazo, custo). */}
+          <div className="mt-2">
+          <TaskSummaryCard task={t} specialties={refs?.specialties ?? []} metrics={[
+            { label: "Etapas", value: `${t.steps.length} etapa${t.steps.length === 1 ? "" : "s"}${t.stage_execution === "stage" ? " · execução por etapa" : ""}`, help: t.stage_execution === "stage" ? "Cada etapa é qualificada e aprovada antes de liberar a próxima." : "Qualificação e aprovação acontecem no fim da tarefa." },
+            { label: "Horas das etapas", value: formatStageHours((t.steps ?? []).reduce((sum: number, step: any) => sum + (step.estimated_minutes ?? 0), 0)), help: "Soma do tempo estimado de todas as etapas." },
+            { label: "Prazo pelas etapas", value: flowSummary(t.steps ?? []).criticalMinutes > 0 ? `${fmtBusinessMinutes(flowSummary(t.steps).criticalMinutes)} úteis (≈ ${businessDaysOf(flowSummary(t.steps).criticalMinutes, wc.business_hours_per_day).toLocaleString("pt-BR")} dia(s))` : "a definir", help: "Prazo calculado pelas etapas, em horas úteis do calendário da plataforma. Etapas em paralelo contam só a mais longa." },
+            (t.steps ?? []).some((s: any) => s.execution_mode === "hibrido")
+              ? { label: "Custo total estimado", value: `Humano ${taskStagesPrice(t, refs) == null ? "a definir" : brl2(taskStagesPrice(t, refs)!)} · IA ${taskStagesPriceAi(t, refs) == null ? "a definir" : brl2(taskStagesPriceAi(t, refs)!)}`, help: "Há etapa “Humano ou IA”: o total aparece com as duas opções (as etapas híbridas feitas por humano ou por IA). O cliente escolhe na contratação. Horas × valor/hora, sem taxas e margem." }
+              : { label: "Custo total estimado", value: taskStagesPrice(t, refs) == null ? "a definir" : brl2(taskStagesPrice(t, refs)!), help: "Soma do custo estimado de todas as etapas (horas × valor/hora, sem taxas e margem)." },
+            ...(t.questionnaire ? [{ label: "Questionário", value: String(t.questionnaire.name), help: "Questionário vinculado a esta tarefa (perguntas que o cliente responde)." }] : []),
+          ]}>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
+              <TaskIndicators task={t} />
+              {!readOnly && ["ia", "hibrido"].includes(t.execution_mode) && (
+                <button type="button" aria-expanded={advancedTask === t.id} onClick={() => toggleAdvancedTask(t.id)} className="inline-flex h-7 items-center gap-1 rounded-lg border border-violet-300 bg-white px-2 text-[11px] font-semibold text-violet-700 hover:bg-violet-50">
+                  <Sparkles className="h-3.5 w-3.5" />{advancedTask === t.id ? "Fechar configuração da IA" : "Configurar a IA desta tarefa"}
+                </button>
+              )}
+            </div>
+          </TaskSummaryCard>
+          </div>
           <div className={closed.has(t.id) && !highlightTaskIds.includes(t.id) ? "hidden" : ""}>
-           {!readOnly && advancedTask === t.id && <TaskInlineEdit version={version} task={t} refs={refs} act={act} effortHighlighted={(highlightTarget === "catalog2-task-effort" && highlightTaskIds.includes(t.id)) || ringOf("task-effort:" + t.id).includes("amber")} durationHighlighted={(highlightTarget === "catalog2-task-duration" && highlightTaskIds.includes(t.id)) || ringOf("task-duration:" + t.id).includes("amber")} effortDone={ringOf("task-effort:" + t.id).includes("emerald")} durationDone={ringOf("task-duration:" + t.id).includes("emerald")} onSaved={(target: string) => clearHighlight(target)} onOpenPricing={onOpenPricing} />}
-          <p className="mt-2 ml-2 text-[11px] font-semibold uppercase tracking-wide text-sky-700 dark:text-sky-300" data-testid="task-checklist-title">Checklist da tarefa — etapas ({t.steps.length}){t.steps.length === 0 ? " · cadastre ao menos uma etapa" : ""}</p>
-          <ul className="mt-1 ml-2 space-y-1 border-l-2 border-sky-200 pl-3 dark:border-sky-900/60">
-            {t.steps.map((st: any, si: number) => (
-              <StepRow key={st.id} version={version} step={st} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} />
-            ))}
+           {!readOnly && <RestoreTaskPanel task={t} act={act} />}
+           {/* A tarefa não tem painel de configuração: tudo é configurado nas etapas. Só a IA (tarefa com etapa de IA) abre seu painel próprio. */}
+           {!readOnly && advancedTask === t.id && ["ia", "hibrido"].includes(t.execution_mode) && <section className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2 text-xs dark:border-slate-800 dark:bg-slate-800/30"><AiConfig task={t} act={act} onOpenPricing={() => void onOpenPricing?.(t.id)} /></section>}
+          <p className="mt-4 ml-2 text-[15px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300" data-testid="task-checklist-title">Etapas da tarefa · {t.steps.length}<span className="field-info" data-help="Tudo o que você cadastra nas etapas abaixo (quem executa, especialidade, horas, prazo e custo) é somado automaticamente no resumo, em cima. O resumo é atualizado sozinho." aria-hidden="true">i</span>{t.steps.length === 0 ? <span className="ml-1 normal-case font-semibold text-amber-700"> · cadastre ao menos uma etapa</span> : null}</p>
+          {(() => {
+            const together = flowSummary(t.steps ?? []).waves.filter((w) => w.length > 1);
+            if (together.length === 0) return null;
+            const numberOf = (k: string) => (t.steps ?? []).findIndex((s: any) => s.key === k) + 1;
+            return <p className="ml-2 mt-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300" data-testid="parallel-legend">⇄ Ao mesmo tempo: {together.map((w) => `etapas ${w.map(numberOf).sort((a, b) => a - b).join(" + ")}`).join(" · ")}</p>;
+          })()}
+          <ul className="mt-2 ml-2 space-y-2.5 border-l-2 border-sky-200 pl-5 dark:border-sky-900/60">
+            {t.steps.map((st: any, si: number) => {
+              const wave = flowSummary(t.steps ?? []).waves.find((w) => w.length > 1 && w.includes(st.key));
+              const parallelWith = wave ? wave.filter((k) => k !== st.key).map((k) => (t.steps ?? []).findIndex((s: any) => s.key === k) + 1).sort((a, b) => a - b) : [];
+              return <StepRow key={st.id} version={version} step={st} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} parallelWith={parallelWith} />;
+            })}
             {!readOnly && <AddStepControl ringClass={ringOf("catalog2-step-add:" + t.id)} domId={"catalog2-step-add:" + t.id} refs={refs} task={t} act={act} />}
           </ul>
-          <StepFlowEditor task={t} readOnly={readOnly} act={act} />
+          <StepFlowEditor task={t} readOnly={readOnly} act={act} hoursPerDay={wc.business_hours_per_day} />
           </div>
         </div>
       ))}
@@ -1671,32 +2082,27 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
   );
 }
 
-const SpecialtySelect = ({ refs, value, onChange, emptyLabel, mode }: any) => {
-  const all: any[] = refs?.specialties ?? [];
-  const list = mode ? specialtiesForMode(all, mode) : all;
-  const current = value ? all.find((sp) => sp.id === value) : null;
-  const orphan = mode && current && !isSpecialtyCompatible(current, mode) ? current : null;
-  return (
-    <>
-      <select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{emptyLabel}</option>
-        {orphan && <option value={orphan.id} disabled>{orphan.name} (tipo {EXEC_KIND_LABEL[specialtyKind(orphan)]} — troque)</option>}
-        {list.map((sp: any) => <option key={sp.id} value={sp.id}>{sp.name}{sp.max_hourly_rate == null ? " (sem valor/hora)" : ""}</option>)}
-      </select>
-      {mode && list.length === 0 && <span className="mt-1 block text-[11px] text-amber-700" data-testid="specialty-empty-hint">{emptySpecialtyHint(mode)}</span>}
-    </>
-  );
-};
+// Especialidade da etapa: só as cadastradas (não existe mais "usa a da tarefa"), filtradas pelo executor e com busca.
+const SpecialtySelect = ({ refs, value, onChange, mode }: any) => (
+  <SpecialtyCombobox specialties={refs?.specialties ?? []} mode={mode} value={value} onChange={onChange} />
+);
+
+// Tipos de evidência que a etapa pode exigir (igual à lista do servidor).
+const EVIDENCE_TYPE_OPTIONS: [string, string][] = [["print", "Print da tela"], ["arquivo", "Arquivo anexo"], ["pdf", "PDF"], ["relatorio", "Relatório"], ["link", "Link"], ["texto", "Texto / descrição"]];
 
 function TaskField({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="flex min-w-[8.5rem] flex-col gap-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300"><span>{label}</span>{children}</label>;
 }
 
-function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, version }: any) {
+function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, version, parallelWith = [] }: any) {
+  // Não é lembrado no F5: o texto digitado se perderia e a etapa voltaria "presa" no formulário. A etapa sempre abre na ficha de leitura.
   const [editing, setEditing] = useState(false);
+  // Cada etapa é um cartão que pode ser recolhido (vem aberta). Mover para cima/baixo sempre pergunta antes.
+  const [open, setOpen] = usePersistedFlag(`step-open:${step.id}`, true);
+  const [moveAsk, setMoveAsk] = useState<null | -1 | 1>(null);
   const [viewModel, setViewModel] = useState(false);
   const [scopeAsk, setScopeAsk] = useState(false);
-  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [checklistOpen, setChecklistOpen] = usePersistedFlag(`step-checklist:${step.id}`, false);
   const [savingChecklist, setSavingChecklist] = useState(false);
   const [leaders, setLeaders] = useState<{ id: string; name: string; kind: string }[]>([]);
   const [specialists, setSpecialists] = useState<{ id: string; name: string; kind: string }[]>([]);
@@ -1708,50 +2114,160 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
     if (!editing || leaders.length > 0) return;
     apiClient.getCatalog2Qualifiers().then((r) => setLeaders(r.data.filter((u) => u.kind === "lider"))).catch(() => {});
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
-  const initial = () => ({ name: step.name, estimated_hours: step.estimated_minutes == null ? "" : String(step.estimated_minutes / 60), specialty_id: step.specialty_id ?? "", purpose: step.purpose ?? "execucao", execution_mode: step.execution_mode ?? "humano", completion_criteria: step.completion_criteria ?? "", first_execution_only: !!step.first_execution_only, skip_when_same_executor: !!step.skip_when_same_executor, description: step.description ?? "", ops: (step.ops ?? {}) as any, executor_kind: step.executor_kind ?? "nomad", leader_mode: step.leader_mode ?? "auto", leader_user_id: step.leader_user_id ?? "", internal_step: !!step.internal_step, requires_qualification: step.requires_qualification !== false, release_next_auto: step.release_next_auto !== false, requires_specialist_qualification: !!step.requires_specialist_qualification, specialist_user_id: step.specialist_user_id ?? "", approval_hours: step.approval_hours == null ? "" : String(step.approval_hours), rework_hours: step.rework_hours == null ? "" : String(step.rework_hours), executor_accept_hours: step.executor_accept_hours == null ? "" : String(step.executor_accept_hours) });
+  const initial = () => ({ name: step.name, estimated_hours: step.estimated_minutes == null ? "" : String(step.estimated_minutes / 60), specialty_id: step.specialty_id ?? "", purpose: step.purpose ?? "execucao", execution_mode: step.execution_mode ?? "humano", completion_criteria: step.completion_criteria ?? "", first_execution_only: !!step.first_execution_only, skip_when_same_executor: !!step.skip_when_same_executor, description: step.description ?? "", ops: (step.ops ?? {}) as any, executor_kind: step.executor_kind ?? "nomad", leader_mode: step.leader_mode ?? "auto", leader_user_id: step.leader_user_id ?? "", internal_step: !!step.internal_step, requires_qualification: step.requires_qualification !== false, release_next_auto: step.release_next_auto !== false, requires_specialist_qualification: !!step.requires_specialist_qualification, specialist_user_id: step.specialist_user_id ?? "", approval_hours: step.approval_hours == null ? "" : String(step.approval_hours), rework_hours: step.rework_hours == null ? "" : String(step.rework_hours), executor_accept_hours: step.executor_accept_hours == null ? "" : String(step.executor_accept_hours), ai_free_changes: step.ai_free_changes == null ? "" : String(step.ai_free_changes), ai_specialty_id: step.ai_specialty_id ?? "", ai_estimated_hours: step.ai_estimated_minutes == null ? "" : String(step.ai_estimated_minutes / 60), ai_prompt: String(step.ops?.ai_prompt ?? ""), qual_on: step.requires_qualification !== false || !!step.requires_specialist_qualification, qualifier_kind: (step.qualifier_kind && step.qualifier_kind !== "leader" ? step.qualifier_kind : step.requires_specialist_qualification ? (step.requires_qualification !== false ? "leader_person" : "person") : "leader") as string });
   const [f, setF] = useState(initial);
+  const aiBad = f.ai_free_changes.trim() !== "" && !(/^\d+$/.test(f.ai_free_changes.trim()) && Number(f.ai_free_changes.trim()) <= 100);
   const specName = (refs?.specialties ?? []).find((sp: any) => sp.id === (step.specialty_id ?? task?.specialty?.id))?.name;
   const hoursOf = (v: string): number | null | "bad" => { const t = String(v ?? "").trim(); if (t === "") return null; const n = Number(t); return Number.isInteger(n) && n >= 1 ? n : "bad"; };
   const hoursBad = [f.approval_hours, f.rework_hours, f.executor_accept_hours].some((v) => hoursOf(v) === "bad");
-  const payload = () => ({ approval_hours: hoursOf(f.approval_hours) === "bad" ? null : hoursOf(f.approval_hours), rework_hours: hoursOf(f.rework_hours) === "bad" ? null : hoursOf(f.rework_hours), executor_accept_hours: step.executor_policy === "prefer_same_as_step" ? (hoursOf(f.executor_accept_hours) === "bad" ? null : hoursOf(f.executor_accept_hours)) : (step.executor_accept_hours ?? null), name: f.name, estimated_minutes: f.estimated_hours === "" ? null : Math.round(Number(f.estimated_hours) * 60), specialty_id: f.specialty_id || null, purpose: f.purpose, execution_mode: f.execution_mode, completion_criteria: f.completion_criteria.trim() ? f.completion_criteria : null, first_execution_only: f.first_execution_only, skip_when_same_executor: f.skip_when_same_executor, description: f.description.trim() ? f.description : null, ops: f.ops, executor_kind: f.executor_kind, leader_mode: f.executor_kind === "leader" ? f.leader_mode : "auto", leader_user_id: f.executor_kind === "leader" && f.leader_mode === "specific" ? f.leader_user_id || null : null, internal_step: f.internal_step, requires_qualification: enforceApprover(f).requires_qualification, release_next_auto: true, requires_specialist_qualification: enforceApprover(f).requires_specialist_qualification, specialist_user_id: enforceApprover(f).requires_specialist_qualification ? f.specialist_user_id || null : null });
+  // Qualificação (reunião 14/10): liga/desliga por etapa + quem qualifica (líder, pessoa específica, líder e depois a pessoa,
+  // nômades qualificadores). Etapa com IA (ou humano ou IA) SEMPRE tem qualificação ligada.
+  // "Humano ou IA": a chave vale para a opção HUMANA (pode ser desligada); a opção IA sempre é qualificada (configuração própria abaixo).
+  const qualOn = f.execution_mode === "ia" ? true : !!f.qual_on;
+  const qualAny = f.execution_mode !== "humano" || qualOn; // alguma opção qualifica (vale para o checklist de conferência)
+  const qualPayload = () => {
+    const k = f.qualifier_kind as string;
+    const person = qualOn && (k === "person" || k === "leader_person");
+    return {
+      requires_qualification: qualOn && k !== "person",
+      requires_specialist_qualification: person,
+      specialist_user_id: person ? f.specialist_user_id || null : null,
+      qualifier_kind: qualOn ? k : "leader",
+      release_next_auto: true,
+    };
+  };
+  // Troca do "Quem executa": leva a especialidade/horas para o lugar certo (humana ↔ opção IA) em vez de perdê-las.
+  const changeMode = (mode: string) => {
+    const cur = (refs?.specialties ?? []).find((x: any) => x.id === f.specialty_id);
+    const next: any = { ...f, execution_mode: mode };
+    if (mode === "hibrido") {
+      if (cur && specialtyKind(cur) === "ia") { next.ai_specialty_id = cur.id; next.specialty_id = ""; if (f.ai_estimated_hours === "") { next.ai_estimated_hours = f.estimated_hours; next.estimated_hours = ""; } }
+      else if (cur && specialtyKind(cur) === "hibrido") next.specialty_id = "";
+    } else {
+      next.specialty_id = keepSpecialtyForMode(refs?.specialties, f.specialty_id, mode);
+      if (f.execution_mode === "hibrido" && mode === "ia" && f.ai_specialty_id) { next.specialty_id = f.ai_specialty_id; if (f.ai_estimated_hours !== "") next.estimated_hours = f.ai_estimated_hours; }
+    }
+    setF(enforceApprover(next));
+  };
+  const payload = () => ({ ai_specialty_id: f.execution_mode === "hibrido" ? f.ai_specialty_id || null : null, ai_estimated_minutes: f.execution_mode === "hibrido" && f.ai_estimated_hours !== "" ? Math.round(Number(f.ai_estimated_hours) * 60) : null, ai_free_changes: f.ai_free_changes.trim() === "" || aiBad ? null : Number(f.ai_free_changes.trim()), approval_hours: hoursOf(f.approval_hours) === "bad" ? null : hoursOf(f.approval_hours), rework_hours: hoursOf(f.rework_hours) === "bad" ? null : hoursOf(f.rework_hours), executor_accept_hours: step.executor_policy === "prefer_same_as_step" ? (hoursOf(f.executor_accept_hours) === "bad" ? null : hoursOf(f.executor_accept_hours)) : (step.executor_accept_hours ?? null), name: f.name, estimated_minutes: f.estimated_hours === "" ? null : Math.round(Number(f.estimated_hours) * 60), specialty_id: f.specialty_id || null, purpose: f.purpose, execution_mode: f.execution_mode, completion_criteria: f.completion_criteria.trim() ? f.completion_criteria : null, first_execution_only: f.first_execution_only, skip_when_same_executor: f.skip_when_same_executor, description: f.description.trim() ? f.description : null, ops: f.ops, executor_kind: f.executor_kind, leader_mode: f.executor_kind === "leader" ? f.leader_mode : "auto", leader_user_id: f.executor_kind === "leader" && f.leader_mode === "specific" ? f.leader_user_id || null : null, internal_step: f.internal_step, ...qualPayload() });
   const doSave = (scope?: "product" | "model") => act(() => apiClient.updateCatalog2Step(step.id, { ...payload(), ...(scope ? { scope } : {}), ...(scope === "model" ? { confirm_model_update: true } : {}) }), "Etapa salva.").then(() => setEditing(false));
-  const save = () => { if (hoursBad) { void act(() => Promise.reject(new Error("Os prazos em horas precisam ser números inteiros a partir de 1 (ou ficar vazios para usar o padrão).")), ""); return; } return step.step_model_id != null ? setScopeAsk(true) : void doSave(); };
+  const save = () => { if (aiBad) { void act(() => Promise.reject(new Error("Alterações por IA grátis: use um número inteiro de 0 a 100 (ou deixe vazio).")), ""); return; } if (hoursBad) { void act(() => Promise.reject(new Error("Os prazos em horas precisam ser números inteiros a partir de 1 (ou ficar vazios para usar o padrão).")), ""); return; } return step.step_model_id != null ? setScopeAsk(true) : void doSave(); };
+  // Registra a etapa aberta no editor: "Salvar rascunho"/"Travar edição" sabem se há alteração não salva aqui.
+  const registerOpenForm = useContext(FormsCtx);
+  const formApi = useRef<{ label: string; isDirty: () => boolean; save: () => Promise<void>; discard: () => void }>({ label: "", isDirty: () => false, save: async () => {}, discard: () => {} });
+  formApi.current = {
+    label: `Etapa ${index + 1} — ${step.name}`,
+    isDirty: () => editing && JSON.stringify(f) !== JSON.stringify(initial()),
+    save: async () => {
+      if (aiBad) throw new Error("Alterações por IA grátis: use um número inteiro de 0 a 100 (ou deixe vazio).");
+      if (hoursBad) throw new Error("Os prazos em horas precisam ser números inteiros a partir de 1 (ou ficar vazios para usar o padrão).");
+      // Pelo rascunho, a etapa grava só neste produto (nunca altera o modelo global).
+      await act(() => apiClient.updateCatalog2Step(step.id, { ...payload(), scope: "product" }), "Etapa salva.", { rethrow: true });
+      setEditing(false);
+    },
+    discard: () => { setF(initial()); setEditing(false); },
+  };
+  useEffect(() => {
+    if (!editing) return;
+    const api: OpenFormApi = {
+      get label() { return formApi.current.label; },
+      isDirty: () => formApi.current.isDirty(),
+      save: () => formApi.current.save(),
+      discard: () => formApi.current.discard(),
+    };
+    return registerOpenForm(`step:${step.id}`, api);
+  }, [editing, step.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Edição travada (ou versão publicada): a etapa nunca fica com o formulário aberto.
+  useEffect(() => { if (readOnly && editing) { setF(initial()); setEditing(false); } }, [readOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (editing) {
     const draftCost = (() => { const h = Number(f.estimated_hours); const sp = (refs?.specialties ?? []).find((x: any) => x.id === (f.specialty_id || task?.specialty?.id)); return f.estimated_hours !== "" && h > 0 && sp?.max_hourly_rate != null ? (h * Number(sp.max_hourly_rate)) : null; })();
+    // Etapa "Humano ou IA": custo da opção IA (horas da IA × valor/hora da especialidade de IA).
+    const draftAiCost = (() => { const h = Number(f.ai_estimated_hours); const sp = (refs?.specialties ?? []).find((x: any) => x.id === f.ai_specialty_id); return f.ai_estimated_hours !== "" && h > 0 && sp?.max_hourly_rate != null ? (h * Number(sp.max_hourly_rate)) : null; })();
     const draftChecklist: ChecklistItem[] = (f.ops?.checklist as ChecklistItem[] | undefined) ?? [];
     const setOps = (patch: Record<string, unknown>) => setF({ ...f, ops: { ...(f.ops ?? {}), ...patch } });
-    const CTL = "h-9 w-full rounded-md border border-slate-200 bg-white px-2.5 text-sm dark:border-slate-700 dark:bg-slate-900";
-    const SECTION = "min-w-0 space-y-2.5 p-4";
-    const TITLE = "text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+    // Usar / deixar de usar / adicionar acesso na etapa SALVA NA HORA só os campos de acesso (o resto do formulário segue
+    // como está, ainda não salvo), para o resumo "Acessos necessários" já mostrar a etapa.
+    const persistAccessOps = (patch: Record<string, unknown>) => {
+      setOps(patch);
+      const next: Record<string, unknown> = { ...(step.ops ?? {}), ...patch };
+      for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
+      return act(() => apiClient.updateCatalog2Step(step.id, { ops: next, scope: "product" }), "Acesso da etapa atualizado.");
+    };
+    // Formulário COMPACTO: campos baixos (h-8), espaçamentos curtos e cabeçalho fixo com o custo, para enxergar tudo ao configurar.
+    const CTL = "h-8 w-full min-w-0 max-w-full truncate rounded-md border border-slate-200 bg-white px-2 text-[13px] dark:border-slate-700 dark:bg-slate-900";
+    const SECTION = "min-w-0 space-y-1.5 px-3 py-2";
+    const TITLE = "text-[10px] font-bold uppercase tracking-wide text-slate-500";
     return (
-      <li className="relative rounded-xl border border-sky-400 bg-white shadow-sm before:absolute before:-left-[14px] before:top-6 before:h-px before:w-3.5 before:bg-violet-300 after:absolute after:-left-[17px] after:top-[21px] after:h-1.5 after:w-1.5 after:rounded-full after:bg-violet-400 dark:border-sky-700 dark:bg-slate-900/60" data-testid="step-edit-form">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5 dark:border-slate-700">
+      <li className="relative rounded-xl border border-sky-400 bg-white shadow-sm before:absolute before:-left-[14px] before:top-6 before:h-px before:w-3.5 before:bg-violet-300 after:absolute after:-left-[17px] after:top-[21px] after:h-1.5 after:w-1.5 after:rounded-full after:bg-violet-400 dark:border-sky-700 dark:bg-slate-900/60 [&_label>span:first-child]:text-[11px]" data-testid="step-edit-form">
+        <fieldset disabled={readOnly} className="contents">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b border-slate-200 bg-white/95 px-3 py-1.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
           <div className="flex min-w-0 items-center gap-2">
             <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-sky-500 px-1.5 text-xs font-bold text-white">{index + 1}</span>
             <span className="rounded-md bg-sky-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">Etapa {index + 1}</span>
             <span className="h-4 w-px bg-slate-300" />
             <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{f.name || step.name}</span>
           </div>
-          <span className="text-xs text-slate-500">{draftCost == null ? "Custo estimado desta etapa: a definir" : <>Custo estimado desta etapa: <strong className="text-slate-800 dark:text-slate-100">{brl2(draftCost)}</strong></>}</span>
+          {f.execution_mode === "hibrido" ? (
+            // Humano ou IA: os DOIS custos aparecem sempre, lado a lado.
+            <span className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="step-header-costs">
+              <span className="rounded-md bg-sky-50 px-2 py-0.5 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200">Custo estimado com humano: <strong>{draftCost == null ? "a definir" : brl2(draftCost)}</strong></span>
+              <span className="rounded-md bg-violet-50 px-2 py-0.5 text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">Custo estimado com IA: <strong>{draftAiCost == null ? "a definir" : brl2(draftAiCost)}</strong></span>
+            </span>
+          ) : (
+            <span className="text-xs text-slate-500">{draftCost == null ? "Custo estimado desta etapa: a definir" : <>Custo estimado desta etapa: <strong className="text-slate-800 dark:text-slate-100">{brl2(draftCost)}</strong></>}</span>
+          )}
         </div>
 
-        <div className="grid divide-slate-200 md:grid-cols-2 md:divide-x dark:divide-slate-700">
+        {/* Uma coluna só, 100% da largura: 1, 2, 3, 4 e 5 empilhados, nunca lado a lado. */}
+        <div className="flex flex-col divide-y divide-slate-200 dark:divide-slate-700">
           {/* 1 · O que é esta etapa */}
           <section className={SECTION}>
             <h5 className={TITLE}>1 · O que é esta etapa</h5>
-            <Field label="Nome da etapa"><input className={CTL} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-            <Field label={<span className="inline-flex items-center gap-2">Descrição (o que acontece nesta etapa)<AiFieldButton compact label="Descrição (o que acontece nesta etapa)" value={f.description} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Critério de conclusão": f.completion_criteria } }} disabled={readOnly} onResult={(v) => setF({ ...f, description: v.slice(0, 8000) })} /></span>}><Textarea rows={3} maxLength={8000} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-[88px] text-sm" /></Field>
+            {/* Nome e descrição lado a lado: o nome é curto, a descrição ocupa o resto. */}
+            <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
+              <Field label="Nome da etapa"><input className={CTL} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+              <Field label={<span className="inline-flex items-center gap-2">Descrição (o que acontece nesta etapa)<AiFieldButton compact label="Descrição (o que acontece nesta etapa)" value={f.description} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Critério de conclusão": f.completion_criteria } }} disabled={readOnly} onResult={(v) => setF({ ...f, description: v.slice(0, 8000) })} /></span>}><Textarea rows={1} maxLength={8000} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-[32px] py-1.5 text-[13px]" /></Field>
+            </div>
           </section>
           {/* 2 · Quem faz e quanto tempo leva */}
           <section className={SECTION}>
             <h5 className={TITLE}>2 · Quem faz e quanto tempo leva</h5>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+            {f.execution_mode === "hibrido" ? (
+              <>
+                <div className="grid grid-cols-1 gap-x-2 gap-y-1.5 sm:grid-cols-2">
+                  <Field label="Finalidade"><select className={CTL} value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+                  <Field label="Quem executa"><select className={CTL} aria-label="Quem executa" value={f.execution_mode} onChange={(e) => changeMode(e.target.value)}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+                </div>
+                {/* Humano ou IA: duas opções, cada uma com a sua especialidade e o seu tempo. O cliente escolhe uma na contratação e vê o preço de cada. */}
+                <div className="grid gap-2 md:grid-cols-2" data-testid="hybrid-options">
+                  <div className="space-y-1.5 rounded-lg border border-sky-200 bg-sky-50/50 p-2 dark:border-sky-900 dark:bg-sky-950/20">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">Opção humano</p>
+                    <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
+                      <Field label="Especialidade (humana)"><SpecialtyCombobox specialties={refs?.specialties ?? []} mode="humano" value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} /></Field>
+                      <Field label="Horas / prazo"><input className={CTL} aria-label="Horas estimadas do humano" type="number" min="0" step="0.25" value={f.estimated_hours} onChange={(e) => setF({ ...f, estimated_hours: e.target.value })} /></Field>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300" data-testid="hybrid-human-cost">Custo humano: {draftCost == null ? "a definir" : <strong>{brl2(draftCost)}</strong>}</p>
+                  </div>
+                  <div className="space-y-1.5 rounded-lg border border-violet-200 bg-violet-50/50 p-2 dark:border-violet-900 dark:bg-violet-950/20">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">Opção IA</p>
+                    <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
+                      <Field label="Especialidade (IA)"><SpecialtyCombobox specialties={refs?.specialties ?? []} mode="ia" value={f.ai_specialty_id} onChange={(v: string) => setF({ ...f, ai_specialty_id: v })} /></Field>
+                      <Field label="Horas / prazo"><input className={CTL} aria-label="Horas estimadas da IA" type="number" min="0" step="0.25" value={f.ai_estimated_hours} onChange={(e) => setF({ ...f, ai_estimated_hours: e.target.value })} /></Field>
+                    </div>
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300" data-testid="hybrid-ai-cost">Custo IA: {draftAiCost == null ? "a definir" : <strong>{brl2(draftAiCost)}</strong>}</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+            <div className="grid grid-cols-1 gap-x-2 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-4">
               <Field label="Finalidade"><select className={CTL} value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-              <Field label="Quem executa"><select className={CTL} aria-label="Quem executa" value={f.execution_mode} onChange={(e) => setF(enforceApprover({ ...f, execution_mode: e.target.value, specialty_id: keepSpecialtyForMode(refs?.specialties, f.specialty_id, e.target.value) }))}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-              <Field label="Especialidade"><SpecialtySelect refs={refs} mode={f.execution_mode} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
+              <Field label="Quem executa"><select className={CTL} aria-label="Quem executa" value={f.execution_mode} onChange={(e) => changeMode(e.target.value)}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+              <Field label="Especialidade"><SpecialtySelect refs={refs} mode={f.execution_mode} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} /></Field>
               <Field label="Horas estimadas"><input className={CTL} type="number" min="0" step="0.25" value={f.estimated_hours} onChange={(e) => setF({ ...f, estimated_hours: e.target.value })} /></Field>
             </div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2.5" data-testid="step-receiver">
+            )}
+            <div className="grid grid-cols-1 gap-x-2 gap-y-1.5 sm:grid-cols-2" data-testid="step-receiver">
               <Field label="Quem recebe a etapa">
                 <select className={CTL} aria-label="Quem recebe a etapa" value={f.executor_kind} onChange={(e) => setF({ ...f, executor_kind: e.target.value, ...(e.target.value !== "leader" ? { leader_mode: "auto", leader_user_id: "" } : {}) })}>
                   <option value="nomad">Nômade da plataforma (oferta e rodízio)</option>
@@ -1771,129 +2287,279 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
           </section>
         </div>
 
-        <div className="grid divide-slate-200 border-t border-slate-200 md:grid-cols-2 md:divide-x dark:divide-slate-700 dark:border-slate-700">
+        <div className="flex flex-col divide-y divide-slate-200 border-t border-slate-200 dark:divide-slate-700 dark:border-slate-700">
           {/* 3 · Quando a etapa termina */}
           <section className={SECTION}>
-            <h5 className={TITLE}>3 · Quando a etapa termina</h5>
+            <h5 className={TITLE}>3 · Quando a etapa termina<span className="field-info" data-help={"Aqui você define:\n• quando a etapa é considerada PRONTA (critério de conclusão);\n• se ela se repete nos meses seguintes, em produtos mensais;\n• e, em tarefas com execução por etapa, quem aprova e em quanto tempo."} aria-hidden="true">i</span></h5>
             <Field label={<span className="inline-flex items-center gap-2">Critério de conclusão<AiFieldButton compact label="Critério de conclusão" value={f.completion_criteria} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Descrição da etapa": f.description } }} disabled={readOnly} onResult={(v) => setF({ ...f, completion_criteria: v.replace(/\n/g, " ").slice(0, 4000) })} /></span>}><input className={CTL} value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
             <label className="flex items-center gap-2 text-sm" title="Nunca se repete nos ciclos seguintes"><input type="checkbox" className="h-4 w-4" checked={f.first_execution_only} onChange={(e) => setF({ ...f, first_execution_only: e.target.checked })} /> Só na primeira execução</label>
             <label className="flex items-center gap-2 text-sm" title="Se o mesmo executor for mantido no ciclo seguinte, esta etapa é dispensada"><input type="checkbox" className="h-4 w-4" checked={f.skip_when_same_executor} onChange={(e) => setF({ ...f, skip_when_same_executor: e.target.checked })} /> Dispensável quando o mesmo executor continua</label>
+            <details className="rounded-md border border-sky-200 bg-sky-50/60 px-2 py-1 text-[11px] text-slate-700 dark:border-sky-900 dark:bg-sky-950/20 dark:text-slate-200" data-testid="recurrence-explainer">
+              <summary className="cursor-pointer font-semibold text-sky-800 dark:text-sky-200">Como as duas opções acima funcionam em produtos mensais? Veja um exemplo</summary>
+              <div className="mt-1.5 space-y-1.5 leading-snug">
+                <p>Em um produto <strong>mensal (recorrente)</strong> a tarefa se repete todo mês. Cada mês é um <strong>ciclo</strong>. Em produto de compra única essas duas opções não mudam nada, pois só existe um ciclo.</p>
+                <p>Exemplo — tarefa “Gestão de anúncios” com 3 etapas:</p>
+                <ul className="list-disc space-y-0.5 pl-4">
+                  <li><strong>Configurar a conta</strong> → marcada “Só na primeira execução”</li>
+                  <li><strong>Reunião de alinhamento</strong> → marcada “Dispensável quando o mesmo executor continua”</li>
+                  <li><strong>Otimizar campanhas</strong> → sem marcação</li>
+                </ul>
+                <div className="overflow-hidden rounded border border-sky-200 dark:border-sky-900">
+                  <table className="w-full text-left text-[11px]">
+                    <thead className="bg-sky-100/70 dark:bg-sky-900/30"><tr><th className="px-2 py-1">Mês</th><th className="px-2 py-1">O que acontece</th></tr></thead>
+                    <tbody>
+                      <tr><td className="px-2 py-1 font-semibold">1</td><td className="px-2 py-1">As 3 etapas acontecem.</td></tr>
+                      <tr><td className="px-2 py-1 font-semibold">2 (mesmo executor)</td><td className="px-2 py-1">Só “Otimizar campanhas”. A configuração não repete e a reunião é dispensada.</td></tr>
+                      <tr><td className="px-2 py-1 font-semibold">3 (executor trocou)</td><td className="px-2 py-1">“Reunião de alinhamento” volta (o executor é novo) + “Otimizar campanhas”. A configuração nunca mais volta.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p>Resumo: <strong>“Só na primeira execução”</strong> = acontece uma única vez, no mês 1. <strong>“Dispensável…”</strong> = pula enquanto o profissional for o mesmo.</p>
+              </div>
+            </details>
+            {/* Qualificação por etapa: liga/desliga + quem qualifica. O checklist de conferência (qualificação) só vale com ela ligada. */}
+            <div className="space-y-1.5 rounded-lg border border-amber-200 bg-amber-50/50 p-2.5 dark:border-amber-900 dark:bg-amber-950/20" data-testid="qualification-box">
+              <label className="flex items-center gap-2.5 text-sm font-medium">
+                <Switch aria-label="Esta etapa precisa de qualificação" checked={qualOn} disabled={readOnly || f.execution_mode === "ia"} onCheckedChange={(v) => setF({ ...f, qual_on: !!v })} />
+                <span data-no-info="">{f.execution_mode === "hibrido" ? "Se um humano executar: esta etapa precisa de qualificação" : "Esta etapa precisa de qualificação"}</span>
+                <span className="field-info" data-help={"Qualificação = alguém CONFERE a entrega antes de ela seguir (para o cliente ou para a próxima etapa).\nLigada: aparece o checklist de conferência e a escolha de quem qualifica.\nDesligada: a etapa é liberada sem essa conferência.\nEtapas feitas por IA (ou humano ou IA) sempre têm qualificação."} aria-hidden="true">i</span>
+              </label>
+              {f.execution_mode === "ia" && <p className="text-[11px] text-amber-800 dark:text-amber-200" data-testid="approver-ai-note">Esta etapa usa IA: um qualificador sempre confere a entrega.</p>}
+              {qualOn && (
+                <div className="grid gap-2 md:grid-cols-2" data-testid="qualifier-choice">
+                  <Field label={f.execution_mode === "hibrido" ? "Quem qualifica (se humano executar)" : "Quem qualifica"}>
+                    <select className={CTL} aria-label="Quem qualifica" value={f.qualifier_kind} onChange={(e) => setF({ ...f, qualifier_kind: e.target.value })}>
+                      <option value="leader">Líder da área</option>
+                      <option value="person">Pessoa específica</option>
+                      <option value="leader_person">Líder e depois uma pessoa específica</option>
+                      <option value="nomad_pool">Nômades qualificadores</option>
+                    </select>
+                  </Field>
+                  {(f.qualifier_kind === "person" || f.qualifier_kind === "leader_person") && (
+                    <Field label="Pessoa que qualifica">
+                      <select aria-label="Pessoa que qualifica" className={CTL} value={f.specialist_user_id} onChange={(e) => setF({ ...f, specialist_user_id: e.target.value })}>
+                        <option value="">Escolha a pessoa…</option>
+                        {specialists.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.kind === "nomade" ? "nômade" : u.kind === "admin" ? "administração" : "líder"})</option>)}
+                      </select>
+                    </Field>
+                  )}
+                </div>
+              )}
+              {f.execution_mode === "hibrido" && (
+                <div className="space-y-1.5 rounded-md border border-violet-200 bg-violet-50/60 p-2 dark:border-violet-900 dark:bg-violet-950/20" data-testid="ai-qualification-box">
+                  <p className="text-[12px] font-semibold text-violet-900 dark:text-violet-200">Se a IA executar: sempre é qualificada<span className="field-info" data-help={"Na etapa 'Humano ou IA' existem duas configurações de qualificação:\n• Se um humano executar: você liga ou desliga a qualificação e escolhe quem qualifica (acima).\n• Se a IA executar: a conferência é SEMPRE obrigatória; aqui você escolhe quem confere o trabalho da IA."} aria-hidden="true">i</span></p>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <Field label="Quem qualifica (se a IA executar)">
+                      <select className={CTL} aria-label="Quem qualifica se a IA executar" disabled={readOnly} value={(f.ops?.ai_qualifier_kind as string) ?? "leader"} onChange={(e) => setOps({ ai_qualifier_kind: e.target.value, ...(e.target.value === "person" || e.target.value === "leader_person" ? {} : { ai_qualifier_user_id: undefined }) })}>
+                        <option value="leader">Líder da área</option>
+                        <option value="person">Pessoa específica</option>
+                        <option value="leader_person">Líder e depois uma pessoa específica</option>
+                        <option value="nomad_pool">Nômades qualificadores</option>
+                      </select>
+                    </Field>
+                    {(f.ops?.ai_qualifier_kind === "person" || f.ops?.ai_qualifier_kind === "leader_person") && (
+                      <Field label="Pessoa que qualifica (se a IA executar)">
+                        <select aria-label="Pessoa que qualifica se a IA executar" className={CTL} disabled={readOnly} value={(f.ops?.ai_qualifier_user_id as string) ?? ""} onChange={(e) => setOps({ ai_qualifier_user_id: e.target.value || undefined })}>
+                          <option value="">Escolha a pessoa…</option>
+                          {specialists.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.kind === "nomade" ? "nômade" : u.kind === "admin" ? "administração" : "líder"})</option>)}
+                        </select>
+                      </Field>
+                    )}
+                  </div>
+                </div>
+              )}
+              {qualOn && f.qualifier_kind === "nomad_pool" && <p className="text-[11px] text-slate-600 dark:text-slate-300">A conferência vai, em rodízio, para um nômade marcado como “Nômade qualificador” no cadastro e habilitado nesta área (nunca o próprio executor). Se não houver ninguém disponível, o líder da área qualifica.</p>}
+              {/* Execução por etapa: sem ela a qualificação por etapa não é cobrada em execução (só no fim da tarefa). */}
+              <label className="flex items-start gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                <input type="checkbox" className="mt-0.5 h-3.5 w-3.5" disabled={readOnly} checked={task?.stage_execution === "stage"} onChange={(e) => void act(() => apiClient.updateCatalog2Task(task.id, { stage_execution: e.target.checked ? "stage" : "task", scope: "product" }), e.target.checked ? "Execução por etapa ligada: cada etapa é qualificada e aprovada antes de liberar a próxima." : "Execução por etapa desligada.")} />
+                <span><strong>Esta tarefa executa por etapa</strong> — cada etapa é qualificada e aprovada antes de liberar a próxima. Sem isso, a qualificação acontece só no fim da tarefa. (Vale para todas as etapas da tarefa; salva na hora.)</span>
+              </label>
+            </div>
             {task?.stage_execution === "stage" && (
               <div className="mt-1 space-y-1.5 rounded-lg border border-violet-200 bg-violet-50/50 p-2.5 dark:border-violet-900 dark:bg-violet-950/20" data-testid="stage-flags">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">Execução por etapa</p>
                 <label className="flex items-center gap-2 text-sm" title="O cliente não vê nem aprova esta etapa (ex.: validação de briefing ou de acessos). Se achar um problema, o líder pode avisar o cliente."><input type="checkbox" className="h-4 w-4" checked={f.internal_step} onChange={(e) => setF({ ...f, internal_step: e.target.checked })} /> Etapa interna (o cliente não vê nem aprova)</label>
-                <Field label="Quem aprova esta etapa">
-                  <select className={CTL} aria-label="Quem aprova esta etapa" data-testid="step-approver" title="Quem qualifica a entrega antes de seguir. Quando a execução é feita por IA (ou híbrida), SEMPRE precisa de um qualificador." value={approverOf(f)} onChange={(e) => setF({ ...f, ...applyApprover(e.target.value as ApproverMode) })}>
-                    {APPROVER_OPTIONS.filter((o) => o.value !== "none" || (f.execution_mode === "humano" && approverOf(f) === "none")).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </Field>
-                {f.execution_mode !== "humano" && <p className="text-[11px] text-violet-700" data-testid="approver-ai-note">Esta etapa usa IA: um qualificador sempre aprova a entrega.</p>}
-                <div className="grid gap-1.5 sm:grid-cols-3" data-testid="stage-hours">
+                <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4" data-testid="stage-hours">
                   <Field label="Prazo de aprovação do cliente (h úteis)"><input type="number" min={1} step={1} aria-label="Prazo de aprovação do cliente (horas úteis)" title="Quantas horas úteis o cliente tem para aprovar esta etapa. Vazio = padrão da plataforma." className={CTL} value={f.approval_hours} onChange={(e) => setF({ ...f, approval_hours: e.target.value })} placeholder="padrão" /></Field>
                   <Field label="Prazo de refação (h úteis)"><input type="number" min={1} step={1} aria-label="Prazo de refação (horas úteis)" title="Quantas horas úteis o executor tem para refazer depois de uma reprovação. Vazio = mantém o prazo anterior." className={CTL} value={f.rework_hours} onChange={(e) => setF({ ...f, rework_hours: e.target.value })} placeholder="mantém" /></Field>
+                  <Field label="Alterações por IA grátis (cota da etapa)"><input type="number" min={0} max={100} step={1} aria-label="Alterações por IA grátis desta etapa" title="Quantas alterações por IA o cliente faz sem pagar NESTA etapa, em cada contratação. Vazio = a etapa não tem cota própria. Depois das grátis, cada alteração é cobrada do saldo da carteira. O produto mostra a soma e o detalhamento por etapa." className={CTL} value={f.ai_free_changes} onChange={(e) => setF({ ...f, ai_free_changes: e.target.value })} placeholder="sem cota" /></Field>
                   {step.executor_policy === "prefer_same_as_step" && <Field label="Prazo de aceite do preferido (h)"><input type="number" min={1} step={1} aria-label="Prazo de aceite do preferido (horas)" title="Quantas horas o executor preferido tem para aceitar antes de a etapa abrir para os demais. Vazio = 2 h." className={CTL} value={f.executor_accept_hours} onChange={(e) => setF({ ...f, executor_accept_hours: e.target.value })} placeholder="2 h" /></Field>}
                 </div>
                 {hoursBad && <p role="alert" className="text-[11px] font-semibold text-red-600">Use números inteiros a partir de 1 (ou deixe vazio).</p>}
-                {f.requires_specialist_qualification && (
-                  <Field label="Especialista que qualifica"><select aria-label="Especialista que qualifica" className={CTL} value={f.specialist_user_id} onChange={(e) => setF({ ...f, specialist_user_id: e.target.value })}><option value="">Escolha o especialista…</option>{specialists.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.kind === "nomade" ? "nômade" : u.kind === "admin" ? "administração" : "líder"})</option>)}</select></Field>
-                )}
               </div>
             )}
           </section>
           {/* 4 · Checklist, orientações e evidência */}
           <section className={SECTION}>
             <div className="flex items-center justify-between gap-2">
-              <h5 className={TITLE}>4 · Checklist, orientações e evidência</h5>
+              <h5 className={TITLE}>4 · Checklist, orientações e evidência<span className="field-info" data-help={"Três coisas diferentes:\n• Orientações: o passo a passo de COMO executar.\n• Checklist: a lista de itens que serão CONFERIDOS.\n• Evidência: a PROVA da entrega (arquivo ou link anexado)."} aria-hidden="true">i</span></h5>
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600" data-testid="step-checklist-count">{checklistCount(draftChecklist)} {checklistCount(draftChecklist) === 1 ? "item" : "itens"}</span>
                 <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setChecklistOpen(true)} data-testid="open-step-checklist"><ListChecks className="mr-1.5 h-4 w-4" />Gerenciar checklist</Button>
               </div>
             </div>
-            <Field label="Orientações para execução"><Textarea rows={2} maxLength={8000} value={f.ops?.instructions ?? ""} onChange={(e) => setOps({ instructions: e.target.value })} className="min-h-[64px] text-sm" placeholder="Como executar esta etapa, passo a passo." /></Field>
+            {/* Prévia do checklist: os itens à vista, agrupados (a conferência só aparece com a qualificação ligada). */}
+            {(() => {
+              const KIND_LABEL: Record<string, string> = { execucao: "Execução", aprovacao: "Aprovação", qualificacao: "Qualificação (conferência)" };
+              const shown = draftChecklist.filter((c) => qualAny || c.kind !== "qualificacao");
+              // Os três quadros (Execução, Aprovação, Qualificação) aparecem SEMPRE; vazio mostra "nenhum item configurado".
+              return (
+                <div className="grid gap-1.5 md:grid-cols-3" data-testid="checklist-preview">
+                  {(["execucao", "aprovacao", "qualificacao"] as const).map((k) => {
+                    const off = k === "qualificacao" && !qualAny;
+                    const list = off ? [] : shown.filter((c) => c.kind === k);
+                    return (
+                      <div key={k} data-testid={`checklist-box-${k}`} className={`rounded-md border px-2 py-1.5 ${off ? "border-dashed border-slate-300 bg-slate-100/60 dark:border-slate-700 dark:bg-slate-800/20" : "border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/40"}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{KIND_LABEL[k]} ({list.length})</p>
+                        {off ? <p className="text-[11px] text-slate-500">Qualificação desligada nesta etapa: não há conferência.</p>
+                          : list.length === 0 ? <p className="text-[11px] text-slate-500" data-testid={`checklist-empty-${k}`}>Nenhum item de checklist configurado.</p> : (
+                          <ul className="mt-0.5 space-y-0.5 text-[11px] text-slate-700 dark:text-slate-200">
+                            {list.slice(0, 4).map((c) => <li key={c.id} className="flex gap-1"><span aria-hidden="true">☐</span><span className="min-w-0 break-words">{c.text}</span></li>)}
+                            {list.length > 4 && <li className="text-slate-400">+ {list.length - 4} item(ns)</li>}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+            <details className="rounded-md border border-violet-200 bg-violet-50/60 px-2 py-1 text-[11px] text-slate-700 dark:border-violet-900 dark:bg-violet-950/20 dark:text-slate-200" data-testid="checklist-vs-evidence">
+              <summary className="cursor-pointer font-semibold text-violet-800 dark:text-violet-200">Checklist, orientações e evidência: qual a diferença?</summary>
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 leading-snug">
+                <li><strong>Orientações para execução</strong> = o <em>como fazer</em>. Texto livre para o executor (ex.: “duplique a campanha modelo e troque o público”).</li>
+                <li><strong>Checklist</strong> = o <em>que conferir</em>. Lista de itens (“logo aplicado”, “texto revisado”) que o executor marca como feitos e que quem qualifica e quem aprova também conferem.</li>
+                <li><strong>Evidência obrigatória</strong> = a <em>prova</em>. Um arquivo ou link anexado (ex.: print da campanha no ar). Ligada, a etapa <u>não conclui</u> sem anexar a prova.</li>
+              </ul>
+              <p className="mt-1">Eles se complementam: o checklist diz o que foi conferido; a evidência é o comprovante. Pode usar só um, ou os dois.</p>
+            </details>
+            <Field label="Orientações para execução"><Textarea rows={4} maxLength={8000} value={f.ops?.instructions ?? ""} onChange={(e) => setOps({ instructions: e.target.value })} className="min-h-[88px] py-1.5 text-[13px]" placeholder={"Manual operacional da etapa (serve para o nômade, o líder e a IA).\n1. O que abrir ou acessar\n2. O que fazer, passo a passo\n3. Como conferir antes de entregar"} /><span className="block text-right text-[10px] text-slate-400">{(f.ops?.instructions ?? "").length}/8000</span></Field>
+            {f.execution_mode !== "humano" && (
+              <Field label="Prompt da IA (como a IA deve executar esta etapa)">
+                <Textarea rows={3} maxLength={8000} disabled={readOnly} value={f.ops?.ai_prompt ?? ""} onChange={(e) => setOps({ ai_prompt: e.target.value })} className="min-h-[56px] py-1.5 text-[13px]" placeholder="Instrução específica para a IA: o que ela deve produzir, tom, formato da saída, o que nunca fazer…" data-testid="ai-prompt" />
+              </Field>
+            )}
             <label className="flex items-center gap-2.5 text-sm font-medium" title="A etapa só pode ser concluída depois de anexar uma evidência.">
-              <Switch aria-label="Evidência obrigatória" checked={!!f.ops?.evidence_required} onCheckedChange={(v) => setOps({ evidence_required: !!v })} />
+              <Switch aria-label="Evidência obrigatória" checked={!!f.ops?.evidence_required} onCheckedChange={(v) => setOps({ evidence_required: !!v, ...(v ? {} : { evidence_types: undefined }) })} />
               Evidência obrigatória
             </label>
-            <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
-              <Field label="Responsável pela evidência">
-                <select className={CTL} value={f.ops?.evidence_owner ?? "executor"} onChange={(e) => setOps({ evidence_owner: e.target.value })}>
-                  <option value="executor">Executor da etapa</option><option value="leader">Líder</option><option value="client">Cliente</option>
-                </select>
-              </Field>
-              <Field label="Exemplo de evidência (opcional)"><input className={CTL} maxLength={1000} value={f.ops?.evidence_hint ?? ""} onChange={(e) => setOps({ evidence_hint: e.target.value })} placeholder="Ex.: print da tela com a campanha publicada" /></Field>
-            </div>
+            {f.ops?.evidence_required && (
+              <fieldset className="rounded-lg border border-violet-200 bg-violet-50/50 px-2.5 py-2 dark:border-violet-900 dark:bg-violet-950/20" data-testid="evidence-types">
+                <legend className="px-1 text-[11px] font-semibold text-violet-800 dark:text-violet-200">Que tipo de evidência você quer?<span className="field-info" data-help={"Marque o que vale como prova nesta etapa (pode marcar mais de um).\nO executor vê o tipo pedido e entrega do jeito certo.\nExemplo: Print da tela + Relatório."} aria-hidden="true">i</span></legend>
+                <div className="flex flex-wrap gap-1.5">
+                  {EVIDENCE_TYPE_OPTIONS.map(([key, label]) => {
+                    const chosen: string[] = Array.isArray(f.ops?.evidence_types) ? f.ops.evidence_types : [];
+                    const on = chosen.includes(key);
+                    return (
+                      <label key={key} className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${on ? "border-violet-500 bg-violet-600 text-white" : "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"}`}>
+                        <input type="checkbox" className="sr-only" checked={on} onChange={(e) => setOps({ evidence_types: e.target.checked ? [...chosen, key] : chosen.filter((k) => k !== key) })} />
+                        {label}
+                      </label>
+                    );
+                  })}
+                </div>
+                {(!Array.isArray(f.ops?.evidence_types) || f.ops.evidence_types.length === 0) && <p className="mt-1 text-[11px] text-slate-500">Nenhum tipo marcado: qualquer prova (arquivo ou link) vale.</p>}
+              </fieldset>
+            )}
+            {/* Responsável e exemplo só aparecem com a evidência obrigatória LIGADA; desligada, não há o que configurar. */}
+            {f.ops?.evidence_required && (
+              <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2" data-testid="evidence-details">
+                <Field label="Responsável pela evidência">
+                  <select className={CTL} value={f.ops?.evidence_owner ?? "executor"} onChange={(e) => setOps({ evidence_owner: e.target.value })}>
+                    <option value="executor">Executor da etapa</option><option value="leader">Líder</option><option value="client">Cliente</option>
+                  </select>
+                </Field>
+                <Field label="Exemplo de evidência (opcional)"><input className={CTL} maxLength={1000} value={f.ops?.evidence_hint ?? ""} onChange={(e) => setOps({ evidence_hint: e.target.value })} placeholder="Ex.: print da tela com a campanha publicada" /></Field>
+              </div>
+            )}
           </section>
         </div>
 
         {/* 5 · Conexões e acessos (largura total) */}
         <section className="space-y-2.5 border-t border-slate-200 p-4 dark:border-slate-700">
           <h5 className={TITLE}>5 · Conexões e acessos desta etapa</h5>
-          <StepAccessPicker requirements={version?.connection_requirements ?? []} value={f.ops} disabled={readOnly} onChange={(patch) => setOps(patch)} />
-          <ConnectionsSection version={version} readOnly={readOnly} act={act} scope={{ kind: "step", task: { key: task.key, name: task.name }, step: { key: step.key, name: step.name } }} />
+          {/* Uma lista só: liga/desliga → lista de acessos da etapa + "Adicionar acesso" + acessos de outras etapas para usar aqui. */}
+          <ConnectionsSection version={version} readOnly={readOnly} act={act} scope={{ kind: "step", task: { key: task.key, name: task.name }, step: { key: step.key, name: step.name } }}
+            stepOps={f.ops} onStepOps={(patch) => persistAccessOps(patch)}
+            stepNames={Object.fromEntries((version?.tasks ?? []).flatMap((t: any) => (t.steps ?? []).map((s: any) => [s.key, s.name])))}
+            onLinked={(key) => {
+            // O acesso cadastrado nesta etapa já passa a ser usado por ela, e isso é salvo na hora (o resumo de baixo atualiza).
+            const cur = f.ops ?? {};
+            if (cur.access_scope === "all") return;
+            const keys: string[] = Array.isArray(cur.access_keys) ? cur.access_keys : [];
+            if (!keys.includes(key)) persistAccessOps(accessPatch("some", [...keys, key]));
+          }} />
         </section>
 
-        <StepChecklistDialog open={checklistOpen} title={f.name || step.name} value={draftChecklist} onClose={() => setChecklistOpen(false)} onSave={(list) => { setOps({ checklist: list }); setChecklistOpen(false); }} />
+        <StepChecklistDialog open={checklistOpen} title={f.name || step.name} value={draftChecklist} qualificationEnabled={qualAny} onClose={() => setChecklistOpen(false)} onSave={(list) => { setOps({ checklist: list }); setChecklistOpen(false); }} />
 
-        <div className="sticky bottom-0 flex gap-2 rounded-b-xl border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+        <div className="sticky bottom-0 flex gap-2 rounded-b-xl border-t border-slate-200 bg-white/95 px-3 py-1.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
           <SaveButton onClick={save}>Salvar etapa</SaveButton>
           <Button size="sm" variant="ghost" className="h-9" onClick={() => { setF(initial()); setEditing(false); }}>Cancelar</Button>
         </div>
         <ModelScopeDialog open={scopeAsk} kindLabel="etapa" modelId={step.step_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void doSave(sc); }} />
+        </fieldset>
       </li>
     );
   }
   return (
-    <li className="relative rounded-lg bg-sky-50/70 px-2.5 py-1.5 text-[13px] before:absolute before:-left-[14px] before:top-1/2 before:h-px before:w-3.5 before:bg-violet-300 after:absolute after:-left-[17px] after:top-[calc(50%-3px)] after:h-1.5 after:w-1.5 after:rounded-full after:bg-violet-400 dark:bg-sky-950/20 dark:before:bg-violet-700 dark:after:bg-violet-500">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-300">Etapa</span><span className="flex h-4 min-w-4 items-center justify-center rounded bg-sky-500 px-1 text-[10px] font-bold text-white">{index + 1}</span><span className="font-medium text-slate-800 dark:text-slate-100">{step.name}</span>
-            {step.step_model_id != null && <button type="button" title="Ver o modelo global desta etapa" onClick={() => setViewModel(true)} className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-200">Etapa #{step.step_model_id}</button>}
+    <li data-testid={`step-card-${index + 1}`} className={`relative rounded-xl border bg-white px-3 py-2.5 text-[13px] shadow-sm before:absolute before:-left-[26px] before:top-[18px] before:h-3 before:w-3 before:rounded-full before:border-2 before:border-white before:bg-violet-500 dark:bg-slate-900/60 ${parallelWith.length > 0 ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900" : open ? "border-cyan-300 bg-sky-50/40 ring-1 ring-cyan-200 dark:border-cyan-800 dark:ring-cyan-900" : "border-slate-200 dark:border-slate-700"}`}>
+      <div className="flex items-start gap-3" data-testid="step-header">
+        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white ${open ? "bg-sky-500" : "bg-indigo-400"}`}>{index + 1}</span>
+        <div role="button" tabIndex={0} aria-expanded={open} aria-label={open ? `Recolher a etapa ${index + 1}` : `Abrir a etapa ${index + 1}`} onClick={() => setOpen((v) => !v)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpen((v) => !v); } }} className="min-w-0 flex-1 cursor-pointer text-left" data-testid="step-toggle">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[15px] font-bold leading-tight text-slate-900 dark:text-slate-100">{step.name}</span>
+            {parallelWith.length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" data-testid="step-parallel-chip" title="Estas etapas acontecem ao mesmo tempo">⇄ Ao mesmo tempo que a etapa {parallelWith.join(", ")}</span>}
+            {step.step_model_id != null && <button type="button" title="Ver o modelo global desta etapa" onClick={(e) => { e.stopPropagation(); setViewModel(true); }} className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-200">Etapa #{step.step_model_id}</button>}
             <ModelStatusChips model={step.model} readOnly={readOnly} onSync={() => act(() => apiClient.syncCatalog2StepModel(step.id), "Etapa atualizada para a revisão atual do modelo global.")} />
-            {step.first_execution_only && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">Só na 1ª execução</span>}
-            {step.skip_when_same_executor && <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">Dispensável c/ mesmo executor</span>}
-            {step.is_access_validation && <span title="Bloqueia as etapas seguintes até os acessos serem validados" className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-semibold text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">Pré-requisito: acessos</span>}
-            {task?.effort_is_provisional && !readOnly && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">revisar</span>}
-          </div>
-          <div className="text-xs text-neutral-500">
-            {PURPOSE_LABEL[step.purpose] ?? step.purpose} · {EXEC_LABEL[step.execution_mode] ?? step.execution_mode} · {specName ?? "sem especialidade"} · {formatStageHours(step.estimated_minutes)} · <span data-testid="step-cost" title="Custo estimado: horas × valor/hora da especialidade (sem taxas e margem)">{stepCostEstimate(step, task, refs) == null ? "custo a definir" : brl2(stepCostEstimate(step, task, refs)!)}</span>{step.is_conditional ? " · condicional" : ""}
-          </div>
+            {step.first_execution_only && <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">Só na 1ª execução</span>}
+            {step.skip_when_same_executor && <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-[11px] font-semibold text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">Dispensável c/ mesmo executor</span>}
+            {step.is_access_validation && <span title="Bloqueia as etapas seguintes até os acessos serem validados" className="rounded-full bg-teal-100 px-2.5 py-0.5 text-[11px] font-semibold text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">Pré-requisito: acessos</span>}
+            {task?.effort_is_provisional && !readOnly && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">revisar</span>}
+            {stepFlowChips(step, steps).slice(0, 1).map((c) => <span key={c} data-testid="step-flow-chips" className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">{c.charAt(0).toUpperCase() + c.slice(1)}</span>)}
+          </span>
+          <span className="mt-0.5 block truncate text-[12px] text-slate-500">
+            {PURPOSE_LABEL[step.purpose] ?? step.purpose} · {EXEC_LABEL[step.execution_mode] ?? step.execution_mode} · {specName ?? "sem especialidade"} · {formatStageHours(step.estimated_minutes)}
+            {(() => { const c = step.execution_mode === "hibrido" ? null : stepCostEstimate(step, task, refs); return c == null ? null : <span data-testid="step-cost" title="Custo estimado: horas × valor/hora da especialidade (sem taxas e margem)"> · custo {brl2(c)}</span>; })()}
+            {step.execution_mode === "hibrido" && (() => {
+              const aiSp = (refs?.specialties ?? []).find((sp: any) => sp.id === step.ai_specialty_id);
+              return <span data-testid="step-ai-option" className="font-semibold text-violet-700 dark:text-violet-300"> · Opção IA: {aiSp?.name ?? "sem especialidade"} · {formatStageHours(step.ai_estimated_minutes)}</span>;
+            })()}
+          </span>
+        </div>
+        <button type="button" aria-expanded={open} aria-label={open ? `Recolher a etapa ${index + 1}` : `Abrir a etapa ${index + 1}`} onClick={() => setOpen((v) => !v)} className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">{open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
+      </div>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <StepDetailsSummary step={step} />
           {!readOnly && steps.length > 1 && <StepFlowControls step={step} steps={steps} index={index} taskId={taskId} act={act} />}
-          {task?.stage_execution === "stage" && (
-            <div className="mt-0.5 flex flex-wrap gap-1" data-testid="stage-chips">
-              {step.internal_step && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Interna (cliente não vê)</span>}
-              {step.requires_qualification === false && <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">Sem qualificação do líder</span>}
-              {step.requires_specialist_qualification && <span className="rounded-full bg-pink-100 px-2 py-0.5 text-[10px] font-semibold text-pink-800">Qualificação do especialista</span>}
-              {step.approval_hours != null && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800" title="Prazo do cliente para aprovar">Aprovação: {step.approval_hours} h úteis</span>}
-              {step.rework_hours != null && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800" title="Prazo para refazer após reprovação">Refação: {step.rework_hours} h úteis</span>}
-              {step.executor_policy === "prefer_same_as_step" && step.executor_accept_hours != null && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800" title="Prazo de aceite do executor preferido">Aceite: {step.executor_accept_hours} h</span>}
-              {!readOnly && <span className="text-[10px] text-slate-400">Para alterar, clique em Editar.</span>}
+          {(step.executor_kind === "leader" || step.executor_kind === "internal") && <div><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800" data-testid="step-receiver-chip">{step.executor_kind === "internal" ? "Equipe interna" : step.leader_mode === "specific" ? "Líder específico" : "Líder da área"}</span></div>}
+          <StepGovernance step={step} task={task} version={version} readOnly={readOnly} act={act} />
+          {!readOnly && (
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 dark:border-slate-800" data-testid="step-actions">
+              {task?.effort_is_provisional && (
+                <button className="rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700" title="Conferi esta etapa (nome, horas e especialidade) — confirmar"
+                  onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: step.name, estimated_minutes: step.estimated_minutes ?? null, specialty_id: step.specialty_id ?? task?.specialty?.id ?? null }), "Etapa confirmada.")}>Ok, conferi</button>
+              )}
+              <button type="button" data-testid="step-checklist-btn" title="Ver e cadastrar o checklist desta etapa (execução, aprovação e qualificação)" onClick={() => setChecklistOpen(true)} className="inline-flex h-8 items-center gap-1 rounded-md border border-sky-200 bg-white px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"><ListChecks className="h-3.5 w-3.5" />Checklist ({checklistCount((step.ops?.checklist as ChecklistItem[] | undefined) ?? [])})</button>
+              <button type="button" title="Editar esta etapa (nome, executor, especialidade, tempo…)" onClick={() => setEditing(true)} className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50"><Pencil className="h-3.5 w-3.5" />Editar etapa</button>
+              <button type="button" disabled={index === 0} title="Mover etapa para cima — ela passa a acontecer antes da anterior" onClick={() => setMoveAsk(-1)} className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"><ChevronUp className="h-3.5 w-3.5" />Subir</button>
+              <button type="button" disabled={index === steps.length - 1} title="Mover etapa para baixo — ela passa a acontecer depois da próxima" onClick={() => setMoveAsk(1)} className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" />Descer</button>
+              <ConfirmDeleteButton testId="step-delete" label="Excluir etapa" title="Remover etapa desta tarefa?" onConfirm={() => act(() => apiClient.deleteCatalog2Step(step.id), "Etapa removida da tarefa.")} />
             </div>
           )}
-          {(step.executor_kind === "leader" || step.executor_kind === "internal") && <div className="mt-0.5"><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800" data-testid="step-receiver-chip">{step.executor_kind === "internal" ? "Equipe interna" : step.leader_mode === "specific" ? "Líder específico" : "Líder da área"}</span></div>}
-          {stepFlowChips(step, steps).length > 0 && <div className="mt-0.5 flex flex-wrap gap-1" data-testid="step-flow-chips">{stepFlowChips(step, steps).map((c) => <span key={c} className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200">{c}</span>)}</div>}
-          {step.completion_criteria && <div className="text-xs text-neutral-500">Critério de conclusão: {step.completion_criteria}</div>}
-          <StepGovernance step={step} task={task} version={version} readOnly={readOnly} act={act} />
         </div>
-        {!readOnly && (
-          <span className="flex shrink-0 gap-1">
-            {task?.effort_is_provisional && (
-              <button
-                className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-700"
-                title="Conferi esta etapa (nome, horas e especialidade) — confirmar"
-                onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: step.name, estimated_minutes: step.estimated_minutes ?? null, specialty_id: step.specialty_id ?? task?.specialty?.id ?? null }), "Etapa confirmada.")}
-              >Ok</button>
-            )}
-            <button type="button" data-testid="step-checklist-btn" title="Ver e cadastrar o checklist desta etapa (execução, aprovação e qualificação)" onClick={() => setChecklistOpen(true)} className="inline-flex h-7 items-center gap-1 rounded-lg border border-sky-200 bg-white px-2 text-[11px] font-semibold text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:bg-slate-900"><ListChecks className="h-3.5 w-3.5" />Checklist ({checklistCount(step.ops?.checklist)})</button>
-            <IconBtn label="Editar esta etapa (nome, executor, especialidade, tempo…)" onClick={() => setEditing(true)}><Pencil className="h-3.5 w-3.5" /></IconBtn>
-            <IconBtn label="Mover etapa para cima — ela passa a acontecer antes da anterior" disabled={index === 0} onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, -1)))}><ChevronUp className="h-3.5 w-3.5" /></IconBtn>
-            <IconBtn label="Mover etapa para baixo — ela passa a acontecer depois da próxima" disabled={index === steps.length - 1} onClick={() => act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, 1)))}><ChevronDown className="h-3.5 w-3.5" /></IconBtn>
-            <DeleteBtn label="Remover etapa desta tarefa?" onConfirm={() => act(() => apiClient.deleteCatalog2Step(step.id), "Etapa removida da tarefa.")} />
-          </span>
-        )}
-      </div>
+      )}
       {viewModel && step.step_model_id != null && <TaskModelInfoDialog kind="step" id={step.step_model_id} onClose={() => setViewModel(false)} />}
-      <StepChecklistDialog open={checklistOpen} title={step.name} readOnly={readOnly} saving={savingChecklist} value={(step.ops?.checklist as ChecklistItem[] | undefined) ?? []} onClose={() => setChecklistOpen(false)}
+      <ConfirmationDialog
+        open={moveAsk !== null}
+        onClose={() => setMoveAsk(null)}
+        title="Mudar a ordem da etapa?"
+        message={moveAsk === null ? null : <>Deseja que a etapa <strong>“{step.name}”</strong> passe a ser a <strong>{index + 1 + moveAsk}ª</strong>? A etapa <strong>“{steps[index + moveAsk]?.name}”</strong> passa a ser a {index + 1}ª. A ordem muda também o que acontece antes e depois de cada etapa.</>}
+        confirmText={`Sim, passar para a ${moveAsk === null ? "" : index + 1 + moveAsk}ª`}
+        onConfirm={async () => { const dir = moveAsk; setMoveAsk(null); if (dir === null) return; await act(() => apiClient.reorderCatalog2Steps(taskId, move(steps.map((x: any) => x.id), index, dir)), "Ordem das etapas atualizada."); }}
+      />
+      <StepChecklistDialog open={checklistOpen} title={step.name} readOnly={readOnly} saving={savingChecklist} qualificationEnabled={step.execution_mode !== "humano" && step.execution_mode != null ? true : step.requires_qualification !== false || !!step.requires_specialist_qualification} value={(step.ops?.checklist as ChecklistItem[] | undefined) ?? []} onClose={() => setChecklistOpen(false)}
         onSave={(list) => { setSavingChecklist(true); void act(() => apiClient.updateCatalog2Step(step.id, { ops: { ...(step.ops ?? {}), checklist: list }, scope: "product" }), "Checklist da etapa salvo.").then(() => setChecklistOpen(false)).finally(() => setSavingChecklist(false)); }} />
     </li>
   );
@@ -1942,13 +2608,11 @@ function TaskInlineEdit({ task, version, refs, act, effortHighlighted, durationH
   const saveTask = () => void doSaveTask("product");
   return (
     <section className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-800/30">
-    <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300">Configurar tarefa <span className="font-normal text-slate-400">(executor, especialidade, ciclo, acessos, questionário…)</span></p>
+    <p className="text-[12px] font-semibold text-slate-600 dark:text-slate-300">Configurações da tarefa <span className="font-normal text-slate-400">(ciclo, repetição, guia, entregáveis, dependências, acessos, questionário…) — quem executa e a especialidade vêm das etapas</span></p>
     <div className="space-y-2 pt-2 text-xs">
       <div className="flex flex-wrap items-end gap-2">
-        <TaskField label="Executor">
-          <select className="h-8 rounded border border-neutral-300 bg-white px-2 text-xs dark:border-neutral-700 dark:bg-slate-900" value={t.execution_mode} onChange={(e) => { const keep = keepSpecialtyForMode(refs?.specialties, t.specialty_id, e.target.value); setT({ ...t, execution_mode: e.target.value, specialty_id: keep }); preview({ execution_mode: e.target.value, ...(keep !== t.specialty_id ? { specialty_id: null, specialty: null } : {}) }); }}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-        </TaskField>
-        <TaskField label="Especialidade / conhecimento humano">
+        {/* Quem executa NÃO é escolhido aqui: vem das etapas (humano, IA ou misto) e aparece no Resumo da tarefa. */}
+        <TaskField label="Especialidade padrão (das etapas sem especialidade própria)">
           <select className={`h-8 rounded border bg-white px-2 text-xs dark:border-neutral-700 dark:bg-slate-900 ${effortDone ? "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-400 dark:bg-emerald-900/30" : effortHighlighted ? "border-amber-500 bg-amber-100 ring-2 ring-amber-400 dark:bg-amber-900/30" : "border-neutral-300"}`} value={t.specialty_id} onChange={(e) => { const specialty = refs.specialties.find((s: any) => s.id === e.target.value) ?? null; setT({ ...t, specialty_id: e.target.value }); preview({ specialty_id: e.target.value || null, specialty }); }}><option value="">Sem especialidade</option>{specialtiesForMode(refs.specialties, t.execution_mode).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
         </TaskField>
         <button type="button" className="mb-0.5 text-xs font-semibold text-violet-700 underline hover:text-violet-900 dark:text-violet-300" onClick={() => void onOpenPricing?.(task.id)}>Configurar especialidades e custos</button>
@@ -2082,7 +2746,7 @@ function NewSpecialtyForm({ onCreated, act }: { onCreated: (s: any) => void; act
       <Field label="key"><Input value={f.key} onChange={(e) => setF({ ...f, key: e.target.value })} /></Field>
       <Field label="nome"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
       <Field label="valor/hora (opcional)"><Input type="number" value={f.max_hourly_rate} onChange={(e) => setF({ ...f, max_hourly_rate: e.target.value })} /></Field>
-      <Field label="tipo"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={f.execution_kind} onChange={(e) => setF({ ...f, execution_kind: e.target.value })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
+      <Field label="tipo"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={f.execution_kind} onChange={(e) => setF({ ...f, execution_kind: e.target.value })}>{EXEC_MODES.filter(([v]) => v !== "hibrido").map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
       <Button
         size="sm"
         onClick={() =>
@@ -2385,7 +3049,7 @@ function AddStepControl({ refs, ringClass, domId, task, act }: { refs?: any; rin
             <Field label="Nome"><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} /></Field>
             <Field label="Finalidade"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={s.purpose} onChange={(e) => setS({ ...s, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
             <Field label="Executor"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={s.execution_mode} onChange={(e) => setS({ ...s, execution_mode: e.target.value, specialty_id: keepSpecialtyForMode(refs?.specialties, s.specialty_id, e.target.value) })}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-            <Field label="Especialidade"><SpecialtySelect refs={refs} mode={s.execution_mode} value={s.specialty_id} onChange={(v: string) => setS({ ...s, specialty_id: v })} emptyLabel="(usa a da tarefa)" /></Field>
+            <Field label="Especialidade"><SpecialtySelect refs={refs} mode={s.execution_mode} value={s.specialty_id} onChange={(v: string) => setS({ ...s, specialty_id: v })} /></Field>
             <Field label="Horas estimadas"><Input className="w-24" type="number" min="0" step="0.25" value={s.estimated_hours} onChange={(e) => setS({ ...s, estimated_hours: e.target.value })} /></Field>
           </div>
           <Field label="Critério de conclusão"><Input value={s.completion_criteria} onChange={(e) => setS({ ...s, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
@@ -2503,13 +3167,19 @@ function DeadlineBaseField({ version, act, ringOf, locked, compact = false }: an
     catch (e: any) { setErr(e?.message ?? "Não foi possível salvar o prazo."); }
   };
   if (compact) return (
-    <div id="catalog2-deadline-base" className={`flex min-h-[52px] min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800/40 ${ringOf("catalog2-deadline-base")}`}>
-      <span className="min-w-[120px] flex-1"><span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">Prazo comercial base</span><span className="block text-[10px] text-slate-500">Prazo prometido ao cliente (em horas)</span></span>
-      <span className="inline-flex shrink-0 items-baseline gap-1.5">
-        <Input type="number" min={1} aria-label="Prazo comercial base em horas" className="h-8 w-20 rounded-md border border-slate-300 bg-white px-2 text-right text-base font-bold text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} onBlur={() => { if (dirty) void save(); }} onKeyDown={(e) => { if (e.key === "Enter" && dirty) void save(); }} />
-        <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">horas</span>
-      </span>
-      <span className="w-full text-[11px] font-semibold text-violet-700 dark:text-violet-300" data-testid="deadline-days-reflex">{valid ? `= ${dayText} (24 h = 1 dia)` : "Informe as horas; os dias aparecem aqui."}{err ? <span className="ml-2 text-red-600">{err}</span> : null}{okMsg ? <span className="ml-2 text-emerald-700">✓ salvo</span> : null}</span>
+    <div id="catalog2-deadline-base" className={`flex h-full min-w-0 flex-col gap-2.5 px-1 md:pr-5 ${ringOf("catalog2-deadline-base")}`}>
+      <div className="flex items-start gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><CalendarClock className="h-4 w-4" /></span>
+        <span className="min-w-0"><span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100">Prazo comercial<span className="field-info" data-help="Prazo prometido ao cliente, informado em HORAS úteis. 24 h = 1 dia. O sistema guarda o dia inteiro arredondado para cima (mínimo 1)." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Prazo prometido ao cliente</span></span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Input type="number" min={1} aria-label="Prazo comercial base em horas" className="h-10 w-28 rounded-lg border border-slate-300 bg-white px-3 text-right text-lg font-bold text-slate-900 focus:border-violet-500 focus:ring-2 focus:ring-violet-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} onBlur={() => { if (dirty) void save(); }} onKeyDown={(e) => { if (e.key === "Enter" && dirty) void save(); }} />
+        <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">horas</span>
+      </div>
+      <p className="mt-auto text-[11px] leading-snug text-slate-500" data-testid="deadline-days-reflex">
+        {valid ? <><span className="mr-1.5 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-800 dark:bg-violet-950/50 dark:text-violet-200">= {dayText}</span>24 h = 1 dia</> : "Informe as horas; o equivalente em dias aparece aqui."}
+        {err ? <span className="ml-2 font-semibold text-red-600">{err}</span> : null}{okMsg ? <span className="ml-2 font-semibold text-emerald-700">✓ salvo</span> : null}
+      </p>
       {!readOnly && <button type="button" disabled={!valid} onClick={(event) => { event.preventDefault(); void save(); }} className="sr-only">Salvar prazo</button>}
     </div>
   );
@@ -3556,11 +4226,13 @@ const LEVEL_META: Record<string, { label: string; chip: string; border: string; 
 
 type ReadinessFilter = "todos" | "pronto" | "bloqueador" | "pendente" | "opcional";
 
-function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDetail, onItems, onData, detailFor, detailTargetFor }: { productId: string; versionId?: string; versionKey: string; onGo: (key: string) => void; onGoDetail: (key: string, targetId: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void; onData?: (d: any) => void; detailFor?: (key: string) => string[]; detailTargetFor?: (key: string, index: number) => string | undefined }) {
+function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDetail, onItems, onData, detailFor, detailTargetFor, taskName }: { taskName?: string; productId: string; versionId?: string; versionKey: string; onGo: (key: string) => void; onGoDetail: (key: string, targetId: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void; onData?: (d: any) => void; detailFor?: (key: string) => string[]; detailTargetFor?: (key: string, index: number) => string | undefined }) {
   const [data, setData] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ReadinessFilter>("todos");
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [howOpen, setHowOpen] = useState(false);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -3596,51 +4268,92 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
     { id: "opcional", label: "Opcional", n: countOf("opcional") },
   ];
 
+  const attention = visible.filter((it) => it.level === "bloqueador" || it.level === "pendente");
+  const ready = visible.filter((it) => it.level === "pronto");
+  const optional = visible.filter((it) => it.level === "opcional");
+  const fallbackKey = (entries.find((it) => it.level === "pendente") ?? entries.find((it) => it.level === "bloqueador"))?.key ?? null;
+  const activeKey = selectedKey && entries.some((it) => it.key === selectedKey) ? selectedKey : fallbackKey;
+  const active = entries.find((it) => it.key === activeKey) ?? null;
+  const stepOf = (key: string) => (READINESS_WHERE[key] ?? "").match(/^Passo \d/)?.[0] ?? "Abrir";
+  const isTaskItem = (key: string) => ["tarefas", "etapas", "esforco_tarefas", "prazo", "conexoes"].includes(key);
+  const BADGE = "inline-flex h-6 shrink-0 items-center justify-center rounded-full px-2.5 text-[11px] font-semibold";
+
+  const renderRow = (it: { key: string; level: string; note: string }, compact = false) => {
+    const meta = LEVEL_META[it.level] ?? LEVEL_META.opcional;
+    const Icon = READINESS_ICON[it.key] ?? FileText;
+    const isAttention = it.level === "bloqueador" || it.level === "pendente";
+    const selected = isAttention && it.key === activeKey;
+    return (
+      <li key={it.key} data-testid={"readiness-item-" + it.key}>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => (isAttention ? setSelectedKey(it.key) : onGo(it.key))}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (isAttention) setSelectedKey(it.key); else onGo(it.key); } }}
+          className={"flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 py-2 transition-colors hover:border-violet-300 dark:bg-slate-900 " + (selected ? "border-violet-400 ring-1 ring-violet-300" : "border-slate-200 dark:border-slate-700")}
+        >
+          <span className={BADGE + " min-w-[72px] " + meta.chip}>{meta.label}</span>
+          <Icon className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-bold text-slate-900 dark:text-slate-100">{READINESS_ITEM_LABEL[it.key] ?? it.key}</span>
+            {compact && <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400" title={it.note}>{it.note}</span>}
+          </span>
+          {!compact && <span className="hidden min-w-0 max-w-[45%] flex-1 truncate text-xs text-slate-500 dark:text-slate-400 md:block" title={it.note}>{it.note}</span>}
+          <button type="button" onClick={(e) => { e.stopPropagation(); onGo(it.key); }} className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-violet-700 hover:underline dark:text-violet-300">
+            {stepOf(it.key)} <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </li>
+    );
+  };
+
   return (
-    <section className="rounded-2xl border border-white/70 bg-[#e8ecf9] shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="block w-full px-5 py-2.5 text-left"
-      >
-        <span className="flex items-center justify-between gap-3">
-          <span className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-semibold text-slate-900 dark:text-slate-100">Checklist do produto ·</span>
-            {data?.error ? (
-              <span className="text-red-600">não foi possível carregar</span>
-            ) : loading && !data ? (
-              <span className="text-slate-500">carregando…</span>
-            ) : nBlock === 0 && nPend === 0 ? (
-              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">nada pendente</span>
-            ) : (
-              <>
-                {nBlock > 0 && <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">{nBlock} {nBlock === 1 ? "bloqueio" : "bloqueios"}</span>}
-                {nPend > 0 && <span className="rounded-full bg-pink-100 px-2.5 py-0.5 text-xs font-semibold text-pink-700">{nPend} {nPend === 1 ? "pendência" : "pendências"}</span>}
-              </>
-            )}
+    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="block w-full px-4 py-2.5 text-left" aria-expanded={open}>
+        <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="flex items-center gap-2.5">
+            <CheckSquare className="h-5 w-5 text-violet-600" aria-hidden="true" />
+            <span className="text-base font-bold text-slate-900 dark:text-slate-100">Checklist do produto</span>
           </span>
-          <span className="flex shrink-0 items-center gap-3 text-xs text-slate-500">
-            {data?.items && <span>{pct}% concluído</span>}
-            {open ? <ChevronDown className="h-5 w-5 text-violet-600" /> : <ChevronRight className="h-5 w-5 text-violet-600" />}
-          </span>
+          {data?.error ? (
+            <span className="text-sm text-red-600">não foi possível carregar</span>
+          ) : loading && !data ? (
+            <span className="text-sm text-slate-500">carregando…</span>
+          ) : (
+            <>
+              {data?.items && <span className="text-sm text-slate-500"><strong className="text-emerald-600">{readyCount} de {entries.length}</strong> prontos</span>}
+              {nBlock === 0 && nPend === 0 ? (
+                <span className={BADGE + " bg-emerald-100 text-emerald-700"}>nada pendente</span>
+              ) : (
+                <>
+                  {nBlock > 0 && <span className={BADGE + " gap-1 bg-red-100 text-red-700"}><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{nBlock} {nBlock === 1 ? "bloqueio" : "bloqueios"}</span>}
+                  {nPend > 0 && <span className={BADGE + " gap-1 bg-amber-100 text-amber-700"}><Clock className="h-3.5 w-3.5" aria-hidden="true" />{nPend} {nPend === 1 ? "pendência" : "pendências"}</span>}
+                </>
+              )}
+            </>
+          )}
+          {data?.items && (
+            <span className="flex min-w-[14rem] flex-1 items-center gap-3">
+              <span className="shrink-0 text-sm text-slate-600 dark:text-slate-300">{pct}% concluído</span>
+              <span className="flex h-2 min-w-[8rem] flex-1 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-700/60" aria-hidden>
+                <span className="h-full bg-emerald-500" style={{ width: seg(readyCount) + "%" }} />
+                <span className="h-full bg-pink-300" style={{ width: seg(nPend) + "%" }} />
+                <span className="h-full bg-red-500" style={{ width: seg(nBlock) + "%" }} />
+              </span>
+            </span>
+          )}
+          {open ? <ChevronDown className="h-5 w-5 shrink-0 text-violet-600" /> : <ChevronRight className="h-5 w-5 shrink-0 text-violet-600" />}
         </span>
-        {data?.items && (
-          <span className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-700/60" aria-hidden>
-            <span className="h-full bg-emerald-500" style={{ width: seg(readyCount) + "%" }} />
-            <span className="h-full bg-pink-300" style={{ width: seg(nPend) + "%" }} />
-            <span className="h-full bg-red-500" style={{ width: seg(nBlock) + "%" }} />
-          </span>
-        )}
       </button>
       {open && (
-        <div className="border-t border-slate-200/80 px-5 py-4 dark:border-slate-700/60">
+        <div className="space-y-3 border-t border-slate-100 bg-[#f4f6fc] px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
           {data?.error ? (
             <p className="text-sm text-red-600">Não foi possível carregar a prontidão.</p>
           ) : !data?.items ? (
             <p className="flex items-center gap-2 text-sm text-slate-500"><ButtonLoader text="Carregando prontidão…" /></p>
           ) : (
             <>
-              <div className="mb-2 flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtrar itens do checklist">
+              <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Filtrar itens do checklist">
                 {filters.map((f) => (
                   <button
                     key={f.id}
@@ -3648,75 +4361,110 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
                     role="tab"
                     aria-selected={filter === f.id}
                     onClick={() => setFilter(f.id)}
-                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${filter === f.id ? "border-violet-600 bg-violet-600 text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}
+                    style={filter === f.id ? { background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" } : undefined}
+                    className={"inline-flex h-8 items-center rounded-full border px-3.5 text-xs font-semibold transition-colors " + (filter === f.id ? "border-transparent text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300")}
                   >
-                    {f.label} <span className={filter === f.id ? "text-white/80" : "text-slate-400"}>({f.n})</span>
+                    {f.label} <span className={"ml-1 " + (filter === f.id ? "text-white/80" : "text-slate-400")}>({f.n})</span>
                   </button>
                 ))}
-                <span className="ml-auto text-[11px] text-slate-500">Clique num item para ir ao lugar de resolver.</span>
               </div>
-              {visible.length === 0 ? (
-                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-800/40">Nenhum item nesta categoria.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {visible.map((it) => {
-                    const meta = LEVEL_META[it.level] ?? LEVEL_META.opcional;
-                    const help = (READINESS_HELP[it.key] as any)?.[it.level] as string | undefined;
-                    const Icon = READINESS_ICON[it.key] ?? FileText;
-                    const details = detailFor?.(it.key) ?? [];
+
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+                <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                  <h3 className="mb-2 text-sm font-bold text-slate-900 dark:text-slate-100">Itens do checklist</h3>
+                  {visible.length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-800/40">Nenhum item nesta categoria.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {attention.length > 0 && (
+                        <div className="rounded-xl bg-red-50/70 p-2 dark:bg-red-950/20">
+                          <p className="mb-1.5 flex items-center gap-2 px-1 text-[13px] font-bold text-red-700 dark:text-red-300"><AlertCircle className="h-4 w-4" aria-hidden="true" />Precisa de atenção · {attention.length}</p>
+                          <ul className="space-y-1.5">{attention.map((it) => renderRow(it))}</ul>
+                        </div>
+                      )}
+                      {ready.length > 0 && (
+                        <div className="rounded-xl bg-emerald-50/70 p-2 dark:bg-emerald-950/20">
+                          <p className="mb-1.5 flex items-center gap-2 px-1 text-[13px] font-bold text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />Prontos · {ready.length}</p>
+                          <ul className="grid gap-1.5 md:grid-cols-2">{ready.map((it) => renderRow(it, true))}</ul>
+                        </div>
+                      )}
+                      {optional.length > 0 && (
+                        <ul className="space-y-1.5">{optional.map((it) => renderRow(it, true))}</ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <aside className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900" data-testid="readiness-resolve">
+                  {active ? (() => {
+                    const meta = LEVEL_META[active.level] ?? LEVEL_META.opcional;
+                    const details = detailFor?.(active.key) ?? [];
+                    const help = (READINESS_HELP[active.key] as any)?.[active.level] as string | undefined;
                     return (
-                      <li key={it.key} className="overflow-hidden rounded-xl border border-white/70 bg-[#f2f4fc] transition-colors hover:border-violet-300 dark:border-slate-700/60 dark:bg-slate-900">
-                        <button
-                          type="button"
-                          onClick={() => onGo(it.key)}
-                          className="w-full px-3 py-1.5 text-left hover:bg-white dark:hover:bg-slate-800/50"
-                        >
-                          <span className="flex items-center gap-3">
-                            <span className={`w-[74px] shrink-0 rounded-full px-2 py-0.5 text-center text-[11px] font-semibold ${meta.chip}`}>{meta.label}</span>
-                            <Icon className="h-4 w-4 shrink-0 text-violet-600" />
-                            <span className="w-[210px] shrink-0 truncate text-[13px] font-bold text-slate-900 dark:text-slate-100">{READINESS_ITEM_LABEL[it.key] ?? it.key}</span>
-                            <span className="min-w-0 flex-1 truncate text-xs text-slate-500 dark:text-slate-400" title={it.note}>{it.note}</span>
-                            <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-violet-700 dark:text-violet-300">
-                              {READINESS_WHERE[it.key] ?? "Abrir"} <ChevronRight className="h-4 w-4" />
-                            </span>
-                          </span>
-                        </button>
-                        {it.level !== "pronto" && details.length > 0 && (
-                          <div className="mx-3 mb-2 rounded-lg border border-slate-200/80 bg-white/70 p-2.5 dark:border-slate-700 dark:bg-slate-800/60">
-                            <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                              {details.length} {details.length === 1 ? "ajuste necessário" : "ajustes necessários"} · clique em cada um para resolver
-                            </div>
-                            <div className="grid gap-1 sm:grid-cols-2">
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Clock className="h-5 w-5 text-violet-600" aria-hidden="true" />
+                          <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Resolver pendência</h3>
+                          <span className={BADGE + " " + meta.chip}>{meta.label}</span>
+                        </div>
+                        <div>
+                          <p className="text-[15px] font-bold text-slate-900 dark:text-slate-100">{READINESS_ITEM_LABEL[active.key] ?? active.key}</p>
+                          <p className="mt-0.5 text-[13px] text-slate-600 dark:text-slate-300">{active.note}</p>
+                        </div>
+                        {details.length > 0 && (
+                          <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
+                            <p className="mb-1.5 text-xs font-bold text-slate-800 dark:text-slate-100">O que fazer</p>
+                            <ul className="space-y-1.5">
                               {details.map((line, i) => {
-                                const targetId = detailTargetFor?.(it.key, i);
+                                const targetId = detailTargetFor?.(active.key, i);
                                 return (
-                                  <button
-                                    key={i}
-                                    type="button"
-                                    disabled={!targetId}
-                                    onClick={() => targetId && onGoDetail(it.key, targetId)}
-                                    className="group flex items-start gap-1.5 rounded-md bg-slate-50 px-2 py-1.5 text-left text-[12px] leading-snug text-slate-700 transition-colors hover:bg-violet-100 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:cursor-default dark:bg-slate-900/70 dark:text-slate-200 dark:hover:bg-violet-950/50 dark:hover:text-violet-200"
-                                  >
-                                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[10px] font-bold text-violet-700 group-hover:bg-violet-600 group-hover:text-white dark:bg-violet-950 dark:text-violet-300">{i + 1}</span>
-                                    <span className="flex-1">{line}</span>
-                                    <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500 opacity-0 transition-opacity group-hover:opacity-100" />
-                                  </button>
+                                  <li key={i}>
+                                    <button type="button" disabled={!targetId} onClick={() => targetId && onGoDetail(active.key, targetId)} className="group flex w-full items-start gap-2.5 text-left text-[13px] text-slate-700 hover:text-violet-700 disabled:cursor-default dark:text-slate-200">
+                                      <span className="mt-0.5 h-4 w-4 shrink-0 rounded border border-slate-300 bg-white group-hover:border-violet-500 dark:border-slate-600 dark:bg-slate-800" aria-hidden="true" />
+                                      <span className="min-w-0 flex-1">{line}</span>
+                                    </button>
+                                  </li>
                                 );
                               })}
-                            </div>
+                            </ul>
                           </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onGo(active.key)}
+                          style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }}
+                          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white shadow-md hover:brightness-110"
+                          data-testid="readiness-open"
+                        >
+                          {isTaskItem(active.key) ? "Abrir etapa" : "Ir resolver"} <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        {isTaskItem(active.key) && (
+                          <button type="button" onClick={() => onGoDetail(active.key, "catalog2-tasks")} className="mx-auto flex items-center gap-1.5 text-[13px] font-semibold text-violet-700 hover:underline dark:text-violet-300">
+                            <FileText className="h-4 w-4" aria-hidden="true" />Ver tarefa{taskName ? " " + taskName : ""} <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
                         )}
                         {help && (
-                          <div className={`mx-3 mb-2 rounded-lg px-2.5 py-1.5 text-[12px] leading-snug ${it.level === "bloqueador" ? "bg-red-50 text-red-800 dark:bg-red-950/20 dark:text-red-200" : "bg-amber-50 text-amber-900 dark:bg-amber-950/20 dark:text-amber-200"}`}>
-                            <strong>{it.level === "bloqueador" ? "Como resolver: " : "Como concluir: "}</strong>{help}
+                          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50">
+                            <button type="button" aria-expanded={howOpen} onClick={() => setHowOpen((v) => !v)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-semibold text-slate-800 dark:text-slate-100">
+                              <Lightbulb className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                              <span className="flex-1">Como resolver</span>
+                              <ChevronDown className={"h-4 w-4 text-slate-500 transition-transform " + (howOpen ? "rotate-180" : "")} aria-hidden="true" />
+                            </button>
+                            {howOpen && <p className="px-3 pb-3 text-[13px] leading-snug text-slate-600 dark:text-slate-300">{help}</p>}
                           </div>
                         )}
-                      </li>
+                      </div>
                     );
-                  })}
-                </ul>
-              )}
-              <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
+                  })() : (
+                    <div className="flex flex-col items-center gap-2 py-6 text-center">
+                      <CheckCircle2 className="h-9 w-9 text-emerald-500" aria-hidden="true" />
+                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Nada precisa de atenção</p>
+                      <p className="text-xs text-slate-500">Todos os itens obrigatórios estão prontos.</p>
+                    </div>
+                  )}
+                </aside>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate-400">
                 <span>tarefas: {data.task_count ?? 0} · etapas: {data.step_count ?? 0}</span>
                 <button type="button" className="underline" onClick={reload}>atualizar</button>
               </div>
@@ -3736,13 +4484,29 @@ const MAIN_TABS_LIST = "h-auto w-full flex-nowrap justify-start gap-1 overflow-x
 const MAIN_TAB = "-mb-px flex-none rounded-none border-0 border-b-2 border-transparent bg-transparent px-4 py-3 text-[13px] font-semibold text-slate-500 shadow-none hover:text-slate-700 data-[state=active]:border-violet-600 data-[state=active]:bg-transparent data-[state=active]:text-violet-700 data-[state=active]:shadow-none dark:text-slate-400 dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-violet-300";
 const SUB_TABS_LIST = "h-auto w-fit flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900";
 const SUB_TAB = "flex-none rounded-lg px-3.5 py-1.5 text-[13px] font-semibold text-slate-600 transition data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#2558FF] data-[state=active]:via-[#6E2C96] data-[state=active]:to-[#D92293] data-[state=active]:text-white data-[state=active]:shadow-md dark:text-slate-300";
-const TAB_CARD = "mt-3 rounded-2xl border border-white/70 bg-[#e8ecf9] p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900";
+const TAB_CARD = "mt-2 rounded-2xl border border-white/70 bg-[#e8ecf9] p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900";
 
 // Estado aberto/fechado das seções: lembrado enquanto a página não é recarregada (trocar de aba do produto e voltar mantém como estava; F5 volta tudo fechado).
-const openStore = new Map<string, boolean>();
+// Guardado também no sessionStorage: F5 volta tudo exatamente como estava (aberto continua aberto).
+const OPEN_STORE_KEY = "allka:product-editor:open";
+let openStoreCache: Record<string, boolean> | null = null;
+const openStoreAll = (): Record<string, boolean> => {
+  if (openStoreCache) return openStoreCache;
+  try { openStoreCache = JSON.parse(window.sessionStorage.getItem(OPEN_STORE_KEY) ?? "{}") ?? {}; } catch { openStoreCache = {}; }
+  return openStoreCache as Record<string, boolean>;
+};
 const storeKey = (k: string) => `${typeof window !== "undefined" ? window.location.pathname : ""}|${k}`;
-const readOpen = (k: string, fallback: boolean) => openStore.get(storeKey(k)) ?? fallback;
-const writeOpen = (k: string, v: boolean) => { openStore.set(storeKey(k), v); };
+const readOpen = (k: string, fallback: boolean) => openStoreAll()[storeKey(k)] ?? fallback;
+const writeOpen = (k: string, v: boolean) => {
+  const all = openStoreAll(); all[storeKey(k)] = v;
+  try { window.sessionStorage.setItem(OPEN_STORE_KEY, JSON.stringify(all)); } catch { /* sem sessão: segue só em memória */ }
+};
+/** useState que lembra o valor (aberto/fechado, editando) por chave, inclusive após F5. */
+function usePersistedFlag(key: string, fallback: boolean): [boolean, (v: boolean | ((o: boolean) => boolean)) => void] {
+  const [v, setV] = useState(() => readOpen(key, fallback));
+  const set = useCallback((next: boolean | ((o: boolean) => boolean)) => setV((cur) => { const n = typeof next === "function" ? next(cur) : next; writeOpen(key, n); return n; }), [key]);
+  return [v, set];
+}
 
 // Abas do produto ficam montadas (só escondidas) ao trocar de aba: tudo que estava aberto/digitado continua como estava; F5 reinicia.
 function KeepTabsContent({ className, ...props }: React.ComponentProps<typeof TabsContent>) {
@@ -3761,15 +4525,15 @@ function SectionCard({ icon: Icon, title, subtitle, help, headerAction, children
     <>
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-3.5 w-3.5" /></span>
       <div className="min-w-0 flex-1 text-left">
-        <h3 className="text-[13px] font-bold leading-tight text-slate-900 dark:text-slate-100">{title}</h3>
+        <h3 className="text-[13px] font-bold leading-tight text-slate-900 dark:text-slate-100">{title}{help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}</h3>
         <p className="truncate text-[11px] text-slate-500 dark:text-slate-400" title={subtitle}>{subtitle}</p>
       </div>
     </>
   );
   const toggleIcon = shown ? <ChevronUp className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />;
   const heading = collapsible ? <div className="flex min-w-0 items-center gap-2"><button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={shown} className="flex min-w-0 flex-1 items-center gap-2.5">{head}{!headerAction && toggleIcon}</button>{headerAction && <span className="shrink-0" onClick={(e) => e.stopPropagation()}>{headerAction}</span>}{headerAction && <button type="button" aria-label={shown ? "Recolher" : "Expandir"} onClick={() => setOpen((o) => !o)} className="shrink-0 p-1">{toggleIcon}</button>}</div> : <header className="flex items-center gap-2.5">{head}<span className="ml-auto shrink-0">{headerAction}</span></header>;
-  const card = <section className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-      {help ? <TooltipProvider delayDuration={180}><Tooltip><TooltipTrigger asChild>{heading}</TooltipTrigger><TooltipContent side="bottom" sideOffset={7} className="max-w-xs bg-slate-950 px-3 py-2 text-xs leading-relaxed text-white shadow-lg">{help}</TooltipContent></Tooltip></TooltipProvider> : heading}
+  const card = <section className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+      {heading}
       {shown && <div className="mt-2.5 space-y-2">{children}</div>}
     </section>;
   return card;
@@ -3778,9 +4542,10 @@ function SectionCard({ icon: Icon, title, subtitle, help, headerAction, children
 // Somente os cartões principais recolhem. Ao abrir uma seção, seus campos
 // ficam todos visíveis e editáveis — sem um segundo nível de accordions.
 function FieldAccordion({ title, help, children }: { title: React.ReactNode; help?: string; children: React.ReactNode; forceOpen?: boolean }) {
-  const heading = <div className="flex w-full items-center gap-2 text-left text-[12px] font-semibold text-slate-700 dark:text-slate-200"><span className="flex-1">{title}</span></div>;
+  // Ajuda SÓ no ícone "i" (o tooltip não aparece mais ao passar o mouse no resto do cartão). O "i" é o mesmo da camada de ajuda.
+  const heading = <div data-no-info={help ? "" : undefined} className="flex w-full items-center gap-2 text-left text-[12px] font-semibold text-slate-700 dark:text-slate-200"><span className="flex-1">{title}{help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}</span></div>;
   const card = <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40">
-    {help ? <TooltipProvider delayDuration={180}><Tooltip><TooltipTrigger asChild>{heading}</TooltipTrigger><TooltipContent side="bottom" sideOffset={6} className="max-w-xs bg-slate-950 px-3 py-2 text-xs leading-relaxed text-white shadow-lg">{help}</TooltipContent></Tooltip></TooltipProvider> : heading}
+    {heading}
     <div className="mt-2">{children}</div>
   </div>;
   return card;
@@ -3985,7 +4750,7 @@ function StepIntro({ children }: { children: React.ReactNode }) {
   return <p className="mb-3 rounded-lg bg-violet-50/70 px-3 py-1.5 text-xs text-slate-600 dark:bg-violet-950/20 dark:text-slate-300">{children}</p>;
 }
 function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
-  return <label className="block space-y-1"><span className="block text-[12px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>{children}</label>;
+  return <label className="block min-w-0 space-y-0.5"><span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>{children}</label>;
 }
 function DeleteBtn({ label, onConfirm, tip }: { label: string; onConfirm: () => void; tip?: string }) {
   const [open, setOpen] = useState(false);

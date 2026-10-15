@@ -1,4 +1,5 @@
 // Campos comerciais estruturados da versão do produto (universal: vale para todos os produtos).
+import { normalizeFileRef, storedFileExists, type DeliverableFileRef } from "./catalog2-deliverable-files";
 // Regras:
 //  • descrição curta ≤ 500 e completa ≤ 4000 (um único limite para tela, API e testes);
 //  • conteúdo JÁ salvo acima do limite nunca é cortado em silêncio — só é rejeitado o que for ALTERADO para cima do limite;
@@ -8,7 +9,9 @@
 export const SUMMARY_MAX = 500;
 export const FULL_DESCRIPTION_MAX = 4000;
 
-export const VISIBILITIES = ["internal", "team", "client"] as const;
+// client = "Todos veem" (empresas, agências e equipe Allka) · company = "Cliente vê" (só empresas e a Allka; agência não)
+// · internal = "Equipe interna vê" (só a Allka) · team = valor antigo (só equipe), segue válido e oculto para o cliente.
+export const VISIBILITIES = ["internal", "team", "company", "client"] as const;
 export type Visibility = (typeof VISIBILITIES)[number];
 
 export const TEXT_FIELDS = {
@@ -55,11 +58,44 @@ export function readVisibility(json: string | null | undefined): Record<string, 
   return out;
 }
 
+const itemText = (x: unknown): string => (typeof x === "string" ? x : (x as { text?: unknown } | null)?.text ?? "").toString();
+
 export function readList(json: string | null | undefined): string[] {
   try {
     const v = json ? (JSON.parse(json) as unknown) : [];
-    return Array.isArray(v) ? v.map((x) => String(x)).filter((x) => x.trim()) : [];
+    return Array.isArray(v) ? v.map(itemText).filter((x) => x.trim()) : [];
   } catch { return []; }
+}
+
+/** Item de lista com anexo opcional (hoje só no "Resumo dos entregáveis"). Item antigo (texto puro) vem com file = null. */
+export interface RichListItem { text: string; file: DeliverableFileRef | null }
+export function readRichList(json: string | null | undefined): RichListItem[] {
+  try {
+    const v = json ? (JSON.parse(json) as unknown) : [];
+    if (!Array.isArray(v)) return [];
+    return v.map((x) => ({ text: itemText(x), file: typeof x === "object" && x ? normalizeFileRef((x as { file?: unknown }).file) : null })).filter((x) => x.text.trim());
+  } catch { return []; }
+}
+
+/** Como normalizeList, mas preserva o anexo de cada item. Texto puro continua sendo gravado como texto (nada muda para item sem anexo). */
+export function normalizeRichList(label: string, raw: unknown): Array<string | { text: string; file: DeliverableFileRef }> {
+  if (!Array.isArray(raw)) throw new CommercialFieldError(`"${label}" deve ser uma lista.`);
+  const out: Array<string | { text: string; file: DeliverableFileRef }> = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    const text = itemText(item).trim();
+    if (!text) continue;
+    if (text.length > LIST_ITEM_MAX) throw new CommercialFieldError(`Um item de "${label}" passa de ${LIST_ITEM_MAX} caracteres.`, "list_item_too_long");
+    if (seen.has(text)) continue;
+    seen.add(text);
+    const rawFile = typeof item === "object" && item ? (item as { file?: unknown }).file : null;
+    const file = rawFile == null ? null : normalizeFileRef(rawFile);
+    if (rawFile != null && !file) throw new CommercialFieldError(`O anexo do item "${text.slice(0, 40)}" é inválido. Envie o arquivo de novo.`, "list_item_file_invalid");
+    if (file && !storedFileExists(file.id)) throw new CommercialFieldError(`O anexo "${file.name}" não foi encontrado no servidor. Envie o arquivo de novo.`, "list_item_file_missing");
+    out.push(file ? { text, file } : text);
+  }
+  if (out.length > LIST_MAX_ITEMS) throw new CommercialFieldError(`"${label}" aceita no máximo ${LIST_MAX_ITEMS} itens.`, "list_too_long");
+  return out;
 }
 
 /** Normaliza uma lista vinda da API: texto aparado, sem itens vazios, sem duplicados exatos, com limites. */
@@ -109,7 +145,7 @@ export function buildCommercialUpdate(input: CommercialInput, before: Row): { da
   }
   for (const [key, def] of Object.entries(LIST_FIELDS)) {
     if (lists[key] === undefined) continue;
-    const items = lists[key] == null ? [] : normalizeList(def.label, lists[key]);
+    const items = lists[key] == null ? [] : key === "deliverables_summary" ? normalizeRichList(def.label, lists[key]) : normalizeList(def.label, lists[key]);
     const json = items.length ? JSON.stringify(items) : null;
     if (json !== ((before[def.column] as string | null) ?? null)) { data[def.column] = json; changed.push(def.label); }
   }
@@ -117,7 +153,7 @@ export function buildCommercialUpdate(input: CommercialInput, before: Row): { da
     const next = readVisibility(before.field_visibility_json as string | null);
     for (const [k, v] of Object.entries(input.field_visibility)) {
       if (!(k in DEFAULT_VISIBILITY)) throw new CommercialFieldError(`Campo desconhecido na visibilidade: ${k}.`, "visibility_unknown_field");
-      if (!(VISIBILITIES as readonly string[]).includes(v)) throw new CommercialFieldError(`Visibilidade inválida para "${k}": use interna, equipe ou cliente.`, "visibility_invalid");
+      if (!(VISIBILITIES as readonly string[]).includes(v)) throw new CommercialFieldError(`Visibilidade inválida para "${k}": use todos, cliente ou equipe interna.`, "visibility_invalid");
       if (k === "internal_notes" && v !== "internal") throw new CommercialFieldError("As observações internas nunca podem ser visíveis ao cliente ou à equipe.", "internal_notes_always_internal");
       next[k] = v as Visibility;
     }
@@ -135,6 +171,8 @@ export function serializeCommercialFields(v: Row) {
   for (const [k, def] of Object.entries(LIST_FIELDS)) lists[k] = readList(v[def.column] as string | null);
   return {
     ...text, ...lists,
+    // Itens do resumo dos entregáveis com o anexo opcional (modelo do entregável).
+    deliverables_summary_items: readRichList(v[LIST_FIELDS.deliverables_summary.column] as string | null),
     deliverables: lists.deliverables_summary.join("\n"),
     field_visibility: readVisibility(v.field_visibility_json as string | null),
     limits: { summary: SUMMARY_MAX, full_description: FULL_DESCRIPTION_MAX, list_item: LIST_ITEM_MAX, list_items: LIST_MAX_ITEMS, text: Object.fromEntries(Object.entries(TEXT_FIELDS).map(([k, d]) => [k, d.max])) },
@@ -142,11 +180,14 @@ export function serializeCommercialFields(v: Row) {
 }
 
 /** O que o cliente enxerga: só campos marcados como "cliente" — nunca observações internas. */
-export function clientCommercialView(v: Row) {
+export function clientCommercialView(v: Row, viewer: "company" | "agency" | "admin_preview" = "company") {
   const vis = readVisibility(v.field_visibility_json as string | null);
+  // "Todos veem" aparece para quem contrata; "Cliente vê" só para empresa (e na pré-visualização do admin), nunca para agência.
+  const sees = (k: string) => vis[k] === "client" || (vis[k] === "company" && viewer !== "agency");
   const out: Record<string, unknown> = {};
-  for (const [k, def] of Object.entries(TEXT_FIELDS)) if (vis[k] === "client" && k !== "internal_notes") out[k] = (v[def.column] as string | null) ?? null;
-  for (const [k, def] of Object.entries(LIST_FIELDS)) if (vis[k] === "client") out[k] = readList(v[def.column] as string | null);
+  for (const [k, def] of Object.entries(TEXT_FIELDS)) if (sees(k) && k !== "internal_notes") out[k] = (v[def.column] as string | null) ?? null;
+  for (const [k, def] of Object.entries(LIST_FIELDS)) if (sees(k)) out[k] = readList(v[def.column] as string | null);
+  if (sees("deliverables_summary")) out.deliverables_summary_items = readRichList(v[LIST_FIELDS.deliverables_summary.column] as string | null);
   return out;
 }
 

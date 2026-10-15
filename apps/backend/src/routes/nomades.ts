@@ -28,6 +28,7 @@ const createSchema = z.object({
   score: z.number().int().min(0).default(0),
   areas_of_interest: z.string().optional(),
   is_leader: z.boolean().default(false),
+  is_qualifier: z.boolean().optional(),
   leader_id: z.string().optional(),
   min_monthly_goal: z.number().optional(),
   terms_accepted: z.boolean().default(false),

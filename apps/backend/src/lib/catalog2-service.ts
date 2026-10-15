@@ -12,6 +12,7 @@ import { providerProblem } from "./catalog2-ai-providers";
 import { parseOptions, parseValidation } from "./catalog2-question-types";
 import { runCost } from "./catalog2-ai";
 import { commercialCloneData, serializeCommercialFields } from "./catalog2-commercial-fields";
+import { parseOptionExamples, parseOptionExampleFile } from "./catalog2-option-examples";
 import { Prisma } from "@prisma/client";
 import { copyTaskDeliverables } from "./task-deliverables";
 import { aiCopyData, AI_EXECUTION_MODES } from "./catalog2-ai";
@@ -360,6 +361,10 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
           emergency_extra_value: s.emergency_extra_value,
           approval_hours: s.approval_hours,
           executor_accept_hours: s.executor_accept_hours,
+          ai_free_changes: s.ai_free_changes,
+          ai_specialty_id: s.ai_specialty_id,
+          ai_estimated_minutes: s.ai_estimated_minutes,
+          qualifier_kind: s.qualifier_kind,
           rework_hours: s.rework_hours,
           task_id: nt.id,
           key: s.key,
@@ -399,6 +404,7 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         is_required: va.is_required,
         sort_order: va.sort_order,
         notes: va.notes,
+        base_included: va.base_included,
         is_active: va.is_active,
       },
     });
@@ -413,7 +419,12 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
           is_active: opt.is_active,
           availability: opt.availability,
           availability_note: opt.availability_note,
-          effects: { create: opt.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order, charge_scope: e.charge_scope, charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, charge_quantity: e.charge_quantity, source_task_key: e.source_task_key, source_step_key: e.source_step_key, effort_scale_by_quantity: e.effort_scale_by_quantity })) },
+          media_url: opt.media_url,
+          icon_key: opt.icon_key,
+          short_description: opt.short_description,
+          example_links_json: opt.example_links_json,
+          example_file_json: opt.example_file_json,
+          effects: { create: opt.effects.map((e) => ({ effect_type: e.effect_type, effect_value: e.effect_value, sort_order: e.sort_order, charge_scope: e.charge_scope, charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, charge_quantity: e.charge_quantity, source_task_key: e.source_task_key, source_step_key: e.source_step_key, effort_scale_by_quantity: e.effort_scale_by_quantity, specialty_id: (e as { specialty_id?: string | null }).specialty_id ?? null })) },
         },
       });
     }
@@ -1391,6 +1402,7 @@ export async function getProductDetail(productId: string) {
         selection_type: va.selection_type,
         sort_order: va.sort_order,
         notes: va.notes,
+        base_included: va.base_included,
         is_active: va.is_active,
         options: va.options.map((o) => ({
           id: o.id,
@@ -1401,7 +1413,12 @@ export async function getProductDetail(productId: string) {
           is_active: o.is_active,
           availability: o.availability,
           availability_note: o.availability_note,
-          effects: o.effects.map((e) => ({ id: e.id, effect_type: e.effect_type, effect_value: e.effect_value, ...chargeOut(e) })),
+          media_url: o.media_url,
+          icon_key: o.icon_key,
+          short_description: o.short_description,
+          example_links: parseOptionExamples(o.example_links_json),
+          example_file: parseOptionExampleFile(o.example_file_json),
+          effects: o.effects.map((e) => ({ id: e.id, effect_type: e.effect_type, effect_value: e.effect_value, ...chargeOut(e), specialty_id: (e as { specialty_id?: string | null }).specialty_id ?? null })),
         })),
       })),
       addons: v.addons.map((a) => ({
@@ -1543,6 +1560,10 @@ export async function getProductDetail(productId: string) {
           emergency_extra_value: s.emergency_extra_value ?? null,
           approval_hours: s.approval_hours ?? null,
           executor_accept_hours: s.executor_accept_hours ?? null,
+          ai_free_changes: s.ai_free_changes ?? null,
+          ai_specialty_id: s.ai_specialty_id ?? null,
+          ai_estimated_minutes: s.ai_estimated_minutes ?? null,
+          qualifier_kind: s.qualifier_kind ?? "leader",
           rework_hours: s.rework_hours ?? null,
           specialty_id: s.specialty_id,
           step_model_id: s.step_model_id,

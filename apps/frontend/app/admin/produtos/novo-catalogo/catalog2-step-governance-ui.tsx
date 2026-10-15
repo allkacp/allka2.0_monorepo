@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronRight, Clock, Plus, Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,8 +95,8 @@ export function StepGovernance({ step, task, version, readOnly, act }: { step: a
   const [addR, setAddR] = useState(false);
   const lab = (list: any[] | undefined, k: string) => list?.find((x) => x.key === k)?.label ?? k;
   return (
-    <details className="mt-1 rounded-md border border-slate-200 bg-white/70 text-xs dark:border-slate-700 dark:bg-slate-900/40" data-testid="step-governance" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary className="cursor-pointer select-none px-2 py-1 font-semibold text-slate-700 dark:text-slate-200">Aprovações, prazos e histórico real desta etapa{gates.length + rules.length > 0 ? ` · ${gates.length} aprovação(ões), ${rules.length} prazo(s)` : ""}</summary>
+    <details className="group mt-1 rounded-xl border border-slate-200 bg-white text-xs dark:border-slate-700 dark:bg-slate-900/40" data-testid="step-governance" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+      <summary className="flex cursor-pointer select-none list-none items-center gap-3 px-3 py-2.5 text-[13px] font-semibold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden"><Clock className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" /><span className="flex-1">Aprovações, prazos e histórico real desta etapa{gates.length + rules.length > 0 ? ` · ${gates.length} aprovação(ões), ${rules.length} prazo(s)` : ""}</span><ChevronRight className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-90" aria-hidden="true" /></summary>
       {open && (
         <div className="space-y-3 border-t border-slate-100 p-2.5 dark:border-slate-800">
           <section>

@@ -38,6 +38,8 @@ export interface EffortItem {
   scope: string;
   start: number;
   end: number | null;
+  /** Especialidade própria das horas extras (opcional): sobrepõe a especialidade do alvo. */
+  specialty_id?: string | null;
 }
 
 /** O esforço entra no ciclo k (0 = implantação/primeira cobrança)? */

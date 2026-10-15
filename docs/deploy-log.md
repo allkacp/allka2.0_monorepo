@@ -2,6 +2,12 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
+## deploy-2026-10-15-1 — ajustes da reunião de 14/10 + revisão de layout (código)
+**Subiu — Banco (migrations aditivas):** 20261014120000 a 20261014160000 (alterações por IA por etapa, acessos compartilhados entre etapas, etapa "Humano ou IA", tipo de qualificador, descrição/links/arquivo-modelo na opção), 20261015120000 (nômade qualificador + marca de grupo na etapa), 20261015130000 (variação "já no produto original"), 20261015140000 (especialidade própria nas horas extras), 20261015150000 (custo do qualificador: preenche 20% onde estava vazio). Mais as migrations de 10/10 a 13/10 que ainda não tinham subido (chat e tema).
+**Subiu — Backend:** grupo de nômades qualificadores (rodízio), rota única de qualificação de etapas (/api/qualificacoes), horas extras com especialidade própria, opção padrão = produto original, cota de alterações por IA por etapa, limpar/restaurar tarefa, arquivo-modelo por opção.
+**Subiu — Frontend:** editor de produto redesenhado (cabeçalho, checklist, entrega comercial, tarefa/etapas/fluxo, acessos, classificação, variações), tela única "Etapas para qualificar" (nômade, líder, admin), chave "Nômade qualificador" no cadastro, confirmações de salvar, carregamento padronizado.
+**Dados:** espelho do banco local no QA logo em seguida (ver entrada abaixo quando concluído).
+
 ## Espelho do banco local no QA 2026-10-08 (run 37864971331)
 A pedido do usuário (o link allka.store é QA; no link final os dados serão zerados), o banco do servidor foi substituído por cópia do banco LOCAL (usuários, empresas, projetos, produtos, saldos), sem a tabela de controle das migrations. Conferido no servidor após o espelho: 25 usuários, 5 empresas, 40 projetos, 36 produtos, 14 movimentos de carteira (igual ao local). **Backup antes:** allka-before-mirror-20261009T002854Z.sql.gz. API e site responderam 200. Release temporário e secret MIRROR_BUNDLE_KEY removidos; dump local apagado. **Não incluído:** arquivos em disco (anexos/entregas). Workflow: mirror-local-to-qa.yml (só para QA; nunca usar no link final).
 
