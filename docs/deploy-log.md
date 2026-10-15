@@ -2,6 +2,9 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
+## Espelho do banco local no QA 2026-10-15 (run 38806021107)
+A pedido do usuário (o link allka.store é QA: o que é cadastrado local sobe para outras pessoas conferirem), o banco do servidor foi substituído por cópia do banco LOCAL logo depois do deploy-2026-10-15-1. Conferido no servidor após o espelho: 25 usuários, 5 empresas, 40 projetos, 36 produtos, 14 movimentos de carteira (igual ao local). **Backup antes:** allka-before-mirror-20261015T205656Z.sql.gz. API e site responderam 200. **Ajuste para funcionar lá:** o estado cifrado do 1 perfil do navegador seguro (state_ciphertext) foi zerado no pacote, porque é cifrado com a chave do computador local; o perfil continua cadastrado e a sessão é refeita no servidor. Não havia gateway de pagamento, conexão com segredo nem token da Meta no local. Release e secret MIRROR_BUNDLE_KEY apagados; dump local apagado. **Não incluído:** arquivos em disco (anexos/entregas). Workflow: mirror-local-to-qa.yml.
+
 ## deploy-2026-10-15-1 — ajustes da reunião de 14/10 + revisão de layout (código)
 **Subiu — Banco (migrations aditivas):** 20261014120000 a 20261014160000 (alterações por IA por etapa, acessos compartilhados entre etapas, etapa "Humano ou IA", tipo de qualificador, descrição/links/arquivo-modelo na opção), 20261015120000 (nômade qualificador + marca de grupo na etapa), 20261015130000 (variação "já no produto original"), 20261015140000 (especialidade própria nas horas extras), 20261015150000 (custo do qualificador: preenche 20% onde estava vazio). Mais as migrations de 10/10 a 13/10 que ainda não tinham subido (chat e tema).
 **Subiu — Backend:** grupo de nômades qualificadores (rodízio), rota única de qualificação de etapas (/api/qualificacoes), horas extras com especialidade própria, opção padrão = produto original, cota de alterações por IA por etapa, limpar/restaurar tarefa, arquivo-modelo por opção.
