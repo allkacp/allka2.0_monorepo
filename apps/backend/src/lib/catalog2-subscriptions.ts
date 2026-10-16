@@ -43,11 +43,15 @@ export async function issueNextInvoice(id: string, actor: string | null = null) 
     const project = await tx.project.findUniqueOrThrow({ where: { id: sub.project_id }, select: { company_id: true, client_id: true } });
     const pp = await tx.projectProduct.findUniqueOrThrow({ where: { id: sub.project_product_id } });
     // Valor do ciclo n: só a mensalidade recorrente (nunca a implantação, que foi cobrada na 1ª cobrança).
-    const amount = amountForSubscriptionCycle(sub, n);
+    const gross = amountForSubscriptionCycle(sub, n);
+    // Crédito por etapa(s) "dispensável(is) com o mesmo executor" que foram dispensadas: as horas dispensadas não são cobradas (abate desta fatura).
+    const credit = Math.min(Math.max(0, sub.pending_credit_amount ?? 0), gross);
+    const amount = Math.round((gross - credit) * 100) / 100;
+    if (credit > 0) await tx.catalog2Subscription.update({ where: { id: sub.id }, data: { pending_credit_amount: Math.round(((sub.pending_credit_amount ?? 0) - credit) * 100) / 100 } });
     const payment = await tx.payment.create({
       data: {
         project_id: sub.project_id, amount, payment_method: "RECORRENCIA_AUTOMATICA", status: "PENDENTE", gateway: "FAKE_SANDBOX",
-        idempotency_key: key, billing_cycle_key: `sub:${sub.id}:${n}`, notes: `Assinatura — mês ${n + 1}`,
+        idempotency_key: key, billing_cycle_key: `sub:${sub.id}:${n}`, notes: `Assinatura — mês ${n + 1}${credit > 0 ? ` (abatido R$ ${credit.toFixed(2).replace(".", ",")} de etapa(s) dispensada(s) com o mesmo executor)` : ""}`,
       },
     });
     await tx.paymentItem.create({
@@ -200,6 +204,7 @@ export function serializeSubscription(s: Awaited<ReturnType<typeof loadSub>>, ev
     implementation_reason: s.implementation_reason,
     first_charge: s.first_charge_json ? JSON.parse(s.first_charge_json) : null,
     next_renewal_amount: amountForSubscriptionCycle(s, s.current_cycle_index + 1),
+    pending_credit_amount: s.pending_credit_amount ?? 0,
     started_at: s.started_at,
     months_paid: s.current_cycle_index + 1,
     current_period_start: s.current_period_start,

@@ -1,5 +1,7 @@
 # Produtos
 
+> ⚠️ **LEGADO (modelo antigo `Product`/metadata).** O catálogo e o cadastro de produtos atuais são o módulo **`catalog2`** (editor em 5 passos). Para entender o produto hoje e como cadastrá-lo, leia **[cadastro-produto-passo-a-passo.md](./cadastro-produto-passo-a-passo.md)** e a seção "Cadastro de produtos (catalog2)" de [regras-de-negocio.md](./regras-de-negocio.md). O texto abaixo é mantido só para consulta histórica.
+
 Tudo sobre o domínio de produtos: estrutura, variações, etapas, testes, briefing e onde editar cada parte.
 
 ---

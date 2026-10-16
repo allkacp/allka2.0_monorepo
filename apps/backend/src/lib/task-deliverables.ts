@@ -10,6 +10,7 @@ import { z } from "zod";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { audienceOf, canSee, VISIBILITY_LEVELS, type Visibility } from "./catalog2-ops";
 import { rejectSecrets, AssetError } from "./client-assets";
+import { parseQuestionCondition, questionConditionMet } from "./catalog2-question-types";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -30,6 +31,17 @@ export const DELIVERABLE_RESPONSIBLE_LABEL: Record<DeliverableResponsible, strin
   agencia: "Agência",
   cliente: "Cliente",
   sistema: "Sistema (automático)",
+};
+/** Quando o entregável vale: em todo ciclo ou só na primeira execução do produto no projeto (recorrência do entregável). */
+export const DELIVERABLE_CYCLE_SCOPES = ["every_cycle", "first_execution"] as const;
+export const DELIVERABLE_CYCLE_SCOPE_LABEL: Record<(typeof DELIVERABLE_CYCLE_SCOPES)[number], string> = { every_cycle: "Todo ciclo", first_execution: "Só na primeira execução" };
+/** Momento da entrega (quando o item deve estar pronto). */
+export const DELIVERABLE_MOMENTS = ["step_end", "cycle_end", "before_approval", "on_request"] as const;
+export const DELIVERABLE_MOMENT_LABEL: Record<(typeof DELIVERABLE_MOMENTS)[number], string> = {
+  step_end: "Ao concluir a etapa",
+  cycle_end: "No fim do ciclo",
+  before_approval: "Antes da aprovação do cliente",
+  on_request: "Sob demanda",
 };
 export const DELIVERABLE_STATUSES = ["pendente", "enviado", "em_revisao", "aprovado", "reprovado"] as const;
 export type DeliverableStatus = (typeof DELIVERABLE_STATUSES)[number];
@@ -63,16 +75,28 @@ export const deliverableInputSchema = z.object({
   visibility: z.enum(VISIBILITY_LEVELS).default("client"),
   step_id: z.string().nullish(),
   sort_order: z.number().int().optional(),
+  // Cadastro completo (16/10): formato, momento, arquivo-modelo, prova, qualificação interna, recorrência e condição.
+  format: z.string().trim().max(80).nullish(),
+  delivery_moment: z.enum(DELIVERABLE_MOMENTS).nullish(),
+  template_url: z.string().trim().max(1000).nullish(),
+  template_name: z.string().trim().max(191).nullish(),
+  evidence_required: z.boolean().default(false),
+  requires_qualification: z.boolean().default(false),
+  cycle_scope: z.enum(DELIVERABLE_CYCLE_SCOPES).default("every_cycle"),
+  is_conditional: z.boolean().default(false),
+  condition_json: z.string().max(4000).nullish(),
 });
 
 // ── Materialização (geração da tarefa contratada) ─────────────────────────
 export async function materializeTaskDeliverables(
   db: Db,
-  p: { catalogTaskId: string; projectTaskId: string; stageIdByStepId: Map<string, string> },
+  p: { catalogTaskId: string; projectTaskId: string; stageIdByStepId: Map<string, string>; /** é a primeira execução deste produto neste projeto? (entregável "só na primeira execução" não nasce nos ciclos seguintes) */ firstExecution?: boolean; /** escolhas da cotação: entregável com condição ESTRUTURADA (variação/adicional) só nasce se a condição vale; condição em texto livre é orientação e não filtra */ selection?: { variation_option_keys?: string[]; addon_keys?: string[] } },
 ): Promise<number> {
   const defs = await db.catalog2TaskDeliverable.findMany({ where: { task_id: p.catalogTaskId }, orderBy: [{ sort_order: "asc" }, { created_at: "asc" }] });
   let n = 0;
   for (const d of defs) {
+    if (d.cycle_scope === "first_execution" && p.firstExecution === false) continue;
+    if (d.is_conditional && d.condition_json && !questionConditionMet(parseQuestionCondition(d.condition_json), p.selection ?? {})) continue;
     let stageId: string | null = null;
     if (d.step_id) {
       stageId = p.stageIdByStepId.get(d.step_id) ?? null;
@@ -82,6 +106,7 @@ export async function materializeTaskDeliverables(
       data: {
         project_task_id: p.projectTaskId, project_task_stage_id: stageId, catalog2_deliverable_id: d.id, key: d.key, name: d.name, description: d.description,
         type: d.type, responsible: d.responsible, is_required: d.is_required, requires_approval: d.requires_approval, visibility: d.visibility, sort_order: d.sort_order,
+        format: d.format, delivery_moment: d.delivery_moment, template_url: d.template_url, template_name: d.template_name, evidence_required: d.evidence_required, requires_qualification: d.requires_qualification,
         // Item entregue pelo "sistema" não depende de ninguém: nasce enviado (e aprovado, se não exigir aprovação).
         status: d.responsible === "sistema" ? (d.requires_approval ? "enviado" : "aprovado") : "pendente",
       },
@@ -95,7 +120,7 @@ export async function materializeTaskDeliverables(
 // religando cada item à etapa equivalente pela CHAVE da etapa.
 export async function copyTaskDeliverables(
   db: Db,
-  src: { steps: { id: string; key: string }[]; deliverables: { step_id: string | null; key: string; name: string; description: string | null; type: string; responsible: string; is_required: boolean; requires_approval: boolean; visibility: string; sort_order: number }[] },
+  src: { steps: { id: string; key: string }[]; deliverables: { step_id: string | null; key: string; name: string; description: string | null; type: string; responsible: string; is_required: boolean; requires_approval: boolean; visibility: string; sort_order: number; format?: string | null; delivery_moment?: string | null; template_url?: string | null; template_name?: string | null; evidence_required?: boolean; requires_qualification?: boolean; cycle_scope?: string; is_conditional?: boolean; condition_json?: string | null }[] },
   newTaskId: string,
 ): Promise<number> {
   if (!src.deliverables?.length) return 0;
@@ -108,6 +133,8 @@ export async function copyTaskDeliverables(
       data: {
         task_id: newTaskId, step_id: stepKey ? idByKey.get(stepKey) ?? null : null, key: d.key, name: d.name, description: d.description, type: d.type,
         responsible: d.responsible, is_required: d.is_required, requires_approval: d.requires_approval, visibility: d.visibility, sort_order: d.sort_order,
+        format: d.format ?? null, delivery_moment: d.delivery_moment ?? null, template_url: d.template_url ?? null, template_name: d.template_name ?? null,
+        evidence_required: !!d.evidence_required, requires_qualification: !!d.requires_qualification, cycle_scope: d.cycle_scope ?? "every_cycle", is_conditional: !!d.is_conditional, condition_json: d.condition_json ?? null,
       },
     });
   }

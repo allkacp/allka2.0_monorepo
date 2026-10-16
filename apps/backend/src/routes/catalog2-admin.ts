@@ -8,7 +8,7 @@ import { redactSecrets } from "../lib/redact-secrets";
 import { AI_PROVIDERS, ON_FAILURE_ACTIONS, ON_FAILURE_LABEL, findProvider, providerConfigured, providerProblem } from "../lib/catalog2-ai-providers";
 import { runCost } from "../lib/catalog2-ai";
 import { invokeTaskAIAdapter, currentTaskAIAdapterName } from "../lib/task-ai";
-import { QuestionConfigError, normalizeQuestionConfig, parseOptions, parseValidation, QUESTION_TYPES, QUESTION_TYPE_LABEL, QUESTION_VISIBILITIES, ANSWER_USAGES } from "../lib/catalog2-question-types";
+import { QuestionConfigError, normalizeQuestionConfig, parseQuestionSettings, parseOptions, parseValidation, QUESTION_TYPES, QUESTION_TYPE_LABEL, QUESTION_VISIBILITIES, ANSWER_USAGES } from "../lib/catalog2-question-types";
 import { buildCommercialUpdate, serializeCommercialFields, CommercialFieldError, type CommercialInput } from "../lib/catalog2-commercial-fields";
 import { storeDeliverableFile, MAX_DELIVERABLE_FILE_BYTES, normalizeFileRef, storedFileExists } from "../lib/catalog2-deliverable-files";
 import multer from "multer";
@@ -364,28 +364,47 @@ const questionConfigShape = {
   validation: z.record(z.any()).nullish(),
   visibility: z.enum(QUESTION_VISIBILITIES).optional(),
   answer_usage: z.enum(ANSWER_USAGES).optional(),
+  // Onde a resposta é usada (chave da etapa; vazio = a tarefa toda) e quando a pergunta aparece (variação, adicional ou resposta anterior).
+  target_step_key: z.string().max(60).nullish(),
+  condition: z.any().nullish(),
+  /** Configuração estendida: placeholder, ativa/inativa, seção, anexos, escala, limites de escolha. */
+  settings: z.any().nullish(),
 };
 const questionSchema = z.object({ key: z.string().min(1).max(60), label: z.string().min(1).max(500), is_required: z.boolean().optional(), sort_order: z.number().int().optional(), ...questionConfigShape });
 /** Colunas gravadas de uma pergunta (configuração validada por tipo). */
-function questionColumns(d: z.infer<typeof questionSchema>, current?: { question_type: string; options_json: string | null; default_value: string | null; validation_json: string | null }) {
-  return normalizeQuestionConfig({ question_type: d.question_type, options: d.options, default_value: d.default_value, validation: d.validation, visibility: d.visibility, answer_usage: d.answer_usage, help_text: d.help_text }, current);
+function questionColumns(d: z.infer<typeof questionSchema>, current?: { question_type: string; options_json: string | null; default_value: string | null; validation_json: string | null; settings_json?: string | null }) {
+  return normalizeQuestionConfig({ question_type: d.question_type, options: d.options, default_value: d.default_value, validation: d.validation, visibility: d.visibility, answer_usage: d.answer_usage, help_text: d.help_text, target_step_key: d.target_step_key, condition: d.condition, settings: d.settings }, current);
 }
 /** Pergunta para a API: colunas + opções/validação já interpretadas + rótulo do tipo. */
-function serializeQuestion<T extends { options_json: string | null; validation_json: string | null; question_type: string }>(q: T) {
-  return { ...q, options: parseOptions(q.options_json), validation: parseValidation(q.validation_json), question_type_label: QUESTION_TYPE_LABEL[q.question_type as keyof typeof QUESTION_TYPE_LABEL] ?? q.question_type };
+function serializeQuestion<T extends { options_json: string | null; validation_json: string | null; question_type: string; settings_json?: string | null }>(q: T) {
+  return { ...q, options: parseOptions(q.options_json), validation: parseValidation(q.validation_json), settings: parseQuestionSettings(q.settings_json), question_type_label: QUESTION_TYPE_LABEL[q.question_type as keyof typeof QUESTION_TYPE_LABEL] ?? q.question_type };
 }
 router.get("/question-types", (_req, res) => {
   res.json({ data: QUESTION_TYPES.map((t) => ({ key: t, label: QUESTION_TYPE_LABEL[t] })), visibilities: QUESTION_VISIBILITIES, answer_usages: ANSWER_USAGES });
 });
+const sectionSchema = z.object({ key: z.string().min(1).max(60), name: z.string().min(1).max(120), description: z.string().max(1000).nullish() });
+const sectionsValue = (sections: z.infer<typeof sectionSchema>[] | undefined | null) => {
+  if (!sections || sections.length === 0) return null;
+  if (new Set(sections.map((x) => x.key)).size !== sections.length) throw new Catalog2Error("As seções não podem ter a mesma chave.", 422, "questionnaire_sections_duplicated");
+  return JSON.stringify(sections.map((x, i) => ({ key: x.key, name: x.name.trim(), description: x.description?.trim() || null, sort_order: i + 1 })));
+};
+const parseSections = (json: string | null | undefined): { key: string; name: string; description: string | null; sort_order: number }[] => {
+  try { const v = json ? JSON.parse(json) : []; return Array.isArray(v) ? v : []; } catch { return []; }
+};
 const questionnaireContentSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(4000).nullish(),
+  sections: z.array(sectionSchema).max(30).optional(),
+  /** Questionário usado por mais de uma tarefa: "edit_shared" edita o modelo (afeta todos), "copy" cria uma cópia independente só para esta tarefa. */
+  shared_mode: z.enum(["edit_shared", "copy"]).optional(),
+  confirm_shared: z.boolean().optional(),
   questions: z.array(z.object({
+    id: z.string().optional(),
     key: z.string().min(1).max(60),
     label: z.string().min(1).max(500),
     is_required: z.boolean().optional(),
     ...questionConfigShape,
-  })).max(50),
+  })).max(80),
 });
 
 async function countQuestionnaireReferrers(questionnaireId: string) {
@@ -435,29 +454,85 @@ async function productContextForQuestionnaire(questionnaireId: string): Promise<
   return { productId: task.version.product_id, versionId: task.version_id, taskName: task.name };
 }
 
-router.get("/questionnaires", async (_req, res, next) => {
+// Biblioteca de questionários: busca por ID, nome, pergunta, especialidade, produto ou categoria; modelos globais primeiro.
+router.get("/questionnaires", async (req, res, next) => {
   try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const specialty = typeof req.query.specialty === "string" ? req.query.specialty.trim() : "";
+    const product = typeof req.query.product === "string" ? req.query.product.trim() : "";
+    const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
+    const onlyGlobal = req.query.global === "1";
+    const and: Prisma.Catalog2QuestionnaireWhereInput[] = [];
+    if (q) and.push({ OR: [{ id: { contains: q } }, { name: { contains: q } }, { description: { contains: q } }, { questions: { some: { OR: [{ label: { contains: q } }, { id: { contains: q } }, { key: { contains: q } }] } } }] });
+    if (specialty) and.push({ tasks: { some: { specialty: { name: { contains: specialty } } } } });
+    if (product) and.push({ tasks: { some: { version: { product: { OR: [{ internal_name: { contains: product } }, ...(Number.isFinite(Number(product)) ? [{ sequence_number: Number(product) }] : [])] } } } } });
+    if (category) and.push({ tasks: { some: { version: { product: { category: { name: { contains: category } } } } } } });
+    if (onlyGlobal) and.push({ is_global_model: true });
     const rows = await prisma.catalog2Questionnaire.findMany({
-      orderBy: { name: "asc" },
-      include: { _count: { select: { questions: true, tasks: true } } },
+      where: and.length ? { AND: and } : {},
+      orderBy: [{ is_global_model: "desc" }, { name: "asc" }],
+      include: { _count: { select: { questions: true, tasks: true } }, tasks: { take: 6, select: { specialty: { select: { name: true } }, version: { select: { product: { select: { internal_name: true, sequence_number: true, category: { select: { name: true } } } } } } } } },
     });
     res.json({
-      data: rows.map((q) => ({
-        id: q.id, name: q.name, description: q.description,
-        question_count: q._count.questions, task_count: q._count.tasks,
-        created_at: q.created_at, updated_at: q.updated_at,
+      data: rows.map((qn) => ({
+        id: qn.id, name: qn.name, description: qn.description,
+        question_count: qn._count.questions, task_count: qn._count.tasks,
+        is_global_model: qn.is_global_model, revision: qn.revision, source_questionnaire_id: qn.source_questionnaire_id,
+        products: [...new Set(qn.tasks.map((t) => `#${t.version.product.sequence_number} ${t.version.product.internal_name}`))],
+        categories: [...new Set(qn.tasks.map((t) => t.version.product.category?.name).filter((x): x is string => !!x))],
+        specialties: [...new Set(qn.tasks.map((t) => t.specialty?.name).filter((x): x is string => !!x))],
+        created_at: qn.created_at, updated_at: qn.updated_at,
       })),
     });
   } catch (e) { next(e); }
 });
+// Biblioteca de PERGUNTAS: reutilize uma pergunta já cadastrada (por nome ou ID). A tela copia a pergunta; a cópia recebe ID novo ao salvar.
+router.get("/question-library", async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const rows = await prisma.catalog2QuestionnaireQuestion.findMany({
+      where: q ? { OR: [{ id: { contains: q } }, { label: { contains: q } }, { key: { contains: q } }] } : {},
+      orderBy: { updated_at: "desc" }, take: 40,
+      include: { questionnaire: { select: { id: true, name: true } } },
+    });
+    res.json({ data: rows.map((r) => ({ ...serializeQuestion(r), from: `${r.questionnaire.name} · ID ${r.questionnaire.id.slice(0, 8)}`, questionnaire_id: r.questionnaire.id })) });
+  } catch (e) { next(e); }
+});
 router.post("/questionnaires", async (req, res, next) => {
   try {
-    const d = questionnaireSchema.parse(req.body);
+    const d = questionnaireSchema.extend({ sections: z.array(sectionSchema).max(30).optional(), is_global_model: z.boolean().optional() }).parse(req.body);
     const created = await prisma.catalog2Questionnaire.create({
-      data: { name: d.name, description: d.description ?? null, created_by_user_id: req.user!.id },
+      data: { name: d.name, description: d.description ?? null, created_by_user_id: req.user!.id, sections_json: sectionsValue(d.sections), is_global_model: d.is_global_model ?? false },
     });
     await audit(req, "questionnaire_created", { id: created.id });
     res.status(201).json({ ...created, questions: [] });
+  } catch (e) { handle(e, res, next); }
+});
+// Duplica um questionário inteiro (perguntas com IDs NOVOS; cópia independente, revisão 1).
+router.post("/questionnaires/:id/duplicate", async (req, res, next) => {
+  try {
+    const src = await prisma.catalog2Questionnaire.findUnique({ where: { id: req.params.id as string }, include: { questions: { orderBy: { sort_order: "asc" } } } });
+    if (!src) throw new Catalog2Error("Questionário não encontrado.", 404);
+    const name = typeof req.body?.name === "string" && req.body.name.trim() ? req.body.name.trim().slice(0, 200) : `${src.name} (cópia)`;
+    const copy = await prisma.$transaction(async (tx) => {
+      const c = await tx.catalog2Questionnaire.create({ data: { name, description: src.description, sections_json: src.sections_json, created_by_user_id: req.user!.id, source_questionnaire_id: src.id } });
+      for (const qq of src.questions) {
+        const { id: _id, questionnaire_id: _qid, created_at: _c, updated_at: _u, ...rest } = qq;
+        await tx.catalog2QuestionnaireQuestion.create({ data: { ...rest, questionnaire_id: c.id } });
+      }
+      return c;
+    });
+    await audit(req, "questionnaire_duplicated", { from: src.id, id: copy.id });
+    res.status(201).json({ id: copy.id, name: copy.name });
+  } catch (e) { handle(e, res, next); }
+});
+// "Salvar como modelo global": o questionário passa a aparecer na biblioteca para reutilização em qualquer produto.
+router.put("/questionnaires/:id/global", async (req, res, next) => {
+  try {
+    const on = z.object({ is_global_model: z.boolean() }).parse(req.body).is_global_model;
+    const u = await prisma.catalog2Questionnaire.update({ where: { id: req.params.id as string }, data: { is_global_model: on } });
+    await audit(req, "questionnaire_global_model", { id: u.id, is_global_model: on });
+    res.json({ ok: true, is_global_model: u.is_global_model });
   } catch (e) { handle(e, res, next); }
 });
 router.get("/questionnaires/:id", async (req, res, next) => {
@@ -467,7 +542,7 @@ router.get("/questionnaires/:id", async (req, res, next) => {
       include: { questions: { orderBy: { sort_order: "asc" } } },
     });
     if (!q) throw new Catalog2Error("Questionário não encontrado.", 404);
-    res.json({ ...q, questions: q.questions.map(serializeQuestion) });
+    res.json({ ...q, sections: parseSections(q.sections_json), questions: q.questions.map(serializeQuestion) });
   } catch (e) { handle(e, res, next); }
 });
 router.put("/questionnaires/:id", async (req, res, next) => {
@@ -620,45 +695,71 @@ router.put("/tasks/:id/questionnaire/content", async (req, res, next) => {
     if (!task) throw new Catalog2Error("Tarefa não encontrada.", 404);
     if (!task.questionnaire_id) throw new Catalog2Error("Esta tarefa não tem questionário vinculado.", 404);
     const d = questionnaireContentSchema.parse(req.body);
+    const keys = d.questions.map((x) => x.key);
+    if (new Set(keys).size !== keys.length) throw new Catalog2Error("Há perguntas com a mesma chave neste questionário.", 422, "question_key_duplicated");
+    const sectionKeys = new Set((d.sections ?? []).map((x) => x.key));
+    // valida TODAS as perguntas antes de gravar (tudo ou nada)
+    const prepared = d.questions.map((q, i) => {
+      const cols = questionColumns(q as z.infer<typeof questionSchema>);
+      const st = parseQuestionSettings(cols.settings_json as string | null | undefined);
+      if (st.section_key && !sectionKeys.has(st.section_key)) throw new Catalog2Error(`A pergunta "${q.label}" aponta para uma seção que não existe.`, 422, "question_section_missing");
+      return { q, cols, order: i + 1 };
+    });
 
-    const referrers = await countQuestionnaireReferrers(task.questionnaire_id);
-    const forked = referrers > 1;
+    const referrers = await prisma.catalog2Task.findMany({ where: { questionnaire_id: task.questionnaire_id }, select: { id: true, version_id: true, version: { select: { state: true, product_id: true } } } });
+    const shared = referrers.length > 1;
+    // Sem escolha explícita, o comportamento de sempre: questionário compartilhado vira CÓPIA (o original nunca é tocado em silêncio).
+    const mode = d.shared_mode ?? (shared ? "copy" : "edit_shared");
+    if (shared && mode === "edit_shared") {
+      if (referrers.some((r) => r.version.state === "publicada")) throw new Catalog2Error("Este modelo é usado por uma versão PUBLICADA (imutável). Crie uma cópia independente ou edite o modelo a partir de uma nova versão.", 409, "version_published_immutable");
+      if (!d.confirm_shared) throw new Catalog2Error(`Este questionário é usado por ${referrers.length} tarefas. Confirme que quer editar o modelo para todas elas ou crie uma cópia independente.`, 409, "questionnaire_shared_confirm");
+    }
+    const forked = shared && mode === "copy";
+    const sectionsJson = sectionsValue(d.sections);
 
     const result = await prisma.$transaction(async (tx) => {
       let targetId = task.questionnaire_id as string;
+      const before = await tx.catalog2Questionnaire.findUniqueOrThrow({ where: { id: targetId }, include: { questions: true } });
       if (forked) {
-        const copy = await tx.catalog2Questionnaire.create({
-          data: { name: d.name, description: d.description ?? null, created_by_user_id: req.user!.id },
-        });
+        const copy = await tx.catalog2Questionnaire.create({ data: { name: d.name, description: d.description ?? null, sections_json: sectionsJson, created_by_user_id: req.user!.id, source_questionnaire_id: targetId } });
         targetId = copy.id;
         await tx.catalog2Task.update({ where: { id: task.id }, data: { questionnaire_id: targetId } });
+        for (const p of prepared) await tx.catalog2QuestionnaireQuestion.create({ data: { questionnaire_id: targetId, key: p.q.key, label: p.q.label, is_required: p.q.is_required ?? true, sort_order: p.order, ...p.cols } as never });
       } else {
-        await tx.catalog2Questionnaire.update({ where: { id: targetId }, data: { name: d.name, description: d.description ?? null } });
-        await tx.catalog2QuestionnaireQuestion.deleteMany({ where: { questionnaire_id: targetId } });
+        await tx.catalog2Questionnaire.update({ where: { id: targetId }, data: { name: d.name, description: d.description ?? null, sections_json: sectionsJson, revision: { increment: 1 } } });
+        // IDs ESTÁVEIS: pergunta com o mesmo id (ou a mesma chave) é atualizada no lugar; só some quem foi removido da lista.
+        const byId = new Map(before.questions.map((x) => [x.id, x]));
+        const byKey = new Map(before.questions.map((x) => [x.key, x]));
+        const keep = new Set<string>();
+        const touched: { id: string; order: number; data: Record<string, unknown> }[] = [];
+        for (const p of prepared) {
+          const existing = (p.q.id && byId.get(p.q.id)) || byKey.get(p.q.key);
+          if (existing) keep.add(existing.id);
+          touched.push({ id: existing?.id ?? "", order: p.order, data: { key: p.q.key, label: p.q.label, is_required: p.q.is_required ?? true, sort_order: p.order, ...p.cols } });
+        }
+        // 1) libera as chaves (evita colisão ao trocar chaves entre perguntas) 2) remove as que saíram 3) grava
+        const gone = before.questions.filter((x) => !keep.has(x.id));
+        if (gone.length) await tx.catalog2QuestionnaireQuestion.deleteMany({ where: { id: { in: gone.map((x) => x.id) } } });
+        for (const t of touched) {
+          if (t.id) await tx.catalog2QuestionnaireQuestion.update({ where: { id: t.id }, data: { ...t.data, key: `__tmp_${t.id}` } as never });
+        }
+        for (const t of touched) {
+          if (t.id) await tx.catalog2QuestionnaireQuestion.update({ where: { id: t.id }, data: t.data as never });
+          else await tx.catalog2QuestionnaireQuestion.create({ data: { questionnaire_id: targetId, ...t.data } as never });
+        }
       }
-      for (const [i, q] of d.questions.entries()) {
-        await tx.catalog2QuestionnaireQuestion.create({
-          data: { questionnaire_id: targetId, key: q.key, label: q.label, is_required: q.is_required ?? true, sort_order: i + 1, ...questionColumns(q as z.infer<typeof questionSchema>) } as never,
-        });
-      }
-      const saved = await tx.catalog2Questionnaire.findUniqueOrThrow({
-        where: { id: targetId },
-        include: { questions: { orderBy: { sort_order: "asc" } } },
-      });
-      // Item 7.1: gravado NA MESMA transação — se isto falhar, a cópia/
-      // edição do questionário acima também é revertida (nunca fica
-      // "meio salvo" sem o registro correspondente).
+      const saved = await tx.catalog2Questionnaire.findUniqueOrThrow({ where: { id: targetId }, include: { questions: { orderBy: { sort_order: "asc" } } } });
       await recordCatalog2ProductHistory(tx, {
         productId: taskVersion.product_id, versionId: taskVersion.id, eventType: "questionnaire_content_updated",
-        description: `Conteúdo do questionário "${saved.name}" atualizado na tarefa "${task.name}"${forked ? " (cópia própria criada — conteúdo compartilhado preservado)" : ""}.`,
-        after: { questionnaire_id: saved.id, question_count: saved.questions.length, forked },
+        description: `Conteúdo do questionário "${saved.name}" atualizado na tarefa "${task.name}"${forked ? " (cópia independente criada — o modelo compartilhado ficou intacto)" : shared ? " (MODELO COMPARTILHADO editado para todas as tarefas que o usam)" : ""}.`,
+        after: { questionnaire_id: saved.id, revision: saved.revision, question_count: saved.questions.length, forked, shared_edit: shared && !forked },
         actorUserId: req.user!.id,
       });
       return saved;
     });
 
-    await audit(req, "task_questionnaire_content_saved", { task_id: task.id, questionnaire_id: result.id, forked });
-    res.json({ ok: true, forked, questionnaire: { ...result, questions: result.questions.map(serializeQuestion) } });
+    await audit(req, "task_questionnaire_content_saved", { task_id: task.id, questionnaire_id: result.id, forked, mode });
+    res.json({ ok: true, forked, questionnaire: { ...result, sections: parseSections(result.sections_json), questions: result.questions.map(serializeQuestion) } });
   } catch (e) { handle(e, res, next); }
 });
 // Vincula/desvincula um questionário a UMA tarefa (referência — nunca
@@ -667,21 +768,32 @@ router.put("/tasks/:id/questionnaire", async (req, res, next) => {
   try {
     const version = await versionOfTask(req.params.id as string);
     const before = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: req.params.id as string }, select: { name: true, questionnaire_id: true } });
-    const questionnaireId = req.body?.questionnaire_id === null ? null : z.string().min(1).parse(req.body?.questionnaire_id);
+    let questionnaireId = req.body?.questionnaire_id === null ? null : z.string().min(1).parse(req.body?.questionnaire_id);
+    // "sync" (padrão) = vincula mantendo sincronizado com o modelo; "copy" = cria uma cópia independente (IDs novos) e vincula a cópia.
+    const mode = z.enum(["sync", "copy"]).default("sync").parse(req.body?.mode ?? "sync");
     let questionnaireName: string | null = null;
-    if (questionnaireId) {
-      const exists = await prisma.catalog2Questionnaire.findUnique({ where: { id: questionnaireId }, select: { id: true, name: true } });
-      if (!exists) throw new Catalog2Error("Questionário não encontrado.", 404);
-      questionnaireName = exists.name;
-    }
+    let copied = false;
     const updated = await prisma.$transaction(async (tx) => {
+      if (questionnaireId) {
+        const src = await tx.catalog2Questionnaire.findUnique({ where: { id: questionnaireId }, include: { questions: { orderBy: { sort_order: "asc" } } } });
+        if (!src) throw new Catalog2Error("Questionário não encontrado.", 404);
+        questionnaireName = src.name;
+        if (mode === "copy") {
+          const c = await tx.catalog2Questionnaire.create({ data: { name: `${src.name} (cópia)`, description: src.description, sections_json: src.sections_json, created_by_user_id: req.user!.id, source_questionnaire_id: src.id } });
+          for (const qq of src.questions) {
+            const { id: _id, questionnaire_id: _qid, created_at: _c, updated_at: _u, ...rest } = qq;
+            await tx.catalog2QuestionnaireQuestion.create({ data: { ...rest, questionnaire_id: c.id } });
+          }
+          questionnaireId = c.id; questionnaireName = c.name; copied = true;
+        }
+      }
       const u = await tx.catalog2Task.update({ where: { id: req.params.id as string }, data: { questionnaire_id: questionnaireId } });
       if (before.questionnaire_id !== u.questionnaire_id) {
         await recordCatalog2ProductHistory(tx, {
           productId: version.product_id, versionId: version.id,
           eventType: questionnaireId ? "questionnaire_linked" : "questionnaire_unlinked",
           description: questionnaireId
-            ? `Questionário "${questionnaireName}" vinculado à tarefa "${before.name}".`
+            ? `Questionário "${questionnaireName}" ${copied ? "copiado (independente) e vinculado" : "vinculado (sincronizado com o modelo)"} à tarefa "${before.name}".`
             : `Questionário desvinculado da tarefa "${before.name}".`,
           before: { questionnaire_id: before.questionnaire_id },
           after: { questionnaire_id: u.questionnaire_id },
@@ -690,7 +802,7 @@ router.put("/tasks/:id/questionnaire", async (req, res, next) => {
       }
       return u;
     });
-    res.json({ ok: true, questionnaire_id: updated.questionnaire_id });
+    res.json({ ok: true, questionnaire_id: updated.questionnaire_id, copied });
   } catch (e) { handle(e, res, next); }
 });
 
@@ -2256,6 +2368,11 @@ const taskSchema = z.object({
   executor_continuity: z.enum(CONTINUITY_MODES).optional(),
   asset_rule: z.enum(ASSET_RULES).optional(),
   asset_revalidate_days: z.number().int().min(1).max(730).nullish(),
+  // Continuidade do executor — configuração simples (16/10): prazo de aceite do preferido, o que fazer se indisponível / sem resposta, reaproveitar só no mesmo projeto.
+  continuity_accept_hours: z.number().int().min(1).max(168).nullish(),
+  continuity_if_unavailable: z.enum(["normal_queue", "ask_leader"]).optional(),
+  continuity_after_deadline: z.enum(["normal_queue", "ask_leader"]).optional(),
+  reuse_connections_same_project: z.boolean().optional(),
   // Campos operacionais (objetivo, instruções, entradas, saída, critério de aceite, riscos + visibilidade).
   ops: taskOpsSchema,
   // Revisão: quem revisa (nulo = líder responsável), tempo previsto e especialidade usada no custo da revisão.
@@ -2325,7 +2442,7 @@ router.post("/versions/:id/tasks", async (req, res, next) => {
         return t;
       }
       const takenKeys = new Set((await tx.catalog2Task.findMany({ where: { version_id: req.params.id as string }, select: { key: true } })).map((t) => t.key));
-      const c = await tx.catalog2Task.create({ data: { task_model_id: model.id, task_model_revision: model.revision, requires_qualification: d.requires_qualification ?? false, cycle_type: d.cycle_type ?? "recorrente", repeat_rule: d.repeat_rule ?? "all_cycles", repeat_every_cycles: d.repeat_every_cycles ?? null, executor_continuity: d.executor_continuity ?? "not_allowed", asset_rule: d.asset_rule ?? "first_only", asset_revalidate_days: d.asset_revalidate_days ?? null, qualifier_user_id: d.qualifier_user_id ?? null, qualification_cost_mode: d.qualification_cost_mode ?? "inherit", qualification_specialty_id: d.qualification_specialty_id ?? null, qualification_hourly_rate: d.qualification_hourly_rate ?? null, qualification_minutes: d.qualification_minutes ?? null, qualification_percent: d.qualification_percent ?? null, qualification_fixed_amount: d.qualification_fixed_amount ?? null, qualifier_kind: d.qualifier_kind ?? "area_leader", reviewer_user_id: d.reviewer_user_id ?? null, review_minutes: d.review_minutes ?? null, review_specialty_id: d.review_specialty_id ?? null, ops: taskOpsValue(d.ops), version_id: req.params.id as string, key: d.key ?? autoKey("tarefa", model.id, takenKeys), name: d.name, description: d.description ?? null, objective: d.objective ?? null, sort_order: d.sort_order ?? 99, specialty_id: d.specialty_id ?? null, execution_mode: d.execution_mode ?? "humano", estimated_minutes: d.estimated_minutes ?? null, requires_review: d.requires_review ?? false, requires_client_approval: d.requires_client_approval ?? false, is_conditional: d.is_conditional ?? false } });
+      const c = await tx.catalog2Task.create({ data: { task_model_id: model.id, task_model_revision: model.revision, requires_qualification: d.requires_qualification ?? false, cycle_type: d.cycle_type ?? "recorrente", repeat_rule: d.repeat_rule ?? "all_cycles", repeat_every_cycles: d.repeat_every_cycles ?? null, executor_continuity: d.executor_continuity ?? "not_allowed", continuity_accept_hours: d.continuity_accept_hours ?? null, continuity_if_unavailable: d.continuity_if_unavailable ?? "normal_queue", continuity_after_deadline: d.continuity_after_deadline ?? "normal_queue", reuse_connections_same_project: d.reuse_connections_same_project ?? true, asset_rule: d.asset_rule ?? "first_only", asset_revalidate_days: d.asset_revalidate_days ?? null, qualifier_user_id: d.qualifier_user_id ?? null, qualification_cost_mode: d.qualification_cost_mode ?? "inherit", qualification_specialty_id: d.qualification_specialty_id ?? null, qualification_hourly_rate: d.qualification_hourly_rate ?? null, qualification_minutes: d.qualification_minutes ?? null, qualification_percent: d.qualification_percent ?? null, qualification_fixed_amount: d.qualification_fixed_amount ?? null, qualifier_kind: d.qualifier_kind ?? "area_leader", reviewer_user_id: d.reviewer_user_id ?? null, review_minutes: d.review_minutes ?? null, review_specialty_id: d.review_specialty_id ?? null, ops: taskOpsValue(d.ops), version_id: req.params.id as string, key: d.key ?? autoKey("tarefa", model.id, takenKeys), name: d.name, description: d.description ?? null, objective: d.objective ?? null, sort_order: d.sort_order ?? 99, specialty_id: d.specialty_id ?? null, execution_mode: d.execution_mode ?? "humano", estimated_minutes: d.estimated_minutes ?? null, requires_review: d.requires_review ?? false, requires_client_approval: d.requires_client_approval ?? false, is_conditional: d.is_conditional ?? false } });
       await recordCatalog2ProductHistory(tx, {
         productId: version.product_id, versionId: version.id, eventType: "task_added",
         description: `Tarefa "${c.name}" adicionada.`, after: { key: c.key, name: c.name },
@@ -2373,6 +2490,8 @@ router.put("/tasks/:id", async (req, res, next) => {
       if (d.specialty_id !== undefined && d.specialty_id !== before.specialty_id) changed.push("especialidade");
       if (d.estimated_minutes !== undefined && d.estimated_minutes !== before.estimated_minutes) changed.push(`tempo estimado de ${before.estimated_minutes ?? "?"} para ${d.estimated_minutes ?? "?"} min`);
       if (d.specialty_id !== undefined && d.specialty_id !== before.specialty_id) changed.push("especialidade alterada");
+      const contFields = ["executor_continuity", "continuity_accept_hours", "continuity_if_unavailable", "continuity_after_deadline", "reuse_connections_same_project", "asset_rule", "asset_revalidate_days"] as const;
+      if (contFields.some((k) => (d as Record<string, unknown>)[k] !== undefined && (d as Record<string, unknown>)[k] !== (before as Record<string, unknown>)[k])) changed.push("continuidade do executor / acessos");
       if (changed.length > 0) {
         await recordCatalog2ProductHistory(tx, {
           productId: version.product_id, versionId: version.id, eventType: "task_updated",
@@ -2497,7 +2616,8 @@ router.post("/tasks/:id/deliverables", async (req, res, next) => {
     if (!key) { let n = taken.size + 1; while (taken.has(`entregavel-${n}`)) n++; key = `entregavel-${n}`; }
     const created = await prisma.$transaction(async (tx) => {
       const c = await tx.catalog2TaskDeliverable.create({
-        data: { task_id: task.id, step_id: d.step_id ?? null, key: key!, name: d.name, description: d.description ?? null, type: d.type, responsible: d.responsible, is_required: d.is_required, requires_approval: d.requires_approval, visibility: d.visibility, sort_order: d.sort_order ?? taken.size + 1 },
+        data: { task_id: task.id, step_id: d.step_id ?? null, key: key!, name: d.name, description: d.description ?? null, type: d.type, responsible: d.responsible, is_required: d.is_required, requires_approval: d.requires_approval, visibility: d.visibility, sort_order: d.sort_order ?? taken.size + 1,
+          format: d.format ?? null, delivery_moment: d.delivery_moment ?? null, template_url: d.template_url ?? null, template_name: d.template_name ?? null, evidence_required: d.evidence_required, requires_qualification: d.requires_qualification, cycle_scope: d.cycle_scope, is_conditional: d.is_conditional, condition_json: d.condition_json ?? null },
       });
       await recordCatalog2ProductHistory(tx, { productId: version.product_id, versionId: version.id, eventType: "deliverable_added", description: `Entregável "${c.name}" adicionado à tarefa "${task.name}".`, after: { key: c.key, name: c.name, type: c.type, responsible: c.responsible }, actorUserId: req.user!.id });
       return c;
@@ -2521,6 +2641,18 @@ router.put("/deliverables/:id", async (req, res, next) => {
     res.json(updated);
   } catch (e) { handle(e, res, next); }
 });
+// Biblioteca de entregáveis já cadastrados em outros produtos/tarefas (para REUTILIZAR como modelo): busca por nome, devolve os mais recentes.
+router.get("/deliverables-library", async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    const rows = await prisma.catalog2TaskDeliverable.findMany({
+      where: q ? { name: { contains: q } } : {},
+      orderBy: { updated_at: "desc" }, take: 40,
+      select: { id: true, key: true, name: true, description: true, type: true, format: true, responsible: true, is_required: true, requires_approval: true, visibility: true, evidence_required: true, requires_qualification: true, delivery_moment: true, cycle_scope: true, template_url: true, template_name: true, task: { select: { name: true, version: { select: { product: { select: { internal_name: true, sequence_number: true } } } } } } },
+    });
+    res.json({ data: rows.map((r) => ({ ...r, task: undefined, from: `${r.task.version.product.internal_name} #${r.task.version.product.sequence_number} · ${r.task.name}` })) });
+  } catch (e) { handle(e, res, next); }
+});
 router.delete("/deliverables/:id", async (req, res, next) => {
   try {
     const { d: before, version } = await versionOfDeliverable(req.params.id as string);
@@ -2542,7 +2674,7 @@ router.post("/tasks/:id/duplicate", async (req, res, next) => {
       const dupModel = await findOrCreateTaskModel(tx, { name: `${src.name} (cópia)`, description: src.description, execution_mode: src.execution_mode, specialty_id: src.specialty_id, estimated_minutes: src.estimated_minutes, questionnaire_id: src.questionnaire_id, is_conditional: src.is_conditional, requires_client_approval: src.requires_client_approval });
       const t = await tx.catalog2Task.create({
         data: {
-          task_model_id: dupModel.id, task_model_revision: dupModel.revision, requires_qualification: src.requires_qualification, stage_execution: src.stage_execution, stage_payout_mode: src.stage_payout_mode, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
+          task_model_id: dupModel.id, task_model_revision: dupModel.revision, requires_qualification: src.requires_qualification, stage_execution: src.stage_execution, stage_payout_mode: src.stage_payout_mode, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days, continuity_accept_hours: src.continuity_accept_hours, continuity_if_unavailable: src.continuity_if_unavailable, continuity_after_deadline: src.continuity_after_deadline, reuse_connections_same_project: src.reuse_connections_same_project,
           qualifier_user_id: src.qualifier_user_id, qualification_mode: src.qualification_mode, qualification_min_approvals: src.qualification_min_approvals, qualification_cost_mode: src.qualification_cost_mode, qualification_specialty_id: src.qualification_specialty_id, qualification_hourly_rate: src.qualification_hourly_rate, qualification_minutes: src.qualification_minutes, qualification_percent: src.qualification_percent, qualification_fixed_amount: src.qualification_fixed_amount, qualifier_kind: src.qualifier_kind,
           reviewer_user_id: src.reviewer_user_id, review_minutes: src.review_minutes, review_specialty_id: src.review_specialty_id,
           ops: (src.ops ?? undefined) as Prisma.InputJsonValue | undefined,
@@ -2587,7 +2719,7 @@ router.post("/versions/:id/tasks/import", async (req, res, next) => {
     const imported = await prisma.$transaction(async (tx) => {
       const t = await tx.catalog2Task.create({
         data: {
-          task_model_id: src.task_model_id, task_model_revision: src.task_model_revision, requires_qualification: src.requires_qualification, stage_execution: src.stage_execution, stage_payout_mode: src.stage_payout_mode, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days,
+          task_model_id: src.task_model_id, task_model_revision: src.task_model_revision, requires_qualification: src.requires_qualification, stage_execution: src.stage_execution, stage_payout_mode: src.stage_payout_mode, cycle_type: src.cycle_type, repeat_rule: src.repeat_rule, repeat_every_cycles: src.repeat_every_cycles, executor_continuity: src.executor_continuity, asset_rule: src.asset_rule, asset_revalidate_days: src.asset_revalidate_days, continuity_accept_hours: src.continuity_accept_hours, continuity_if_unavailable: src.continuity_if_unavailable, continuity_after_deadline: src.continuity_after_deadline, reuse_connections_same_project: src.reuse_connections_same_project,
           qualifier_user_id: src.qualifier_user_id, qualification_mode: src.qualification_mode, qualification_min_approvals: src.qualification_min_approvals, qualification_cost_mode: src.qualification_cost_mode, qualification_specialty_id: src.qualification_specialty_id, qualification_hourly_rate: src.qualification_hourly_rate, qualification_minutes: src.qualification_minutes, qualification_percent: src.qualification_percent, qualification_fixed_amount: src.qualification_fixed_amount, qualifier_kind: src.qualifier_kind,
           reviewer_user_id: src.reviewer_user_id, review_minutes: src.review_minutes, review_specialty_id: src.review_specialty_id,
           ops: (src.ops ?? undefined) as Prisma.InputJsonValue | undefined,
@@ -2797,6 +2929,8 @@ const packageBody = z.object({
   // exigir TODOS os itens, itens ESPECÍFICOS (required_product_ids) ou PELO MENOS UM outro item do pacote
   requirement_mode: z.enum(["all", "specific", "any"]).optional(),
   required_product_ids: z.array(z.string()).max(20).optional(),
+  // Decisão do administrador (16/10): impedir que os produtos deste pacote sejam vendidos SEPARADAMENTE. Padrão: continuam vendidos separadamente.
+  block_standalone_sale: z.boolean().optional(),
 });
 function checkPackageMode(mode: string | undefined, ids: string[], required: string[] | undefined) {
   if (mode === "specific") {
@@ -2814,7 +2948,7 @@ router.post("/packages", async (req, res, next) => {
     checkPackageMode(d.requirement_mode, ids, d.required_product_ids);
     const pkg = await prisma.catalog2Package.create({
       data: {
-        name: d.name, description: d.description ?? null, created_by_user_id: req.user!.id, requirement_mode: d.requirement_mode ?? "all",
+        name: d.name, description: d.description ?? null, created_by_user_id: req.user!.id, requirement_mode: d.requirement_mode ?? "all", block_standalone_sale: d.block_standalone_sale ?? false,
         items: { create: ids.map((id, i) => ({ catalog2_product_id: id, sort_order: i, is_required: d.requirement_mode === "specific" && (d.required_product_ids ?? []).includes(id) })) },
       },
     });
@@ -2829,7 +2963,7 @@ router.put("/packages/:id", async (req, res, next) => {
     const pkg = await prisma.catalog2Package.findUnique({ where: { id }, include: { items: true } });
     if (!pkg) throw new Catalog2Error("Pacote não encontrado.", 404);
     await prisma.$transaction(async (tx) => {
-      await tx.catalog2Package.update({ where: { id }, data: { ...(d.requirement_mode !== undefined ? { requirement_mode: d.requirement_mode } : {}), ...(d.name !== undefined ? { name: d.name } : {}), ...(d.description !== undefined ? { description: d.description } : {}), ...(d.is_active !== undefined ? { is_active: d.is_active } : {}) } });
+      await tx.catalog2Package.update({ where: { id }, data: { ...(d.block_standalone_sale !== undefined ? { block_standalone_sale: d.block_standalone_sale } : {}), ...(d.requirement_mode !== undefined ? { requirement_mode: d.requirement_mode } : {}), ...(d.name !== undefined ? { name: d.name } : {}), ...(d.description !== undefined ? { description: d.description } : {}), ...(d.is_active !== undefined ? { is_active: d.is_active } : {}) } });
       if (d.product_ids) {
         const ids = [...new Set(d.product_ids)];
         if (ids.length < 2) throw new Catalog2Error("Um pacote precisa de pelo menos 2 produtos diferentes.", 422);
@@ -2848,6 +2982,25 @@ router.put("/packages/:id", async (req, res, next) => {
     }
     await audit(req, "package_updated", { package_id: id });
     res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
+});
+// Primeira execução forçada (16/10): o administrador manda repetir as etapas "Só na primeira execução" no PRÓXIMO ciclo gerado deste contrato
+// (mudança estrutural: nova plataforma, nova conta, refazer a implantação). Justificativa obrigatória; fica no histórico do projeto.
+router.post("/project-products/:id/force-first-execution", async (req, res, next) => {
+  try {
+    const d = z.object({ reason: z.string().trim().min(10, "Explique o motivo (mínimo de 10 caracteres).").max(1000), cancel: z.boolean().optional() }).parse(req.body);
+    const pp = await prisma.projectProduct.findUnique({ where: { id: req.params.id as string }, select: { id: true, project_id: true, catalog2_product_id: true, product_name_snapshot: true } });
+    if (!pp || !pp.catalog2_product_id) throw new Catalog2Error("Contratação do catálogo não encontrada.", 404);
+    const { logProjectDecision } = await import("../lib/catalog2-cycles");
+    if (d.cancel) {
+      await prisma.projectProduct.update({ where: { id: pp.id }, data: { force_first_execution_next: false } });
+      await logProjectDecision(prisma, { projectId: pp.project_id, projectProductId: pp.id, kind: "first_execution_force_cancelled", message: `Cancelado o pedido de repetir a primeira execução de "${pp.product_name_snapshot}". Justificativa: ${d.reason}`, actorUserId: req.user!.id });
+    } else {
+      await prisma.projectProduct.update({ where: { id: pp.id }, data: { force_first_execution_next: true, force_first_execution_reason: d.reason, force_first_execution_by: req.user!.id, force_first_execution_at: new Date() } });
+      await logProjectDecision(prisma, { projectId: pp.project_id, projectProductId: pp.id, kind: "first_execution_force_requested", message: `O administrador pediu a primeira execução de novo no próximo ciclo de "${pp.product_name_snapshot}" (mudança estrutural). Justificativa: ${d.reason}`, actorUserId: req.user!.id });
+    }
+    await audit(req, d.cancel ? "first_execution_force_cancelled" : "first_execution_force_requested", { project_product_id: pp.id, reason: d.reason });
+    res.json({ ok: true, force_first_execution_next: !d.cancel });
   } catch (e) { handle(e, res, next); }
 });
 router.post("/packages/:id/rules", async (req, res, next) => {
@@ -3423,6 +3576,10 @@ async function taskDependencyReaches(from: string, target: string): Promise<bool
 router.post("/tasks/:id/dependencies", async (req, res, next) => {
   try {
     const v = await versionOfTask(req.params.id as string);
+    // Decisão de 16/10: produto INDIVIDUAL não tem dependência entre tarefas (o trabalho é dividido em etapas dentro da tarefa única).
+    // Dependência de um produto em relação a outro é regra de Combos / Pacotes e Dependências. Dependências antigas já gravadas são preservadas.
+    const prod = await prisma.catalog2Product.findUnique({ where: { id: v.product_id }, select: { task_structure: true } });
+    if (prod?.task_structure === "single") throw new Catalog2Error("Produto individual não tem dependência entre tarefas: divida o trabalho em etapas (com ordem) dentro da tarefa. Dependência entre produtos é cadastrada em Combos / Pacotes e Dependências.", 422, "single_product_no_task_dependencies");
     const dependsOn = z.string().parse(req.body?.depends_on_task_id);
     const dep = await prisma.catalog2Task.findUnique({ where: { id: dependsOn }, select: { version_id: true, id: true } });
     if (!dep || dep.version_id !== v.id) throw new Catalog2Error("A dependência precisa ser uma tarefa da MESMA versão.", 422, "cross_version_ref");

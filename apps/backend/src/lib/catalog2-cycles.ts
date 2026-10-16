@@ -54,6 +54,14 @@ export interface CycleContext {
   hasImplementation: boolean;
   implementationRule: string;
   isFirstContract: boolean;
+  /**
+   * Primeira execução (regra de 16/10): este é o 1º ciclo DESTE produto NESTE projeto? Decide se as etapas marcadas
+   * "Só na primeira execução" executam. Projeto novo = nova primeira execução (mesmo que o cliente já tenha o produto em outro projeto);
+   * recontratação/ciclos seguintes no MESMO projeto = não repete.
+   */
+  firstExecutionInProject: boolean;
+  /** O administrador forçou a primeira execução no próximo ciclo gerado (mudança estrutural), com justificativa e histórico. */
+  forcedFirstExecution: boolean;
   /** Implementações já CONCLUÍDAS antes para o mesmo cliente+produto (por modelo global ou key). */
   completedImplementation: { modelIds: Set<number>; keys: Set<string> };
   revalidationReason: string | null;
@@ -143,6 +151,7 @@ export async function resolveCycleContext(
   pp: {
     id: string; catalog2_product_id: string | null; catalog2_period_months: number | null; created_at: Date;
     first_contract: boolean | null; revalidation_reason: string | null;
+    force_first_execution_next?: boolean | null;
     catalog2_product?: { delivery_recurrence: string | null } | null;
     catalog2_version?: { has_initial_implementation: boolean; implementation_rule: string } | null;
   },
@@ -168,6 +177,16 @@ export async function resolveCycleContext(
     }
   }
 
+  // Primeira execução NESTE projeto: não há outra contratação anterior do mesmo produto, já com tarefas, neste projeto.
+  let firstExecutionInProject = true;
+  if (pp.catalog2_product_id) {
+    const priorInProject = await tx.projectProduct.findFirst({
+      where: { id: { not: pp.id }, project_id: projectId, catalog2_product_id: pp.catalog2_product_id, created_at: { lt: pp.created_at }, tasks: { some: {} } },
+      select: { id: true },
+    });
+    firstExecutionInProject = !priorInProject;
+  }
+
   const completed = { modelIds: new Set<number>(), keys: new Set<string>() };
   if (cycleIndex === 0 && conds.length > 0 && pp.catalog2_product_id) {
     const rows = await tx.projectTask.findMany({
@@ -191,9 +210,25 @@ export async function resolveCycleContext(
     hasImplementation,
     implementationRule: pp.catalog2_version?.implementation_rule ?? "first_only",
     isFirstContract,
+    firstExecutionInProject,
+    forcedFirstExecution: !!pp.force_first_execution_next,
     completedImplementation: completed,
     revalidationReason: pp.revalidation_reason ?? null,
   };
+}
+
+/**
+ * Primeira execução para o PREÇO/COTAÇÃO de um projeto que já existe (aditivo): se o projeto já tem este produto contratado
+ * (com tarefas), as etapas "Só na primeira execução" não executam nem entram no preço. Projeto novo = aplica.
+ */
+export async function firstExecutionOptions(db: Db, projectId: string, catalog2ProductId: string): Promise<{ applies: boolean; reason?: string }> {
+  const prior = await db.projectProduct.findFirst({
+    where: { project_id: projectId, catalog2_product_id: catalog2ProductId, tasks: { some: {} } },
+    select: { id: true },
+  });
+  return prior
+    ? { applies: false, reason: "Este produto já foi contratado neste projeto: as etapas “Só na primeira execução” não são executadas nem cobradas de novo." }
+    : { applies: true };
 }
 
 /** Implantações que a empresa JÁ concluiu para este produto (decide se a implantação é cobrada de novo). */

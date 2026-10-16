@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { apiClient } from "@/lib/api-client"
 import { DependencyRuleForm, type DependencyOptions } from "@/components/dependency-rule-form"
 import { InlineLoader } from "@/components/ui/loading";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 
 const BEHAVIOR_TONE: Record<string, string> = {
   block_start: "bg-red-100 text-red-800",
@@ -31,6 +32,9 @@ export default function AdminPacotesPage() {
   const [mode, setMode] = useState<"all" | "specific" | "any">("all")
   const [required, setRequired] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
+  // "Impedir a venda separada" é decisão do administrador, aqui na gestão do pacote (nunca um campo escondido no cadastro do produto).
+  const [blockSolo, setBlockSolo] = useState(false)
+  const [confirmBlock, setConfirmBlock] = useState<{ id: string; name: string; next: boolean } | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -57,8 +61,8 @@ export default function AdminPacotesPage() {
     setBusy(true)
     setError(null)
     try {
-      await apiClient.createCatalog2Package({ name: name.trim(), description: description.trim() || null, product_ids: selected, requirement_mode: mode, ...(mode === "specific" ? { required_product_ids: required.filter((r) => selected.includes(r)) } : {}) })
-      setName(""); setDescription(""); setSelected([]); setRequired([]); setMode("all")
+      await apiClient.createCatalog2Package({ name: name.trim(), description: description.trim() || null, product_ids: selected, requirement_mode: mode, block_standalone_sale: blockSolo, ...(mode === "specific" ? { required_product_ids: required.filter((r) => selected.includes(r)) } : {}) })
+      setName(""); setDescription(""); setSelected([]); setRequired([]); setMode("all"); setBlockSolo(false)
       await load()
     } catch (e: any) {
       setError(e?.message ?? "Não foi possível criar o pacote.")
@@ -100,7 +104,11 @@ export default function AdminPacotesPage() {
           </ul>
         </div>
         <div className="mt-2 space-y-1 text-xs">
-          <label className="font-semibold text-slate-500">Para vender um produto "só em pacote", o pedido precisa ter:
+          <label className="flex items-start gap-2 rounded border border-slate-200 p-2 text-sm dark:border-slate-700" data-testid="block-standalone-new">
+            <input type="checkbox" className="mt-0.5" aria-label="Impedir a venda separada dos produtos deste pacote" checked={blockSolo} onChange={(e) => setBlockSolo(e.target.checked)} />
+            <span><strong>Impedir a venda separada dos produtos deste pacote</strong><span className="block text-xs text-slate-500">Por padrão, um produto de um pacote continua sendo vendido separadamente. Marque só se quiser que ele seja contratado apenas com os itens exigidos pelo pacote (regra abaixo). Atenção: o cliente deixa de poder comprá-lo sozinho.</span></span>
+          </label>
+          <label className="font-semibold text-slate-500">Quando a venda separada estiver impedida, o pedido precisa ter:
             <select aria-label="Regra do pacote" className="ml-2 h-8 rounded border border-slate-300 bg-transparent px-2" value={mode} onChange={(e) => setMode(e.target.value as "all" | "specific" | "any")}>
               <option value="all">Todos os itens do pacote</option>
               <option value="specific">Itens específicos (marque abaixo)</option>
@@ -129,8 +137,10 @@ export default function AdminPacotesPage() {
               <div>
                 <p className="font-semibold">{pk.name} {!pk.is_active && <span className="ml-1 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold">inativo</span>}</p>
                 <p className="text-xs text-slate-500">{pk.items.map((i: any) => i.product.internal_name).join(" + ")}</p>
+                <p className={`mt-0.5 text-[11px] font-semibold ${pk.block_standalone_sale ? "text-amber-700" : "text-emerald-700"}`} data-testid="package-solo-state">{pk.block_standalone_sale ? "Venda separada IMPEDIDA: só se contrata com os itens do pacote." : "Venda separada permitida: os produtos também podem ser comprados sozinhos."}</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" data-testid="package-solo-toggle" onClick={() => setConfirmBlock({ id: pk.id, name: pk.name, next: !pk.block_standalone_sale })}>{pk.block_standalone_sale ? "Permitir venda separada" : "Impedir venda separada"}</Button>
                 <Button size="sm" variant="outline" onClick={() => setOpenId(openId === pk.id ? null : pk.id)}>{openId === pk.id ? "Fechar" : `Regras (${pk.rules.filter((r: any) => r.is_active).length})`}</Button>
                 <Button size="sm" variant="ghost" onClick={async () => { await apiClient.updateCatalog2Package(pk.id, { is_active: !pk.is_active }); await load() }}>{pk.is_active ? "Desativar" : "Reativar"}</Button>
               </div>
@@ -163,6 +173,17 @@ export default function AdminPacotesPage() {
           </div>
         ))}
       </section>
+      <ConfirmationDialog
+        open={!!confirmBlock}
+        onClose={() => setConfirmBlock(null)}
+        title={confirmBlock?.next ? "Impedir a venda separada?" : "Permitir a venda separada?"}
+        message={confirmBlock?.next
+          ? `Os produtos do pacote "${confirmBlock?.name}" deixarão de poder ser comprados sozinhos: só serão contratados em pedidos que tenham os itens exigidos pelo pacote. Isso vale para novas compras; contratos já feitos não mudam.`
+          : `Os produtos do pacote "${confirmBlock?.name}" voltam a poder ser comprados separadamente.`}
+        confirmText={confirmBlock?.next ? "Impedir venda separada" : "Permitir venda separada"}
+        destructive={!!confirmBlock?.next}
+        onConfirm={async () => { if (!confirmBlock) return; await apiClient.updateCatalog2Package(confirmBlock.id, { block_standalone_sale: confirmBlock.next }); setConfirmBlock(null); await load() }}
+      />
     </div>
   )
 }

@@ -39,11 +39,25 @@ Mapa das principais áreas do sistema. Para cada uma: o que faz, onde editar, co
 - **Backend**: `apps/backend/src/routes/permissions.ts`, modelos `AdminProfile` + `AdminPermission`
 - **Lógica frontend**: `apps/frontend/lib/user-permissions.ts`
 
-### Produtos — `/admin/produtos`
+### Produtos — `/admin/produtos` (legado — o cadastro atual é `/admin/cadastro-produtos`, logo abaixo)
 
 - CRUD de produtos do catálogo (definição comercial)
 - **Editar em**: `apps/frontend/app/admin/produtos/page.tsx`
 - **Domínio detalhado**: ver [produtos.md](./produtos.md)
+
+### Cadastro de Produtos (catalog2) — `/admin/cadastro-produtos/:produtoId?`  ← **tela atual de cadastro**
+
+- **Função**: criar, configurar, versionar e publicar produtos. Lista de produtos → "Continuar configuração" → **Editar**. Editor em **5 passos**: Informações do produto · Entrega: tarefas, etapas e prazos · Classificação e opções (Classificação, Variações, Adicionais, Prazos e condições) · Custos e preço · Revisão e publicação (Conferência final, Publicação e versões, Histórico). Painel "Checklist do produto" no topo, ícone "i" em todo campo, modo "Somente visualização" (como o cliente vê).
+- **Guia campo a campo**: [cadastro-produto-passo-a-passo.md](./cadastro-produto-passo-a-passo.md)
+- **Editar em**: `apps/frontend/app/admin/produtos/novo-catalogo/` (`page.tsx` lista, `product-editor.tsx` editor, `field-help.ts` textos do "i", `step-details-summary.tsx`, `option-step-adjust-ui.tsx`, `variation-actions-ui.tsx`, `unsaved-dialog.tsx`, `catalog2-*-ui.tsx`)
+- **Backend**: `apps/backend/src/routes/catalog2-admin.ts` (`/api/admin/catalog2`), `lib/catalog2-service.ts` (publicação), `lib/catalog2-pricing.ts` (preço), `lib/stage-engine.ts` (etapas em execução)
+- **Telas ligadas**: Precificação (`/admin/precificacao`: especialidades, valor/hora, taxas, custo do qualificador), Combos (`/admin/combos`: produtos com várias tarefas), Catálogo de Produtos (visão do cliente)
+
+### Etapas para qualificar — `/nomades/qualificacoes`, `/leader/qualificacoes`, `/admin/qualificacoes`
+
+- **Função**: tela única para quem confere (qualifica) entregas de etapas — nômade qualificador, líder e admin. Mostra as conferências pendentes e permite aprovar ou devolver.
+- **Editar em**: `apps/frontend/app/qualificacoes/page.tsx` · **Backend**: `apps/backend/src/routes/qualificacoes.ts`, `lib/qualifier-pool.ts` (rodízio)
+- A marcação **"Nômade qualificador"** fica no cadastro do nômade/empresa (`apps/frontend/app/admin/empresas/nomad-qualifier-toggle.tsx`).
 
 ### Catálogo de Produtos — `/admin/catalogo-produtos`
 

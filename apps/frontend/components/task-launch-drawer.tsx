@@ -15,6 +15,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { apiClient } from "@/lib/api-client";
+import { BriefingQuestionField, isVisible as briefingIsVisible, pendingMessage as briefingPending, type BriefingValue } from "@/components/briefing-question-field";
 import { cn } from "@/lib/utils";
 import {
   Clock,
@@ -276,6 +277,7 @@ export function TaskLaunchDrawer({
             answersMap[ans.question_key] = {
               answer: ans.answer ?? "",
               selected_options: tryParseJson(ans.files),
+              files: tryParseJson(ans.files).filter((x: any) => x && typeof x === "object"),
               links: tryParseJson(ans.links),
             };
           }
@@ -309,6 +311,7 @@ export function TaskLaunchDrawer({
       answer: string;
       selected_options: string[];
       links: string[];
+      files: any[];
     }>,
   ) {
     setAnswers((prev) => ({
@@ -319,7 +322,13 @@ export function TaskLaunchDrawer({
   }
 
   // ── Computed ───────────────────────────────────────────────────────────────
+  // Construtor universal (perguntas com tipo): valores atuais, perguntas visíveis (ativas + condição atendida) e o que ainda falta.
+  const richValues: Record<string, BriefingValue> = {};
+  for (const [k, v] of Object.entries(answers)) richValues[k] = { answer: (v as any).answer ?? "", files: (v as any).files ?? [] };
+  const isRich = (q: any) => !!q.question_type;
+  const shownQuestions = briefingQuestions.filter((q) => !isRich(q) || briefingIsVisible(q, richValues));
   const missingRequired = briefingQuestions.filter((q, idx) => {
+    if (isRich(q)) return briefingIsVisible(q, richValues) && !!briefingPending(q, richValues[getQuestionKey(q, idx)]);
     if (!q.required) return false;
     const key = getQuestionKey(q, idx);
     const a = answers[key];
@@ -330,7 +339,7 @@ export function TaskLaunchDrawer({
   });
 
   const canRelease = missingRequired.length === 0;
-  const requiredCount = briefingQuestions.filter((q) => q.required).length;
+  const requiredCount = shownQuestions.filter((q) => q.required).length;
   const answeredCount = requiredCount - missingRequired.length;
   const progressPct =
     requiredCount > 0 ? Math.round((answeredCount / requiredCount) * 100) : 100;
@@ -340,9 +349,18 @@ export function TaskLaunchDrawer({
 
   // ── API payload builder ────────────────────────────────────────────────────
   function buildAnswersPayload() {
-    return briefingQuestions.map((q, idx) => {
+    return shownQuestions.map((q) => {
+      const idx = briefingQuestions.indexOf(q);
       const key = getQuestionKey(q, idx);
       const a = answers[key] ?? {};
+      if (isRich(q)) {
+        return {
+          question_key: key,
+          question_text: q.question_text ?? q.question ?? q.label ?? `Pergunta ${idx + 1}`,
+          answer: a.answer ?? "",
+          ...((a.files ?? []).length > 0 ? { files: JSON.stringify(a.files) } : {}),
+        };
+      }
       let answerText = "";
       if (q.type === "multiple_choice") {
         answerText = (a.selected_options ?? []).join(", ");
@@ -580,7 +598,41 @@ export function TaskLaunchDrawer({
   }
 
   // ── Render: Briefing question ──────────────────────────────────────────────
+  function renderRichQuestion(q: any, idx: number) {
+    const key = getQuestionKey(q, idx);
+    const label = q.question_text ?? q.label ?? `Pergunta ${idx + 1}`;
+    const value: BriefingValue = richValues[key] ?? { answer: "", files: [] };
+    const msg = briefingPending(q, value);
+    const prev = briefingQuestions.slice(0, idx).filter((x) => isRich(x) && briefingIsVisible(x, richValues)).pop();
+    const showSection = q.section_name && q.section_key !== prev?.section_key;
+    return (
+      <div key={key}>
+        {showSection && (
+          <div className="mb-2 mt-3 border-b border-slate-200 pb-1" data-testid="briefing-section">
+            <p className="text-sm font-bold text-slate-800">{q.section_name}</p>
+            {q.section_description && <p className="text-xs text-slate-500">{q.section_description}</p>}
+          </div>
+        )}
+        <div className={cn("rounded-xl border bg-white p-4 space-y-2", msg && q.required ? "border-amber-200" : "border-slate-200")} data-testid="briefing-question">
+          <Label htmlFor={`bq-${key}`} className="text-sm font-semibold text-slate-700 leading-snug">
+            {label}{q.required && <span className="text-red-500 ml-1" aria-label="obrigatório">*</span>}
+          </Label>
+          {q.description && <p className="text-xs text-slate-500">{q.description}</p>}
+          <BriefingQuestionField
+            q={q} value={value}
+            onChange={(v) => setAnswer(key, { answer: v.answer, files: v.files } as any)}
+            onUploadFile={(file, description) => apiClient.uploadBriefingFile(task.id, key, file, description)}
+            onRemoveFile={async (f) => { if (f.id) await apiClient.deleteBriefingFile(task.id, f.id); }}
+            onDownloadFile={(f) => { if (f.id) void apiClient.downloadBriefingFile(task.id, { id: f.id, name: f.name }).catch(() => {}); }}
+          />
+          {msg && <p className="text-xs text-amber-700 flex items-center gap-1"><AlertCircle className="h-3 w-3 shrink-0" />{msg}{q.required ? " Isto precisa estar pronto para enviar o briefing." : ""}</p>}
+        </div>
+      </div>
+    );
+  }
+
   function renderQuestion(q: any, idx: number) {
+    if (isRich(q)) return briefingIsVisible(q, richValues) ? renderRichQuestion(q, idx) : null;
     const key = getQuestionKey(q, idx);
     const label = q.question_text ?? q.question ?? q.label ?? `Pergunta ${idx + 1}`;
     const a = answers[key] ?? {};

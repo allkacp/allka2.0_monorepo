@@ -88,16 +88,24 @@ export async function assertPackageOnlyRules(quoteIds: string[]): Promise<void> 
     select: { product_id: true, product: { select: { internal_name: true } }, version: { select: { sale_modes_enforced: true, sell_mode: true } } },
   });
   const inOrder = new Set(quotes.map((q) => q.product_id));
+  const satisfies = (p: { requirement_mode: string; items: { catalog2_product_id: string; is_required: boolean }[] }, productId: string) => {
+    if (p.requirement_mode === "any") return p.items.some((i) => i.catalog2_product_id !== productId && inOrder.has(i.catalog2_product_id));
+    if (p.requirement_mode === "specific") return p.items.filter((i) => i.is_required).every((i) => inOrder.has(i.catalog2_product_id));
+    return p.items.every((i) => inOrder.has(i.catalog2_product_id));
+  };
   for (const q of quotes) {
-    if (!q.version.sale_modes_enforced || q.version.sell_mode !== "package_only") continue;
-    const packages = await prisma.catalog2Package.findMany({ where: { is_active: true, items: { some: { catalog2_product_id: q.product_id } } }, include: { items: true } });
-    const satisfied = packages.some((p) => {
-      if (p.requirement_mode === "any") return p.items.some((i) => i.catalog2_product_id !== q.product_id && inOrder.has(i.catalog2_product_id));
-      if (p.requirement_mode === "specific") return p.items.filter((i) => i.is_required).every((i) => inOrder.has(i.catalog2_product_id));
-      return p.items.every((i) => inOrder.has(i.catalog2_product_id));
-    });
-    if (!satisfied) {
-      throw new Catalog2CheckoutError(`"${q.product.internal_name}" só é vendido dentro de um pacote. Adicione ao mesmo pedido os itens que o pacote exige.`, 409, "package_only");
+    // (1) legado: a versão do produto foi publicada como "só em pacote" (campo antigo, sem tela no cadastro comum).
+    if (q.version.sale_modes_enforced && q.version.sell_mode === "package_only") {
+      const packages = await prisma.catalog2Package.findMany({ where: { is_active: true, items: { some: { catalog2_product_id: q.product_id } } }, include: { items: true } });
+      if (!packages.some((p) => satisfies(p, q.product_id))) {
+        throw new Catalog2CheckoutError(`"${q.product.internal_name}" só é vendido dentro de um pacote. Adicione ao mesmo pedido os itens que o pacote exige.`, 409, "package_only");
+      }
+    }
+    // (2) decisão do administrador na gestão do pacote (16/10): "impedir a venda separada dos produtos deste pacote". Produto em pacote
+    // SEM essa marca continua sendo vendido separadamente.
+    const blocking = await prisma.catalog2Package.findMany({ where: { is_active: true, block_standalone_sale: true, items: { some: { catalog2_product_id: q.product_id } } }, include: { items: true } });
+    if (blocking.length > 0 && !blocking.some((p) => satisfies(p, q.product_id))) {
+      throw new Catalog2CheckoutError(`"${q.product.internal_name}" não é vendido separadamente: o pacote "${blocking[0].name}" exige que os itens dele sejam contratados juntos. Adicione ao mesmo pedido os itens que o pacote exige.`, 409, "package_only");
     }
   }
 }

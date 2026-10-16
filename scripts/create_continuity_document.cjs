@@ -32,7 +32,7 @@ const children = [
     width: { size: 100, type: WidthType.PERCENTAGE },
     rows: [
       new TableRow({ tableHeader: true, children: [cell("#", { w: 5, bold: true, fill: "D9D9D9" }), cell("Item", { w: 35, bold: true, fill: "D9D9D9" }), cell("Situação", { w: 14, bold: true, fill: "D9D9D9" }), cell("Detalhe", { w: 46, bold: true, fill: "D9D9D9" })] }),
-      ...data.checklist.map(([id, item, status, det]) => new TableRow({ children: [cell(id, { w: 5, bold: true }), cell(item, { w: 35 }), cell(status, { w: 14, bold: true, fill: FILL[status] }), cell(det, { w: 46 })] })),
+      ...data.checklist.map(([id, item, status, det]) => new TableRow({ children: [cell(id, { w: 5, bold: true }), cell(item, { w: 35 }), cell(status, { w: 14, bold: true, fill: FILL[status] ?? (/^FEITO \(aguardando/i.test(status) ? "FFF2CC" : /^FEITO/i.test(status) ? "D9F2D9" : undefined) }), cell(det, { w: 46 })] })),
     ],
   }),
   h("Validação pendente (teste manual)"), ...data.validacao_pendente.map(bullet),

@@ -924,7 +924,15 @@ class ApiClient {
   updateCatalog2Specialty(id: string, body: Record<string, any>) { return this.c2("PUT", `/specialties/${id}`, body); }
   deleteCatalog2Specialty(id: string, detachModels = false) { return this.c2("DELETE", `/specialties/${id}${detachModels ? "?detach_models=1" : ""}`); }
   // questionários (reunião 2026-09-14, Item 3 — cadastro integrado)
-  getCatalog2Questionnaires() { return this.c2<{ data: any[] }>("GET", "/questionnaires"); }
+  getCatalog2Questionnaires(params: { q?: string; product?: string; category?: string; specialty?: string; global?: boolean } = {}) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v === true ? "1" : String(v));
+    return this.c2<{ data: any[] }>("GET", `/questionnaires${qs.toString() ? `?${qs}` : ""}`);
+  }
+  /** Biblioteca de PERGUNTAS já cadastradas (busca por nome ou ID) para reutilizar. */
+  searchCatalog2QuestionLibrary(q: string) { return this.c2<{ data: any[] }>("GET", `/question-library?q=${encodeURIComponent(q)}`); }
+  duplicateCatalog2Questionnaire(id: string, name?: string) { return this.c2<{ id: string; name: string }>("POST", `/questionnaires/${id}/duplicate`, name ? { name } : {}); }
+  setCatalog2QuestionnaireGlobal(id: string, isGlobal: boolean) { return this.c2<{ ok: boolean; is_global_model: boolean }>("PUT", `/questionnaires/${id}/global`, { is_global_model: isGlobal }); }
   getCatalog2Questionnaire(id: string) { return this.c2("GET", `/questionnaires/${id}`); }
   addCatalog2Questionnaire(body: Record<string, any>) { return this.c2("POST", "/questionnaires", body); }
   updateCatalog2Questionnaire(id: string, body: Record<string, any>) { return this.c2("PUT", `/questionnaires/${id}`, body); }
@@ -932,10 +940,11 @@ class ApiClient {
   updateCatalog2QuestionnaireQuestion(id: string, body: Record<string, any>) { return this.c2("PUT", `/questions/${id}`, body); }
   deleteCatalog2QuestionnaireQuestion(id: string) { return this.c2("DELETE", `/questions/${id}`); }
   reorderCatalog2QuestionnaireQuestions(questionnaireId: string, order: string[]) { return this.c2("PUT", `/questionnaires/${questionnaireId}/questions/order`, { order }); }
-  setCatalog2TaskQuestionnaire(taskId: string, questionnaireId: string | null) { return this.c2("PUT", `/tasks/${taskId}/questionnaire`, { questionnaire_id: questionnaireId }); }
+  /** mode: "sync" vincula mantendo sincronizado com o modelo; "copy" cria uma cópia independente e vincula a cópia. */
+  setCatalog2TaskQuestionnaire(taskId: string, questionnaireId: string | null, mode: "sync" | "copy" = "sync") { return this.c2<any>("PUT", `/tasks/${taskId}/questionnaire`, { questionnaire_id: questionnaireId, mode }); }
   // Item 3.1 — edição segura (cria cópia própria se o questionário for
   // compartilhado com outra tarefa/produto/versão publicada).
-  updateCatalog2TaskQuestionnaireContent(taskId: string, body: { name: string; description?: string | null; questions: { key: string; label: string; is_required?: boolean }[] }) {
+  updateCatalog2TaskQuestionnaireContent(taskId: string, body: { name: string; description?: string | null; sections?: { key: string; name: string; description?: string | null }[]; shared_mode?: "edit_shared" | "copy"; confirm_shared?: boolean; questions: Record<string, any>[] }) {
     return this.c2("PUT", `/tasks/${taskId}/questionnaire/content`, body);
   }
   // tarefas reutilizáveis — busca cross-produto + importar (copia) pra outra versão
@@ -1035,6 +1044,28 @@ class ApiClient {
     return this.uploadFile("/admin/catalog2/deliverable-files", file);
   }
   /** Baixa o anexo (com a sessão do usuário) e entrega ao navegador como arquivo. */
+  // anexos das respostas do questionário (armazenamento seguro no servidor)
+  async uploadBriefingFile(taskId: string, questionKey: string, file: File, description?: string): Promise<{ id: string; name: string; size: number; mime_type: string; description: string | null }> {
+    const fd = new FormData();
+    fd.append("question_key", questionKey);
+    if (description) fd.append("description", description);
+    fd.append("file", file);
+    const token = this.getToken();
+    const res = await fetch(`${API_BASE_URL}/project-tasks/${taskId}/briefing/files`, { method: "POST", headers: token ? { Authorization: `Bearer ${token}` } : undefined, body: fd });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.error ?? `Não foi possível enviar o arquivo (HTTP ${res.status}).`);
+    return body.file;
+  }
+  deleteBriefingFile(taskId: string, fileId: string) { return this.del(`/project-tasks/${taskId}/briefing/files/${fileId}`); }
+  async downloadBriefingFile(taskId: string, ref: { id: string; name: string }): Promise<void> {
+    const token = this.getToken();
+    const res = await fetch(`${API_BASE_URL}/project-tasks/${taskId}/briefing/files/${encodeURIComponent(ref.id)}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+    if (!res.ok) throw new Error(res.status === 404 ? "Arquivo não encontrado." : "Não foi possível baixar o arquivo.");
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url; a.download = ref.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
   async downloadCatalog2DeliverableFile(ref: { id: string; name: string }): Promise<void> {
     const token = this.getToken();
     const res = await fetch(`${API_BASE_URL}/catalog2/deliverable-files/${encodeURIComponent(ref.id)}?name=${encodeURIComponent(ref.name)}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
@@ -1068,6 +1099,8 @@ class ApiClient {
   createCatalog2Deliverable(taskId: string, body: Record<string, any>) { return this.c2("POST", `/tasks/${taskId}/deliverables`, body); }
   updateCatalog2Deliverable(id: string, body: Record<string, any>) { return this.c2("PUT", `/deliverables/${id}`, body); }
   deleteCatalog2Deliverable(id: string) { return this.c2("DELETE", `/deliverables/${id}`); }
+  /** Entregáveis já cadastrados em outros produtos (para reutilizar como modelo). */
+  searchCatalog2DeliverableLibrary(q: string) { return this.c2<{ data: any[] }>("GET", `/deliverables-library?q=${encodeURIComponent(q)}`); }
   addCatalog2TaskDependency(taskId: string, dependsOn: string) { return this.c2("POST", `/tasks/${taskId}/dependencies`, { depends_on_task_id: dependsOn }); }
   deleteCatalog2TaskDependency(taskId: string, depId: string) { return this.c2("DELETE", `/tasks/${taskId}/dependencies/${depId}`); }
   addCatalog2Step(taskId: string, body: Record<string, any>) { return this.c2("POST", `/tasks/${taskId}/steps`, body); }
@@ -1369,6 +1402,8 @@ class ApiClient {
     return this.post<any>(`/qualificacoes/etapas/${stageId}/decisao`, { decisao, ...(comentario ? { comentario } : {}) });
   }
   warnStageClient(taskId: string, stageId: string, mensagem: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/avisar-cliente`, { mensagem }); }
+  requireDispensedStage(taskId: string, stageId: string, justificativa: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/exigir`, { justificativa }); }
+  forceFirstExecution(projectProductId: string, reason: string, cancel = false) { return this.post<any>(`/admin/catalog2/project-products/${projectProductId}/force-first-execution`, { reason, cancel }); }
   getStageHistory(taskId: string, stageId: string) { return this.get<{ data: any[] }>(`/project-tasks/${taskId}/etapas/${stageId}/historico`); }
   decideApprovalGate(gateId: string, decision: "approve" | "reject", comment?: string) { return this.post<any>(`/approval-gates/${gateId}/decision`, { decision, ...(comment ? { comment } : {}) }); }
   getSlaReasons() { return this.get<{ reasons: { key: string; label: string }[]; responsibles: { key: string; label: string }[] }>("/sla/reasons"); }

@@ -5,6 +5,8 @@ const api = {
   getTaskFlowPanel: vi.fn(),
   decideStage: vi.fn(async () => ({})),
   warnStageClient: vi.fn(async () => ({})),
+  requireDispensedStage: vi.fn(async () => ({})),
+  forceFirstExecution: vi.fn(async () => ({})),
   getStageHistory: vi.fn(async () => ({ data: [] })),
   decideApprovalGate: vi.fn(async () => ({})),
   getSlaReasons: vi.fn(async () => ({ reasons: [{ key: "acesso_nao_liberado", label: "Acesso não liberado" }], responsibles: [{ key: "client", label: "Cliente" }] })),
@@ -42,6 +44,26 @@ describe("Painel operacional da tarefa (A8b fase 5)", () => {
     await waitFor(() => expect(api.decideStage).toHaveBeenCalledWith("t", "s1", "aprovacao", "aprovar", undefined));
     expect(screen.queryByRole("button", { name: /Liberar a próxima/ })).toBeNull();
     expect(screen.queryByLabelText("Motivo da pausa")).toBeNull();
+  });
+
+  it("administrador exige uma etapa dispensável e solicita nova primeira execução com justificativa", async () => {
+    api.getTaskFlowPanel.mockResolvedValue(flow({
+      task: { id: "t", stage_execution: "stage", project_product_id: "pp1", force_first_execution_next: false },
+      viewer: { kind: "admin", is_admin: true, can_manage_sla: true },
+      stages: [stage({ status: "PENDENTE", can_qualify: false, can_require_dispensed_stage: true })],
+    }));
+    render(<TaskStagesPanel taskId="t" status="EM_EXECUCAO" />);
+    const force = await screen.findByRole("button", { name: /Repetir no próximo ciclo/ });
+    expect(force).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Justificativa para repetir a primeira execução"), { target: { value: "Cliente trocou de plataforma e exige nova implantação." } });
+    fireEvent.click(force);
+    await waitFor(() => expect(api.forceFirstExecution).toHaveBeenCalledWith("pp1", "Cliente trocou de plataforma e exige nova implantação."));
+
+    const require = screen.getByRole("button", { name: "Exigir etapa" }) as HTMLButtonElement;
+    expect(require.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Justificativa para exigir a etapa 1"), { target: { value: "O acesso foi alterado pelo cliente." } });
+    fireEvent.click(require);
+    await waitFor(() => expect(api.requireDispensedStage).toHaveBeenCalledWith("t", "s1", "O acesso foi alterado pelo cliente."));
   });
 
   it("líder: avisa o cliente sobre etapa interna; portões e prazos aparecem com ações (sem botão de liberar a próxima etapa)", async () => {

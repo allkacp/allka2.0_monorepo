@@ -9,7 +9,7 @@
 //  - efeitos e condições só usam vocabulário FECHADO e referências válidas.
 
 import { providerProblem } from "./catalog2-ai-providers";
-import { parseOptions, parseValidation } from "./catalog2-question-types";
+import { parseOptions, parseValidation, parseQuestionCondition, parseQuestionSettings } from "./catalog2-question-types";
 import { runCost } from "./catalog2-ai";
 import { commercialCloneData, serializeCommercialFields } from "./catalog2-commercial-fields";
 import { parseOptionExamples, parseOptionExampleFile } from "./catalog2-option-examples";
@@ -297,6 +297,10 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         executor_continuity: t.executor_continuity,
         asset_rule: t.asset_rule,
         asset_revalidate_days: t.asset_revalidate_days,
+        continuity_accept_hours: t.continuity_accept_hours,
+        continuity_if_unavailable: t.continuity_if_unavailable,
+        continuity_after_deadline: t.continuity_after_deadline,
+        reuse_connections_same_project: t.reuse_connections_same_project,
         // Qualificador designado e campos operacionais seguem para a versão nova.
         qualifier_user_id: t.qualifier_user_id,
         qualification_mode: t.qualification_mode,
@@ -1468,6 +1472,10 @@ export async function getProductDetail(productId: string) {
         executor_continuity: t.executor_continuity,
         asset_rule: t.asset_rule,
         asset_revalidate_days: t.asset_revalidate_days,
+        continuity_accept_hours: t.continuity_accept_hours,
+        continuity_if_unavailable: t.continuity_if_unavailable,
+        continuity_after_deadline: t.continuity_after_deadline,
+        reuse_connections_same_project: t.reuse_connections_same_project,
         qualifier_user_id: t.qualifier_user_id,
         qualification_cost_mode: t.qualification_cost_mode,
         qualification_specialty_id: t.qualification_specialty_id,
@@ -1479,7 +1487,7 @@ export async function getProductDetail(productId: string) {
         reviewer_user_id: t.reviewer_user_id,
         review_minutes: t.review_minutes,
         review_specialty_id: t.review_specialty_id,
-        deliverables: t.deliverables.map((d) => ({ id: d.id, key: d.key, name: d.name, description: d.description, type: d.type, responsible: d.responsible, is_required: d.is_required, requires_approval: d.requires_approval, visibility: d.visibility, step_id: d.step_id, sort_order: d.sort_order })),
+        deliverables: t.deliverables.map((d) => ({ id: d.id, key: d.key, name: d.name, description: d.description, type: d.type, responsible: d.responsible, is_required: d.is_required, requires_approval: d.requires_approval, visibility: d.visibility, step_id: d.step_id, sort_order: d.sort_order, format: d.format, delivery_moment: d.delivery_moment, template_url: d.template_url, template_name: d.template_name, evidence_required: d.evidence_required, requires_qualification: d.requires_qualification, cycle_scope: d.cycle_scope, is_conditional: d.is_conditional, condition_json: d.condition_json })),
         ops: t.ops ?? null,
         // "Modelo global" x "Configuração específica deste produto" (+ modelo mudou depois?)
         model: t.task_model
@@ -1511,8 +1519,12 @@ export async function getProductDetail(productId: string) {
               id: t.questionnaire.id,
               name: t.questionnaire.name,
               description: t.questionnaire.description,
+              revision: t.questionnaire.revision,
+              is_global_model: t.questionnaire.is_global_model,
+              source_questionnaire_id: t.questionnaire.source_questionnaire_id,
+              sections: (() => { try { const v = t.questionnaire.sections_json ? JSON.parse(t.questionnaire.sections_json) : []; return Array.isArray(v) ? v : []; } catch { return []; } })(),
               // Configuração COMPLETA da pergunta (tipo, ajuda, opções, padrão, validação, visibilidade, uso): sem isto a tela reabre tudo como texto longo e regrava errado.
-              questions: t.questionnaire.questions.map((q) => ({ id: q.id, key: q.key, label: q.label, is_required: q.is_required, sort_order: q.sort_order, question_type: q.question_type, help_text: q.help_text, options: parseOptions(q.options_json), default_value: q.default_value, validation: parseValidation(q.validation_json), visibility: q.visibility, answer_usage: q.answer_usage })),
+              questions: t.questionnaire.questions.map((q) => ({ id: q.id, key: q.key, label: q.label, is_required: q.is_required, sort_order: q.sort_order, question_type: q.question_type, help_text: q.help_text, options: parseOptions(q.options_json), default_value: q.default_value, validation: parseValidation(q.validation_json), visibility: q.visibility, answer_usage: q.answer_usage, target_step_key: q.target_step_key, condition: parseQuestionCondition(q.condition_json), settings: parseQuestionSettings(q.settings_json) })),
             }
           : null,
         depends_on: t.dependencies.map((d) => d.depends_on_task_id),

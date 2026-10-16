@@ -299,6 +299,18 @@ export function clientChargesView(p: PricingResult) {
     first_charge: s.first_charge,
     renewal: s.renewal,
     avulso_total: s.avulso_total,
+    // Implantação/primeira execução × ciclo recorrente (valores reais do cálculo; o cliente nunca vê custo, imposto ou margem).
+    summary: {
+      implementation_price: s.commercial_summary.implementation_price,
+      first_cycle_recurring_price: s.commercial_summary.first_cycle_recurring_price,
+      first_charge: s.commercial_summary.first_charge,
+      renewal: s.commercial_summary.renewal,
+      avulso: s.commercial_summary.avulso,
+      implementation_step_names: s.commercial_summary.implementation_steps.map((x) => x.name),
+      recurring_step_names: s.commercial_summary.recurring_steps.map((x) => x.name),
+      first_execution_applies: s.first_execution.applies,
+      first_execution_reason: s.first_execution.reason,
+    },
   };
 }
 
@@ -312,6 +324,8 @@ export function quoteChargeFields(pricing: PricingResult, periodPricing: { first
     first_charge_price: periodPricing ? periodPricing.first_charge_price ?? null : s.first_charge,
     pricing_components_json: JSON.stringify({
       schedule: s.schedule, first_charge_parts: s.first_charge_parts, implementation: { applicable: s.implementation.applicable, rule: s.implementation.rule, reason: s.implementation.reason },
+      // Memória da cobrança: etapas de implantação × recorrentes, o que seria dispensado e o resumo (guardado na cotação, no contrato e no histórico).
+      first_execution: s.first_execution, dispensable: s.dispensable, commercial_summary: s.commercial_summary,
       discount_percent: periodPricing?.discount_percent ?? 0, months: periodPricing?.months ?? 1,
     }),
   };
@@ -702,7 +716,9 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
     sale_modes: {
       one_time: !version.sale_modes_enforced || version.accepts_one_time !== false,
       recurring: !version.sale_modes_enforced || version.accepts_recurring === true || availablePeriods.length > 0,
-      package_only: !!version.sale_modes_enforced && version.sell_mode === "package_only",
+      // "Só em pacote": campo antigo da versão OU decisão do administrador na gestão do pacote ("impedir venda separada").
+      package_only: (!!version.sale_modes_enforced && version.sell_mode === "package_only")
+        || (await prisma.catalog2Package.count({ where: { is_active: true, block_standalone_sale: true, items: { some: { catalog2_product_id: product.id } } } })) > 0,
     },
     can_configure: ctx.can_configure && vis.visible,
     can_contract: ctx.can_contract && vis.contractable,
@@ -731,9 +747,13 @@ function saleLabelOf(v: { accepts_one_time: boolean; accepts_recurring: boolean 
   return null;
 }
 
-async function implOpts(accountKind: string, accountId: string, productId: string) {
-  const { loadImplementationDone } = await import("./catalog2-cycles");
-  return { implementationDone: await loadImplementationDone(prisma, { companyId: accountKind === "company" ? accountId : null, catalog2ProductId: productId }) };
+async function implOpts(accountKind: string, accountId: string, productId: string, projectId?: string | null) {
+  const { loadImplementationDone, firstExecutionOptions } = await import("./catalog2-cycles");
+  return {
+    implementationDone: await loadImplementationDone(prisma, { companyId: accountKind === "company" ? accountId : null, catalog2ProductId: productId }),
+    // Cotação feita para um projeto existente (aditivo): a primeira execução depende de o projeto já ter este produto.
+    ...(projectId ? { firstExecution: await firstExecutionOptions(prisma, projectId, productId) } : {}),
+  };
 }
 
 export function saleModeProblem(version: { sale_modes_enforced?: boolean; accepts_one_time?: boolean; accepts_recurring?: boolean }, period: unknown): string | null {
@@ -1040,6 +1060,36 @@ export async function createQuote(ctx: ClientContext, productIdOrSlug: string, r
   return serializeQuote(created);
 }
 
+/**
+ * Aditivo para um projeto que JÁ existe: a cotação passa a lembrar o projeto e é refeita com a regra da primeira execução
+ * (se o projeto já tem este produto, as etapas "Só na primeira execução" não executam nem entram no preço). Idempotente.
+ * O preço guardado e o preço ao vivo (assessQuote) usam o MESMO contexto, então não há "desvio" artificial na revalidação.
+ */
+export async function rebaseQuoteToProject(ctx: ClientContext, quoteId: string, projectId: string): Promise<void> {
+  const q = await prisma.catalog2Quote.findUnique({ where: { id: quoteId } });
+  if (!q || q.account_kind !== ctx.account_kind || q.account_id !== ctx.account_id || q.status !== "valida" || q.commercial_request_id) return;
+  if (q.for_project_id === projectId) return;
+  const product = await prisma.catalog2Product.findUnique({ where: { id: q.product_id } });
+  if (!product) return;
+  const sel = normalizeSelection(JSON.parse(q.selection_json));
+  const period = isCatalog2Period(q.contract_period) ? q.contract_period : null;
+  const implOpt = await implOpts(q.account_kind, q.account_id, q.product_id, projectId);
+  const pricing = await computePricing(q.version_id, sel, implOpt);
+  const periodPricing = period ? await computePeriodPricing(q.version_id, sel, product, period, implOpt) : null;
+  const ready = period ? !!periodPricing?.available : pricing.commercial_ready;
+  if (!ready) { await prisma.catalog2Quote.update({ where: { id: q.id }, data: { for_project_id: projectId } }); return; }
+  await prisma.catalog2Quote.update({
+    where: { id: q.id },
+    data: {
+      for_project_id: projectId,
+      commercial_price: periodPricing ? periodPricing.total_price : pricing.lines.commercial_final_price.amount,
+      pricing_snapshot_json: JSON.stringify(periodPricing ? clientPeriodPricingView(periodPricing) : clientPricingView(pricing)),
+      contract_period_reference_monthly_price: periodPricing?.reference_monthly_price ?? null,
+      ...quoteChargeFields(pricing, periodPricing),
+    },
+  });
+}
+
 export async function listQuotes(ctx: ClientContext) {
   const rows = await prisma.catalog2Quote.findMany({
     where: { account_kind: ctx.account_kind, account_id: ctx.account_id },
@@ -1190,10 +1240,10 @@ export async function assessQuote(q: QuoteRow): Promise<QuoteAssessment> {
   let periodResult: PeriodPricingResult | null = null;
   if (pricingVersionId) {
     if (contractPeriod) {
-      periodResult = await computePeriodPricing(pricingVersionId, sel, product!, contractPeriod, await implOpts(q.account_kind, q.account_id, q.product_id));
+      periodResult = await computePeriodPricing(pricingVersionId, sel, product!, contractPeriod, await implOpts(q.account_kind, q.account_id, q.product_id, q.for_project_id));
       pricing = periodResult.base;
     } else {
-      pricing = await computePricing(pricingVersionId, sel, await implOpts(q.account_kind, q.account_id, q.product_id));
+      pricing = await computePricing(pricingVersionId, sel, await implOpts(q.account_kind, q.account_id, q.product_id, q.for_project_id));
     }
   }
   const currentReady = contractPeriod ? !!periodResult?.available : !!pricing?.commercial_ready;

@@ -7,6 +7,7 @@ const task = (over: Partial<CycleTaskInput> = {}): CycleTaskInput => ({
 });
 const ctx = (over: Partial<CycleContext> = {}): CycleContext => ({
   cycleIndex: 0, contractMode: "mensal_implementacao", hasImplementation: true, implementationRule: "first_only", isFirstContract: true,
+  firstExecutionInProject: true, forcedFirstExecution: false,
   completedImplementation: { modelIds: new Set(), keys: new Set() }, revalidationReason: null, ...over,
 });
 

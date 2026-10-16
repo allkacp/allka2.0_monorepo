@@ -354,7 +354,7 @@ export function stepDataFromModel(m: StepModelRow) {
 export async function addTaskFromModel(tx: Prisma.TransactionClient, versionId: string, model: TaskModelRow, sortOrder: number) {
   const taken = new Set((await tx.catalog2Task.findMany({ where: { version_id: versionId }, select: { key: true } })).map((t) => t.key));
   const task = await tx.catalog2Task.create({
-    data: { version_id: versionId, key: autoKey("tarefa", model.id, taken), sort_order: sortOrder, ...taskDataFromModel(model) },
+    data: { version_id: versionId, key: autoKey("tarefa", model.id, taken), sort_order: sortOrder, reuse_connections_same_project: true, ...taskDataFromModel(model) },
   });
   const defaults = await tx.catalog2TaskModelStep.findMany({ where: { task_model_id: model.id }, orderBy: { sort_order: "asc" }, include: { step_model: true } });
   let i = 1;

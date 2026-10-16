@@ -234,7 +234,9 @@ export function chargeActiveAt(m: { scope: ChargeScope; start: number; end: numb
   return true;
 }
 
-export interface PricingSplitComponent { cost: number; price: number; tasks: string[]; taxes_and_margins: PricingLine[] }
+/** Etapa que forma um componente do preço (implantação/primeira execução ou ciclo recorrente): custo e preço próprios. */
+export interface PricingSplitStep { ref: string; task_key: string; step_key: string; name: string; cost: number; price: number; dispensable?: boolean }
+export interface PricingSplitComponent { cost: number; price: number; tasks: string[]; taxes_and_margins: PricingLine[]; /** Etapas que formam este valor (só as de "primeira execução" e as recorrentes por etapa). */ steps?: PricingSplitStep[] }
 /** Valor a cobrar no ciclo k (0 = primeira cobrança), a partir do cronograma guardado. Desconto só incide sobre o recorrente. */
 export function cycleAmount(schedule: { tasks: { price: number; kind: string; every_n: number | null }[]; items: { price: number; scope: string; start: number; end: number | null }[] }, k: number, discountPercent = 0): number {
   const f = 1 - discountPercent / 100;
@@ -267,14 +269,60 @@ export interface PricingSplit {
   first_charge: number | null;
   renewal: number | null;
   cycle_prices: { cycle: number; price: number | null }[];
-  /** Componentes de cada tarefa e item para o cálculo exato de qualquer ciclo (guardado na assinatura). */
-  schedule: { tasks: { key: string; name: string; price: number; kind: "implementation" | "one_time" | "recurring"; every_n: number | null }[]; items: { label: string; price: number; scope: ChargeScope; start: number; end: number | null }[] };
+  /** Componentes de cada tarefa e item para o cálculo exato de qualquer ciclo (guardado na assinatura).
+   *  Uma tarefa com etapas "só na primeira execução" gera DUAS linhas (mesma `key`): a de implantação e a recorrente.
+   *  `steps` é o detalhe por etapa (usado para abater o crédito de uma etapa dispensada). */
+  schedule: {
+    tasks: { key: string; name: string; price: number; kind: "implementation" | "one_time" | "recurring"; every_n: number | null; part?: "first_execution_steps" | "whole_task" }[];
+    items: { label: string; price: number; scope: ChargeScope; start: number; end: number | null }[];
+    steps?: { ref: string; task_key: string; step_key: string; name: string; kind: "implementation" | "recurring"; dispensable: boolean; price: number }[];
+  };
   not_charged: { key: string; reason: string }[];
+  /** Regra de "primeira execução" aplicada a este cálculo (etapas marcadas "Só na primeira execução"). */
+  first_execution: {
+    /** Há ao menos uma etapa ativa marcada "Só na primeira execução"? */
+    has_steps: boolean;
+    /** Elas entram NESTE cálculo (1º ciclo do produto neste projeto)? false = recontratação no mesmo projeto: não executa nem cobra. */
+    applies: boolean;
+    reason: string;
+    steps: PricingSplitStep[];
+  };
+  /** Etapas recorrentes marcadas "Dispensável quando o mesmo executor continua": o que seria dispensado no ciclo seguinte e quanto custaria a renovação sem elas. */
+  dispensable: {
+    continuity_mode: string;
+    steps: PricingSplitStep[];
+    /** Mensalidade se TODAS essas etapas forem dispensadas (mesmo executor continua). null = sem etapas dispensáveis. */
+    renewal_if_dispensed: number | null;
+    savings_per_cycle: number;
+    note: string;
+  };
+  /** Resumo comercial da cobrança, pronto para a tela (todos os valores vêm do cálculo real; nunca recalculados no frontend). */
+  commercial_summary: {
+    /** Implantação/primeira execução: etapas "só na primeira execução" + implantação legada + cobranças únicas. */
+    implementation_price: number | null;
+    implementation_applicable: boolean;
+    /** Parte recorrente do 1º ciclo. */
+    first_cycle_recurring_price: number | null;
+    /** Primeira cobrança = implantação + 1º ciclo recorrente (+ variações/adicionais aplicáveis). */
+    first_charge: number | null;
+    /** Renovação = só o recorrente. */
+    renewal: number | null;
+    /** Compra avulsa = implantação (se aplicável) + 1 ciclo; sem renovação automática. */
+    avulso: number | null;
+    implementation_steps: PricingSplitStep[];
+    recurring_steps: PricingSplitStep[];
+  };
 }
 
 export interface PricingOptions {
   /** Implantações que o cliente JÁ concluiu antes (por modelo global ou chave da tarefa) — decide se a implantação é cobrada de novo. */
   implementationDone?: { modelIds: Set<number>; keys: Set<string> };
+  /**
+   * Primeira execução (etapas "Só na primeira execução"): `applies:false` quando o produto já foi contratado NESTE projeto
+   * (recontratação/ciclo seguinte) — essas etapas então não executam nem entram no preço. Sem informação (cotação, simulador,
+   * projeto novo) = aplica.
+   */
+  firstExecution?: { applies: boolean; reason?: string };
   /** Pré-visualização (rascunho/admin): usa as MESMAS regras reais e só impede que o resultado autorize cotação/contratação. */
   previewOnly?: boolean;
 }
@@ -290,10 +338,15 @@ async function loadVersion(versionId: string) {
       variations: { include: { options: { include: { effects: true } } } },
       addons: { include: { effects: true, choices: { orderBy: { sort_order: "asc" } } } },
       conditions: true,
-      tasks: { include: { steps: { include: { specialty: true } }, ai: true, specialty: true } },
+      tasks: { include: { steps: { include: { specialty: true, step_model: { select: { first_execution_only: true, skip_when_same_executor: true } } } }, ai: true, specialty: true } },
     },
   });
 }
+
+/** Etapa marcada "Só na primeira execução" (no cadastro da etapa ou herdada do modelo global). */
+export const isFirstExecutionStep = (s: { first_execution_only?: boolean | null; step_model?: { first_execution_only?: boolean | null } | null }): boolean => !!(s.first_execution_only || s.step_model?.first_execution_only);
+/** Etapa "Dispensável quando o mesmo executor continua". */
+export const isDispensableStep = (s: { skip_when_same_executor?: boolean | null; step_model?: { skip_when_same_executor?: boolean | null } | null }): boolean => !!(s.skip_when_same_executor || s.step_model?.skip_when_same_executor);
 
 function num(v: string | null | undefined): number {
   const n = Number((v ?? "").trim());
@@ -443,6 +496,7 @@ export async function computePricing(versionId: string, selection: PricingSelect
     r.lines.final_price = r.lines.commercial_final_price;
     r.split.first_charge = null; r.split.renewal = null; r.split.avulso_total = null;
     r.split.cycle_prices = r.split.cycle_prices.map((c) => ({ cycle: c.cycle, price: null }));
+    r.split.commercial_summary = { ...r.split.commercial_summary, implementation_price: null, first_cycle_recurring_price: null, first_charge: null, renewal: null, avulso: null };
     return r;
   }
   // manual_fixed
@@ -470,12 +524,15 @@ export async function computePricing(versionId: string, selection: PricingSelect
     avulso_total: price, first_charge: price, renewal: price,
     cycle_prices: r.split.cycle_prices.map((c) => ({ cycle: c.cycle, price })),
     schedule: { tasks: [{ key: "preco_fixo", name: "Preço fixo informado", price, kind: "recurring", every_n: null }], items: [] },
+    first_execution: { ...r.split.first_execution, applies: false, reason: "Preço fixo informado: sem cobrança separada de implantação.", steps: [] },
+    dispensable: { ...r.split.dispensable, steps: [], renewal_if_dispensed: null, savings_per_cycle: 0 },
+    commercial_summary: { implementation_price: 0, implementation_applicable: false, first_cycle_recurring_price: price, first_charge: price, renewal: price, avulso: price, implementation_steps: [], recurring_steps: [] },
   };
   if (!opts.previewOnly) {
     r.quote_blockers = [...r.quote_requirements.map((q) => `${REQUEST_KIND_LABEL[q.kind] ?? q.kind}: ${q.message}`), ...r.selection_issues.map((i) => i.message)];
     r.commercial_ready = r.quote_blockers.length === 0;
   }
-  if (r.quote_requirements.length) { r.lines.commercial_final_price = { label: "Preço comercial final (fixo)", amount: null, detail: REQUEST_KIND_LABEL[r.price_status] ?? "Sob solicitação comercial" }; r.lines.final_price = r.lines.commercial_final_price; r.split.first_charge = null; r.split.renewal = null; r.split.avulso_total = null; }
+  if (r.quote_requirements.length) { r.lines.commercial_final_price = { label: "Preço comercial final (fixo)", amount: null, detail: REQUEST_KIND_LABEL[r.price_status] ?? "Sob solicitação comercial" }; r.lines.final_price = r.lines.commercial_final_price; r.split.first_charge = null; r.split.renewal = null; r.split.avulso_total = null; r.split.commercial_summary = { ...r.split.commercial_summary, first_charge: null, renewal: null, avulso: null, first_cycle_recurring_price: null, implementation_price: null }; }
   r.price_status = r.quote_requirements.length ? r.price_status : "final";
   return r;
 }
@@ -543,6 +600,27 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     return true;
   });
 
+  // ── Primeira execução (decisão de 16/10): etapas marcadas "Só na primeira execução" formam a IMPLANTAÇÃO ──
+  // Entram na primeira cobrança e NÃO entram na renovação. Se este projeto já tem o produto (recontratação), nem executam nem cobram.
+  const wholeTaskKind = (t: { cycle_type: string; repeat_rule: string }): "implementation" | "one_time" | "recurring" =>
+    t.cycle_type === "implementacao" ? "implementation" : t.cycle_type === "avulso" || t.repeat_rule === "first_only" ? "one_time" : "recurring";
+  const firstExecApplies = opts.firstExecution?.applies !== false;
+  const firstOnlyRefs = new Set<string>();
+  for (const t of chargedTasks) {
+    if (wholeTaskKind(t) !== "recurring") continue; // tarefa inteira de uma vez/implantação: a marca na etapa é irrelevante
+    for (const s of t.steps) {
+      const ref = `${t.key}:${s.key}`;
+      if (activeStepSet.has(ref) && isFirstExecutionStep(s)) firstOnlyRefs.add(ref);
+    }
+  }
+  const firstExecHas = firstOnlyRefs.size > 0;
+  const firstExecApplicable = firstExecHas && firstExecApplies;
+  const firstExecReasonOff = opts.firstExecution?.reason ?? "O produto já foi contratado neste projeto: as etapas “Só na primeira execução” não são executadas nem cobradas de novo.";
+  /** Etapas que NÃO entram neste cálculo (primeira execução que não se aplica). */
+  const excludedStepRefs = firstExecHas && !firstExecApplies ? firstOnlyRefs : new Set<string>();
+  if (excludedStepRefs.size > 0) for (const ref of excludedStepRefs) notCharged.push({ key: ref, reason: firstExecReasonOff });
+  if (firstExecApplicable) implementationApplicable = true;
+
   // ── Esforço universal: efeitos de variação/adicional/condição que somam ou substituem minutos ──
   const effortItems: EffortItem[] = [];
   for (const e of effects) {
@@ -571,6 +649,9 @@ async function computePricingCore(versionId: string, selection: PricingSelection
   // ── Custo humano ──────────────────────────────────────────────────────
   let humanCost = 0;
   let humanPending = false;
+  // Etapa/tarefa COM horas mas SEM especialidade (nem na etapa, nem na tarefa): não há valor/hora, então o custo dela não entra no preço.
+  // Antes isso passava em silêncio como R$ 0,00; agora deixa o preço "a definir" e diz qual etapa falta (16/10).
+  const stepsWithoutSpecialty: string[] = [];
   let anySpecialtyRateMissing = false;
   // Reunião 10/09 ("36 produtos funcionalmente completos para teste"):
   // tarefa com effort_is_provisional=true tem specialty_id/estimated_minutes
@@ -591,6 +672,11 @@ async function computePricingCore(versionId: string, selection: PricingSelection
   const priceLine = (label: string, key: string, minutes: number, spec: { id: string; name: string; max_hourly_rate: number | null } | null | undefined, effortProvisional: boolean) => {
     const { rate, provisional } = rateOf(spec);
     if (minutes === 0) warnings.push({ code: "task_without_time", message: `${label} não tem duração estimada.` });
+    if (!spec && minutes > 0) {
+      humanPending = true;
+      stepsWithoutSpecialty.push(label);
+      warnings.push({ code: "step_without_specialty", message: `${label} tem horas, mas não tem especialidade: o custo dela ainda não entra no preço.` });
+    }
     if (rate == null && spec) {
       humanPending = true;
       anySpecialtyRateMissing = true;
@@ -608,14 +694,15 @@ async function computePricingCore(versionId: string, selection: PricingSelection
       warnings.push({ code: "effort_provisional", message: `A tarefa "${t.name}" tem especialidade/tempo PROVISÓRIOS (dado de teste) — não pode fechar o preço comercial.` });
     }
     // Etapas com horas: cada etapa usa a SUA especialidade (ou a da tarefa).
-    const pricedSteps = t.steps.filter((s) => activeStepSet.has(`${t.key}:${s.key}`) && (s.estimated_minutes ?? 0) > 0);
+    const pricedSteps = t.steps.filter((s) => activeStepSet.has(`${t.key}:${s.key}`) && !excludedStepRefs.has(`${t.key}:${s.key}`) && (s.estimated_minutes ?? 0) > 0);
     if (pricedSteps.length > 0) {
       const withMinutes = pricedSteps.map((s) => ({ s, m: replaceStep.get(`${t.key}:${s.key}`) ?? (s.estimated_minutes ?? 0) }));
       const taskTarget = replaceTask.get(t.key);
       const sumBase = withMinutes.reduce((a, x) => a + x.m, 0);
       const factor = taskTarget != null && sumBase > 0 ? taskTarget / sumBase : 1;
       for (const { s, m } of withMinutes) priceLine(`A etapa "${s.name}" da tarefa "${t.name}"`, `${t.key}:${s.key}`, replaceStep.has(`${t.key}:${s.key}`) ? m : m * factor, s.specialty ?? t.specialty, !!t.effort_is_provisional);
-    } else {
+    } else if (!t.steps.some((s) => excludedStepRefs.has(`${t.key}:${s.key}`) && (s.estimated_minutes ?? 0) > 0)) {
+      // (se todas as etapas com horas são de "primeira execução" fora deste cálculo, a tarefa não tem nada a cobrar aqui)
       priceLine(`A tarefa "${t.name}"`, t.key, replaceTask.get(t.key) ?? t.estimated_minutes ?? 0, t.specialty, !!t.effort_is_provisional);
     }
   }
@@ -623,9 +710,12 @@ async function computePricingCore(versionId: string, selection: PricingSelection
 
   // custo humano de UMA unidade por tarefa (etapas somadas) — base da revisão por percentual e do demonstrativo
   const humanByTask = new Map<string, number>();
+  // custo humano de UMA unidade por ETAPA (chave "tarefa:etapa") — base da separação implantação × recorrente
+  const humanByStep = new Map<string, number>();
   for (const b of humanExact) {
     const k = b.task_key.split(":")[0];
     humanByTask.set(k, (humanByTask.get(k) ?? 0) + b.cost);
+    if (b.task_key.includes(":")) humanByStep.set(b.task_key, (humanByStep.get(b.task_key) ?? 0) + b.cost);
   }
 
   // ── Custo de IA (tokens + rodadas de revisão) ────────────────────────
@@ -833,7 +923,14 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     const st = it.step ? tk.steps.find((x) => x.key === it.step) ?? null : null;
     if (it.step && !st) { selectionIssues.push({ code: "effort_target_missing", message: `O esforço de ${it.from} aponta para a etapa "${it.step}", que não existe na tarefa "${tk.name}".`, ref: it.from }); continue; }
     if (!activeTaskKeys.has(tk.key)) { warnings.push({ code: "effort_target_inactive", message: `O esforço de ${it.from} aponta para a tarefa "${tk.name}", que não está ativa neste cenário — ignorado.` }); continue; }
-    if (it.scope === "implementation" && !implementationApplicable) continue;
+    // Horas extras numa etapa "só na primeira execução": a etapa não roda nas renovações, então o custo extra também é de cobrança única
+    // (implantação). Se a primeira execução não se aplica (recontratação no mesmo projeto), a etapa não roda e o efeito é ignorado.
+    let effScope = it.scope as ChargeScope; let effStart = it.start; let effEnd = it.end;
+    if (it.step && firstOnlyRefs.has(`${it.task}:${it.step}`)) {
+      if (!firstExecApplies) { notCharged.push({ key: it.from, reason: firstExecReasonOff }); continue; }
+      if (effScope === "recurring" || effScope === "per_cycle" || effScope === "per_quantity") { effScope = "implementation"; effStart = 0; effEnd = null; }
+    }
+    if (effScope === "implementation" && !implementationApplicable) continue;
     const minutes = it.minutes * it.scale;
     const spec = (it.specialty_id ? effortSpecById.get(it.specialty_id) ?? null : null) ?? st?.specialty ?? tk.specialty;
     const { rate } = rateOf(spec);
@@ -848,8 +945,8 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     let qual: number | null = 0;
     if (human != null && human > 0) { if (pct == null) { reviewNeedsPct = true; qual = null; } else qual = human * (pct / 100); }
     const cost = human == null || qual == null ? null : human + qual;
-    effortLines.push({ from: it.from, mode: "add", task: it.task, step: it.step, minutes_per_unit: it.minutes, scale: it.scale, minutes, when: whenLabel(it), specialty: spec?.name ?? null, rate, human_cost: human != null ? round2(human) : null, qualification_cost: qual != null ? round2(qual) : null, cost: cost != null ? round2(cost) : null });
-    if (cost != null) effortChargeItems.push({ label: `esforço:${it.from}`, cost, scope: it.scope as ChargeScope, start: it.start, end: it.end, task: it.task });
+    effortLines.push({ from: it.from, mode: "add", task: it.task, step: it.step, minutes_per_unit: it.minutes, scale: it.scale, minutes, when: whenLabel({ ...it, scope: effScope, start: effStart, end: effEnd }), specialty: spec?.name ?? null, rate, human_cost: human != null ? round2(human) : null, qualification_cost: qual != null ? round2(qual) : null, cost: cost != null ? round2(cost) : null });
+    if (cost != null) effortChargeItems.push({ label: `esforço:${it.from}`, cost, scope: effScope, start: effStart, end: effEnd, task: it.task });
   }
   for (const it of effortItems) {
     if (it.mode !== "replace") continue;
@@ -921,6 +1018,7 @@ async function computePricingCore(versionId: string, selection: PricingSelection
   // Esforço provisório também deixa o custo humano pendente, mas não
   // significa que o valor/hora esteja ausente. Exiba cada causa separadamente.
   if (anySpecialtyRateMissing) pendingInfo.push("valor/hora de especialidade");
+  if (stepsWithoutSpecialty.length > 0) pendingInfo.push(`especialidade de etapa(s) com horas (${stepsWithoutSpecialty.slice(0, 3).map((l) => l.replace(/^A (etapa|tarefa) /, "")).join("; ")}${stepsWithoutSpecialty.length > 3 ? "…" : ""})`);
   if (anyProvisionalEffort) pendingInfo.push("especialidade/tempo de tarefa(s) provisórios (dado de teste, revisão humana pendente)");
   if (iaPending) pendingInfo.push("custo por token de IA");
   if (reviewPct == null && reviewNeedsPct) pendingInfo.push("percentual de revisão humana");
@@ -982,7 +1080,7 @@ async function computePricingCore(versionId: string, selection: PricingSelection
 
   // ── Entrega emergencial (B3): prazo menor por um adicional definido em cada etapa ──
   await ensureWorkCalendar(prisma);
-  const emergencySteps = activeTasks.flatMap((t) => t.steps.filter((st) => activeStepSet.has(`${t.key}:${st.key}`)).map((st) => {
+  const emergencySteps = activeTasks.flatMap((t) => t.steps.filter((st) => activeStepSet.has(`${t.key}:${st.key}`) && !excludedStepRefs.has(`${t.key}:${st.key}`)).map((st) => {
     const ref = `${t.key}:${st.key}`;
     const minutes = humanBreakdown.filter((b) => b.task_key === ref).reduce((a, b) => a + b.minutes, 0) || (st.estimated_minutes ?? 0);
     const exact = humanExact.filter((b) => b.task_key === ref).reduce((a, b) => a + b.cost, 0);
@@ -1004,31 +1102,59 @@ async function computePricingCore(versionId: string, selection: PricingSelection
   const taskDirect = (t: (typeof chargedTasks)[number]) => (t.execution_mode === "ia" ? 0 : (humanByTask.get(t.key) ?? 0) * quantity) + (t.execution_mode === "humano" || !t.ai ? 0 : iaByTask.get(t.key) ?? 0);
   const taskReview = (t: (typeof chargedTasks)[number]) => reviewByTask.get(t.key) ?? 0;
   const priceOf = (direct: number, review: number, extra = 0) => runPipeline(direct, (direct + review + extra) * pctMult);
-  const classify = (t: (typeof chargedTasks)[number]): "implementation" | "one_time" | "recurring" =>
-    t.cycle_type === "implementacao" ? "implementation" : t.cycle_type === "avulso" || t.repeat_rule === "first_only" ? "one_time" : "recurring";
-  const emptyComp = () => ({ direct: 0, review: 0, tasks: [] as string[] });
+  const classify = wholeTaskKind;
+  const emptyComp = () => ({ direct: 0, review: 0, tasks: [] as string[], steps: [] as PricingSplitStep[] });
   const cImpl = emptyComp(), cFirst = emptyComp(), cRec = emptyComp();
   const everyN: { key: string; every: number }[] = [];
   const schedTasks: PricingSplit["schedule"]["tasks"] = [];
+  const schedSteps: NonNullable<PricingSplit["schedule"]["steps"]> = [];
+  const recurringStepRows: PricingSplitStep[] = [];
+  const continuityOf = new Map<string, string>(); // tarefa → modo de continuidade (para as etapas dispensáveis)
   for (const t of chargedTasks) {
     const kind = classify(t);
-    const d = taskDirect(t), r = taskReview(t);
+    const dAll = taskDirect(t), rAll = taskReview(t);
+    // Custo humano de uma unidade da tarefa × quantidade, e o de cada etapa (para repartir revisão/qualificação na mesma proporção).
+    const humanAll = (humanByTask.get(t.key) ?? 0) * quantity;
+    let dFirst = 0, rFirst = 0;
+    const firstRows: PricingSplitStep[] = [];
+    const recRows: PricingSplitStep[] = [];
+    if (kind === "recurring") {
+      for (const s of t.steps) {
+        const ref = `${t.key}:${s.key}`;
+        if (!humanByStep.has(ref)) continue; // etapa sem horas (ou fora deste cálculo)
+        const sDirect = (humanByStep.get(ref) ?? 0) * quantity;
+        const sReview = humanAll > 0 ? rAll * (sDirect / humanAll) : 0; // a qualificação acompanha o custo humano da etapa
+        const row: PricingSplitStep = { ref, task_key: t.key, step_key: s.key, name: s.name, cost: round2(sDirect + sReview), price: round2(priceOf(sDirect, sReview).price) };
+        if (firstOnlyRefs.has(ref)) { dFirst += sDirect; rFirst += sReview; firstRows.push(row); schedSteps.push({ ref, task_key: t.key, step_key: s.key, name: s.name, kind: "implementation", dispensable: false, price: r6(priceOf(sDirect, sReview).price) }); }
+        else { const disp = isDispensableStep(s); recRows.push({ ...row, dispensable: disp }); schedSteps.push({ ref, task_key: t.key, step_key: s.key, name: s.name, kind: "recurring", dispensable: disp, price: r6(priceOf(sDirect, sReview).price) }); }
+      }
+    }
+    continuityOf.set(t.key, (t as { executor_continuity?: string }).executor_continuity ?? "not_allowed");
+    const hasFirstPart = dFirst > 1e-9 || rFirst > 1e-9;
+    if (hasFirstPart) {
+      // IMPLANTAÇÃO / primeira execução: as etapas "só na 1ª execução" (+ a qualificação delas). Só no 1º ciclo.
+      schedTasks.push({ key: t.key, name: t.name, price: r6(priceOf(dFirst, rFirst).price), kind: "implementation", every_n: null, part: "first_execution_steps" });
+      cImpl.direct += dFirst; cImpl.review += rFirst; cImpl.tasks.push(t.key); cImpl.steps.push(...firstRows);
+    }
+    const d = Math.max(0, dAll - dFirst), r = Math.max(0, rAll - rFirst);
+    if (hasFirstPart && d <= 1e-9 && r <= 1e-9) continue; // a tarefa só tem etapas de primeira execução: nada recorrente
     const n = t.repeat_rule === "every_n_cycles" && kind === "recurring" ? Math.max(1, t.repeat_every_cycles ?? 1) : null;
-    schedTasks.push({ key: t.key, name: t.name, price: r6(priceOf(d, r).price), kind, every_n: n });
+    schedTasks.push({ key: t.key, name: t.name, price: r6(priceOf(d, r).price), kind, every_n: n, part: hasFirstPart ? undefined : "whole_task" });
     if (kind === "implementation") { cImpl.direct += d; cImpl.review += r; cImpl.tasks.push(t.key); continue; }
-    cFirst.direct += d; cFirst.review += r; cFirst.tasks.push(t.key); // tudo o que nasce no 1º ciclo
+    cFirst.direct += d; cFirst.review += r; cFirst.tasks.push(t.key); cFirst.steps.push(...recRows); // o recorrente que nasce no 1º ciclo
     if (kind === "recurring") {
       if (n) { everyN.push({ key: t.key, every: n }); continue; } // aparece só nos ciclos múltiplos de n (fora da renovação típica)
-      cRec.direct += d; cRec.review += r; cRec.tasks.push(t.key);
+      cRec.direct += d; cRec.review += r; cRec.tasks.push(t.key); cRec.steps.push(...recRows);
+      recurringStepRows.push(...recRows);
     }
   }
   const items: ChargeItem[] = [...chargeItems, ...effectItems, ...effortChargeItems];
   const itemAt = (k: number) => items.filter((i) => i.scope !== "implementation" && chargeActiveAt(i, k));
   const implItems = items.filter((i) => i.scope === "implementation" && chargeActiveAt(i, 0));
   const schedItems: PricingSplit["schedule"]["items"] = items.map((i) => ({ label: i.label, price: r6(priceOf(0, 0, i.cost).price), scope: i.scope, start: i.start, end: i.end }));
-  const compOut = (c: { direct: number; review: number; tasks: string[] }, extra = 0): PricingSplitComponent => {
+  const compOut = (c: { direct: number; review: number; tasks: string[]; steps?: PricingSplitStep[] }, extra = 0): PricingSplitComponent => {
     const p = priceOf(c.direct, c.review, extra);
-    return { cost: round2(c.direct + c.review + extra), price: round2(p.price), tasks: c.tasks, taxes_and_margins: p.lines };
+    return { cost: round2(c.direct + c.review + extra), price: round2(p.price), tasks: c.tasks, taxes_and_margins: p.lines, ...(c.steps && c.steps.length > 0 ? { steps: c.steps } : {}) };
   };
   const schedAmount = (k: number): number => cycleAmount({ tasks: schedTasks, items: schedItems }, k, 0);
   const isOnce = (sc: string) => sc === "one_time" || sc === "first_cycle";
@@ -1038,9 +1164,23 @@ async function computePricingCore(versionId: string, selection: PricingSelection
   const extraFirst = itemAt(0).reduce((a, i) => a + i.cost, 0);
   const splitReady = !pricingPending && !reqKind;
   const implComp = compOut(cImpl, implItems.reduce((a, i) => a + i.cost, 0));
+  const legacyImplTasks = activeTasksAll.some((t) => t.cycle_type === "implementacao");
+  const legacyImplApplies = chargedTasks.some((t) => t.cycle_type === "implementacao");
+  const implementationReason = implementationApplicable
+    ? (firstExecApplicable && !legacyImplApplies ? "Etapas marcadas “Só na primeira execução”: formam a implantação, cobrada só na primeira cobrança deste projeto." : implRule === "always" ? "Regra 'sempre': cobrada em toda contratação." : "Primeira contratação deste cliente.")
+    : firstExecHas && !firstExecApplies ? firstExecReasonOff
+    : legacyImplTasks ? "Implantação já concluída por este cliente — não cobrada de novo."
+    : "Este produto não possui atividades exclusivas da primeira execução.";
+  // Etapas "dispensáveis quando o mesmo executor continua": só valem se a continuidade da tarefa NÃO for "não permitida".
+  const dispensableAny = recurringStepRows.some((r) => r.dispensable);
+  const dispensableRows = recurringStepRows.filter((r) => r.dispensable && (continuityOf.get(r.task_key) ?? "not_allowed") !== "not_allowed");
+  const dispSavings = round2(dispensableRows.reduce((a, r) => a + r.price, 0));
+  const dispModes = [...new Set(recurringStepRows.filter((r) => r.dispensable).map((r) => continuityOf.get(r.task_key) ?? "not_allowed"))];
+  const renewalNow = splitReady ? schedAmount(1) : null;
+  const onceTotal = splitReady ? round2(partImpl + partOnce) : null;
   const split: PricingSplit = {
     first_charge_parts: splitReady ? { implementation: round2(partImpl), one_time: round2(partOnce), recurring: round2(schedAmount(0) - partImpl - partOnce) } : null,
-    implementation: { ...implComp, applicable: implementationApplicable, rule: implRule, reason: implementationApplicable ? (implRule === "always" ? "Regra 'sempre': cobrada em toda contratação." : "Primeira contratação deste cliente.") : (activeTasksAll.some((t) => t.cycle_type === "implementacao") ? "Implantação já concluída por este cliente — não cobrada de novo." : "O produto não tem tarefa de implantação.") },
+    implementation: { ...implComp, applicable: implementationApplicable, rule: implRule, reason: implementationReason },
     first_cycle_operation: compOut(cFirst, extraFirst),
     recurring: { ...compOut(cRec, itemAt(1).reduce((a, i) => a + i.cost, 0)), every_n_tasks: everyN },
     revalidation: (() => {
@@ -1053,8 +1193,28 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     first_charge: splitReady ? schedAmount(0) : null,
     renewal: splitReady ? schedAmount(1) : null,
     cycle_prices: [0, 1, 2, 3, 4, 5].map((k) => ({ cycle: k, price: splitReady ? schedAmount(k) : null })),
-    schedule: { tasks: schedTasks, items: schedItems },
+    schedule: { tasks: schedTasks, items: schedItems, steps: schedSteps },
     not_charged: notCharged,
+    first_execution: { has_steps: firstExecHas, applies: firstExecApplies, reason: firstExecHas ? (firstExecApplies ? "Primeiro ciclo deste produto neste projeto: as etapas “Só na primeira execução” executam e entram na primeira cobrança." : firstExecReasonOff) : "Este produto não possui atividades exclusivas da primeira execução.", steps: cImpl.steps },
+    dispensable: {
+      continuity_mode: dispModes.length === 0 ? "not_allowed" : dispModes.length === 1 ? dispModes[0] : "mixed",
+      steps: dispensableRows,
+      renewal_if_dispensed: dispensableRows.length > 0 && renewalNow != null ? round2(Math.max(0, renewalNow - dispSavings)) : null,
+      savings_per_cycle: dispSavings,
+      note: !dispensableAny ? "Nenhuma etapa está marcada como “Dispensável quando o mesmo executor continua”."
+        : dispensableRows.length === 0 ? "Há etapas dispensáveis, mas a continuidade do executor está como “Não permitida”: elas continuam sendo executadas e cobradas."
+        : "Se o mesmo executor continuar no ciclo seguinte, estas etapas são dispensadas e as horas delas não são cobradas (o valor é abatido da próxima fatura).",
+    },
+    commercial_summary: {
+      implementation_price: onceTotal,
+      implementation_applicable: implementationApplicable,
+      first_cycle_recurring_price: splitReady ? round2(schedAmount(0) - partImpl - partOnce) : null,
+      first_charge: splitReady ? schedAmount(0) : null,
+      renewal: renewalNow,
+      avulso: splitReady ? schedAmount(0) : null,
+      implementation_steps: cImpl.steps,
+      recurring_steps: recurringStepRows,
+    },
   };
 
   const finalLine: PricingLine = {
@@ -1169,7 +1329,7 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     selection_issues: selectionIssues,
     ai_cost_state: aiCostState,
     active_scenario: activeScenario,
-    scenario: { implementation_applicable: implementationApplicable, quantity, modality_note: implementationApplicable ? "Primeira contratação: implantação aplicável." : activeTasksAll.some((t) => t.cycle_type === "implementacao") ? "Renovação ou implantação já concluída: sem cobrança de implantação." : "Produto sem tarefa de implantação." },
+    scenario: { implementation_applicable: implementationApplicable, quantity, modality_note: implementationApplicable ? "Primeira contratação: implantação/primeira execução aplicável." : (firstExecHas || activeTasksAll.some((t) => t.cycle_type === "implementacao")) ? "Renovação ou implantação já concluída: sem cobrança de implantação." : "Este produto não possui atividades exclusivas da primeira execução." },
   };
   // Entrega emergencial ESCOLHIDA: soma os adicionais na primeira cobrança (não nas renovações) e encurta o prazo comercial.
   if (emergencyInfo.selected) {
@@ -1183,6 +1343,9 @@ async function computePricingCore(versionId: string, selection: PricingSelection
       if (sp.avulso_total != null) sp.avulso_total = round2(sp.avulso_total + x);
       if (sp.cycle_prices?.[0]?.price != null) sp.cycle_prices[0].price = round2(sp.cycle_prices[0].price + x);
       if (sp.first_charge_parts) (sp.first_charge_parts as Record<string, number>).emergency = x;
+      const cs = sp.commercial_summary;
+      if (cs.first_charge != null) cs.first_charge = round2(cs.first_charge + x);
+      if (cs.avulso != null) cs.avulso = round2(cs.avulso + x);
     }
     if (emergencyInfo.reduction_days > 0 && result.deadline.commercial_deadline_days != null) {
       result.deadline.commercial_deadline_days = Math.max(1, result.deadline.commercial_deadline_days - emergencyInfo.reduction_days);

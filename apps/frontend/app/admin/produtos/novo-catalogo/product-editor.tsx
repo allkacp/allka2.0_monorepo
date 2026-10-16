@@ -25,6 +25,8 @@ import { CommercialConsistencyBanner } from "./commercial-consistency";
 import { CommercialFieldsCard } from "./catalog2-commercial-ui";
 import { ConnectionsSection, AccessesSummary } from "./catalog2-connections-ui";
 import { TaskSummaryCard } from "./task-summary";
+import { ChargeSummary, ChargeSummaryLoader, ChargeMemory } from "./charge-summary";
+import { ContinuityCard } from "./continuity-card";
 import { ClearTaskButton, RestoreTaskPanel } from "./task-clear";
 import { createPortal } from "react-dom";
 import { SpecialtyCombobox } from "./specialty-combobox";
@@ -47,7 +49,8 @@ import { StepFlowEditor, StepFlowControls, stepFlowChips, stepStartMode, startCh
 import { useWorkCalendar, fmtBusinessMinutes, businessDaysOf } from "@/lib/use-work-calendar";
 import { specialtiesForMode, keepSpecialtyForMode, isSpecialtyCompatible, emptySpecialtyHint, EXEC_KIND_LABEL, specialtyKind } from "./catalog2-specialty-kind";
 import { EffortEffectForm, EFFORT_TYPES, isEffortType, effortEffectSummary, InternalNameEditor, ProductCounts, ApprovalGatesSection, SlaRulesSection, UniversalMemory, availabilityLabel } from "./catalog2-universal-ui";
-import { QuestionConfigFields, emptyQuestion, draftFromServer, draftFromSuggestion, payloadFromDraft, questionTypeLabel, type QuestionDraft } from "./catalog2-questions-ui";
+import { draftFromSuggestion, payloadFromDraft, questionTypeLabel, type QuestionDraft, type QuestionCtx } from "./catalog2-questions-ui";
+import { QuestionnaireEditor, QuestionnairePreview, questionnaireBody, stateFromServer, type QuestionnaireState } from "./catalog2-questionnaire-builder";
 import { BillingSplitSection } from "@/components/catalog2-pricing-memory-popover";
 import { VariationSettings, OptionSettings, AddonSettings, ChargeScopeFields, chargeScopeLabel } from "./catalog2-choices-ui";
 import { CATALOG2_STATUSES, CATALOG2_STATUS_LABEL, CATALOG2_STATUS_MEANING, catalog2StatusLabel, catalog2StatusTone, type Catalog2Status } from "@/lib/catalog2-status";
@@ -364,6 +367,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
     setHighlightTaskIds([]);
     setDoneIds([]);
     setWatch(ids.length ? { key, ids } : null);
+    if (dest.target === "catalog2-delivery-recurrence") { setHighlightTarget(dest.target); revealDeliveryRecurrenceField(); window.setTimeout(() => setHighlightTarget((c) => (c === dest.target ? null : c)), 8000); return; }
     window.setTimeout(() => (document.getElementById(ids[0] ?? dest.target) ?? document.getElementById(dest.target) ?? document.getElementById("catalog2-tasks") ?? document.getElementById("catalog2-editor-tabs"))?.scrollIntoView({ behavior: "smooth", block: "center" }), 350);
   }
   function goToReadinessAdjustment(key: string, targetId: string) {
@@ -449,6 +453,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       : targetFromApi === "conditions" ? { tab: "entrega", target: "catalog2-conditions" }
       : targetFromApi === "options" ? { tab: "opcoes", target: "catalog2-classification" }
       : targetFromApi === "pricing" ? { tab: "precos", target: "catalog2-costs" }
+      : MONTHLY_ISSUE_RE.test(issue) ? { tab: "precos", target: "catalog2-delivery-recurrence" }
       : text.includes("título")
       ? { tab: "info", target: "catalog2-field-title" }
       : text.includes("descrição")
@@ -468,10 +473,18 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
     setEditorTab(destination.tab);
     setHighlightTarget(destination.target);
     setHighlightTaskIds(detail?.task_ids ?? []);
+    if (destination.target === "catalog2-delivery-recurrence") { revealDeliveryRecurrenceField(); window.setTimeout(() => setHighlightTarget((c) => (c === destination.target ? null : c)), 8000); return; }
     window.setTimeout(() => document.getElementById(destination.target)?.scrollIntoView({ behavior: "smooth", block: "center" }), 0);
   }
 
   const clearPublishHighlight = (target: string) => setHighlightTarget((current) => current === target ? null : current);
+  // Atalho do Passo 2 para o campo "Este produto gera uma nova entrega todo mês" (Passo 4 › Modalidades por período).
+  function goToDeliveryRecurrence() {
+    setEditorTab("precos");
+    setHighlightTarget("catalog2-delivery-recurrence");
+    revealDeliveryRecurrenceField();
+    window.setTimeout(() => setHighlightTarget((c) => (c === "catalog2-delivery-recurrence" ? null : c)), 8000);
+  }
 
   // Rascunho criado automaticamente pelo "Editar" e ainda NÃO salvo pelo botão
   // "Salvar rascunho": "none" = não há; "unchanged" = igual à publicada; "changed" = tem alterações.
@@ -707,7 +720,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 
           <KeepTabsContent value="entrega" className="mt-2 space-y-2">
             <div className="mb-3 space-y-3">
-              <DeliveryCommercialOverview version={version} readOnly={readOnly} act={act} ringOf={ringOf} locked={!editMode} />
+              <DeliveryCommercialOverview version={version} readOnly={readOnly} act={act} ringOf={ringOf} locked={!editMode} product={product} onGoToRecurrence={goToDeliveryRecurrence} />
               <AccessCatalogDialog open={accessCatalogOpen} onOpenChange={setAccessCatalogOpen} version={version} readOnly={readOnly} act={act} mode={accessCatalogMode} />
             </div>
             <Tabs value={subTabs.entrega} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, entrega: v }))}>
@@ -1675,7 +1688,27 @@ function MetaChip({ children, title }: { children: React.ReactNode; title?: stri
   return <span title={title} className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">{children}</span>;
 }
 
-function ContractModesSection({ version, readOnly, act, compact = false }: any) {
+export function ContractModesSection({ version, readOnly, act, compact = false, product, onGoToRecurrence }: any) {
+  // Ao marcar "Assinatura mensal" com a entrega mensal ainda indefinida, pergunta NO MESMO FLUXO se o produto gera nova entrega todo mês.
+  const [askRecurrence, setAskRecurrence] = useState(false);
+  const [recurrenceBusy, setRecurrenceBusy] = useState(false);
+  const [recurrenceErr, setRecurrenceErr] = useState<string | null>(null);
+  const deliveryMonthly = product?.delivery_recurrence === "mensal";
+  const enableMonthlyDelivery = async () => {
+    if (!product?.id) return;
+    setRecurrenceBusy(true); setRecurrenceErr(null);
+    try {
+      await act(async () => {
+        await apiClient.updateCatalog2ProductDeliveryRecurrence(product.id, "mensal");
+        // Período mensal ativo (sem desconto, se ainda não estava configurado) — é o que deixa a assinatura contratável.
+        const periods: any = await apiClient.getCatalog2ProductPeriods(product.id);
+        const monthly = (periods?.data ?? []).find((p: any) => p.period === "mensal");
+        if (!monthly || !monthly.is_active) await apiClient.updateCatalog2ProductPeriod(product.id, "mensal", { discount_percent: Number(monthly?.discount_percent ?? 0), is_active: true });
+      }, "Entrega mensal ativada e período Mensal ligado.", { rethrow: true });
+      setAskRecurrence(false);
+    } catch (e: any) { setRecurrenceErr(e?.message ?? "Não foi possível ativar a entrega mensal."); }
+    finally { setRecurrenceBusy(false); }
+  };
   const pick = () => ({
     accepts_one_time: version.accepts_one_time ?? true,
     accepts_recurring: version.accepts_recurring ?? false,
@@ -1701,16 +1734,14 @@ function ContractModesSection({ version, readOnly, act, compact = false }: any) 
     await actRef.current(() => apiClient.updateCatalog2VersionInfo(version.id, fRef.current));
   }), [registerFlusher, readOnly, version.id]);
   const set = (patch: Partial<typeof f>) => setF((cur: any) => ({ ...cur, ...patch }));
-  const modalidades = [f.accepts_one_time && "Avulso", f.accepts_recurring && "Mensal"].filter(Boolean).join(" e ") || "nenhuma modalidade";
-  const summary = `Modalidade: ${modalidades} · ${f.has_initial_implementation ? "com implementação inicial no 1º mês" : "sem implementação inicial"}${f.sell_mode === "package_only" ? " · somente em pacote" : ""}`;
   if (compact) {
     const CARD = "flex h-full min-w-0 flex-col gap-2.5 px-1 md:border-l md:border-slate-200 md:pl-5 dark:md:border-slate-700";
     const ICON = "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300";
     const FIELD = "h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
     const priceHint = f.pricing_mode === "calculated" ? "Custo humano, de IA, taxas e prazo vêm das tarefas e etapas." : f.pricing_mode === "manual_fixed" ? "Vale como avulso, primeira cobrança e renovação. Exige preço e prazo." : "Sem compra automática nem cotação pública.";
     const modes = [
-      { key: "accepts_one_time", label: "Avulso", hint: "Compra única, sem renovação" },
-      { key: "accepts_recurring", label: "Assinatura mensal", hint: "Cobra e renova todo mês" },
+      { key: "accepts_one_time", label: "Avulso", hint: "Compra de um único ciclo, sem renovação automática. Atividades exclusivas da primeira execução podem ser cobradas quando aplicáveis." },
+      { key: "accepts_recurring", label: "Assinatura mensal", hint: "Abre um novo ciclo a cada mês. Atividades exclusivas da primeira execução não são cobradas novamente nas renovações." },
     ] as const;
     return <>
       <div className={CARD} data-testid="price-type-card">
@@ -1733,80 +1764,34 @@ function ContractModesSection({ version, readOnly, act, compact = false }: any) 
         <div className="grid gap-2 sm:grid-cols-2">
           {modes.map((mode) => (
             <label key={mode.key} className={`relative flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border-2 px-3.5 py-3 transition ${f[mode.key] ? "border-violet-500 bg-violet-50/70 dark:border-violet-600 dark:bg-violet-950/30" : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900"} ${readOnly ? "cursor-default opacity-80" : ""}`}>
-              <input type="checkbox" disabled={readOnly} checked={!!f[mode.key]} onChange={(e) => set({ [mode.key]: e.target.checked })} className="sr-only" />
+              <input type="checkbox" disabled={readOnly} checked={!!f[mode.key]} onChange={(e) => { set({ [mode.key]: e.target.checked }); if (mode.key === "accepts_recurring" && e.target.checked && !deliveryMonthly) setAskRecurrence(true); if (mode.key === "accepts_recurring" && !e.target.checked) setAskRecurrence(false); }} className="sr-only" />
               <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${f[mode.key] ? "border-violet-600" : "border-slate-300"}`}>{f[mode.key] && <span className="h-2.5 w-2.5 rounded-full bg-violet-600" />}</span>
-              <span className="min-w-0"><span className="block text-[13px] font-bold text-slate-900 dark:text-slate-100">{mode.label}</span><span className="block text-[11px] leading-snug text-slate-500">{mode.hint}</span></span>
+              <span className="min-w-0"><span className="block text-[13px] font-bold text-slate-900 dark:text-slate-100" data-no-info="">{mode.label}<span className="field-info" data-help={mode.hint} aria-hidden="true">i</span></span><span className="block text-[11px] leading-snug text-slate-500">{mode.hint}</span></span>
             </label>
           ))}
         </div>
+        {f.accepts_recurring && !deliveryMonthly && (askRecurrence || !readOnly) && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100" data-testid="recurrence-prompt" role="group" aria-label="Este produto gera uma nova entrega todo mês?">
+            <p className="font-semibold">Este produto gera uma nova entrega todo mês?</p>
+            <p className="mt-0.5 leading-snug"><strong>Cobrança mensal</strong> é como o cliente paga (todo mês). <strong>Nova entrega mensal</strong> é abrir, a cada mês pago, um novo ciclo de tarefas. Para serviço recorrente (ex.: gestão mensal), o normal é <em>sim</em>. Sem isso a assinatura não pode ser publicada.</p>
+            {recurrenceErr && <p role="alert" className="mt-1 font-semibold text-red-700">{recurrenceErr}</p>}
+            {!readOnly && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <button type="button" disabled={recurrenceBusy} onClick={() => void enableMonthlyDelivery()} className="rounded-md bg-violet-700 px-2.5 py-1 font-semibold text-white hover:bg-violet-800 disabled:opacity-60" data-testid="recurrence-yes">Sim, gerar novo ciclo/entrega todos os meses</button>
+              <button type="button" onClick={() => onGoToRecurrence?.()} className="rounded-md border border-amber-400 bg-white px-2.5 py-1 font-semibold text-amber-900 hover:bg-amber-100" data-testid="recurrence-goto">Decidir no Passo 4 (ir ao campo)</button>
+            </div>}
+          </div>
+        )}
         {!readOnly && <p className={`mt-auto flex items-center justify-end gap-1.5 text-xs ${JSON.stringify(f) === sig ? "text-slate-500" : "text-amber-700"}`}>{JSON.stringify(f) === sig ? <><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />Alterações salvas</> : "Alteração pendente — vale ao clicar em “Salvar rascunho”."}</p>}
       </div>
     </>;
   }
-  return (
-    <SetupCard icon={Settings2} title="Modalidades de contratação" summary={summary} help="Define como este produto pode ser contratado e cobrado. Não cria tarefas nem muda o prazo das entregas; essas configurações ficam nas próprias tarefas e etapas.">
-      <CommercialConsistencyBanner version={version} readOnly={readOnly} act={act} />
-      <p className="mb-2 text-[11px] text-slate-500">
-        Três coisas diferentes: <strong>modalidades de compra</strong> (avulso e/ou assinatura mensal — abaixo), <strong>tipo de entrega</strong> (única ou mensal recorrente — Passo 4) e <strong>implementação inicial</strong> (própria regra, não é forma de pagamento).
-      </p>
-      <div className="grid gap-2 md:grid-cols-2" data-testid="modalities-vs-implementation">
-        <div className="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900/60">
-          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Modalidade de contratação</p>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <CheckPill disabled={readOnly} checked={f.accepts_one_time} onChange={(v) => set({ accepts_one_time: v })} hint="Compra de um único mês/ciclo, sem renovação">Avulso</CheckPill>
-            <CheckPill disabled={readOnly} checked={f.accepts_recurring} onChange={(v) => set({ accepts_recurring: v })} hint="Cobra e renova todo mês. Exige a entrega mensal recorrente marcada (Passo 4) e o período Mensal ativo.">Mensal</CheckPill>
-          </div>
-          <p className="mt-1.5 text-[11px] text-slate-500">Marque uma ou as duas.</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900/60">
-          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-slate-500">Implementação inicial</p>
-          <CheckPill disabled={readOnly} checked={f.has_initial_implementation} onChange={(v) => set({ has_initial_implementation: v })} hint="Implantação, configuração ou diagnóstico no primeiro mês, antes da rotina">Este produto tem implementação no 1º mês</CheckPill>
-          <p className="mt-1.5 text-[11px] text-slate-500">Não é forma de pagamento: só informa se existe essa etapa inicial.</p>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <CheckPill disabled={readOnly} checked={f.show_executor_name} onChange={(v) => set({ show_executor_name: v })} hint="Por padrão o cliente vê só 'Especialista responsável'. Marque para mostrar o nome do profissional nesta versão.">Mostrar nome do profissional ao cliente</CheckPill>
-        <span className="mx-1 hidden h-5 w-px bg-slate-200 dark:bg-slate-700 sm:block" />
-        <select disabled={readOnly} aria-label="Venda" className="h-7 rounded-full border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" value={f.sell_mode} onChange={(e) => set({ sell_mode: e.target.value })}>
-          <option value="standalone">Vendido sozinho</option>
-          <option value="package_only">Só em pacote</option>
-        </select>
-      </div>
-      <div data-testid="pricing-mode" className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs dark:bg-slate-800/50">
-        <span className="font-medium text-slate-600 dark:text-slate-300" title="Como o preço desta versão é definido. Preço ou prazo indefinido bloqueia a publicação.">Preço:</span>
-        <select disabled={readOnly} aria-label="Modo de preço" className="h-7 max-w-full rounded-md border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={f.pricing_mode} onChange={(e) => set({ pricing_mode: e.target.value })}>
-          <option value="calculated">Calculado pelas tarefas (custo + taxas)</option>
-          <option value="manual_fixed">Preço fixo informado</option>
-          <option value="on_request">Sob consulta (sem preço público, sem compra automática)</option>
-        </select>
-        {f.pricing_mode === "manual_fixed" && (
-          <>
-            <label className="inline-flex items-center gap-1">R$ <input disabled={readOnly} type="number" min={0} step="0.01" aria-label="Preço fixo" className="h-7 w-28 rounded-md border border-slate-200 bg-white px-1.5 text-xs dark:border-slate-700 dark:bg-slate-900" value={f.manual_price ?? ""} onChange={(e) => set({ manual_price: e.target.value === "" ? null : Number(e.target.value) })} /></label>
-            <label className="inline-flex items-center gap-1">prazo <input disabled={readOnly} type="number" min={1} aria-label="Prazo fixo em dias" className="h-7 w-20 rounded-md border border-slate-200 bg-white px-1.5 text-xs dark:border-slate-700 dark:bg-slate-900" value={f.manual_deadline_days ?? ""} onChange={(e) => set({ manual_deadline_days: e.target.value === "" ? null : Number(e.target.value) })} /> dias</label>
-          </>
-        )}
-        <span className="basis-full text-[11px] text-slate-500">{f.pricing_mode === "calculated" ? "Custo humano, custo de IA, preço, prazo e cada modalidade precisam estar calculáveis para publicar." : f.pricing_mode === "manual_fixed" ? "Vale como avulso, primeira cobrança e renovação. Exige preço e prazo." : "Aparece como “Sob consulta”; não gera cotação nem contratação automática."}</span>
-      </div>
-      {f.has_initial_implementation && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-xs dark:bg-slate-800/50">
-          <span className="font-medium text-slate-600 dark:text-slate-300">Implementação roda:</span>
-          <select disabled={readOnly} className="h-7 max-w-full rounded-md border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={f.implementation_rule} onChange={(e) => set({ implementation_rule: e.target.value })}>
-            {Object.entries(IMPLEMENTATION_RULE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <CheckPill disabled={readOnly} checked={f.implementation_blocks_operation} onChange={(v) => set({ implementation_blocks_operation: v })} hint="As tarefas operacionais só começam depois que a implementação concluir">Bloqueia a rotina até concluir</CheckPill>
-        </div>
-      )}
-      {!readOnly && (
-        <div className="flex items-center gap-2">
-          <SaveButton onClick={() => void act(() => apiClient.updateCatalog2VersionInfo(version.id, f), "Modalidades de contratação salvas.")}>Salvar modalidades</SaveButton>
-          <span className="text-[11px] text-slate-500">Em cada tarefa, escolha o tipo de ciclo e a regra de repetição.</span>
-        </div>
-      )}
-    </SetupCard>
-  );
+  // O cartão de modalidades só existe na versão compacta do Passo 2 (Avulso e Assinatura mensal). Os controles antigos de
+  // "implementação inicial", "implementação roda" e "só em pacote" foram removidos do cadastro (16/10): a implantação vem das etapas
+  // "Só na primeira execução" e "somente em pacote" é decidido em Pacotes e Dependências.
+  return null;
 }
 
-function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked }: any) {
+export function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked, product, onGoToRecurrence }: any) {
   const [open, setOpen] = usePersistedFlag("commercial-overview", false);
   const tasks = version.tasks ?? [];
   const dependencyCount = tasks.reduce((n: number, task: any) => n + (task.depends_on?.length ?? 0), 0);
@@ -1824,7 +1809,7 @@ function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked }: 
   const readyParts = [
     { label: "Estrutura comercial", ok: structureMissing.length === 0, help: structureMissing.length ? `Falta preencher: ${structureMissing.join(" e ")} (Passo 1, Informações do produto).` : "Título comercial e descrição curta preenchidos." },
     { label: "Tarefas e etapas", ok: tasksMissing.length === 0, help: tasksMissing.length ? `Falta: ${tasksMissing.join(" ")}` : `${tasks.length} tarefa${tasks.length === 1 ? "" : "s"}, todas com etapas e tempo estimado.` },
-    { label: "Acessos necessários", ok: accessCount(version) > 0, help: accessCount(version) > 0 ? `${accessCount(version)} acesso${accessCount(version) === 1 ? "" : "s"} configurado${accessCount(version) === 1 ? "" : "s"}.` : "Nenhum acesso configurado. Adicione os acessos que o cliente precisa liberar em “Acessos necessários”." },
+    { label: "Acessos e conexões", ok: accessCount(version) > 0, help: accessCount(version) > 0 ? `${accessCount(version)} acesso${accessCount(version) === 1 ? "" : "s"} configurado${accessCount(version) === 1 ? "" : "s"}.` : "Nenhum acesso configurado. Adicione os acessos que o cliente precisa liberar em “Acessos necessários”." },
   ];
   const ready = readyParts.filter((part) => part.ok).length;
   const percent = Math.round((ready / readyParts.length) * 100);
@@ -1835,11 +1820,23 @@ function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked }: 
       {open ? <ChevronUp className="mt-2 h-4 w-4 text-slate-500" /> : <ChevronDown className="mt-2 h-4 w-4 text-slate-500" />}
     </button>
     {open && <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-      <div className="grid items-stretch gap-4 md:grid-cols-3"><DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={locked} compact /><ContractModesSection version={version} readOnly={readOnly} act={act} compact /></div>
+      <CommercialConsistencyBanner version={version} readOnly={readOnly} act={act} />
+      <div className="grid items-stretch gap-4 md:grid-cols-3"><DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={locked} compact /><ContractModesSection version={version} readOnly={readOnly} act={act} compact product={product} onGoToRecurrence={onGoToRecurrence} /></div>
+      <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-900/40" data-testid="charge-summary-card"><p className="mb-2 flex items-center gap-1 text-sm font-bold text-slate-900 dark:text-slate-100" data-no-info="">Cobrança estimada<span className="field-info" data-help="Implantação/primeira execução (etapas “Só na primeira execução”), ciclo recorrente, primeira cobrança, renovação mensal e compra avulsa — calculados pelo servidor com as opções padrão. A implantação nasce sozinha das etapas marcadas; não há botão de “Implementação inicial”." aria-hidden="true">i</span></p><ChargeSummaryLoader version={version} refreshKey={String(version.updated_at ?? "")} /></section>
       <section className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20 lg:grid-cols-[auto_minmax(9rem,1fr)_repeat(3,minmax(0,1fr))] lg:items-center">
-        <div className="flex items-center gap-2"><span className="flex h-12 w-12 items-center justify-center rounded-full border-[5px] border-emerald-500 bg-white text-sm font-extrabold text-slate-900 dark:bg-slate-900 dark:text-slate-100">{percent}%</span><span><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Prontidão da entrega</span><span className="block text-[10px] text-slate-500">Produto configurado para entrega.</span></span></div>
+        <div className="flex items-center gap-2"><span className="flex h-12 w-12 items-center justify-center rounded-full border-[5px] border-emerald-500 bg-white text-sm font-extrabold text-slate-900 dark:bg-slate-900 dark:text-slate-100">{percent}%</span><span><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Prontidão da entrega</span><span className="block text-[10px] text-slate-500" data-testid="readiness-subtitle">Verifica se a estrutura para <strong>executar</strong> o produto está configurada.</span></span></div>
         <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${percent}%` }} /></div>
         {readyParts.map((part) => <div key={part.label} className={`flex min-w-0 items-center gap-1.5 border-l border-emerald-100 pl-2 text-[11px] dark:border-emerald-900/40 ${part.ok ? "text-emerald-800 dark:text-emerald-200" : "text-amber-800 dark:text-amber-200"}`}><CheckCircle2 className="h-4 w-4 shrink-0" /><span className="min-w-0"><span className="block" data-no-info="">{part.label}<span className="field-info" data-help={part.help} aria-hidden="true">i</span></span><strong className="block text-xs">{part.ok ? "OK" : "REVISAR"}</strong></span></div>)}
+        <details className="min-w-0 rounded-lg border border-emerald-200 bg-white/70 px-2.5 py-1.5 text-[11px] text-slate-700 dark:border-emerald-900/50 dark:bg-slate-900/40 dark:text-slate-200 lg:col-span-full" data-testid="readiness-explain">
+          <summary className="cursor-pointer font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">O que a prontidão verifica</summary>
+          <p className="mt-1.5 leading-snug">Este quadro confere se a estrutura operacional necessária para executar o produto está configurada. Os itens verificados:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4 leading-snug">
+            <li><strong>Estrutura comercial:</strong> modalidades, recorrência e demais configurações comerciais.</li>
+            <li><strong>Tarefas e etapas:</strong> fluxo operacional, responsáveis, duração e regras de execução.</li>
+            <li><strong>Acessos e conexões:</strong> requisitos de acesso necessários, quando houver.</li>
+          </ul>
+          <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 font-semibold leading-snug text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" data-testid="readiness-not-published">Prontidão da entrega <u>não</u> significa que o produto já está publicado. Ela indica somente que a estrutura de execução está suficientemente configurada; a publicação continua dependendo das demais validações do cadastro (Passo 5).</p>
+        </details>
       </section>
     </div>}
   </section>;
@@ -2033,6 +2030,16 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
           </div>
           <div className={closed.has(t.id) && !highlightTaskIds.includes(t.id) ? "hidden" : ""}>
            {!readOnly && <RestoreTaskPanel task={t} act={act} />}
+           {/* Continuidade do executor (configuração simples), Questionário de contratação e Entregáveis: sempre visíveis (a tarefa não tem mais o painel antigo). */}
+           <ContinuityCard task={t} readOnly={readOnly} act={act} />
+           <div className="mt-2 flex w-full min-w-0 flex-col gap-2" data-testid="task-cards-stack">
+             <SetupCard icon={ListChecks} title="Questionário de contratação" summary={t.questionnaire ? `${t.questionnaire.name} · ${t.questionnaire.questions.length} pergunta(s)` : "nenhum questionário"} help="Perguntas que o cliente responde ao contratar. As respostas orientam a equipe e a IA. Pode ser um questionário já existente (busque pelo nome ou pelo ID) ou um novo.">
+               <QuestionnaireSection task={t} refs={refs} act={act} version={version} readOnly={readOnly} />
+             </SetupCard>
+             <SetupCard icon={UploadCloud} title="Entregáveis" summary={`${(t.deliverables ?? []).length} entregável(is)`} help="O que precisa ser entregue nesta tarefa: nome, descrição, etapa, momento, formato, arquivo-modelo, prova, quem confere, se é só na primeira execução ou em todo ciclo, e quem pode ver.">
+               <TaskDeliverablesEditor task={t} act={act} readOnly={readOnly} version={version} />
+             </SetupCard>
+           </div>
            {/* A tarefa não tem painel de configuração: tudo é configurado nas etapas. Só a IA (tarefa com etapa de IA) abre seu painel próprio. */}
            {!readOnly && advancedTask === t.id && ["ia", "hibrido"].includes(t.execution_mode) && <section className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2 text-xs dark:border-slate-800 dark:bg-slate-800/30"><AiConfig task={t} act={act} onOpenPricing={() => void onOpenPricing?.(t.id)} /></section>}
           <p className="mt-4 ml-2 text-[15px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300" data-testid="task-checklist-title">Etapas da tarefa · {t.steps.length}<span className="field-info" data-help="Tudo o que você cadastra nas etapas abaixo (quem executa, especialidade, horas, prazo e custo) é somado automaticamente no resumo, em cima. O resumo é atualizado sozinho." aria-hidden="true">i</span>{t.steps.length === 0 ? <span className="ml-1 normal-case font-semibold text-amber-700"> · cadastre ao menos uma etapa</span> : null}</p>
@@ -2294,6 +2301,10 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
             <Field label={<span className="inline-flex items-center gap-2">Critério de conclusão<AiFieldButton compact label="Critério de conclusão" value={f.completion_criteria} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Descrição da etapa": f.description } }} disabled={readOnly} onResult={(v) => setF({ ...f, completion_criteria: v.replace(/\n/g, " ").slice(0, 4000) })} /></span>}><input className={CTL} value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
             <label className="flex items-center gap-2 text-sm" title="Nunca se repete nos ciclos seguintes"><input type="checkbox" className="h-4 w-4" checked={f.first_execution_only} onChange={(e) => setF({ ...f, first_execution_only: e.target.checked })} /> Só na primeira execução</label>
             <label className="flex items-center gap-2 text-sm" title="Se o mesmo executor for mantido no ciclo seguinte, esta etapa é dispensada"><input type="checkbox" className="h-4 w-4" checked={f.skip_when_same_executor} onChange={(e) => setF({ ...f, skip_when_same_executor: e.target.checked })} /> Dispensável quando o mesmo executor continua</label>
+            {f.first_execution_only && <p className="rounded-md bg-violet-50 px-2 py-1 text-[11px] text-violet-900 dark:bg-violet-950/30 dark:text-violet-100" data-testid="first-execution-effect">Esta etapa forma a <strong>implantação</strong>: entra na primeira cobrança e só roda no primeiro ciclo deste produto neste projeto. <strong>Não entra no preço das renovações.</strong></p>}
+            {f.skip_when_same_executor && ((task?.executor_continuity ?? "not_allowed") === "not_allowed"
+              ? <p className="rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-100" data-testid="dispensable-effect-off">Sem efeito por enquanto: a continuidade do executor desta tarefa está como <strong>“Não permitida”</strong>. Mude no cartão “Continuidade do executor nos próximos ciclos”, acima das etapas.</p>
+              : <p className="rounded-md bg-sky-50 px-2 py-1 text-[11px] text-sky-900 dark:bg-sky-950/30 dark:text-sky-100" data-testid="dispensable-effect-on">Se o mesmo executor continuar (no mesmo projeto, com os acessos ainda válidos e sem mudança de plataforma ou escopo), esta etapa é <strong>dispensada</strong> no ciclo seguinte e as horas dela <strong>não são cobradas</strong> (crédito na próxima fatura). O administrador pode exigi-la mesmo assim, com justificativa.</p>)}
             <details className="rounded-md border border-sky-200 bg-sky-50/60 px-2 py-1 text-[11px] text-slate-700 dark:border-sky-900 dark:bg-sky-950/20 dark:text-slate-200" data-testid="recurrence-explainer">
               <summary className="cursor-pointer font-semibold text-sky-800 dark:text-sky-200">Como as duas opções acima funcionam em produtos mensais? Veja um exemplo</summary>
               <div className="mt-1.5 space-y-1.5 leading-snug">
@@ -2761,254 +2772,190 @@ function NewSpecialtyForm({ onCreated, act }: { onCreated: (s: any) => void; act
   );
 }
 
-// "No ponto de vínculo previsto pelo modelo atual" (Item 3): a tarefa é o
-// ponto real de briefing — cada tarefa pode VINCULAR (referência, nunca
-// cópia) um questionário da biblioteca compartilhada. Editar um
-// questionário aqui afeta toda tarefa que já o vincula, em qualquer produto
-// — SALVO quando o backend detecta compartilhamento e cria uma cópia
-// própria automaticamente (Item 3.1, PUT .../questionnaire/content):
-// avisamos isso na tela quando acontece, nunca em silêncio.
-function QuestionnaireSection({ task, refs, act }: any) {
-  const [showPicker, setShowPicker] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
-  const [selectId, setSelectId] = useState("");
-  const [prefill, setPrefill] = useState<{ name: string; description: string; questions: QuestionDraft[] } | null>(null);
+// Questionário de contratação — construtor universal (17/10). A tarefa VINCULA um questionário (sincronizado com o modelo) ou uma CÓPIA
+// independente. Editar um modelo usado por mais de uma tarefa pede a escolha: editar o modelo (confirmando) ou criar uma cópia só para esta tarefa.
+export function QuestionnaireSection({ task, refs, act, version, readOnly }: any) {
+  const [mode, setMode] = useState<"idle" | "picker" | "create" | "edit" | "preview">("idle");
+  const [prefill, setPrefill] = useState<QuestionnaireState | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const q = task.questionnaire;
-  // D-7: a IA lê todos os campos cadastrados do produto/tarefa e sugere o questionário; abre já preenchido para revisar e editar.
+  const ctx: Omit<QuestionCtx, "otherQuestions" | "sections"> = {
+    steps: (task.steps ?? []).map((s: any) => ({ key: s.key, name: s.name })),
+    variations: (version?.variations ?? []).map((v: any) => ({ key: v.key, name: v.name, options: (v.options ?? []).map((o: any) => ({ key: o.key, label: o.label })) })),
+    addons: (version?.addons ?? []).map((a: any) => ({ key: a.key, name: a.name })),
+  };
+  const usedBy = (refs.questionnaires ?? []).find((x: any) => x.id === q?.id)?.task_count ?? 1;
+  // D-7: a IA lê todos os campos cadastrados do produto/tarefa e sugere o questionário (mesmos tipos e configurações do construtor manual).
   const generate = async () => {
     setAiBusy(true); setAiErr(null);
     try {
       const r = await apiClient.suggestCatalog2TaskQuestionnaire(task.id);
-      setPrefill({ name: r.name, description: r.description ?? "", questions: r.questions.map(draftFromSuggestion) });
-      setShowCreate(true); setShowPicker(false);
+      setPrefill({ name: r.name, description: r.description ?? "", sections: [], questions: r.questions.map(draftFromSuggestion), is_global_model: false });
+      setMode("create");
     } catch (e: any) { setAiErr(e?.message ?? "Não foi possível usar a IA agora."); } finally { setAiBusy(false); }
   };
+  const suggestMore = async (labels: string[]) => (await apiClient.suggestCatalog2TaskQuestionnaire(task.id, labels)).questions.map(draftFromSuggestion);
 
   if (q) {
-    if (showEdit) {
-      return <EditQuestionnaireForm task={task} act={act} onDone={() => setShowEdit(false)} onCancel={() => setShowEdit(false)} />;
+    if (mode === "edit" && !readOnly) {
+      return <EditQuestionnaire task={task} q={q} usedBy={usedBy} ctx={ctx} act={act} onSuggest={suggestMore} onDone={() => setMode("idle")} onCancel={() => setMode("idle")} />;
     }
+    const st = stateFromServer(q);
     return (
-      <div className="rounded border border-neutral-200 p-2 dark:border-neutral-800">
-        <div className="flex items-center justify-between gap-1">
-          <span className="font-medium">Questionário: {q.name}</span>
-          <div className="flex shrink-0 gap-1">
-            <Button size="sm" variant="ghost" onClick={() => setShowEdit(true)}>Editar</Button>
-            <Button size="sm" variant="ghost" onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, null), "Questionário desvinculado.")}>
-              <Unlink className="h-3.5 w-3.5" /> Desvincular
-            </Button>
+      <div className="w-full min-w-0 rounded border border-neutral-200 p-2 dark:border-neutral-800" data-testid="questionnaire-view">
+        <div className="flex flex-wrap items-center justify-between gap-1">
+          <span className="min-w-0 font-medium">Questionário: {q.name}
+            <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-600" title="Identificador permanente do questionário" data-testid="questionnaire-id">ID {String(q.id).slice(0, 8)}</span>
+            <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-600" title="Versão do conteúdo (sobe a cada edição)">v{q.revision ?? 1}</span>
+            {q.is_global_model && <span className="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-normal text-violet-800">modelo global</span>}
+            {usedBy > 1 && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-normal text-amber-800" title="Editar o modelo afeta todas as tarefas que o usam">usado por {usedBy} tarefas</span>}
+          </span>
+          <div className="flex shrink-0 flex-wrap gap-1">
+            <Button size="sm" variant="ghost" onClick={() => setMode(mode === "preview" ? "idle" : "preview")}><Eye className="h-3.5 w-3.5" /> {mode === "preview" ? "Fechar prévia" : "Visualizar como cliente"}</Button>
+            {!readOnly && <>
+              <Button size="sm" variant="ghost" onClick={() => setMode("edit")}>Editar</Button>
+              <Button size="sm" variant="ghost" title="Cria uma cópia independente (IDs novos) e vincula a cópia a esta tarefa" onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, q.id, "copy"), "Cópia independente criada e vinculada a esta tarefa.")}><Copy className="h-3.5 w-3.5" /> Duplicar</Button>
+              <Button size="sm" variant="ghost" onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, null), "Questionário desvinculado.")}><Unlink className="h-3.5 w-3.5" /> Desvincular</Button>
+            </>}
           </div>
         </div>
         {q.description && <p className="mt-0.5 text-neutral-500">{q.description}</p>}
+        {mode === "preview" && <div className="mt-2"><QuestionnairePreview state={st} /></div>}
         <ul className="mt-1 ml-3 list-disc space-y-0.5">
           {q.questions.map((qq: any) => (
-            <li key={qq.id}>{qq.label} {qq.is_required && <span className="text-red-500">*</span>} <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600" title="Tipo da pergunta">{questionTypeLabel(qq.question_type)}</span></li>
+            <li key={qq.id}>{qq.label} {qq.is_required && <span className="text-red-500">*</span>} <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600" title="Tipo da pergunta">{questionTypeLabel(qq.question_type)}</span>
+              {qq.settings?.is_active === false && <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700">inativa</span>}
+              {qq.settings?.attachments?.allowed && <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-800">anexo</span>}
+              {qq.target_step_key && <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-800" title="A resposta é usada só nesta etapa">etapa: {(task.steps ?? []).find((s: any) => s.key === qq.target_step_key)?.name ?? qq.target_step_key}</span>}
+              {qq.condition && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800" title="Só aparece quando a condição é atendida">condicional</span>}</li>
           ))}
-          {q.questions.length === 0 && <li className="list-none text-neutral-400">Nenhuma pergunta ainda — clique em "Editar" pra adicionar.</li>}
+          {q.questions.length === 0 && <li className="list-none text-neutral-400">Nenhuma pergunta ainda{readOnly ? "." : " — clique em “Editar” pra adicionar."}</li>}
         </ul>
       </div>
     );
   }
 
+  if (readOnly) return <p className="text-xs text-slate-500" data-testid="questionnaire-none">Nenhum questionário vinculado. Clique em “Editar” (no topo) para vincular ou criar um.</p>;
   return (
-    <div className="space-y-2">
+    <div className="w-full min-w-0 space-y-2">
       <div className="flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={() => { setShowPicker((v) => !v); setShowCreate(false); }}><Link2 className="h-3.5 w-3.5" /> Selecionar questionário existente</Button>
-        <Button size="sm" variant="outline" onClick={() => { setShowCreate((v) => !v); setShowPicker(false); setPrefill(null); }}><Plus className="h-3.5 w-3.5" /> Criar novo questionário</Button>
-        <button type="button" data-testid="ai-questionnaire" disabled={aiBusy} onClick={() => void generate()} title="A IA lê tudo o que está cadastrado no produto e sugere as perguntas. Você revisa antes de criar." className="inline-flex h-8 items-center gap-1 rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] px-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Gerar questionário com IA"}</button>
+        <Button size="sm" variant="outline" onClick={() => setMode(mode === "picker" ? "idle" : "picker")}><Link2 className="h-3.5 w-3.5" /> Selecionar questionário existente</Button>
+        <Button size="sm" variant="outline" onClick={() => { setMode(mode === "create" && !prefill ? "idle" : "create"); setPrefill(null); }}><Plus className="h-3.5 w-3.5" /> Criar novo questionário</Button>
+        <button type="button" data-testid="ai-questionnaire" disabled={aiBusy} onClick={() => void generate()} title="A IA lê tudo o que está cadastrado no produto e sugere as perguntas, com os mesmos tipos e configurações do construtor. Você revisa antes de criar." className="inline-flex h-8 items-center gap-1 rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#2563eb,#7c3aed))] px-3 text-xs font-semibold text-white disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Gerar questionário com IA"}</button>
       </div>
       {aiErr && <p role="alert" className="text-[11px] font-semibold text-red-600">{aiErr}</p>}
-      {showPicker && (
-        <div className="flex items-end gap-2">
-          <select className="rounded border border-neutral-300 bg-transparent px-1 py-0.5 dark:border-neutral-700" value={selectId} onChange={(e) => setSelectId(e.target.value)}>
-            <option value="">selecione…</option>
-            {refs.questionnaires.map((qn: any) => <option key={qn.id} value={qn.id}>{qn.name} ({qn.question_count} pergunta(s))</option>)}
-          </select>
-          <Button size="sm" disabled={!selectId} onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, selectId), "Questionário vinculado.")}>Vincular</Button>
-        </div>
-      )}
-      {showCreate && <NewQuestionnaireForm key={prefill ? "ai" : "manual"} taskId={task.id} act={act} initial={prefill ?? undefined} onDone={() => { setShowCreate(false); setPrefill(null); }} />}
+      {mode === "picker" && <QuestionnairePicker task={task} act={act} />}
+      {mode === "create" && <NewQuestionnaireForm key={prefill ? "ai" : "manual"} taskId={task.id} act={act} ctx={ctx} initial={prefill ?? undefined} onSuggest={suggestMore} onDone={() => { setMode("idle"); setPrefill(null); }} />}
     </div>
   );
 }
 
-// Cria um questionário novo (nome + perguntas com obrigatoriedade) e já
-// vincula à tarefa atual ao salvar.
-function NewQuestionnaireForm({ taskId, act, onDone, initial }: { taskId: string; act: any; onDone: () => void; initial?: { name: string; description: string; questions: QuestionDraft[] } }) {
-  const [name, setName] = useState(initial?.name ?? "");
-  const [description, setDescription] = useState(initial?.description ?? "");
-  const [questions, setQuestions] = useState<QuestionDraft[]>(initial?.questions ?? []);
-  const [nq, setNq] = useState({ label: "", is_required: true });
-  const updateQuestion = (i: number, patch: Partial<QuestionDraft>) => setQuestions((qs) => qs.map((item, idx) => (idx === i ? { ...item, ...patch } : item)));
-  // Evita duplicar o questionário se o admin clicar "Criar e vincular"
-  // repetidas vezes enquanto as chamadas (criar + N perguntas + vincular)
-  // ainda estão em andamento.
+// Biblioteca de questionários: busca por ID, nome, pergunta, produto, categoria ou especialidade; vincula sincronizado ou como cópia independente.
+function QuestionnairePicker({ task, act }: { task: any; act: any }) {
+  const [f, setF] = useState({ q: "", product: "", category: "", specialty: "", global: false });
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [pick, setPick] = useState("");
+  const [link, setLink] = useState<"sync" | "copy">("sync");
+  const search = async () => { setErr(null); try { setRows((await apiClient.getCatalog2Questionnaires(f)).data ?? []); } catch (e: any) { setErr(e?.message ?? "Não foi possível buscar."); } };
+  useEffect(() => { void search(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="space-y-2 rounded-lg border border-neutral-200 p-2 dark:border-neutral-800" data-testid="questionnaire-picker">
+      <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+        <Input aria-label="Buscar questionário por nome ou ID" className="h-8 text-xs" placeholder="Nome, ID ou texto de pergunta…" value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") void search(); }} />
+        <Input aria-label="Filtrar por produto" className="h-8 text-xs" placeholder="Produto (nome ou nº)" value={f.product} onChange={(e) => setF({ ...f, product: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") void search(); }} />
+        <Input aria-label="Filtrar por categoria" className="h-8 text-xs" placeholder="Categoria" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") void search(); }} />
+        <Input aria-label="Filtrar por especialidade" className="h-8 text-xs" placeholder="Especialidade" value={f.specialty} onChange={(e) => setF({ ...f, specialty: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") void search(); }} />
+      </div>
+      <div className="flex flex-wrap items-center gap-3 text-[11px]">
+        <label className="inline-flex items-center gap-1"><input type="checkbox" checked={f.global} onChange={(e) => setF({ ...f, global: e.target.checked })} />Só modelos globais</label>
+        <Button size="sm" variant="outline" className="h-7" onClick={() => void search()}>Buscar</Button>
+      </div>
+      {err && <p role="alert" className="text-[11px] text-red-600">{err}</p>}
+      {rows && rows.length === 0 && <p className="text-[11px] text-slate-500">Nenhum questionário encontrado.</p>}
+      <ul className="max-h-56 space-y-1 overflow-y-auto" role="radiogroup" aria-label="Questionários existentes">
+        {(rows ?? []).map((qn) => (
+          <li key={qn.id}>
+            <label className={`flex cursor-pointer items-start gap-2 rounded border px-2 py-1 text-xs ${pick === qn.id ? "border-violet-400 bg-violet-50" : "border-slate-200"}`}>
+              <input type="radio" name="qn-pick" className="mt-0.5" checked={pick === qn.id} onChange={() => setPick(qn.id)} />
+              <span className="min-w-0"><strong>{qn.name}</strong> <span className="text-slate-500">· ID {String(qn.id).slice(0, 8)} · {qn.question_count} pergunta(s) · {qn.task_count} uso(s) · v{qn.revision}</span>{qn.is_global_model && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-800">modelo global</span>}
+                {(qn.products?.length ?? 0) > 0 && <span className="block truncate text-[11px] text-slate-500">{qn.products.join(" · ")}</span>}</span>
+            </label>
+          </li>
+        ))}
+      </ul>
+      <fieldset className="flex flex-wrap items-center gap-3 text-[11px]">
+        <legend className="sr-only">Como vincular</legend>
+        <label className="inline-flex items-center gap-1"><input type="radio" name="qn-link" checked={link === "sync"} onChange={() => setLink("sync")} />Vincular mantendo sincronizado</label>
+        <label className="inline-flex items-center gap-1"><input type="radio" name="qn-link" checked={link === "copy"} onChange={() => setLink("copy")} />Criar uma cópia independente</label>
+        <Button size="sm" disabled={!pick} onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, pick, link), link === "copy" ? "Cópia independente criada e vinculada." : "Questionário vinculado.")}>Vincular</Button>
+      </fieldset>
+      <p className="text-[10px] text-slate-500">Sincronizado: alterações no modelo valem para todas as tarefas que o usam (só para novas contratações). Cópia: IDs novos, nada muda nos outros produtos.</p>
+    </div>
+  );
+}
+
+// Cria um questionário novo (nome + seções + perguntas) e já vincula à tarefa atual ao salvar.
+function NewQuestionnaireForm({ taskId, act, onDone, initial, ctx, onSuggest }: { taskId: string; act: any; onDone: () => void; initial?: QuestionnaireState; ctx: Omit<QuestionCtx, "otherQuestions" | "sections">; onSuggest?: (labels: string[]) => Promise<QuestionDraft[]> }) {
+  // Evita duplicar o questionário se o admin clicar "Criar e vincular" repetidas vezes enquanto as chamadas ainda estão em andamento.
   const [saving, setSaving] = useState(false);
-
-  function addQuestion() {
-    if (!nq.label.trim()) return;
-    const key = `p${questions.length + 1}-${nq.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30)}`;
-    setQuestions((qs) => [...qs, { key, label: nq.label.trim(), is_required: nq.is_required, ...emptyQuestion() }]);
-    setNq({ label: "", is_required: true });
-  }
-
-  async function save() {
-    if (!name.trim() || questions.length === 0) return;
-    const created: any = await apiClient.addCatalog2Questionnaire({ name: name.trim(), description: description.trim() || null });
-    for (const [i, q] of questions.entries()) {
-      await apiClient.addCatalog2QuestionnaireQuestion(created.id, { ...payloadFromDraft(q), sort_order: i + 1 });
-    }
+  async function save(s: QuestionnaireState) {
+    const created: any = await apiClient.addCatalog2Questionnaire({ name: s.name.trim(), description: s.description.trim() || null, sections: s.sections.map((x) => ({ key: x.key, name: x.name.trim() || x.key, description: x.description.trim() || null })), is_global_model: s.is_global_model });
+    for (const [i, q] of s.questions.entries()) await apiClient.addCatalog2QuestionnaireQuestion(created.id, { ...payloadFromDraft(q), sort_order: i + 1 });
     await apiClient.setCatalog2TaskQuestionnaire(taskId, created.id);
-  }
-
-  // `act` engole o erro internamente (só mostra a mensagem) — sem isto o
-  // formulário fecharia (onDone) mesmo quando salvar falha no meio do
-  // caminho, escondendo as perguntas já digitadas do admin.
-  async function saveAndTrack(): Promise<boolean> {
-    await save();
     return true;
   }
-
   return (
-    <div className="space-y-2 rounded border border-dashed border-neutral-300 p-2 dark:border-neutral-700">
-      <Field label="nome do questionário"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-      <Field label="descrição (opcional)"><Input value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
-      <div className="space-y-1">
-        {questions.map((q, i) => (
-          <div key={q.key} className="rounded bg-neutral-50 px-2 py-1 dark:bg-neutral-900">
-            <div className="flex items-center justify-between">
-              <span>{i + 1}. {q.label} {q.is_required && <span className="text-red-500">*</span>} <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{questionTypeLabel(q.question_type)}</span></span>
-              <button type="button" aria-label="Remover pergunta" className="text-neutral-400 hover:text-red-500" onClick={() => setQuestions((qs) => qs.filter((_, idx) => idx !== i))}><Trash2 className="h-3.5 w-3.5" /></button>
-            </div>
-            <div className="mt-1"><p className="text-[11px] font-semibold text-violet-600">Tipo e configurações da pergunta</p><div className="mt-1"><QuestionConfigFields q={q} onChange={(patch) => updateQuestion(i, patch)} /></div></div>
-          </div>
-        ))}
-      </div>
-      <div className="flex items-end gap-2">
-        <Field label="nova pergunta"><Input value={nq.label} onChange={(e) => setNq({ ...nq, label: e.target.value })} /></Field>
-        <label><input type="checkbox" checked={nq.is_required} onChange={(e) => setNq({ ...nq, is_required: e.target.checked })} /> obrigatória</label>
-        <Button size="sm" variant="outline" onClick={addQuestion}>Adicionar pergunta</Button>
-      </div>
-      <Button
-        size="sm"
-        disabled={!name.trim() || questions.length === 0 || saving}
-        onClick={() => {
-          setSaving(true);
-          act(saveAndTrack, "Questionário criado e vinculado.").then((ok: boolean | undefined) => { if (ok) onDone(); }).finally(() => setSaving(false));
-        }}
-      >
-        {saving ? "Salvando…" : "Criar e vincular"}
-      </Button>
-      {initial && <p className="text-[11px] text-violet-700">Sugestão da IA: revise, edite, remova ou adicione perguntas antes de criar.</p>}
-      {questions.length === 0 && <p className="text-neutral-400">Adicione ao menos uma pergunta antes de criar.</p>}
-    </div>
+    <QuestionnaireEditor
+      initial={initial ?? { name: "", description: "", sections: [], questions: [], is_global_model: false }}
+      ctx={ctx} saving={saving} saveLabel="Criar e vincular" onSuggest={onSuggest}
+      notice={initial ? <p className="text-[11px] text-violet-700">Sugestão da IA: revise, edite, remova ou adicione perguntas antes de criar.</p> : undefined}
+      onSave={(s) => { setSaving(true); act(() => save(s), "Questionário criado e vinculado.").then((ok: boolean | undefined) => { if (ok) onDone(); }).finally(() => setSaving(false)); }}
+      onCancel={onDone}
+    />
   );
 }
 
-// Item 3.1 — editar título, perguntas, obrigatoriedade e ordem de um
-// questionário JÁ VINCULADO, pelo próprio formulário da tarefa (sem tela
-// de biblioteca separada). Reordenar é local (setas, antes de salvar);
-// "Cancelar" simplesmente descarta o estado local, nada é enviado — o
-// conteúdo anterior nunca é tocado. "Salvar" manda o estado final inteiro
-// pro backend, que decide sozinho se precisa criar uma cópia (avisamos
-// aqui quando isso acontece).
-function EditQuestionnaireForm({ task, act, onDone, onCancel }: { task: any; act: any; onDone: () => void; onCancel: () => void }) {
-  const q = task.questionnaire;
-  const [name, setName] = useState(q.name);
-  const [description, setDescription] = useState(q.description ?? "");
-  const [questions, setQuestions] = useState<QuestionDraft[]>(q.questions.map((qq: any) => draftFromServer(qq)));
-  const [nq, setNq] = useState({ label: "", is_required: true });
+// Editar um questionário JÁ VINCULADO. Modelo usado por mais de uma tarefa: pergunta antes de salvar (editar o modelo ou criar cópia).
+function EditQuestionnaire({ task, q, usedBy, ctx, act, onDone, onCancel, onSuggest }: { task: any; q: any; usedBy: number; ctx: Omit<QuestionCtx, "otherQuestions" | "sections">; act: any; onDone: () => void; onCancel: () => void; onSuggest?: (labels: string[]) => Promise<QuestionDraft[]> }) {
   const [saving, setSaving] = useState(false);
-  const [aiBusy, setAiBusy] = useState(false);
-  const [aiMsg, setAiMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  async function suggestMore() {
-    setAiBusy(true); setAiMsg(null);
-    try {
-      const r = await apiClient.suggestCatalog2TaskQuestionnaire(task.id, questions.map((x) => x.label));
-      const taken = new Set(questions.map((x) => x.key));
-      const novas = r.questions.map(draftFromSuggestion).map((d) => { let k = d.key; while (taken.has(k)) k += "x"; taken.add(k); return { ...d, key: k }; });
-      setQuestions((qs) => [...qs, ...novas]);
-      setAiMsg({ ok: true, text: `${novas.length} pergunta(s) sugerida(s) adicionada(s) ao final. Revise antes de salvar.` });
-    } catch (e: any) { setAiMsg({ ok: false, text: e?.message ?? "Não foi possível usar a IA agora." }); } finally { setAiBusy(false); }
-  }
-
-  function addQuestion() {
-    if (!nq.label.trim()) return;
-    const key = `p${questions.length + 1}-${nq.label.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30)}`;
-    setQuestions((qs) => [...qs, { key, label: nq.label.trim(), is_required: nq.is_required, ...emptyQuestion() }]);
-    setNq({ label: "", is_required: true });
-  }
-  function moveQuestion(i: number, dir: -1 | 1) {
-    setQuestions((qs) => {
-      const j = i + dir;
-      if (j < 0 || j >= qs.length) return qs;
-      const c = [...qs];
-      [c[i], c[j]] = [c[j], c[i]];
-      return c;
-    });
-  }
-  function updateQuestion(i: number, patch: Partial<QuestionDraft>) {
-    setQuestions((qs) => qs.map((item, idx) => (idx === i ? { ...item, ...patch } : item)));
-  }
-
-  async function save() {
-    return apiClient.updateCatalog2TaskQuestionnaireContent(task.id, {
-      name: name.trim(),
-      description: description.trim() || null,
-      questions: questions.map(payloadFromDraft),
-    });
-  }
-
+  const [pending, setPending] = useState<QuestionnaireState | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const run = (s: QuestionnaireState, extra: Record<string, unknown>) => {
+    setSaving(true);
+    act(async () => {
+      const r: any = await apiClient.updateCatalog2TaskQuestionnaireContent(task.id, { ...questionnaireBody(s), ...extra } as any);
+      if (s.is_global_model !== !!r.questionnaire?.is_global_model) await apiClient.setCatalog2QuestionnaireGlobal(r.questionnaire.id, s.is_global_model);
+      return r;
+    }, (r: any) => (r?.forked ? "Cópia independente salva só para esta tarefa — o modelo compartilhado ficou intacto." : "Questionário salvo."))
+      .then((r: any) => { if (r) onDone(); })
+      .finally(() => setSaving(false));
+  };
   return (
-    <div className="space-y-2 rounded border border-dashed border-neutral-300 p-2 dark:border-neutral-700">
-      <Field label="nome do questionário"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-      <Field label="descrição (opcional)"><Input value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
-      <div className="space-y-1">
-        {questions.map((qItem, i) => (
-          <div key={qItem.key} className="space-y-1 rounded bg-neutral-50 px-2 py-1 dark:bg-neutral-900">
-          <div className="flex items-center gap-2">
-            <span className="w-4 shrink-0 text-neutral-400">{i + 1}.</span>
-            <Input className="flex-1" value={qItem.label} onChange={(e) => updateQuestion(i, { label: e.target.value })} />
-            <label className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-              <input type="checkbox" checked={qItem.is_required} onChange={(e) => updateQuestion(i, { is_required: e.target.checked })} /> obrigatória
-            </label>
-            <button type="button" disabled={i === 0} className="disabled:opacity-30" onClick={() => moveQuestion(i, -1)}><ChevronUp className="h-3.5 w-3.5" /></button>
-            <button type="button" disabled={i === questions.length - 1} className="disabled:opacity-30" onClick={() => moveQuestion(i, 1)}><ChevronDown className="h-3.5 w-3.5" /></button>
-            <button type="button" aria-label="Remover pergunta" className="text-neutral-400 hover:text-red-500" onClick={() => setQuestions((qs) => qs.filter((_, idx) => idx !== i))}><Trash2 className="h-3.5 w-3.5" /></button>
+    <div className="w-full min-w-0 space-y-2">
+      <QuestionnaireEditor
+        initial={stateFromServer(q)} ctx={ctx} saving={saving} saveLabel="Salvar" usedByCount={usedBy} onSuggest={onSuggest}
+        onSave={(s) => (usedBy > 1 ? setPending(s) : run(s, {}))}
+        onCancel={onCancel}
+      />
+      {pending && (
+        <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950" role="dialog" aria-label="Questionário compartilhado" data-testid="shared-choice">
+          <p className="font-bold">Este questionário é usado por {usedBy} tarefas (outros produtos).</p>
+          <p>Escolha como salvar. Nada muda em silêncio e contratações já feitas nunca são alteradas.</p>
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="space-y-1">
+              <Button size="sm" disabled={saving} onClick={() => run(pending, { shared_mode: "copy" })}>Criar uma cópia independente (só esta tarefa)</Button>
+              <p className="text-[11px]">Recomendado: o modelo e os outros produtos ficam como estão.</p>
+            </div>
+            <div className="space-y-1">
+              <label className="flex items-center gap-1.5 font-semibold"><input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />Entendo que isto altera o modelo para todas as tarefas que o usam</label>
+              <Button size="sm" variant="outline" disabled={saving || !confirm} onClick={() => run(pending, { shared_mode: "edit_shared", confirm_shared: true })}>Editar o modelo global</Button>
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => setPending(null)}>Voltar</Button>
           </div>
-          <div><p className="text-[11px] font-semibold text-violet-600">Tipo: {questionTypeLabel(qItem.question_type)} · configurações</p><div className="mt-1"><QuestionConfigFields q={qItem} onChange={(patch) => updateQuestion(i, patch)} /></div></div>
-          </div>
-        ))}
-        {questions.length === 0 && <p className="text-neutral-400">Nenhuma pergunta — adicione abaixo.</p>}
-      </div>
-      <div className="flex items-end gap-2">
-        <Field label="nova pergunta"><Input value={nq.label} onChange={(e) => setNq({ ...nq, label: e.target.value })} /></Field>
-        <label><input type="checkbox" checked={nq.is_required} onChange={(e) => setNq({ ...nq, is_required: e.target.checked })} /> obrigatória</label>
-        <Button size="sm" variant="outline" onClick={addQuestion}>Adicionar pergunta</Button>
-        <button type="button" data-testid="ai-questionnaire-more" disabled={aiBusy} onClick={() => void suggestMore()} title="A IA lê tudo o que está cadastrado no produto e sugere perguntas que ainda não existem." className="inline-flex h-8 items-center gap-1 rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] px-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-110 disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Sugerir mais perguntas com IA"}</button>
-      </div>
-      {aiMsg && <p role={aiMsg.ok ? "status" : "alert"} className={`text-[11px] font-semibold ${aiMsg.ok ? "text-emerald-700" : "text-red-600"}`}>{aiMsg.text}</p>}
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          disabled={!name.trim() || questions.length === 0 || saving}
-          onClick={() => {
-            setSaving(true);
-            act(save, (r: any) => (r?.forked
-              ? "Questionário salvo — como ele era usado por outra tarefa/versão, uma cópia própria foi criada só para esta tarefa."
-              : "Questionário salvo."))
-              .then((r: any) => { if (r) onDone(); })
-              .finally(() => setSaving(false));
-          }}
-        >
-          {saving ? "Salvando…" : "Salvar"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>
-      </div>
-      {questions.length === 0 && <p className="text-neutral-400">Adicione ao menos uma pergunta antes de salvar.</p>}
+        </div>
+      )}
     </div>
   );
 }
@@ -3224,9 +3171,9 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
 
   const Card = ({ keyName, icon: Icon, title, subtitle, status }: any) => <button type="button" onClick={() => setOpen(keyName)} className="flex min-h-[112px] items-center gap-3 rounded-[14px] border border-slate-200 bg-white px-4 text-left shadow-sm transition hover:border-violet-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-semibold text-slate-800 dark:text-slate-100">{title}</span><span className="mt-0.5 block text-sm text-slate-500">{subtitle}</span></span><Badge className={status?.pending ? "border-0 bg-amber-100 text-amber-800" : "border-0 bg-emerald-100 text-emerald-700"}>{status?.text}</Badge><ChevronRight className="h-5 w-5 text-violet-600" /></button>;
   if (open === "overview") return <div id="catalog2-costs" className="mt-3 space-y-2">
-    <CostAccordion icon={DollarSign} title="Composição do preço" subtitle="Custos, taxas e margem" status={result?.pending_info?.length ? "Pendente" : "Configurado"} tone={result?.pending_info?.length ? "amber" : "green"}><div className="grid gap-3 md:grid-cols-2"><div>{result?.pending_info?.length > 0 && <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span>Falta uma configuração para fechar o preço.</span><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="font-semibold text-violet-700">Corrigir</button></div>}{result?.error ? <p className="text-sm text-red-600">Não foi possível calcular este cenário.</p> : result && <PricingPriceSummary r={result} />}</div><PricingDiagnostics result={result} /></div><PersistDetails persistKey="d3" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Custos e encargos <ChevronDown className="h-4 w-4 text-slate-400" /></summary>{result && <div className="border-t px-3 py-2"><PricingCostRows r={result} /></div>}</PersistDetails><PersistDetails persistKey="d4" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Memória de cálculo <ChevronDown className="h-4 w-4 text-slate-400" /></summary><div className="border-t px-3 py-2 text-xs text-slate-500">Bases, taxas e margem aplicadas ao cenário atual.</div></PersistDetails></CostAccordion>
+    <CostAccordion icon={DollarSign} title="Composição do preço" subtitle="Custos, taxas e margem" status={result?.pending_info?.length ? "Pendente" : "Configurado"} tone={result?.pending_info?.length ? "amber" : "green"}><div className="grid gap-3 md:grid-cols-2"><div>{result?.pending_info?.length > 0 && <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span>Falta uma configuração para fechar o preço.</span><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="font-semibold text-violet-700">Corrigir</button></div>}{result?.error ? <p className="text-sm text-red-600">Não foi possível calcular este cenário.</p> : result && <PricingPriceSummary r={result} />}{result && !result.error && <div className="mt-3"><ChargeSummary pricing={result} /></div>}</div><PricingDiagnostics result={result} /></div><PersistDetails persistKey="d3" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Custos e encargos <ChevronDown className="h-4 w-4 text-slate-400" /></summary>{result && <div className="border-t px-3 py-2"><PricingCostRows r={result} /></div>}</PersistDetails><PersistDetails persistKey="d4" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Memória de cálculo <ChevronDown className="h-4 w-4 text-slate-400" /></summary><div className="border-t px-3 py-2">{result ? <ChargeMemory pricing={result} /> : <span className="text-xs text-slate-500">Bases, taxas e margem aplicadas ao cenário atual.</span>}</div></PersistDetails></CostAccordion>
     <CostAccordion icon={ListChecks} title="Simular cenário" subtitle="Teste variações e adicionais" status="Pronto para simular" tone="green"><div className="grid gap-3 md:grid-cols-2">{version.variations.map((va: any) => <Field key={va.id} label={va.name}><select className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm" value={sel.variation_option_keys.find((k: string) => va.options.some((o: any) => o.key === k)) ?? ""} onChange={(e) => setSel({ ...sel, variation_option_keys: [...sel.variation_option_keys.filter((k: string) => !va.options.some((o: any) => o.key === k)), e.target.value] })}>{va.options.map((o: any) => <option key={o.id} value={o.key}>{o.label}</option>)}</select></Field>)}<Field label="Adicionais"><div className="flex flex-wrap gap-2">{version.addons.map((a: any) => <CheckPill key={a.id} checked={sel.addon_keys.includes(a.key)} onChange={(checked) => setSel({ ...sel, addon_keys: checked ? [...sel.addon_keys, a.key] : sel.addon_keys.filter((k: string) => k !== a.key) })}>{a.name}</CheckPill>)}</div></Field><Field label="Quantidade de campanhas"><Input className="h-10" type="number" value={sel.quantity} onChange={(e) => setSel({ ...sel, quantity: Number(e.target.value) || 1 })} /></Field></div>{result && <PricingPriceSummary r={result} showCost />}<Button type="button" onClick={() => void run()} className="mt-3 w-full bg-violet-700 text-white hover:bg-fuchsia-700">Atualizar simulação</Button></CostAccordion>
-    <CostAccordion icon={CalendarClock} title="Modalidades por período" subtitle="Entrega recorrente" status="Mensal" tone="green"><ProductPeriodsPanel productId={productId} act={act} /></CostAccordion>
+    <CostAccordion id="catalog2-periods-card" icon={CalendarClock} title="Modalidades por período" subtitle="Entrega recorrente" status="Mensal" tone="green"><ProductPeriodsPanel productId={productId} act={act} /></CostAccordion>
     <CostAccordion icon={FileText} title="Regras comerciais" subtitle="Margem e impostos" status="Configurar" tone="violet"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-500">Margem, impostos e taxas são aplicados automaticamente à composição.</p><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white">Configurar regras comerciais</button></div></CostAccordion>
   </div>;
 
@@ -3239,8 +3186,8 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
         {result?.pending_info?.length > 0 && (
           <div id="catalog2-price-pending" className={`mb-3 flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 ${ringOf("catalog2-price-pending")}`}><span className="font-semibold">Falta uma configuração para fechar o preço.</span><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="rounded-lg border border-violet-300 bg-white px-2 py-1 font-semibold text-violet-700">Configurar precificação</button></div>
         )}
-        {result?.error ? <p className="text-sm text-red-600">Não foi possível calcular este cenário.</p> : result && <PricingPriceSummary r={result} />}
-        <PersistDetails persistKey="d5" className="mt-3 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Custos e encargos <ChevronDown className="h-4 w-4 text-slate-400" /></summary>{result && <div className="border-t px-3 py-2"><PricingCostRows r={result} /></div>}</PersistDetails><PersistDetails persistKey="d6" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Memória de cálculo <ChevronDown className="h-4 w-4 text-slate-400" /></summary><div className="border-t px-3 py-2 text-xs text-slate-500">Bases, taxas e margem aplicadas ao cenário atual.</div></PersistDetails>
+        {result?.error ? <p className="text-sm text-red-600">Não foi possível calcular este cenário.</p> : result && <PricingPriceSummary r={result} />}{result && !result.error && <div className="mt-3"><ChargeSummary pricing={result} /></div>}
+        <PersistDetails persistKey="d5" className="mt-3 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Custos e encargos <ChevronDown className="h-4 w-4 text-slate-400" /></summary>{result && <div className="border-t px-3 py-2"><PricingCostRows r={result} /></div>}</PersistDetails><PersistDetails persistKey="d6" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Memória de cálculo <ChevronDown className="h-4 w-4 text-slate-400" /></summary><div className="border-t px-3 py-2">{result ? <ChargeMemory pricing={result} /> : <span className="text-xs text-slate-500">Bases, taxas e margem aplicadas ao cenário atual.</span>}</div></PersistDetails>
       </section><PricingDiagnostics result={result} /></div>}
 
       {open === "scenario" && <section className="grid gap-3 md:grid-cols-2"><section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><div className="mb-3 flex items-center gap-2"><ListChecks className="h-5 w-5 text-violet-600" /><div><h3 className="font-semibold">Simular cenário</h3><p className="text-xs text-slate-500">Teste variações, adicionais e quantidade</p></div></div>
@@ -3270,7 +3217,7 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
   );
 }
 
-function CostAccordion({ icon: Icon, title, subtitle, status, tone, children }: any) { const tones: any = { amber: "bg-amber-100 text-amber-800", green: "bg-emerald-100 text-emerald-700", violet: "bg-violet-100 text-violet-700" }; return <PersistDetails persistKey="d7" className="group rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[58px] cursor-pointer list-none items-center gap-3 px-3 [&::-webkit-details-marker]:hidden"><span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-100 text-violet-700"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block font-semibold text-slate-800 dark:text-slate-100">{title}</span><span className="block text-xs text-slate-500">{subtitle}</span></span><Badge className={`border-0 ${tones[tone]}`}>{status}</Badge><ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" /></summary><div className="border-t border-slate-100 px-3 py-3 dark:border-slate-800">{children}</div></PersistDetails>; }
+function CostAccordion({ id, icon: Icon, title, subtitle, status, tone, children }: any) { const tones: any = { amber: "bg-amber-100 text-amber-800", green: "bg-emerald-100 text-emerald-700", violet: "bg-violet-100 text-violet-700" }; return <PersistDetails persistKey="d7" id={id} className="group rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[58px] cursor-pointer list-none items-center gap-3 px-3 [&::-webkit-details-marker]:hidden"><span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-100 text-violet-700"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block font-semibold text-slate-800 dark:text-slate-100">{title}</span><span className="block text-xs text-slate-500">{subtitle}</span></span><Badge className={`border-0 ${tones[tone]}`}>{status}</Badge><ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" /></summary><div className="border-t border-slate-100 px-3 py-3 dark:border-slate-800">{children}</div></PersistDetails>; }
 
 function PricingCostRows({ r }: { r: any }) { const money = (n: any) => n == null ? "—" : `${r.currency ?? "R$"} ${Number(n).toFixed(2).replace(".", ",")}`; return <div className="space-y-1 text-xs">{[r.lines?.human_cost, r.lines?.ia_cost, ...(r.lines?.taxes_and_margins ?? [])].filter(Boolean).map((line: any, i: number) => <div key={i} className="flex justify-between gap-3"><span className="text-slate-500">{line.label}</span><span>{money(line.amount)}</span></div>)}</div>; }
 function PricingPriceSummary({ r, showCost = false }: { r: any; showCost?: boolean }) { const price = r.lines?.commercial_final_price ?? r.lines?.final_price; const money = (n: any) => n == null ? "A definir" : `${r.currency ?? "R$"} ${Number(n).toFixed(2).replace(".", ",")}`; return <div className="mt-3 space-y-2"><div className="rounded-xl bg-violet-50 px-3 py-3"><span className="text-xs font-semibold text-violet-700">Preço comercial final</span><strong className="block text-2xl text-violet-800">{money(price?.amount)}</strong></div>{showCost && <div className="grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Esforço estimado</span><strong>{r.deadline?.effort_days ?? "—"} dias</strong></div><div className="rounded-lg bg-slate-50 p-2"><span className="block text-slate-500">Prazo comercial</span><strong>{r.deadline?.commercial_deadline_days ?? "—"} dias</strong></div></div>}</div>; }
@@ -3281,6 +3228,7 @@ function PricingDiagnostics({ result }: { result: any }) { const pending = !!res
 // com "Não configurado" até o admin definir um desconto explícito. Nenhum
 // percentual padrão é sugerido — o campo nasce vazio.
 function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: () => Promise<any>, ok: string) => void }) {
+  const ringOf = useContext(RingCtx);
   const [rows, setRows] = useState<any[] | null>(null);
   const [deliveryRecurrence, setDeliveryRecurrence] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -3301,7 +3249,7 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
       {/* Item 6.1 (reunião 2026-09-14, "Completar a execução dos
           períodos"): pré-requisito — sem isto, NENHUM período fica
           disponível pra contratação, mesmo com desconto configurado. */}
-      <div className="rounded-md border border-neutral-200 p-3 dark:border-neutral-800">
+      <div id="catalog2-delivery-recurrence" className={`scroll-mt-6 rounded-md border border-neutral-200 p-3 dark:border-neutral-800 ${ringOf("catalog2-delivery-recurrence")}`}>
         <label className="flex items-center gap-2 text-sm font-medium">
           <input
             type="checkbox"
@@ -3314,7 +3262,7 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
           Este produto gera uma nova entrega todo mês
         </label>
         <p className="mt-1 text-xs text-muted-foreground">
-          Marque apenas quando as tarefas precisarem se repetir mensalmente. Assinatura e entrega recorrente são coisas diferentes: um produto pode ser contratado por período sem gerar uma nova entrega a cada mês.
+          Cobrança mensal e nova entrega mensal são coisas diferentes. <strong>Assinatura mensal</strong> (Passo 2) é como o cliente paga: todo mês. <strong>Esta caixa</strong> diz se, a cada mês pago, o produto abre um novo ciclo de tarefas e entregas. Para serviço recorrente (ex.: gestão mensal), marque “Sim, gerar novo ciclo/entrega todos os meses”; se o produto só é cobrado todo mês sem nova entrega, deixe desmarcado.
         </p>
         {deliveryRecurrence !== "mensal" && (
           <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
@@ -4154,7 +4102,19 @@ function priceBlockedByTasks(note?: string) {
   return /provis|tarefa/i.test(note ?? "");
 }
 
-function readinessDestination(key: string, product: any, note?: string): { tab: string; sub?: Record<string, string>; target: string } {
+/** A pendência é "assinatura mensal x entrega mensal recorrente" (cobrança mensal ≠ nova entrega mensal)? Então o campo está no Passo 4. */
+export const MONTHLY_ISSUE_RE = /assinatura mensal|entrega mensal recorrente|per[ií]odo mensal|modalidade de compra/i;
+/** Abre o cartão "Modalidades por período" do Passo 4 e destaca o campo "Este produto gera uma nova entrega todo mês". */
+function revealDeliveryRecurrenceField() {
+  const open = () => {
+    const card = document.getElementById("catalog2-periods-card") as HTMLDetailsElement | null;
+    if (card && !card.open) { card.open = true; card.dispatchEvent(new Event("toggle")); }
+    document.getElementById("catalog2-delivery-recurrence")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+  window.setTimeout(open, 350);
+  window.setTimeout(open, 900);
+}
+export function readinessDestination(key: string, product: any, note?: string): { tab: string; sub?: Record<string, string>; target: string } {
   switch (key) {
     case "conteudo": return { tab: "info", target: "catalog2-field-full-description" };
     case "classificacao": return { tab: "opcoes", sub: { opcoes: "class" }, target: !product?.pillar ? "catalog2-field-pillar" : !product?.category ? "catalog2-field-category" : "catalog2-field-four-f" };
@@ -4167,7 +4127,7 @@ function readinessDestination(key: string, product: any, note?: string): { tab: 
     case "conexoes": return { tab: "entrega", sub: { entrega: "tarefas" }, target: "sec-connections" };
     case "preco": return priceBlockedByTasks(note) ? { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-task-effort" } : /prazo/i.test(note ?? "") ? { tab: "entrega", sub: { entrega: "tarefas" }, target: "catalog2-deadline-base" } : { tab: "precos", target: "catalog2-price-pending" };
     case "portfolio": return { tab: "info", target: "catalog2-general" };
-    case "validacao": return { tab: "revisao", sub: { revisao: "hist" }, target: "sec-publicacao" };
+    case "validacao": return MONTHLY_ISSUE_RE.test(note ?? "") ? { tab: "precos", target: "catalog2-delivery-recurrence" } : { tab: "revisao", sub: { revisao: "hist" }, target: "sec-publicacao" };
     case "publicacao": return { tab: "revisao", sub: { revisao: "hist" }, target: "sec-publicacao" };
     default: return { tab: "info", target: "catalog2-general" };
   }

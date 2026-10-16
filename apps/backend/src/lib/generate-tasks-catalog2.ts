@@ -1,11 +1,11 @@
 import type { Prisma } from "@prisma/client";
-import { snapshotQuestion } from "./catalog2-question-types";
+import { snapshotQuestion, parseQuestionCondition, questionConditionMet, parseQuestionSettings, questionIsActive } from "./catalog2-question-types";
 import { accessesForStep, accessesForTask } from "./catalog2-step-accesses";
 import { normalizeStepOps, normalizeTaskOps } from "./catalog2-ops";
 import { materializeTaskDeliverables } from "./task-deliverables";
 import type { DbClient } from "./project-scope";
 import { getNextTaskCode } from "./task-code";
-import { computePricing, type PricingSelection } from "./catalog2-pricing";
+import { computePricing, isFirstExecutionStep, type PricingSelection } from "./catalog2-pricing";
 import type { GerarTarefasResult } from "./generate-tasks";
 import { addMonths } from "./catalog2-checkout";
 import { getPaymentGateway } from "./payment-gateway";
@@ -211,6 +211,7 @@ async function materializeTasksForProjectProduct(
   // 6.1: assim, cada ciclo usa exatamente "a versão e as condições
   // contratadas" (nunca uma versão/condição mais recente do produto).
   let activeTaskKeys: Set<string> | null = null;
+  let quoteSelection: PricingSelection = {};
   // A divisão vem da cotação congelada, nunca do cadastro atual.
   let deliveryGroups = [1];
   // D-2: contratação gerada de um pedido "sob consulta" — as respostas do cliente ao questionário viram o briefing das tarefas.
@@ -222,6 +223,7 @@ async function materializeTasksForProjectProduct(
     });
     if (quote) {
       const sel = JSON.parse(quote.selection_json) as PricingSelection;
+      quoteSelection = sel;
       const pricing = await computePricing(version.id, sel);
       activeTaskKeys = new Set(pricing.active_task_keys);
       const negotiated = await tx.catalog2Quote.findUnique({ where: { id: pp.origin_catalog2_quote_id }, select: { commercial_request_id: true } });
@@ -252,6 +254,10 @@ async function materializeTasksForProjectProduct(
   const cycle = await resolveCycleContext(tx, projectId, pp, opts.occurrenceIndex);
   if (opts.occurrenceIndex === 0 && pp.first_contract === null) {
     await tx.projectProduct.update({ where: { id: pp.id }, data: { first_contract: cycle.isFirstContract, contract_mode: cycle.contractMode } });
+  }
+  // Primeira execução (16/10): guarda se as etapas "Só na primeira execução" entram neste contrato (1º ciclo deste produto neste projeto).
+  if (opts.occurrenceIndex === 0 && pp.first_execution_in_project == null) {
+    await tx.projectProduct.update({ where: { id: pp.id }, data: { first_execution_in_project: cycle.firstExecutionInProject || cycle.forcedFirstExecution } });
   }
   const cycleKindByTaskId = new Map<string, CycleKind>();
   const tasksToGenerate: typeof candidateTasks = [];
@@ -323,7 +329,9 @@ async function materializeTasksForProjectProduct(
     const briefingSnapshot =
       ct.questionnaire && ct.questionnaire.questions.length > 0
         ? JSON.stringify(
-            ct.questionnaire.questions.map((q) => snapshotQuestion(q)),
+            ct.questionnaire.questions
+              .filter((q) => questionIsActive(parseQuestionSettings(q.settings_json)) && questionConditionMet(parseQuestionCondition(q.condition_json), quoteSelection))
+              .map((q) => snapshotQuestion(q, { questionnaireId: ct.questionnaire!.id, revision: ct.questionnaire!.revision, sections: (() => { try { const v = ct.questionnaire!.sections_json ? JSON.parse(ct.questionnaire!.sections_json) : []; return Array.isArray(v) ? v : []; } catch { return []; } })() })),
           )
         : null;
 
@@ -387,7 +395,9 @@ async function materializeTasksForProjectProduct(
 
     // Etapas "somente na 1ª execução" nunca se repetem nos ciclos seguintes (nem no contrato
     // seguinte do mesmo cliente, quando já rodaram).
-    const previouslyExecuted = opts.occurrenceIndex > 0 || !cycle.isFirstContract;
+    // Regra-base (16/10): 1º ciclo DESTE produto NESTE projeto = executa; ciclos seguintes ou recontratação no mesmo projeto = não repete;
+    // projeto novo = nova primeira execução. O administrador pode forçar a repetição (justificativa + histórico).
+    const previouslyExecuted = !cycle.forcedFirstExecution && (opts.occurrenceIndex > 0 || !cycle.firstExecutionInProject);
     const stepsAll = ct.steps;
     const stepsKept = previouslyExecuted ? stepsAll.filter((st) => !(st.first_execution_only || st.step_model?.first_execution_only)) : stepsAll;
     const steps = stepsKept.length > 0 || stepsAll.length === 0 ? stepsKept : stepsAll;
@@ -473,7 +483,7 @@ async function materializeTasksForProjectProduct(
       const stagesNow = await tx.projectTaskStage.findMany({ where: { project_task_id: newTask.id }, select: { id: true, catalog_step_ref: true } });
       const stageIdByStepId = new Map<string, string>();
       for (const s of stagesNow) if (s.catalog_step_ref) stageIdByStepId.set(s.catalog_step_ref, s.id);
-      await materializeTaskDeliverables(tx, { catalogTaskId: ct.id, projectTaskId: newTask.id, stageIdByStepId });
+      await materializeTaskDeliverables(tx, { catalogTaskId: ct.id, projectTaskId: newTask.id, stageIdByStepId, firstExecution: !previouslyExecuted, selection: quoteSelection });
     }
 
     // Fotografia dos campos operacionais (instruções, entradas, critérios, evidência…), em tabela à parte:
@@ -507,6 +517,25 @@ async function materializeTasksForProjectProduct(
     // Continuidade com o mesmo executor (mesmo cliente): obrigatório já nasce "mantido";
     // permitido/recomendado aguarda a escolha. Snapshot da regra fica na tarefa.
     await prepareContinuity(tx, { projectId, projectProductId: pp.id, newTaskId: newTask.id, catalog2ProductId: pp.catalog2_product_id, task: { key: ct.key, name: ct.name, task_model_id: ct.task_model_id, executor_continuity: ct.executor_continuity } });
+    }
+  }
+
+  // ── Histórico das etapas "Só na primeira execução": incluídas, não repetidas ou forçadas pelo administrador ──
+  {
+    const firstOnlyNames = [...new Set(tasksToGenerate.flatMap((t) => t.steps.filter((s) => isFirstExecutionStep(s)).map((s) => s.name)))];
+    if (firstOnlyNames.length > 0 && generated > 0) {
+      const logOnce = async (kind: string, message: string, detail: Record<string, unknown>) => {
+        const dup = await tx.projectDecisionLog.findFirst({ where: { project_product_id: pp.id, kind, message }, select: { id: true } });
+        if (!dup) await logProjectDecision(tx, { projectId, projectProductId: pp.id, kind, message, detail });
+      };
+      if (cycle.forcedFirstExecution) {
+        await logOnce("first_execution_forced_applied", `Primeira execução FORÇADA pelo administrador no ciclo ${opts.occurrenceIndex + 1}: ${firstOnlyNames.join(", ")}. Justificativa: ${pp.force_first_execution_reason ?? "não informada"}.`, { cycle_index: opts.occurrenceIndex, steps: firstOnlyNames, reason: pp.force_first_execution_reason ?? null, by: pp.force_first_execution_by ?? null });
+        await tx.projectProduct.update({ where: { id: pp.id }, data: { force_first_execution_next: false } });
+      } else if (opts.occurrenceIndex > 0 || !cycle.firstExecutionInProject) {
+        await logOnce("first_execution_skipped", `Etapas “Só na primeira execução” não foram criadas no ciclo ${opts.occurrenceIndex + 1}: ${opts.occurrenceIndex > 0 ? "já rodaram no primeiro ciclo deste projeto" : "este produto já foi contratado neste projeto"} (${firstOnlyNames.join(", ")}).`, { cycle_index: opts.occurrenceIndex, steps: firstOnlyNames });
+      } else {
+        await logOnce("first_execution_included", `Primeira execução deste produto neste projeto: etapas “Só na primeira execução” incluídas (${firstOnlyNames.join(", ")}).`, { cycle_index: opts.occurrenceIndex, steps: firstOnlyNames });
+      }
     }
   }
 

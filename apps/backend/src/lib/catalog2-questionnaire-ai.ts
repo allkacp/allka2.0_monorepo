@@ -2,7 +2,7 @@
 // A IA só SUGERE: nada é salvo aqui. O administrador revisa, edita, adiciona ou remove perguntas e só então cria/vincula o questionário.
 import { GoogleGenAI } from "@google/genai";
 import { prisma } from "./prisma";
-import { QUESTION_TYPES } from "./catalog2-question-types";
+import { QUESTION_TYPES, SELECT_TYPES as SELECT_TYPE_LIST, FILE_TYPES } from "./catalog2-question-types";
 import { recordAIUsage, usageFromGeminiResponse } from "./ai-usage-tracker";
 
 export interface SuggestedQuestion {
@@ -14,12 +14,14 @@ export interface SuggestedQuestion {
   options: string[] | null;
   visibility: "client";
   answer_usage: "both";
+  /** Mesma configuração estendida do construtor manual (placeholder, anexos…). */
+  settings: { placeholder?: string; attachments?: { allowed: boolean } } | null;
 }
 export interface QuestionnaireSuggestion { name: string; description: string | null; questions: SuggestedQuestion[] }
-export type RawSuggestion = { label?: unknown; question_type?: unknown; is_required?: unknown; help_text?: unknown; options?: unknown };
+export type RawSuggestion = { label?: unknown; question_type?: unknown; is_required?: unknown; help_text?: unknown; options?: unknown; placeholder?: unknown; allow_attachments?: unknown };
 
 const MAX_QUESTIONS = 15;
-const SELECT_TYPES = new Set(["selecao_unica", "selecao_multipla"]);
+const SELECT_TYPES = new Set<string>(SELECT_TYPE_LIST);
 const clip = (v: unknown, n: number) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, n);
 const slug = (v: string) => v.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "pergunta";
 
@@ -52,6 +54,13 @@ export async function buildQuestionnaireContext(taskId: string): Promise<{ conte
   return { context: lines.join("\n"), productTitle: clip(v?.title, 200), taskName: clip(task.name, 200), hasContent };
 }
 
+function aiSettings(r: RawSuggestion, type: string): SuggestedQuestion["settings"] {
+  const placeholder = clip(r.placeholder, 120);
+  const att = r.allow_attachments === true && !FILE_TYPES.includes(type);
+  if (!placeholder && !att) return null;
+  return { ...(placeholder ? { placeholder } : {}), ...(att ? { attachments: { allowed: true } } : {}) };
+}
+
 /** Normaliza a resposta da IA: tipos válidos, opções só nas perguntas de escolha, chaves únicas, sem duplicar rótulo, no máximo 15. */
 export function normalizeSuggestions(raw: RawSuggestion[], existingLabels: string[] = []): SuggestedQuestion[] {
   const seen = new Set(existingLabels.map((l) => clip(l, 300).toLowerCase()));
@@ -67,7 +76,7 @@ export function normalizeSuggestions(raw: RawSuggestion[], existingLabels: strin
       if (options.length < 2) options = null;
     }
     const finalType = SELECT_TYPES.has(type) && !options ? "texto_curto" : type;
-    out.push({ key: `p${out.length + 1}-${slug(label)}`, label, is_required: r.is_required !== false, question_type: finalType, help_text: clip(r.help_text, 400) || null, options: SELECT_TYPES.has(finalType) ? options : null, visibility: "client", answer_usage: "both" });
+    out.push({ key: `p${out.length + 1}-${slug(label)}`, label, is_required: r.is_required !== false, question_type: finalType, help_text: clip(r.help_text, 400) || null, options: SELECT_TYPES.has(finalType) ? options : null, visibility: "client", answer_usage: "both", settings: aiSettings(r, finalType) });
     if (out.length >= MAX_QUESTIONS) break;
   }
   return out;
@@ -88,7 +97,7 @@ async function geminiGenerator(context: string, existingLabels: string[]): Promi
 Regras:
 - Em português do Brasil, perguntas claras, curtas e específicas ao que foi cadastrado (use os nomes de plataformas, entregas e etapas citados). Nada genérico demais.
 - No máximo ${MAX_QUESTIONS} perguntas; só o que é realmente necessário. Perguntas essenciais são obrigatórias; as opcionais, não.
-- Escolha o tipo certo: ${QUESTION_TYPES.join(", ")}. Para "selecao_unica" ou "selecao_multipla" traga de 2 a 8 opções reais. Use "arquivo" para logotipos/materiais e "url" para endereços.
+- Escolha o tipo certo: ${QUESTION_TYPES.join(", ")}. Para "selecao_unica" ou "selecao_multipla" traga de 2 a 8 opções reais. Use "arquivo"/"imagem"/"documento" para logotipos e materiais, "url" para endereços, "data"/"hora"/"escala" quando fizer sentido, "aceite" para confirmações. Não use "acesso_ativo". Traga "placeholder" (exemplo de resposta) quando ajudar e "allow_attachments" true só se um anexo de apoio fizer sentido.
 - NUNCA peça senhas, tokens ou códigos de acesso (isso é feito por outro recurso da plataforma) e não repita acessos já listados.
 - Não repita perguntas que já existem: ${existingLabels.length ? existingLabels.map((l) => `"${clip(l, 120)}"`).join("; ") : "(nenhuma ainda)"}.
 - Inclua "help_text" curto só quando a pergunta puder gerar dúvida.
@@ -118,6 +127,8 @@ ${context}
                 is_required: { type: "boolean" },
                 help_text: { type: "string" },
                 options: { type: "array", items: { type: "string" } },
+                placeholder: { type: "string" },
+                allow_attachments: { type: "boolean" },
               },
               required: ["label", "question_type", "is_required"],
             },

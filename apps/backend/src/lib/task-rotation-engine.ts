@@ -347,6 +347,7 @@ export async function advanceRotation(taskId: string): Promise<{ action: "waitin
       rotation_episode_key: true,
       auto_nomad_dispatch_enabled: true,
       category_snapshot: true,
+      continuity_status: true,
     },
   });
   if (!task) return { action: "closed" };
@@ -371,6 +372,12 @@ export async function advanceRotation(taskId: string): Promise<{ action: "waitin
   }
 
   const now = new Date();
+
+  // Continuidade: a oferta ao executor preferido tem prazo próprio. Recusada/expirada → fila normal (ou o líder decide, se configurado).
+  if (task.continuity_status === "offered") {
+    const settled = await (await import("./catalog2-continuity")).settleContinuityOffer(taskId);
+    if (settled === "hold") return { action: "waiting" };
+  }
 
   // Expira ofertas normais. A oferta obrigatória é diferente: ao fim do
   // prazo configurado, se não houver recusa explícita, ela é aceita e a
@@ -584,6 +591,7 @@ export async function acceptOffer(offerId: string, sessionUserId: string): Promi
     // Fora da transação: se havia alerta de esgotamento, resolve (o problema acabou).
     await resolveExhaustedAlert(r.taskId, null, sessionUserId, "Um Nômade aceitou a oferta — tarefa atribuída.");
     await afterExecutorAssigned(r.taskId, { id: sessionUserId });
+    await (await import("./catalog2-continuity")).onExecutorAssigned(r.taskId).catch((err) => console.error("[continuity] confirmar continuidade:", err));
     return r;
   });
 }
@@ -806,6 +814,34 @@ export async function sendManualOffer(taskId: string, nomadeId: string, actorUse
         episode_key: episodeKey, rotation_order: previous + 1, rotation_round: 0,
         assigned_by_user_id: actorUserId, status: "pendente", offered_at: now,
         expires_at: new Date(now.getTime() + settings.offer_timeout_minutes * 60_000),
+      },
+    });
+  });
+  return { offerId: offer.id };
+}
+
+/**
+ * Continuidade do executor com prazo de aceite: oferece a tarefa PRIMEIRO ao executor do ciclo anterior (round 0). Ele aceita ou recusa;
+ * sem resposta em `hours`, o rodízio decide o que fazer (ver settleContinuityOffer). Nunca atribui sem o aceite.
+ */
+export async function offerToPreferredNomad(taskId: string, nomadeId: string, hours: number): Promise<{ offerId: string }> {
+  const [task, nomade] = await Promise.all([
+    prisma.projectTask.findUnique({ where: { id: taskId }, select: { id: true, nomade_responsavel_id: true, rotation_episode_key: true } }),
+    prisma.nomade.findUnique({ where: { id: nomadeId }, select: { id: true, user_id: true, status: true, user: { select: { is_active: true } } } }),
+  ]);
+  if (!task) throw new RotationError("Tarefa não encontrada.", 404);
+  if (task.nomade_responsavel_id) throw new RotationError("A tarefa já possui Nômade responsável.", 409, "task_already_assigned");
+  if (!nomade || nomade.status !== "ativo" || !nomade.user?.is_active) throw new RotationError("Nômade indisponível.", 422, "nomade_unavailable");
+  const now = new Date();
+  const episodeKey = task.rotation_episode_key ?? newEpisodeKey(taskId);
+  const previous = await prisma.taskOffer.count({ where: { episode_key: episodeKey } });
+  const offer = await prisma.$transaction(async (tx) => {
+    await tx.taskOffer.updateMany({ where: { project_task_id: taskId, status: "pendente" }, data: { status: "cancelada", close_reason: "cancelled_restart", responded_at: now } });
+    await tx.projectTask.update({ where: { id: taskId }, data: { status: "AGUARDANDO_NOMADE", rotation_episode_key: episodeKey } });
+    return tx.taskOffer.create({
+      data: {
+        project_task_id: taskId, nomade_id: nomade.id, nomade_user_id: nomade.user_id, episode_key: episodeKey, rotation_order: previous + 1, rotation_round: 0,
+        status: "pendente", offered_at: now, expires_at: new Date(now.getTime() + Math.max(0.25, hours) * 3_600_000),
       },
     });
   });

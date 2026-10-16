@@ -529,7 +529,8 @@ describe("Estrutura universal v2 · cadastro universal", () => {
   it("M16. questionários com os tipos novos: cadastro validado, cópia na tarefa e validação das respostas do cliente", async () => {
     const { versionId, product } = await mkProduct("Questionário", { tasks: [{ key: "t1" }], noPublish: true });
     const types = await adm("/question-types", "GET");
-    assert.equal(types.json.data.length, 13, "13 tipos disponíveis");
+    assert.equal(types.json.data.length, 23, "23 tipos disponíveis (13 de antes + os do construtor universal de 17/10)");
+    for (const t of ["hora", "data_hora", "lista_suspensa", "escala", "endereco", "imagem", "video", "audio", "documento", "aceite"]) assert.ok(types.json.data.some((x: any) => x.key === t), `tipo ${t}`);
     const q = await adm("/questionnaires", "POST", { name: "Briefing completo" });
     const qid = q.json.id as string;
     const mk = (body: Record<string, unknown>) => adm(`/questionnaires/${qid}/questions`, "POST", { is_required: false, ...body });

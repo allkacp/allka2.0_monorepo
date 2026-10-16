@@ -1317,6 +1317,14 @@ model ProjectProduct {
   revalidation_reason                     String?
   // Pacote em que este produto foi contratado (instância de ProjectPackage).
   package_instance_id                     String?
+  // Primeira execução (2026-10-16): regra-base = 1º ciclo DESTE produto NESTE projeto. O administrador pode FORÇAR as etapas
+  // "só na primeira execução" no próximo ciclo gerado (mudança estrutural), com justificativa e histórico.
+  force_first_execution_next              Boolean   @default(false)
+  force_first_execution_reason            String?   @db.Text
+  force_first_execution_by                String?
+  force_first_execution_at                DateTime?
+  // true = as etapas "só na 1ª execução" foram incluídas neste contrato; false = já tinham rodado neste projeto.
+  first_execution_in_project              Boolean?
   catalog2_period_discount_percent        Float?
   catalog2_period_reference_monthly_price Float?
   // Fim do periodo contratado (checkout_time + meses) — "prazo de protecao
@@ -1695,6 +1703,9 @@ model Catalog2Package {
 
   @@map("catalog2_packages")
   requirement_mode String @default("all")
+  // 2026-10-16: "Somente em pacote" passa a ser decidido AQUI (Pacotes e Dependências). Por padrão o produto de um pacote continua
+  // sendo vendido separadamente; com isto ligado, os produtos deste pacote só entram num pedido que satisfaça o pacote.
+  block_standalone_sale Boolean @default(false)
 }
 
 model Catalog2PackageItem {
@@ -5184,6 +5195,12 @@ model Catalog2Questionnaire {
   created_by_user_id String?
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
+  // 2026-10-16: versão do conteúdo (sobe a cada edição de perguntas) e origem quando é cópia independente de outro questionário.
+  revision               Int     @default(1)
+  source_questionnaire_id String?
+  // Seções (nome/descrição/ordem) e marca de "modelo global" (pode ser reutilizado por qualquer produto).
+  sections_json          String? @db.Text
+  is_global_model        Boolean @default(false)
 
   questions   Catalog2QuestionnaireQuestion[]
   tasks       Catalog2Task[]
@@ -5220,6 +5237,30 @@ model Catalog2QuestionnaireQuestion {
   validation_json String? @db.Text
   visibility String @default("client")
   answer_usage String @default("both")
+  // 2026-10-16: onde a resposta é usada (a tarefa toda ou uma etapa específica) e quando a pergunta aparece (variação, adicional ou resposta anterior).
+  target_step_key String? @db.VarChar(60)
+  condition_json  String? @db.Text
+  // Configuração estendida (momento, aplicação, anexo, "outro", mín/máx de escolhas, escala, vínculo…): JSON validado no servidor.
+  settings_json   String? @db.Text
+}
+
+// Anexo enviado como parte de uma resposta do briefing (questionário de contratação). O arquivo fica em disco com nome aleatório;
+// nenhuma rota/caminho interno é exposto. Guarda quem enviou, quando e a qual pergunta pertence. Nunca é apagado ao editar o modelo.
+model TaskBriefingFile {
+  id                 String   @id @default(uuid())
+  project_task_id    String
+  question_key       String   @db.VarChar(120)
+  original_name      String   @db.VarChar(255)
+  stored_name        String   @db.VarChar(120)
+  mime_type          String   @db.VarChar(120)
+  detected_kind      String   @db.VarChar(30)
+  size_bytes         Int
+  description        String?  @db.Text
+  uploaded_by_user_id String
+  created_at         DateTime @default(now())
+
+  @@index([project_task_id, question_key])
+  @@map("task_briefing_files")
 }
 
 // Identidade ESTAVEL do produto — nao muda entre versoes. O conteudo
@@ -5966,6 +6007,14 @@ model Catalog2Task {
   // "none_while_valid" | "light_check" (só uma verificação leve enquanto válidos).
   asset_rule            String @default("first_only")
   asset_revalidate_days Int?
+  // Continuidade do executor — configuração simples (2026-10-16). Prazo (em horas) que o executor preferido tem para ACEITAR
+  // antes da distribuição normal (vazio = 2 h); o que fazer se ele estiver indisponível / se não responder no prazo:
+  // "normal_queue" (fila normal) | "ask_leader" (avisa o líder e segura a tarefa até ele escolher).
+  continuity_accept_hours       Int?
+  continuity_if_unavailable     String  @default("normal_queue") @db.VarChar(20)
+  continuity_after_deadline     String  @default("normal_queue") @db.VarChar(20)
+  // Reaproveitar os acessos/conexões só quando já foram validados NO MESMO PROJETO (e o cliente autorizou); padrão: como sempre (por empresa).
+  reuse_connections_same_project Boolean @default(false)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -6523,6 +6572,9 @@ model Catalog2Quote {
 
   // D-2 (07/10): cotação travada no valor APROVADO de um pedido "sob consulta" (gerada pela equipe; vale 7 dias). Não é recalculada pelo motor.
   commercial_request_id String? @unique
+  // 2026-10-16: cotação feita PARA um projeto que já existe (aditivo). Define a "primeira execução": se o projeto já tem este produto,
+  // as etapas "Só na primeira execução" não executam nem entram no preço. Nulo = cotação comum (projeto novo).
+  for_project_id String? @db.VarChar(191)
 
   // Item 4 (reuniao 2026-09-14, "Precos e protecao por 30 dias"): ancora
   // o momento em que o preco/prazo desta cotacao foi percebido pela
@@ -6789,6 +6841,17 @@ model Catalog2TaskDeliverable {
   sort_order        Int              @default(0)
   created_at        DateTime         @default(now())
   updated_at        DateTime         @updatedAt
+  // Cadastro completo do entregável (2026-10-16): formato, momento, arquivo-modelo, prova, qualificação, recorrência e condição.
+  format                String?  @db.VarChar(80)
+  delivery_moment       String?  @db.VarChar(40)
+  template_url          String?  @db.VarChar(1000)
+  template_name         String?  @db.VarChar(191)
+  evidence_required     Boolean  @default(false)
+  requires_qualification Boolean @default(false)
+  // "every_cycle" (todo ciclo) | "first_execution" (só na primeira execução)
+  cycle_scope           String   @default("every_cycle") @db.VarChar(20)
+  is_conditional        Boolean  @default(false)
+  condition_json        String?  @db.Text
 
   @@unique([task_id, key])
   @@index([step_id])
@@ -6832,6 +6895,13 @@ model ProjectTaskDeliverable {
   ai_run_id String?
   version Int @default(1)
   versions ProjectTaskDeliverableVersion[]
+  // Copiados do cadastro do entregável (2026-10-16)
+  format                 String?  @db.VarChar(80)
+  delivery_moment        String?  @db.VarChar(40)
+  template_url           String?  @db.VarChar(1000)
+  template_name          String?  @db.VarChar(191)
+  evidence_required      Boolean  @default(false)
+  requires_qualification Boolean  @default(false)
 }
 
 // Assinatura mensal contínua de um produto contratado (Pedido 3, fase 4): uma fatura por mês, com estado visível.
@@ -6874,6 +6944,9 @@ model Catalog2Subscription {
   implementation_reason String? @db.Text
   first_charge_json String? @db.Text
   renewal_components_json String? @db.LongText
+  // Crédito (R$) por etapa "dispensável com o mesmo executor" que foi dispensada: abatido da PRÓXIMA fatura (nunca cobra horas dispensadas).
+  pending_credit_amount Float @default(0)
+  pending_credit_note String? @db.Text
 }
 
 model Catalog2SubscriptionEvent {

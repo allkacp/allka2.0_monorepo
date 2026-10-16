@@ -41,7 +41,8 @@ interface HumanCostRow {
   effort_is_provisional: boolean;
   rate_is_provisional?: boolean;
 }
-interface SplitComponent { cost: number; price: number; tasks: string[]; taxes_and_margins: PricingLine[] }
+interface SplitStepRow { ref: string; task_key: string; step_key: string; name: string; cost: number; price: number; dispensable?: boolean }
+interface SplitComponent { cost: number; price: number; tasks: string[]; taxes_and_margins: PricingLine[]; /** Etapas que formam este valor (primeira execução × recorrentes). */ steps?: SplitStepRow[] }
 /** Separação implantação × recorrente (mesma memória de cálculo, por componente). */
 export interface PricingSplitView {
   implementation: SplitComponent & { applicable: boolean; rule: string; reason: string };
@@ -56,6 +57,11 @@ export interface PricingSplitView {
   first_charge_parts: { implementation: number; one_time: number; recurring: number } | null;
   cycle_prices: { cycle: number; price: number | null }[];
   not_charged: { key: string; reason: string }[];
+  /** Regra de "primeira execução" (etapas marcadas "Só na primeira execução"). */
+  first_execution?: { has_steps: boolean; applies: boolean; reason: string; steps: SplitStepRow[] };
+  /** Etapas dispensáveis quando o mesmo executor continua e a renovação sem elas. */
+  dispensable?: { continuity_mode: string; steps: SplitStepRow[]; renewal_if_dispensed: number | null; savings_per_cycle: number; note: string };
+  commercial_summary?: { implementation_price: number | null; first_cycle_recurring_price: number | null; first_charge: number | null; renewal: number | null; avulso: number | null };
 }
 interface PricingMemory {
   currency: string;
@@ -121,6 +127,15 @@ function LineRow({ line }: { line: PricingLine }) {
   );
 }
 
+function StepRows({ steps }: { steps?: SplitStepRow[] }) {
+  if (!steps || steps.length === 0) return null;
+  return (
+    <ul className="mt-0.5 space-y-0.5 text-[10px] text-slate-600 dark:text-slate-300" data-testid="split-steps">
+      {steps.map((s) => <li key={s.ref} className="flex justify-between gap-2"><span>{s.name}{s.dispensable ? " (dispensável com o mesmo executor)" : ""}</span><span className="font-mono">{money(s.price)}</span></li>)}
+    </ul>
+  );
+}
+
 function ComponentBlock({ title, sub, c, total }: { title: string; sub: string; c: SplitComponent; total?: string }) {
   return (
     <div className="rounded-md border border-slate-100 p-2 dark:border-slate-800">
@@ -130,6 +145,7 @@ function ComponentBlock({ title, sub, c, total }: { title: string; sub: string; 
       </div>
       <p className="text-[10px] text-slate-400">{sub}</p>
       <p className="mt-0.5 text-[10px] text-slate-500">Custo {money(c.cost)} · Tarefas: {c.tasks.length ? c.tasks.join(", ") : "nenhuma"}</p>
+      <StepRows steps={c.steps} />
       {c.taxes_and_margins.length > 0 && (
         <details className="mt-0.5">
           <summary className="cursor-pointer text-[10px] text-violet-600">Impostos, comissão, taxa e margem deste componente</summary>
@@ -147,15 +163,15 @@ export function BillingSplitSection({ split }: { split: PricingSplitView }) {
     <section data-testid="billing-split" className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-2.5 dark:border-emerald-900/40 dark:bg-emerald-900/10">
       <h4 className="text-[11px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">Como a cobrança se divide</h4>
       <div className="mt-1 grid grid-cols-2 gap-1.5 text-[11px]">
-        <div className="rounded-md bg-white p-1.5 shadow-sm dark:bg-slate-900"><p className="text-[10px] text-slate-500">Primeira cobrança</p><p className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-100">{money(split.first_charge)}</p><p className="text-[10px] text-slate-400">implantação + 1ª mensalidade</p></div>
-        <div className="rounded-md bg-white p-1.5 shadow-sm dark:bg-slate-900"><p className="text-[10px] text-slate-500">Renovação (todo mês)</p><p className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-100">{money(split.renewal)}</p><p className="text-[10px] text-slate-400">sem a implantação</p></div>
-        <div className="col-span-2 rounded-md bg-white p-1.5 shadow-sm dark:bg-slate-900"><p className="text-[10px] text-slate-500">Compra avulsa (sem assinatura)</p><p className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-100">{money(split.avulso_total)}</p><p className="text-[10px] text-slate-400">implantação + um ciclo operacional + variações + adicionais; não renova</p></div>
+        <div className="rounded-md bg-white p-1.5 shadow-sm dark:bg-slate-900"><p className="text-[10px] text-slate-500">Primeira cobrança</p><p className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-100">{money(split.first_charge)}</p><p className="text-[10px] text-slate-400">implantação/primeira execução + 1º ciclo recorrente</p></div>
+        <div className="rounded-md bg-white p-1.5 shadow-sm dark:bg-slate-900"><p className="text-[10px] text-slate-500">Renovação (todo mês)</p><p className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-100">{money(split.renewal)}</p><p className="text-[10px] text-slate-400">só o recorrente: sem a implantação/primeira execução</p></div>
+        <div className="col-span-2 rounded-md bg-white p-1.5 shadow-sm dark:bg-slate-900"><p className="text-[10px] text-slate-500">Compra avulsa (sem assinatura)</p><p className="font-mono text-sm font-extrabold text-slate-800 dark:text-slate-100">{money(split.avulso_total)}</p><p className="text-[10px] text-slate-400">implantação/primeira execução (quando aplicável) + um ciclo + variações + adicionais; não renova</p></div>
       </div>
       {split.first_charge_parts && (
-        <p className="mt-1 text-[10px] text-slate-500">Composição da primeira cobrança: implantação {money(split.first_charge_parts.implementation)} + cobranças únicas {money(split.first_charge_parts.one_time)} + mensalidade do 1º ciclo {money(split.first_charge_parts.recurring)}.</p>
+        <p className="mt-1 text-[10px] text-slate-500">Composição da primeira cobrança: implantação/primeira execução {money(split.first_charge_parts.implementation)} + cobranças únicas {money(split.first_charge_parts.one_time)} + mensalidade do 1º ciclo {money(split.first_charge_parts.recurring)}.</p>
       )}
       <div className="mt-1.5 space-y-1.5">
-        <ComponentBlock title="Implantação inicial (uma vez)" sub={impl.applicable ? `Cobrada agora — ${impl.reason}` : `Não cobrada — ${impl.reason}`} c={impl} total={impl.applicable ? money(impl.price) : "não se aplica"} />
+        <ComponentBlock title="Implantação/primeira execução (uma vez)" sub={impl.applicable ? `Cobrada agora — ${impl.reason}` : `Não cobrada — ${impl.reason}`} c={impl} total={impl.applicable ? money(impl.price) : "não se aplica"} />
         <ComponentBlock title="Ciclo recorrente (cada mensalidade)" sub={split.recurring.every_n_tasks?.length ? `Algumas tarefas só a cada N ciclos: ${split.recurring.every_n_tasks.map((t) => `${t.key} (a cada ${t.every})`).join(", ")}` : "Tarefas que se repetem em todos os ciclos"} c={split.recurring} />
         <ComponentBlock title="Operação do 1º ciclo" sub="Tarefas geradas na contratação (inclui as de “só na 1ª vez”)" c={split.first_cycle_operation} />
         {split.revalidation.tasks.length > 0 && (
@@ -172,6 +188,9 @@ export function BillingSplitSection({ split }: { split: PricingSplitView }) {
         <summary className="cursor-pointer text-[10px] text-violet-600">Valor de cada ciclo (0 = primeira cobrança)</summary>
         <div className="mt-0.5 grid grid-cols-3 gap-x-2 text-[10px] text-slate-600 dark:text-slate-300">{split.cycle_prices.map((c) => <span key={c.cycle}>Ciclo {c.cycle}: <span className="font-mono">{money(c.price)}</span></span>)}</div>
       </details>
+      {split.dispensable && split.dispensable.steps.length > 0 && (
+        <p className="mt-1 rounded-md bg-sky-50 px-2 py-1 text-[10px] text-sky-900 dark:bg-sky-950/30 dark:text-sky-100" data-testid="split-dispensable">Se o mesmo executor continuar no ciclo seguinte, serão dispensadas: {split.dispensable.steps.map((s) => s.name).join(", ")}. Renovação sem elas: {money(split.dispensable.renewal_if_dispensed)} (economia de {money(split.dispensable.savings_per_cycle)}).</p>
+      )}
       {split.not_charged.length > 0 && <p className="mt-1 text-[10px] text-slate-400">Fora do preço: {split.not_charged.map((n) => `${n.key} (${n.reason})`).join("; ")}.</p>}
     </section>
   );

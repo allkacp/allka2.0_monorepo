@@ -2,6 +2,29 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
+## Pendente de deploy (construtor universal de questionário — 2026-10-17, só LOCAL)
+- **Banco:** migração aditiva `20261017100000_questionnaire_builder_v2` (colunas `settings_json` nas perguntas; `revision`, `source_questionnaire_id`, `sections_json`, `is_global_model` nos questionários; tabela nova `task_briefing_files`). Nada apagado nem reescrito. Aplicada só no banco local.
+- **Backend:** 22 tipos de pergunta; configuração por pergunta; condições por resposta anterior (9 operadores); anexos seguros (`lib/briefing-files.ts`: extensão + tipo real pelo conteúdo + tamanho; rotas `/api/project-tasks/:id/briefing/files`); IDs estáveis ao editar; versão do questionário; duplicar, modelo global, biblioteca de perguntas; vincular sincronizado ou como cópia; edição de modelo compartilhado com escolha (`shared_mode`); briefing congelado com ID/versão; IA com os mesmos tipos.
+- **Frontend:** construtor compacto (`catalog2-questionnaire-builder.tsx`, `catalog2-questions-ui.tsx`), campo único de resposta do cliente (`components/briefing-question-field.tsx`, usado na tarefa), prévia, bloco de Entregáveis abaixo do questionário em largura total.
+- A tela de lançamento em lote (`bulk-task-launch-drawer`) também usa o campo único para as perguntas do construtor.
+- **NÃO subiu:** nenhum deploy, push, publicação ou dado. Produto ID 1 não foi tocado.
+
+## Pendente de deploy (correção de modalidades, primeira execução e continuidade — 2026-10-16, só LOCAL)
+- **Banco:** migração aditiva `20261016120000_first_execution_continuity_deliverables` (colunas novas com padrão; nada apagado). Já aplicada no banco local; **não** aplicada no QA/produção.
+- **Backend:** preço separado em implantação (etapas "Só na primeira execução") × recorrente; primeira execução por projeto; continuidade com prazo de aceite e crédito; "exigir etapa" e "repetir primeira execução" (admin, com justificativa); produto individual sem dependência entre tarefas; "impedir venda separada" no pacote; entregável condicional estruturado; etapa com horas sem especialidade → preço "A definir".
+- **Frontend:** cartão de continuidade, cobrança estimada, questionário e entregáveis completos, modalidades só Avulso/Assinatura mensal, pergunta "gera nova entrega todo mês?", painel operacional da tarefa (exigir etapa / repetir primeira execução), Pacotes.
+- **Scripts (local):** `catalog2-legacy-fields-audit.ts` (só leitura) e `catalog2-normalize-product-1.ts` (simulação por padrão; recusa banco não local). **Produto ID 1 normalizado só nos valores técnicos e continua em rascunho.**
+- **Testes:** backend novos 15 + 19 + 12 verdes; regressão de 151 arquivos sem falha nova (falhas antigas idênticas na base limpa); frontend focado 39 verdes.
+- **NÃO subiu:** nenhum deploy, push, publicação de versão ou dado. Só sobe com ordem do usuário.
+
+## Pendente de deploy (documentação para ChatGPT/Codex — 2026-10-16, só LOCAL)
+- **Docs (somente arquivos de texto; não muda o comportamento do sistema e não dispara deploy de backend/frontend, mas só vai para o GitHub com `git push allka2 HEAD:main`, sob ordem do usuário):**
+  - Novo [cadastro-produto-passo-a-passo.md](./cadastro-produto-passo-a-passo.md): o cadastro de produto item por item (5 passos, todos os campos, glossário, o que bloqueia a publicação, ficha modelo).
+  - Novo [prompt-codex-cadastro-produto.md](./prompt-codex-cadastro-produto.md): prompt pronto para o Codex/ChatGPT ler a plataforma e montar a ficha de um produto.
+  - Novo `entregas/produtos/gestao-trafego-pago/Produto ID 1 - texto extraido.md`: texto simples do Word do Produto ID 1 (modelo de profundidade).
+  - Atualizados: `README.md` (estado atual 16/10, Docker/MySQL, tabela de documentos), `docs/regras-de-negocio.md` (seção "Cadastro de produtos (catalog2)"), `docs/telas-e-funcionalidades.md`, `docs/banco.md` (MySQL + migrations de 11 a 15/10), `docs/produtos.md` (aviso de legado), `AGENTS.md` e `CLAUDE.md` (leitura obrigatória), `documentos/registro-continuidade.json` + `.md`/`.docx` regenerados.
+- **Observação de segurança aberta:** o `README.md` (repositório PÚBLICO) cita o e-mail e a senha de teste do admin e a senha das contas de teste; decisão do usuário pendente (trocar a senha no servidor QA e/ou tirar do README).
+
 ## Espelho do banco local no QA 2026-10-15 (run 38806021107)
 A pedido do usuário (o link allka.store é QA: o que é cadastrado local sobe para outras pessoas conferirem), o banco do servidor foi substituído por cópia do banco LOCAL logo depois do deploy-2026-10-15-1. Conferido no servidor após o espelho: 25 usuários, 5 empresas, 40 projetos, 36 produtos, 14 movimentos de carteira (igual ao local). **Backup antes:** allka-before-mirror-20261015T205656Z.sql.gz. API e site responderam 200. **Ajuste para funcionar lá:** o estado cifrado do 1 perfil do navegador seguro (state_ciphertext) foi zerado no pacote, porque é cifrado com a chave do computador local; o perfil continua cadastrado e a sessão é refeita no servidor. Não havia gateway de pagamento, conexão com segredo nem token da Meta no local. Release e secret MIRROR_BUNDLE_KEY apagados; dump local apagado. **Não incluído:** arquivos em disco (anexos/entregas). Workflow: mirror-local-to-qa.yml.
 
@@ -42,7 +65,7 @@ Usuário autorizou a substituição do cadastro de teste do servidor pelo estado
 **Conferido:** deploy de Backend e Frontend concluídos com sucesso; `https://api.allka.store/api/health` e `https://allka.store` responderam 200.
 **NÃO subiu (dados):** nenhum produto, versão, configuração comercial ou publicação foi transferido/alterado. O produto ID 1 continua rascunho/em preparação.
 
-## Pendente de deploy (revisão geral de desempenho e limpeza — 2026-10-10, só LOCAL)
+## (Já subiu no deploy-2026-10-15-1 — mantido como histórico) Revisão geral de desempenho e limpeza — 2026-10-10
 - **Frontend — desempenho:** o mock de desenvolvimento (`dev-mocks`, ~600 KB de dados falsos) saiu do pacote principal; agora só carrega sob demanda e só no modo mock (pacote principal 1.922 KB → 1.439 KB). Avaliação de produto passou a `lib/product-rating.ts` (sem depender de dado falso). Camada global de ajuda (i) agora é incremental (só reexamina o que mudou). Imagens do avatar da Aura reduzidas (1,8 MB→0,5 MB; 1 MB→0,26 MB; 2,7 MB→1,3 MB) e as 5 capas editoriais redimensionadas para 1024 px.
 - **Frontend — limpeza:** 31 arquivos sem nenhum uso removidos (modais/hooks/tipos antigos) e 1 arquivo `.orig` perdido; `scratch/` e `*.orig` no .gitignore. Typecheck limpo; testes: mesmas 114 falhas antigas, nenhuma nova.
 - **Backend — desempenho (2026-10-10):** a prontidão de todos os produtos (usada em /overview, /readiness e no filtro "com pendências") passou a ser calculada em paralelo e compartilhada entre chamadas simultâneas (~2–3 s → ~0,5–0,9 s; sem guardar resultado, sempre estado atual). Lista do catálogo do cliente (/api/catalog2/products) calcula preço/prazo em paralelo (~0,6 s → ~0,2 s). Mesmos resultados; testes catalog2-admin (25/25), catalog2-audience, catalog2-on-request passam; falhas antigas inalteradas (catalog2-catalog 3b, catalog2-import 25 e 30).

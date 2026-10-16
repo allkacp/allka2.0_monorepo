@@ -20,7 +20,12 @@ router.get("/:taskId", async (req: Request, res: Response, next: NextFunction) =
   try {
     const task = await prisma.projectTask.findUnique({
       where: { id: req.params.taskId as string },
-      select: { id: true, title: true, status: true, project_id: true, lider_responsavel_id: true, stage_execution: true, catalog2_task: { select: { key: true, name: true } } },
+      select: {
+        id: true, title: true, status: true, project_id: true, project_product_id: true,
+        lider_responsavel_id: true, stage_execution: true,
+        project_product: { select: { force_first_execution_next: true } },
+        catalog2_task: { select: { key: true, name: true } },
+      },
     });
     if (!task) { fail(res, 404, "Tarefa não encontrada.", "task_not_found"); return; }
     if (!isAdminUser(req.user!)) {
@@ -33,7 +38,7 @@ router.get("/:taskId", async (req: Request, res: Response, next: NextFunction) =
     const gates = (await gateView(prisma, task.id)).map((g) => ({ ...g, can_decide: g.actionable && canDecide({ approver_kind: g.approver_kind }, decider).ok }));
     const stageRows = await prisma.projectTaskStage.findMany({
       where: { project_task_id: task.id }, orderBy: [{ ordem: "asc" }, { created_at: "asc" }],
-      select: { id: true, titulo: true, status: true, ordem: true, iniciada_em: true, concluida_em: true, entregue_em: true, qualificada_em: true, aprovada_em: true, prazo_execucao: true, executor_type: true, lider_id: true, nomade_id: true, visivel_ao_cliente: true, exige_qualificacao: true, exige_qualificacao_especialista: true, especialista_id: true, libera_proxima_auto: true, rodada_ajuste: true, depende_de_json: true, catalog_step_ref: true },
+      select: { id: true, titulo: true, status: true, ordem: true, iniciada_em: true, concluida_em: true, entregue_em: true, qualificada_em: true, aprovada_em: true, prazo_execucao: true, executor_type: true, lider_id: true, nomade_id: true, visivel_ao_cliente: true, exige_qualificacao: true, exige_qualificacao_especialista: true, especialista_id: true, libera_proxima_auto: true, rodada_ajuste: true, depende_de_json: true, catalog_step_ref: true, config_snapshot: true },
     });
     const staff = kind === "admin" || kind === "leader";
     const isLeaderOfTask = task.lider_responsavel_id === req.user!.id;
@@ -42,6 +47,14 @@ router.get("/:taskId", async (req: Request, res: Response, next: NextFunction) =
     // Quem contratou NÃO vê etapa interna (a menos que o líder tenha avisado o cliente); equipe e nômade veem tudo.
     const visiveis = stageRows.filter((e) => staff || kind === "nomad" || e.visivel_ao_cliente || !stageMode);
     const stages = visiveis.map((e, i) => {
+      let continuityConfig: Record<string, unknown> = {};
+      try { continuityConfig = e.config_snapshot ? JSON.parse(e.config_snapshot) : {}; } catch { continuityConfig = {}; }
+      const hasLaterStarted = stageRows.some((later) => later.ordem > e.ordem && !["PENDENTE", "BLOQUEADA"].includes(later.status));
+      const wasDispensedByContinuity = continuityConfig.dispensed_by === "continuity";
+      const canRequireDispensed = kind === "admin"
+        && continuityConfig.skip_when_same_executor === true
+        && continuityConfig.required_by_admin !== true
+        && (["PENDENTE", "BLOQUEADA"].includes(e.status) || (wasDispensedByContinuity && !hasLaterStarted));
       return {
         id: e.id, titulo: e.titulo, status: e.status, ordem: e.ordem, iniciada_em: e.iniciada_em, concluida_em: e.concluida_em, entregue_em: e.entregue_em, qualificada_em: e.qualificada_em, aprovada_em: e.aprovada_em,
         prazo_execucao: e.prazo_execucao, rodada_ajuste: e.rodada_ajuste, em_paralelo: e.depende_de_json != null,
@@ -50,14 +63,15 @@ router.get("/:taskId", async (req: Request, res: Response, next: NextFunction) =
         can_qualify: stageMode && e.status === "EM_QUALIFICACAO" && (kind === "admin" || isLeaderOfTask || e.lider_id === req.user!.id),
         can_approve: stageMode && e.status === "EM_APROVACAO_CLIENTE" && ladoContratante && e.visivel_ao_cliente,
         can_warn_client: stageMode && !e.visivel_ao_cliente && (kind === "admin" || isLeaderOfTask || e.lider_id === req.user!.id),
+        can_require_dispensed_stage: canRequireDispensed,
         position: i + 1,
       };
     });
     const inputs = await prisma.projectTaskInput.findMany({ where: { project_task_id: task.id }, orderBy: { created_at: "asc" } });
     const deps = await ruleStatesForTask(prisma, task.id);
     res.json({
-      task: { id: task.id, title: task.title, status: task.status, catalog_key: task.catalog2_task?.key ?? null, stage_execution: task.stage_execution },
-      viewer: { kind, can_manage_sla: staff },
+      task: { id: task.id, title: task.title, status: task.status, catalog_key: task.catalog2_task?.key ?? null, stage_execution: task.stage_execution, project_product_id: task.project_product_id, force_first_execution_next: task.project_product?.force_first_execution_next ?? false },
+      viewer: { kind, is_admin: kind === "admin", can_manage_sla: staff },
       stages, approval_gates: gates, sla: await slaView(prisma, task.id),
       inputs: inputs.map((i) => ({ id: i.id, label: i.label, source_product_id: i.source_product_id, source_task_id: i.source_project_task_id, deliverable_key: i.source_deliverable_key, link_url: i.link_url, version: i.version_number, approval_status: i.approval_status, approved_at: i.approved_at })),
       dependencies: deps.map((d) => ({ rule_id: d.ruleId, kind: d.targetKind, behavior: d.behavior, state: d.state, satisfied: d.satisfied, reason: d.reason })),

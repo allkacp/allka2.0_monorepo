@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiClient } from "@/lib/api-client";
+import { BriefingQuestionField, isVisible as briefingIsVisible, pendingMessage as briefingPending, type BriefingValue } from "@/components/briefing-question-field";
 import { cn } from "@/lib/utils";
 import {
   Loader2,
@@ -114,6 +115,7 @@ export function BulkTaskLaunchDrawer({
                 answersMap[ans.question_key] = {
                   answer: ans.answer ?? "",
                   selected_options: tryParseJson(ans.files),
+                  files: tryParseJson(ans.files).filter((x: any) => x && typeof x === "object"),
                   links: tryParseJson(ans.links),
                 };
               }
@@ -146,9 +148,18 @@ export function BulkTaskLaunchDrawer({
     );
   }
 
+  function richValuesOf(entry: TaskEntry): Record<string, BriefingValue> {
+    const out: Record<string, BriefingValue> = {};
+    for (const [k, v] of Object.entries(entry.answers)) out[k] = { answer: (v as any).answer ?? "", files: (v as any).files ?? [] };
+    return out;
+  }
+
   // ── Computed: missing-required per task + totals ──────────────────────────
   function missingForEntry(entry: TaskEntry) {
+    const rich = richValuesOf(entry);
     return entry.briefingQuestions.filter((q, idx) => {
+      // Perguntas do construtor universal (com tipo): só contam se visíveis (ativas + condição atendida) e com pendência.
+      if (q.question_type) return briefingIsVisible(q, rich) && !!briefingPending(q, rich[getQuestionKey(q, idx)]);
       if (!q.required) return false;
       const key = getQuestionKey(q, idx);
       const a = entry.answers[key];
@@ -247,9 +258,13 @@ export function BulkTaskLaunchDrawer({
       const items = entries.map((entry) => {
         const answers =
           entry.briefingQuestions.length > 0
-            ? entry.briefingQuestions.map((q, idx) => {
+            ? entry.briefingQuestions.filter((q) => !q.question_type || briefingIsVisible(q, richValuesOf(entry))).map((q) => {
+                const idx = entry.briefingQuestions.indexOf(q);
                 const key = getQuestionKey(q, idx);
                 const a = entry.answers[key] ?? {};
+                if (q.question_type) {
+                  return { question_key: key, question_text: q.question_text ?? q.label ?? `Pergunta ${idx + 1}`, answer: a.answer ?? "", ...((a.files ?? []).length > 0 ? { files: JSON.stringify(a.files) } : {}) };
+                }
                 const answerText =
                   q.type === "multiple_choice" ? (a.selected_options ?? []).join(", ") : (a.answer ?? "");
                 return {
@@ -272,6 +287,28 @@ export function BulkTaskLaunchDrawer({
   }
 
   function renderQuestion(entry: TaskEntry, q: any, idx: number) {
+    if (q.question_type) {
+      const rich = richValuesOf(entry);
+      if (!briefingIsVisible(q, rich)) return null;
+      const rkey = getQuestionKey(q, idx);
+      const value: BriefingValue = rich[rkey] ?? { answer: "", files: [] };
+      const msg = briefingPending(q, value);
+      return (
+        <div key={rkey} className={cn("rounded-xl border bg-white p-4 space-y-2", msg && q.required ? "border-amber-200" : "border-slate-200")} data-testid="briefing-question">
+          {q.section_name && <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{q.section_name}</p>}
+          <Label className="text-sm font-semibold text-slate-700 leading-snug">{q.question_text ?? q.label}{q.required && <span className="text-red-500 ml-1" aria-label="obrigatório">*</span>}</Label>
+          {q.description && <p className="text-xs text-slate-500">{q.description}</p>}
+          <BriefingQuestionField
+            q={q} value={value}
+            onChange={(v) => setAnswer(entry.task.id, rkey, { answer: v.answer, files: v.files })}
+            onUploadFile={(file, description) => apiClient.uploadBriefingFile(entry.task.id, rkey, file, description)}
+            onRemoveFile={async (f) => { if (f.id) await apiClient.deleteBriefingFile(entry.task.id, f.id); }}
+            onDownloadFile={(f) => { if (f.id) void apiClient.downloadBriefingFile(entry.task.id, { id: f.id, name: f.name }).catch(() => {}); }}
+          />
+          {msg && <p className="text-xs text-amber-700">{msg}</p>}
+        </div>
+      );
+    }
     const key = getQuestionKey(q, idx);
     const label = q.question_text ?? q.question ?? q.label ?? `Pergunta ${idx + 1}`;
     const a = entry.answers[key] ?? {};

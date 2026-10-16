@@ -7,7 +7,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { verifyToken } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
-import { resolveClientContext } from "../lib/catalog2-client";
+import { resolveClientContext, rebaseQuoteToProject } from "../lib/catalog2-client";
 import {
   Catalog2CheckoutError,
   revalidateAndFreezeQuote,
@@ -85,6 +85,9 @@ router.post("/", async (req, res, next) => {
         return;
       }
     }
+
+    // Aditivo no MESMO projeto: a primeira execução (implantação) não é cobrada nem executada de novo — a cotação é refeita com esse contexto.
+    await rebaseQuoteToProject(ctx, quote.id, project.id);
 
     const changeOrder = await prisma.catalog2ChangeOrder.create({
       data: {

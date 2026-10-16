@@ -4,13 +4,33 @@ Tudo sobre o banco da plataforma: schema, migrations, seeds, ambientes.
 
 ---
 
+> ⚠️ **Atualização 2026-10-16:** o banco atual é **MySQL 8.4** (local em Docker: `mysql://allka:allka_dev@mysql:3306/allka`, porta 3306; servidor: MySQL no Docker Compose do VPS). As menções a **SQLite** (`dev.db`/`prod.db`) e PostgreSQL mais abaixo são **históricas** — confira sempre `schema.prisma` (`provider = "mysql"`) e `docker-compose.yml`. Migrations são **sempre aditivas** (nunca `db push`) e o deploy do backend as aplica no servidor.
+
 ## Tecnologia
 
 - **ORM**: [Prisma](https://www.prisma.io/) 5.22
-- **Local**: SQLite (arquivo `apps/backend/prisma/dev.db`)
-- **Produção**: SQLite (`prod.db`) **ou** PostgreSQL — definido por `DATABASE_URL`
+- **Local e servidor**: **MySQL 8.4** (definido por `DATABASE_URL`; ver README → "Ambiente local oficial")
 - **Schema**: arquivo único `apps/backend/prisma/schema.prisma` (fonte da verdade)
 - **Migrations**: pasta `apps/backend/prisma/migrations/`
+- **Testes de banco:** bancos descartáveis (`allka_test`), via `apps/backend/scripts/run-db-tests.ts` — nunca o banco real.
+
+### Tabelas do catálogo atual (`catalog2_*`)
+Produto, versões, tarefas, etapas, variações, opções, efeitos das opções, adicionais, condições, conexões/acessos, modelos globais ("Tarefa #ID"/"Etapa #ID": `catalog2_task_models`, `catalog2_step_models`), cotações, pedidos de alteração. Descrição funcional em [cadastro-produto-passo-a-passo.md](./cadastro-produto-passo-a-passo.md).
+
+### Migrations recentes (todas aditivas)
+| Migration | O que faz |
+| --- | --- |
+| `20261011120000_platform_theme` | Tema da plataforma salvo no servidor |
+| `20261012150000_chat_whatsapp` | Chat estilo WhatsApp (mídia, apagar mensagem, configurações do admin) |
+| `20261014120000_ai_free_changes_per_step` | Cota de alterações por IA grátis por etapa |
+| `20261014130000_access_shared_with_steps` | Acessos compartilhados entre etapas |
+| `20261014140000_step_hybrid_ai_option` | Etapa "Humano ou IA" (opção IA com especialidade/tempo) |
+| `20261014150000_step_qualifier_kind` | Tipo de qualificador da etapa (líder, pessoa, líder + pessoa, nômades qualificadores) |
+| `20261014160000_variation_option_description_examples` | Descrição/exemplos/links/arquivo-modelo nas opções de variação |
+| `20261015120000_nomad_qualifier_pool` | `Nomade.is_qualifier` + `ProjectTaskStage.qualificador_pool` (grupo/rodízio de qualificadores) |
+| `20261015130000_variation_base_included` | `Catalog2Variation.base_included` (variação já incluída no produto original) |
+| `20261015140000_option_effect_specialty` | `Catalog2OptionEffect.specialty_id` (horas extras com especialidade própria) |
+| `20261015150000_qualifier_cost_default_20` | Custo do qualificador padrão = 20% |
 
 ---
 

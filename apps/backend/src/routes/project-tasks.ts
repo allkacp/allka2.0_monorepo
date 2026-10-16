@@ -1,5 +1,8 @@
 import { Router } from "express";
-import { validateBriefingAnswers } from "../lib/catalog2-question-types";
+import fs from "fs";
+import multer from "multer";
+import { validateBriefingAnswers, questionIsActive, type SnapshotQuestion } from "../lib/catalog2-question-types";
+import { BriefingFileError, briefingFilePath, checkAndStoreBriefingFile, fileRulesOf } from "../lib/briefing-files";
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
@@ -15,7 +18,7 @@ import { findUnmetCatalog2Dependency, transitionNeedsDependencyGate, CATALOG2_ST
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { recordApprovedTask } from "../lib/memory-service";
 import { assertTaskStatusTransitionAllowed, TaskStatusGuardError } from "../lib/task-release-guard";
-import { decideContinuity, ContinuityError, CONTINUITY_CHOICES } from "../lib/catalog2-continuity";
+import { decideContinuity, ContinuityError, CONTINUITY_CHOICES, requireDispensedStage } from "../lib/catalog2-continuity";
 import { audienceOf, canSee, type Visibility } from "../lib/catalog2-ops";
 import { listDeliverablesFor, submitDeliverable, reviewDeliverable, type DeliverableActor } from "../lib/task-deliverables";
 import { getTaskAIConfig, runTaskAI, adoptRun, discardRun, listRuns, canRunAI } from "../lib/task-ai";
@@ -149,6 +152,17 @@ async function rejectInvalidBriefing(
       }
     }
   } catch { /* snapshot ilegível: não bloqueia */ }
+  // Anexos: toda referência precisa ser de um arquivo realmente enviado para ESTA tarefa e ESTA pergunta (nunca aceita caminho/URL de fora).
+  for (const a of answers) {
+    if (!a.files) continue;
+    let arr: unknown;
+    try { arr = JSON.parse(a.files); } catch { continue; }
+    if (!Array.isArray(arr)) continue;
+    const refs = arr.filter((x): x is { id: string } => !!x && typeof x === "object" && typeof (x as { id?: unknown }).id === "string");
+    if (refs.length === 0) continue;
+    const found = await prisma.taskBriefingFile.findMany({ where: { id: { in: refs.map((r) => r.id) }, project_task_id: task.id, question_key: a.question_key }, select: { id: true } });
+    if (found.length !== new Set(refs.map((r) => r.id)).size) errors.push({ key: a.question_key, message: "Há anexo que não foi enviado por esta pergunta." });
+  }
   if (errors.length === 0) return false;
   res.status(422).json({ error: errors[0].message, code: "briefing_invalid", errors });
   return true;
@@ -1493,6 +1507,77 @@ router.put(
   },
 );
 
+// ── Anexos das respostas do questionário (armazenamento seguro) ─────────────────────────────────────
+// POST envia UM arquivo para UMA pergunta (valida extensão, tipo real e tamanho no servidor); GET baixa; DELETE remove (quem enviou ou admin).
+// Nenhum caminho interno é exposto: o cliente só conhece o id do anexo. Registra quem enviou, quando e a qual pergunta pertence.
+const briefingFileUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024, files: 1 } });
+async function visibleBriefingTask(req: Request, res: Response) {
+  const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+  if (scopeWhere === null) { res.status(404).json({ error: "Tarefa não encontrada" }); return null; }
+  const task = await prisma.projectTask.findFirst({ where: applyScope({ id: req.params.id as string }, scopeWhere), select: { id: true, briefing_snapshot: true, project_id: true } });
+  if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return null; }
+  return task;
+}
+const fileView = (r: { id: string; original_name: string; size_bytes: number; mime_type: string; description: string | null; created_at: Date; uploaded_by_user_id: string; question_key?: string }) =>
+  ({ id: r.id, ...(r.question_key ? { question_key: r.question_key } : {}), name: r.original_name, size: r.size_bytes, mime_type: r.mime_type, description: r.description, uploaded_at: r.created_at, uploaded_by: r.uploaded_by_user_id });
+router.post("/:id/briefing/files", verifyToken, briefingFileUpload.single("file"), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const task = await visibleBriefingTask(req, res); if (!task) return;
+    if (!req.file) { res.status(400).json({ error: "Nenhum arquivo enviado.", code: "file_required" }); return; }
+    const questionKey = String(req.body?.question_key ?? "").trim();
+    const description = String(req.body?.description ?? "").trim().slice(0, 1000) || null;
+    let questions: SnapshotQuestion[] = [];
+    try { const p = task.briefing_snapshot ? JSON.parse(task.briefing_snapshot) : []; questions = Array.isArray(p) ? p : []; } catch { questions = []; }
+    const q = questions.find((x) => x.question_key === questionKey);
+    if (!q || !questionIsActive(q.settings)) { res.status(404).json({ error: "Pergunta não encontrada ou desativada.", code: "question_not_found" }); return; }
+    const rules = fileRulesOf({ question_type: (q as unknown as { question_type?: string }).question_type, type: q.type, settings: q.settings, validation: q.validation });
+    if (rules.maxFiles != null) {
+      const count = await prisma.taskBriefingFile.count({ where: { project_task_id: task.id, question_key: questionKey } });
+      if (count >= rules.maxFiles) { res.status(422).json({ error: "Esta pergunta aceita no máximo " + rules.maxFiles + " arquivo(s).", code: "briefing_file_limit" }); return; }
+    }
+    if (q.settings?.attachments?.require_description && !description) { res.status(422).json({ error: "Descreva o arquivo antes de enviar.", code: "briefing_file_description_required" }); return; }
+    const originalName = Buffer.from(req.file.originalname, "latin1").toString("utf8");
+    let stored;
+    try { stored = checkAndStoreBriefingFile(originalName, req.file.buffer, rules); }
+    catch (e) { if (e instanceof BriefingFileError) { res.status(e.statusCode).json({ error: e.message, code: e.code }); return; } throw e; }
+    const row = await prisma.taskBriefingFile.create({
+      data: { project_task_id: task.id, question_key: questionKey, original_name: stored.name, stored_name: stored.storedName, mime_type: stored.mime, detected_kind: stored.kind, size_bytes: stored.size, description, uploaded_by_user_id: req.user!.id },
+    });
+    res.status(201).json({ file: fileView(row) });
+  } catch (err) { next(err); }
+});
+router.get("/:id/briefing/files", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const task = await visibleBriefingTask(req, res); if (!task) return;
+    const rows = await prisma.taskBriefingFile.findMany({ where: { project_task_id: task.id }, orderBy: { created_at: "asc" } });
+    res.json({ data: rows.map(fileView) });
+  } catch (err) { next(err); }
+});
+router.get("/:id/briefing/files/:fileId/download", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const task = await visibleBriefingTask(req, res); if (!task) return;
+    const row = await prisma.taskBriefingFile.findFirst({ where: { id: req.params.fileId as string, project_task_id: task.id } });
+    const p = row ? briefingFilePath(row.stored_name) : null;
+    if (!row || !p || !fs.existsSync(p)) { res.status(404).json({ error: "Arquivo não encontrado." }); return; }
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + encodeURIComponent(row.original_name));
+    fs.createReadStream(p).pipe(res);
+  } catch (err) { next(err); }
+});
+router.delete("/:id/briefing/files/:fileId", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const task = await visibleBriefingTask(req, res); if (!task) return;
+    const row = await prisma.taskBriefingFile.findFirst({ where: { id: req.params.fileId as string, project_task_id: task.id } });
+    if (!row) { res.status(404).json({ error: "Arquivo não encontrado." }); return; }
+    if (row.uploaded_by_user_id !== req.user!.id && !isAdminUser(req.user)) { res.status(403).json({ error: "Só quem enviou o arquivo (ou o administrador) pode removê-lo." }); return; }
+    await prisma.taskBriefingFile.delete({ where: { id: row.id } });
+    const p = briefingFilePath(row.stored_name);
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 // ── PATCH /api/project-tasks/:id/submit-briefing ─────────────────────────────
 // Agência finaliza o briefing e envia para análise do líder
 // Transitions: EM_LANCAMENTO | AGUARDANDO_INFORMACOES | DEVOLVIDA_PARA_AGENCIA
@@ -2710,6 +2795,20 @@ router.post("/:id/etapas/:stageId/avisar-cliente", verifyToken, validate(z.objec
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof EtapaDecisaoError) { res.status(err.httpStatus).json({ error: err.message }); return; }
+    next(err);
+  }
+});
+
+// O administrador EXIGE uma etapa que a continuidade do executor tinha dispensado (justificativa obrigatória; fica no histórico do projeto).
+router.post("/:id/etapas/:stageId/exigir", verifyToken, validate(z.object({ justificativa: z.string().min(5).max(1000) })), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!isAdminUser(req.user)) { res.status(403).json({ error: "Somente o administrador exige uma etapa dispensada." }); return; }
+    const etapa = await etapaDaTarefa(req.params.id as string, req.params.stageId as string);
+    if (!etapa) { res.status(404).json({ error: "Etapa não encontrada" }); return; }
+    await prisma.$transaction((tx) => requireDispensedStage(tx, etapa.id, { actorUserId: req.user!.id, reason: req.body.justificativa }));
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof ContinuityError) { res.status(err.httpStatus).json({ error: err.message }); return; }
     next(err);
   }
 });

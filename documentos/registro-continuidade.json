@@ -1,20 +1,25 @@
 {
-  "atualizado_em": "2026-10-14",
+  "atualizado_em": "2026-10-17",
   "como_retomar": [
     "Abra a IA (Claude ou ChatGPT/Codex) na pasta do projeto `allka-plataforma/allka-2026` e diga: \"Leia o documento documentos/Registro de Continuidade Produtos Allka.md e continue de onde paramos.\"",
-    "ANTES DE TUDO: confira se o Docker Desktop está aberto. Se não estiver, abra (Windows: \"C:Program FilesDockerDockerDocker Desktop.exe\") e espere ficar pronto. Depois, na pasta allka-2026: `docker compose up -d` e confira `docker compose ps` (mysql, backend, frontend e browser-runner precisam estar Up). Backend responde em http://localhost:3001, frontend em http://localhost:3000.",
+    "ANTES DE TUDO: confira se o Docker Desktop está aberto. Se não estiver, abra (Windows: C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe) e espere ficar pronto; se ele \"caiu\" ou não inicia, rode o script iniciar-docker.ps1 (fica na pasta acima do repositório, fora do Git). Depois, na pasta allka-2026: `docker compose up -d` e confira `docker compose ps` (mysql, backend, frontend e browser-runner precisam estar Up). Backend responde em http://localhost:3001 e o frontend em http://localhost:8082 (editor: http://localhost:8082/admin/cadastro-produtos/1).",
     "O texto-fonte deste documento é documentos/registro-continuidade.json; o .docx e o .md são gerados com: node scripts/create_continuity_document.cjs. Atualize a cada bloco concluído.",
     "Regras fixas: o computador local é a referência. Nada vai para o ar (allka.store, ambiente de QA) sem ordem explícita do usuário. Deploy de código = `git push allka2 HEAD:main` (só com ordem). Sempre backup antes de mexer em dados; migrações só aditivas, sem apagar dado. Nunca inventar dados de produto.",
     "O usuário é leigo em código: fechar cada tarefa com resumo em linguagem simples (o que deu e o que não deu certo) e a tabela de situação (farol).",
-    "O documento final detalhado (todos os itens e o que cada um faz) só deve ser feito no FIM do escopo de outubro, na hora de subir. Não fazer antes."
+    "O documento final detalhado (todos os itens e o que cada um faz) só deve ser feito no FIM do escopo de outubro, na hora de subir. Não fazer antes.",
+    "Para ENTENDER o produto e o cadastro item por item: leia docs/cadastro-produto-passo-a-passo.md (5 passos, todos os campos, glossário, o que bloqueia a publicação, ficha modelo) e a seção \"Cadastro de produtos (catalog2)\" de docs/regras-de-negocio.md. Para a IA (Codex/ChatGPT) montar a ficha de um produto novo: docs/prompt-codex-cadastro-produto.md (entrega em entregas/produtos/<produto>/)."
   ],
   "estado_atual": [
+    "17/10 (LOCAL, sem commit/push/deploy/publicação): CONSTRUTOR UNIVERSAL DE QUESTIONÁRIO. Bloco Questionário de contratação e bloco Entregáveis em largura total, um abaixo do outro; perguntas compactas e recolhíveis (ordenar, duplicar, excluir, ativar/desativar); 22 tipos de resposta; opções editáveis/ordenáveis com padrão, \"Outro\" e mín/máx; anexos por pergunta (tipos, quantidade, tamanho, descrição, obrigatório) com armazenamento seguro (extensão + tipo real + tamanho validados no servidor; autor/data/pergunta registrados); lógica condicional sem código (9 operadores); seções; IDs permanentes de pergunta/questionário e versão do questionário; reutilizar (por ID, nome, pergunta, produto, categoria, especialidade), vincular sincronizado ou como cópia independente, modelo global, duplicar; edição protegida de modelo compartilhado (cópia ou editar o modelo com confirmação); prévia \"como o cliente vê\"; cliente responde em campo único para todos os tipos (rascunho nunca bloqueia; obrigatórias só no envio final). IA gera perguntas com os mesmos tipos/configurações. Migração 20261017100000_questionnaire_builder_v2 (aditiva; tabela task_briefing_files) aplicada no banco local. Produto ID 1 não foi tocado (V1 — Rascunho).",
+    "16/10 (tarde, LOCAL, sem commit/push/deploy/publicação): CORREÇÃO DE MODALIDADES E PRIMEIRA EXECUÇÃO. Só existem Avulso e Assinatura mensal; a implantação nasce das etapas \"Só na primeira execução\" (primeira cobrança + 1º ciclo do produto no projeto; fora da renovação); preço separado em simulador, memória, cotação, cesta, checkout, contrato, projeto; etapa com horas e sem especialidade deixa o preço \"A definir\" e cita a etapa; continuidade do executor com cartão no Passo 2 (aceite, indisponível, depois do prazo, mesmo projeto, acessos), crédito por etapa dispensada; painel operacional da tarefa (admin): \"Exigir etapa\" (só quando ainda permitido) e \"Programar/Cancelar repetição da primeira execução\" (justificativa obrigatória + histórico); questionário e entregáveis com tela completa; produto individual sem dependência entre tarefas; \"somente em pacote\" em Pacotes (Impedir venda separada); assinatura sem \"nova entrega todo mês\" bloqueia a publicação. Migração 20261016120000 (aditiva) aplicada no banco local. Produto ID 1: só valores técnicos normalizados (script catalog2-normalize-product-1.ts), CONTINUA EM RASCUNHO; a etapa \"Validação e organização dos acessos\" (300 min) está SEM especialidade → preço \"A definir\" até o usuário escolher. Testes: backend novos 15 + 19 + 12 (todos verdes); regressão completa de 151 arquivos sem falha nova (falhas antigas: catalog2-catalog, catalog2-import, catalog2-product-history, project-admin-responsible, project-edit-admin-responsible, alert-images-schedules, clean-zero-datetimes — todas idênticas na base limpa); frontend focado 39 verdes (as 64 falhas de produtos/page.test e catalogo-produtos/page.test são as mesmas da base limpa).",
+    "16/10 (continuidade, local): preço fica como “A definir” quando uma etapa humana com horas está sem especialidade; o aviso identifica a etapa, e implantação, renovação e avulso não inventam valor. No painel operacional da tarefa, só para administração, foram acrescentados: exigir uma etapa dispensável pela continuidade (com justificativa e registro do efeito) e programar/cancelar a repetição da primeira execução no próximo ciclo (com justificativa). O botão de exigir só aparece quando a ação ainda é permitida. Testes de interface focados: 15/15. Sem deploy, publicação ou alteração de dados de produto.",
+    "16/10 (documentação, local): README atualizado (estado atual, Docker/MySQL, tabela de documentos), guia novo docs/cadastro-produto-passo-a-passo.md (cadastro item por item com a ficha modelo), prompt pronto para o Codex (docs/prompt-codex-cadastro-produto.md), texto extraído do Produto ID 1 como modelo de profundidade (entregas/produtos/gestao-trafego-pago/), regras de negócio/telas/banco/produtos(legado) atualizados, AGENTS.md e CLAUDE.md com leitura obrigatória. Nada disso mexe no sistema; só sobe ao GitHub com ordem do usuário. Estado no ar: deploy-2026-10-15-1 + espelho do banco local em 15/10. Pendente de decisão do usuário: o README (repositório público) cita e-mail e senha de teste do admin e a senha das contas de teste.",
     "15/10 (tarde, local): itens 8 e 9 conferidos pelo usuário; itens 2, 3, 4, 6 verdes; 5 (layout) fora do farol por decisão dele (revisão geral de telas depois). Feitos: padrão = o que o produto original já inclui (variação com base_included; opção padrão sem horas extras, servidor recusa e remove ao virar padrão); horas extras escolhem etapa/tarefa inteira + especialidade própria (specialty_id no efeito; preço usa o valor/hora dela); custo do qualificador dentro da etapa (percentual global padrão 20%, configurável em Precificação, migração preenche vazios); grupo de nômades qualificadores (Nomade.is_qualifier + rodízio, ProjectTaskStage.qualificador_pool); tela ÚNICA de qualificação de etapas /qualificacoes (nômade, líder, admin) com API /api/qualificacoes; loader padronizado (PageLoader com geometria única + trocas de spinners soltos). Migrações: 20261015120000, 130000, 140000, 150000. Testes: tela 88 (editor), servidor 29 (preço v2), 9 (variações/acessos), 2 (qualificações), 4 (pool).",
     "14/10 (manhã e tarde, local): cadastro do produto refinado — acessos por etapa (lista a partir do catálogo de tipos, compartilhar com outras etapas, guardar ao desligar, transferir a etapa mãe), resumo por acesso embaixo, limpar tarefa com restauração, resumo único da tarefa, etapa Humano ou IA (duas opções), cota de alterações por IA por etapa, anexos nos entregáveis, quem vê cada campo. Migrações aplicadas no banco local: ai_free_changes_per_step, access_shared_with_steps, step_hybrid_ai_option, step_qualifier_kind, variation_option_description_examples.",
     "14/10 (noite, após reunião das 18h09): feitos 1–9 da ata — prompt da IA por etapa (ops.ai_prompt, vai para a etapa do projeto e para a execução da IA), salvar rascunho mantém a edição ativa, classificação sem botão salvar/divergência (salva com o rascunho), qualificação liga/desliga + quem qualifica (líder, pessoa, líder e pessoa, nômades qualificadores) e execução por etapa na tarefa, checklist de conferência só com qualificação ligada, prévia do checklist/orientações, variações com horas extras por etapa, descrição curta, links e arquivo-modelo por opção (também visíveis ao cliente).",
     "13/10: chat novo (estilo WhatsApp: mídia, apagar mensagem, janela destacada, configurações do Admin) e tema da plataforma salvo no servidor estão prontos no local. Migrações 20261011120000_platform_theme e 20261012150000_chat_whatsapp aplicadas no banco local; backend sobe sem erro; Chat > Nova conversa retorna usuários para Admin, Agência, Empresa e Nômade (testado pela API).",
-    "Código salvo no GitHub na branch `revisao-plataforma-2026-10-11` (repositório allkacp/allka2.0_monorepo, commit 6f94554). Sem merge na main e sem deploy. Para publicar: abrir PR para main ou `git push allka2 HEAD:main`, só com ordem do usuário.",
-    "allka.store (QA) está com a versão de 08/10 (espelho completo do local naquela data). Tudo de 10/10 a 13/10 (revisão de desempenho, chat, tema, modais/fontes/mobile) ainda NÃO foi ao ar.",
+    "Código no GitHub: branch main do repositório allkacp/allka2.0_monorepo (remote allka2); último deploy deploy-2026-10-15-1 (commit 0d6f3fb + registros 82bb63b, 88f4f7c, 23e76db). A branch local de trabalho é revisao-plataforma-2026-10-11. A documentação de 16/10 ainda não foi enviada (só com ordem do usuário).",
+    "allka.store (QA) está igual ao computador local de 15/10: código do deploy-2026-10-15-1 e banco espelhado do local (workflow mirror-local-to-qa.yml, com backup antes e contagens conferidas depois). Tudo que o usuário fizer no local depois disso só chega lá com nova ordem dele (deploy de código e/ou novo espelho).",
     "Pagamentos: painel Configurações > Pagamentos pronto (PagBank principal, chaves cifradas, ativação com senha Master, Testar conexão, recarga Pix/cartão na página segura do PagBank, estorno, consulta de status). Usuário confirmou que o painel está certo. Falta só o token sandbox do PagBank para testar de verdade. Não feitos: cobrança mensal com cartão guardado; Asaas/Mercado Pago/Stripe só reservados.",
     "Próximo: o usuário vai testar coisas novas e pedir ajustes. P-4, P-13 e P-16 foram RETIRADOS da lista (13/10): serão retestados na próxima reunião; só voltam se o erro aparecer de novo."
   ],
@@ -60,8 +65,80 @@
       "1) O CLIENTE APROVA CADA ETAPA, depois da qualificação, exceto etapas INTERNAS (ex.: validação de briefing/acessos): essas o cliente não vê nem aprova; só vê que está em execução. Se a validação interna achar problema, dá para ENVIAR AO CLIENTE (\"está errado isso aqui\") e aí ele vê. 2) PAGAMENTO CONFIGURÁVEL no cadastro do produto/tarefa: (a) o nômade recebe ao concluir/aprovar cada etapa, ou (b) o crédito de cada etapa fica BLOQUEADO e é liberado na carteira só quando a última etapa terminar. Deve funcionar para qualquer produto (uns marcam, outros não). 3) Prazo de aceite do nômade preferido: 2 horas, CONFIGURÁVEL. Também: especialidades IA/híbridas distintas; \"humano ou IA\" = a agência escolhe na contratação."
     ]
   ],
-  "checklist_titulo": "Situação dos itens (reuniões de 05/10 e 07/10 e trabalho até 13/10)",
+  "checklist_titulo": "Situação dos itens (reuniões de 05/10, 07/10 e 14/10 e trabalho até 16/10)",
   "checklist": [
+    [
+      "R14-1",
+      "Ata 14/10 · 1 Prompt da IA em cada etapa (vai para a etapa do projeto e para a execução da IA)",
+      "NAO FEITO",
+      "REPROVADO pelo usuário na conferência de 15/10; o MOTIVO ainda não foi informado (aguardando). Implementado em ops.ai_prompt (aparece só com IA ou Humano ou IA); testes automáticos passam."
+    ],
+    [
+      "R14-2",
+      "Ata 14/10 · 2 Salvar mais simples e edição que não fecha",
+      "FEITO",
+      "Conferido pelo usuário (verde). Sem 'Salvar informações'/'Salvar alterações'; 'Salvar rascunho' mantém a edição ativa; aviso verde/vermelho no centro; F5 volta ao mesmo lugar e com os blocos abertos; botão apagado sem mudança."
+    ],
+    [
+      "R14-3",
+      "Ata 14/10 · 3 Liga/desliga de qualificação por etapa",
+      "FEITO",
+      "Conferido pelo usuário (verde), incluindo a etapa Humano ou IA com duas configurações (IA sempre qualificada)."
+    ],
+    [
+      "R14-4",
+      "Ata 14/10 · 4 Quem qualifica (líder, pessoa, líder e pessoa, nômades qualificadores) + 'Esta tarefa executa por etapa'",
+      "FEITO",
+      "Verde por decisão do usuário. O grupo de nômades qualificadores (rodízio, só na área habilitada, nunca o executor, líder como reserva) foi feito em 15/10; o teste visual desse grupo fica para depois."
+    ],
+    [
+      "R14-5",
+      "Ata 14/10 · 5 Layout do checklist e das orientações",
+      "ADIADO",
+      "Fora do farol por decisão do usuário: revisão geral de layout de todas as telas depois."
+    ],
+    [
+      "R14-6",
+      "Ata 14/10 · 6 Limpar a Classificação (sem botão salvar/divergência)",
+      "FEITO",
+      "Conferido pelo usuário (verde). Grava com o Salvar rascunho, ao trocar de passo ou ao publicar."
+    ],
+    [
+      "R14-7",
+      "Ata 14/10 · 7 Variações com horas extras por etapa (opção padrão = produto original)",
+      "FEITO (aguardando conferência)",
+      "Amarelo: a regra padrão x extra será validada com o Gabriel. Feito: variação incluída no original (base_included), opção padrão sem horas extras, horas extras por etapa/tarefa inteira com especialidade própria, editar/excluir variação e opção. 'Duplicar opção' ainda não existe."
+    ],
+    [
+      "R14-8",
+      "Ata 14/10 · 8 Descrição curta e links de exemplo na opção",
+      "FEITO",
+      "Conferido pelo usuário (verde)."
+    ],
+    [
+      "R14-9",
+      "Ata 14/10 · 9 Arquivo-modelo na opção (anexar, remover, baixar)",
+      "FEITO",
+      "Conferido pelo usuário (verde)."
+    ],
+    [
+      "R14-X1",
+      "Extras pedidos fora da ata: tela única de qualificação (nômade, líder, admin), custo do qualificador 20% configurável, padronização do carregamento",
+      "FEITO (aguardando conferência)",
+      "Amarelo: feitos e testados em automático; o usuário ainda vai testar na tela."
+    ],
+    [
+      "R14-X2",
+      "Deploy e espelho de 15/10",
+      "FEITO",
+      "deploy-2026-10-15-1 (código + migrações) e espelho do banco local → allka.store conferidos (saúde ok, site 200, contagens iguais). Registro em docs/deploy-log.md."
+    ],
+    [
+      "DOC-16",
+      "Documentação para ChatGPT/Codex (README, guia do cadastro item por item, prompt do Codex)",
+      "FEITO (aguardando conferência)",
+      "Docs criados/atualizados em 16/10, só no local (ver docs/deploy-log.md → Pendente de deploy). O usuário vai pedir ao Codex que monte a ficha de um produto novo para depois cadastrar manualmente."
+    ],
     [
       "R07-D",
       "Reunião 07/10: decisões D-1 a D-9 (níveis de agência, sob consulta → contratação pela equipe, executor humano/IA/híbrido, liberação automática da próxima etapa, qualificação líder/especialista, evidências obrigatórias, IA gera questionário, editar etapa global/própria, preferir mesmo executor)",
@@ -343,16 +420,78 @@
       "Histórico real de cada etapa (automático) e aprovações/prazos dentro da própria etapa",
       "FEITO (aguardando conferência visual)",
       "A aba \"Visão geral: aprovações e prazos\" foi REMOVIDA. Aprovações e prazos de cada etapa ficam dentro da etapa; as aprovações e prazos GERAIS do produto (implantação, ciclo recorrente, relatório, publicação) foram para o fim da aba \"Prazos e condições\" (Classificação e opções). Histórico real da etapa segue dentro da etapa."
+    ],
+    [
+      "R16-1",
+      "Modalidades só Avulso e Assinatura mensal; implantação por etapas \"Só na primeira execução\"",
+      "FEITO (aguardando conferência visual)",
+      "Preço, cotação, contrato e renovação separados; produto antigo preservado; campos antigos sem tela e sem bloquear publicação."
+    ],
+    [
+      "R16-2",
+      "Preço \"A definir\" quando etapa com horas está sem especialidade",
+      "FEITO (aguardando conferência visual)",
+      "O aviso cita a etapa. Vale em simulador/cotação. Produto 1: etapa \"Validação e organização dos acessos\" precisa de especialidade."
+    ],
+    [
+      "R16-3",
+      "Continuidade do executor (cartão do Passo 2) + crédito por etapa dispensada",
+      "FEITO (aguardando conferência visual)",
+      "Modo, aceite em horas, se indisponível, depois do prazo, só no mesmo projeto, revalidação dos acessos."
+    ],
+    [
+      "R16-4",
+      "Painel da tarefa (admin): exigir etapa dispensada e repetir a primeira execução",
+      "FEITO (aguardando conferência visual)",
+      "Exigir só aparece se ainda permitido; repetir primeira execução é programar/cancelar com justificativa (mín. 10 caracteres) e fica no histórico."
+    ],
+    [
+      "R16-5",
+      "Questionário, entregáveis, pacote \"Impedir venda separada\", sem dependência entre tarefas no produto individual",
+      "FEITO (aguardando conferência visual)",
+      "Telas e regras novas; ver docs/cadastro-produto-passo-a-passo.md."
+    ],
+    [
+      "R17-1",
+      "Construtor universal de questionário (22 tipos, configuração por pergunta, seções, condições, anexos seguros)",
+      "FEITO (aguardando conferência visual)",
+      "Backend 12 testes novos; frontend 50 testes novos; regressão sem falha nova."
+    ],
+    [
+      "R17-2",
+      "Reutilização e proteção de modelo compartilhado (sincronizado × cópia, modelo global, duplicar, ID/versão)",
+      "FEITO (aguardando conferência visual)",
+      "Editar modelo usado por 2+ tarefas pergunta a escolha; contratos já feitos não mudam."
+    ],
+    [
+      "R17-3",
+      "Questionário e Entregáveis em largura total, um abaixo do outro, responsivo",
+      "FEITO (aguardando conferência visual)",
+      "Somente posição/largura do bloco de Entregáveis foi alterada."
     ]
   ],
   "validacao_pendente": [
+    "Usuário: conferir na tela o roteiro de 17/10 (construtor de questionário: tipos, anexos, condições, seções, reutilização, edição de modelo compartilhado, prévia).",
+    "Usuário: conferir na tela local o roteiro de 16/10 (especialidade ausente, exigir etapa dispensada, repetir e cancelar a primeira execução) e escolher a especialidade da etapa \"Validação e organização dos acessos\" do Produto 1.",
+    "Usuário: dizer o MOTIVO da reprovação do item 1 (prompt da IA por etapa) para o ajuste.",
+    "Usuário: testar na tela o grupo de nômades qualificadores (marcar nômade, escolher \"Nômades qualificadores\" na etapa, abrir a tela Etapas para qualificar), horas extras com especialidade própria, custo do qualificador (Precificação) e os novos carregamentos.",
+    "Reunião com o Gabriel: validar a regra de variação/opção padrão x extra (item 7).",
+    "Usuário: decidir sobre o README público (e-mail/senha de teste do admin) e sobre o release antigo catalog2-transfer-2026-09-17 no GitHub (apagar?).",
     "Usuário: abrir a plataforma, atualizar a página e conferir Chat > Nova conversa na tela (a API já retorna os usuários).",
     "Usuário: enviar o token sandbox do PagBank para testar conexão e uma recarga real de teste.",
     "Próxima reunião: retestar o cadastro de produto (antigos P-4, P-13, P-16) e relatar se algum erro voltar.",
     "Por último: P-2 (Neko) e, só com ordem, o espelho completo local → online (A12)."
   ],
-  "proximo_passo": "O usuário vai revisar os itens 1–9 da reunião de 14/10 um por um. Pendências conhecidas: fase 2 do Humano ou IA (cliente escolher/trocar na contratação), grupo de nômades qualificadores (hoje cai no líder), bloqueio por tipo de evidência, evidência obrigatória em revisão posterior, e a 'Inicialização rápida' do Windows (Docker).",
+  "proximo_passo": "O usuário vai pedir ao Codex que leia a plataforma (prompt em docs/prompt-codex-cadastro-produto.md) e monte a ficha de um produto novo, para depois cadastrá-lo manualmente na tela; e continua testando e pedindo ajustes de layout por print. Pendências conhecidas: motivo da reprovação do item 1; validação do item 7 com o Gabriel; fase 2 do Humano ou IA (cliente escolher/trocar na contratação); bloqueio de conclusão sem evidência; etapas sem qualificação nem aprovação em todo o fluxo do projeto; revisão geral de layout; \"Inicialização rápida\" do Windows (Docker). Ao fechar cada item, reenviar a tabela de farol completa.",
   "historico": [
+    [
+      "2026-10-16",
+      "Documentação para ChatGPT/Codex: README atualizado, guia do cadastro item por item, prompt do Codex, texto extraído do Produto ID 1, regras/telas/banco atualizados (só local)."
+    ],
+    [
+      "2026-10-15",
+      "Deploy deploy-2026-10-15-1 (código + migrações 20261014120000…20261015150000) e espelho do banco local → allka.store; itens 2, 3, 4, 6, 8, 9 da ata verdes; item 1 reprovado (motivo pendente); extras (qualificação unificada, horas extras com especialidade própria, custo do qualificador 20%, loaders) feitos."
+    ],
     [
       "2026-10-14",
       "Ajustes da reunião de 14/10 (itens 1–9) implementados e testados no local; revisão item a item pelo usuário pendente."
@@ -492,6 +631,14 @@
     [
       "2026-10-12/13",
       "Chat estilo WhatsApp, modais/fontes/mobile; migrações aplicadas no local; tudo commitado na branch revisao-plataforma-2026-10-11 (sem deploy). P-4/P-13/P-16 retirados para reteste."
+    ],
+    [
+      "2026-10-16",
+      "Correção de modalidades/primeira execução/continuidade (local); painel da tarefa com exigir etapa e repetir primeira execução; regressão completa sem falha nova; nada publicado."
+    ],
+    [
+      "2026-10-17",
+      "Construtor universal de questionário (local); anexos seguros; reutilização e versionamento; nada publicado."
     ]
   ]
 }

@@ -4,7 +4,7 @@
 // (qualificar, aprovar, pedir ajuste, liberar a próxima, avisar o cliente), os portões de aprovação, os prazos (SLA) e as entradas
 // recebidas de outros produtos. Os botões só aparecem quando o servidor diz que o perfil pode (can_*). Nada é calculado aqui.
 import { useCallback, useEffect, useState } from "react"
-import { CheckCircle2, Clock, GitBranch, Loader2, PauseCircle, PlayCircle, ShieldCheck } from "lucide-react"
+import { CheckCircle2, Clock, GitBranch, Loader2, PauseCircle, PlayCircle, ShieldCheck, RotateCcw } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
 
 export const STAGE_STATUS_LABEL: Record<string, { label: string; tone: string }> = {
@@ -33,6 +33,7 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
   const [responsibles, setResponsibles] = useState<{ key: string; label: string }[]>([])
   const [pause, setPause] = useState({ reason: "", party: "client", note: "" })
   const [history, setHistory] = useState<Record<string, any[]>>({})
+  const [forceReason, setForceReason] = useState("")
 
   const load = useCallback(() => { apiClient.getTaskFlowPanel(taskId).then(setFlow).catch(() => setFlow(null)) }, [taskId])
   useEffect(() => { load() }, [load, status])
@@ -63,6 +64,23 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
         <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Andamento da tarefa por etapa</h3>
       </div>
       {notice && <p role="status" className={`rounded-md px-2.5 py-1.5 text-xs ${notice.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{notice.text}</p>}
+
+      {flow.viewer?.is_admin && flow.task?.project_product_id && (
+        <section className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 text-xs dark:border-violet-800 dark:bg-violet-950/20" data-testid="force-first-execution-control">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><p className="font-semibold text-slate-800 dark:text-slate-100">Primeira execução</p><p className="mt-0.5 text-slate-600 dark:text-slate-300">Use apenas quando houver mudança estrutural. As etapas marcadas para a primeira execução voltarão no próximo ciclo.</p></div>
+            <span className={`rounded-full px-2 py-0.5 font-semibold ${flow.task.force_first_execution_next ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}>{flow.task.force_first_execution_next ? "Solicitada para o próximo ciclo" : "Sem solicitação"}</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <input aria-label="Justificativa para repetir a primeira execução" value={forceReason} onChange={(e) => setForceReason(e.target.value)} placeholder="Justificativa da mudança estrutural" className="h-8 min-w-[16rem] flex-1 rounded-md border border-violet-200 bg-white px-2 dark:border-violet-800 dark:bg-slate-900" />
+            {flow.task.force_first_execution_next ? (
+              <button type="button" disabled={busy === "force-first" || forceReason.trim().length < 10} className={`${BTN} border-slate-300 bg-white text-slate-700`} onClick={() => run("force-first", () => apiClient.forceFirstExecution(flow.task.project_product_id, forceReason.trim(), true).then(() => setForceReason("")), "Solicitação de primeira execução cancelada.")}><RotateCcw className="h-3.5 w-3.5" />Cancelar</button>
+            ) : (
+              <button type="button" disabled={busy === "force-first" || forceReason.trim().length < 10} className={`${BTN} border-violet-300 bg-violet-700 text-white hover:bg-violet-800`} onClick={() => run("force-first", () => apiClient.forceFirstExecution(flow.task.project_product_id, forceReason.trim()).then(() => setForceReason("")), "Primeira execução será repetida no próximo ciclo.")}><RotateCcw className="h-3.5 w-3.5" />Repetir no próximo ciclo</button>
+            )}
+          </div>
+        </section>
+      )}
 
       {stageMode && stages.length > 0 && (
         <ol className="space-y-2">
@@ -104,6 +122,13 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
                           onClick={() => run(`w${e.id}`, () => apiClient.warnStageClient(taskId, e.id, comment(`w${e.id}`)).then(() => clear(`w${e.id}`)), "O cliente foi avisado e passa a ver esta etapa.")}>Avisar o cliente</button>
                       </div>
                     )}
+                  </div>
+                )}
+                {e.can_require_dispensed_stage && flow.viewer?.is_admin && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                    <span className="font-medium">Esta etapa pode ser exigida mesmo com continuidade.</span>
+                    <input aria-label={`Justificativa para exigir a etapa ${e.position}`} value={comments[`require${e.id}`] ?? ""} onChange={(ev) => setComment(`require${e.id}`, ev.target.value)} placeholder="Justificativa obrigatória" className="h-8 min-w-[14rem] flex-1 rounded-md border border-amber-200 bg-white px-2 text-slate-800" />
+                    <button type="button" disabled={busy === `require${e.id}` || comment(`require${e.id}`).length < 5} className={`${BTN} border-amber-300 bg-white text-amber-900`} onClick={() => run(`require${e.id}`, () => apiClient.requireDispensedStage(taskId, e.id, comment(`require${e.id}`)).then(() => clear(`require${e.id}`)), "Etapa exigida; a justificativa e o efeito financeiro foram registrados.")}>Exigir etapa</button>
                   </div>
                 )}
                 <button type="button" className="mt-1.5 text-[11px] font-semibold text-slate-500 underline" onClick={() => apiClient.getStageHistory(taskId, e.id).then((r) => setHistory((h) => ({ ...h, [e.id]: r.data }))).catch(() => {})}>
