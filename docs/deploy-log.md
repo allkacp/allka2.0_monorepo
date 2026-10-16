@@ -2,14 +2,23 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
-## Pendente de deploy (construtor universal de questionário — 2026-10-17, só LOCAL)
+## deploy-2026-10-16-1 — modalidades, primeira execução, continuidade, construtor de questionário (no ar em allka.store / api.allka.store)
+**Backup antes:** workflow "DB Backup (manual)", run 38965805385 (sucesso).
+**Subiu — Banco (migrations aditivas):** 20261016120000_first_execution_continuity_deliverables e 20261017100000_questionnaire_builder_v2 (colunas novas com padrão e a tabela task_briefing_files; nada apagado).
+**Subiu — Backend:** preço separado em implantação × recorrente, primeira execução por projeto, continuidade do executor com crédito, exigir etapa e repetir primeira execução (admin), construtor universal de questionário (22 tipos, anexos seguros, condições, seções, reutilização, versão), pacote "impedir venda separada", regras de preço "A definir" para etapa sem especialidade.
+**Subiu — Frontend:** modalidades só Avulso/Assinatura mensal, cobrança estimada e prontidão explicadas, cartão de continuidade, questionário e entregáveis em largura total, campo único de resposta do cliente (inclui lançamento em lote), painel da tarefa com os controles de admin.
+**Subiu — Docs:** guia do cadastro, regras de negócio, prompt do Codex, README, registro de continuidade.
+**Conferido:** Deploy Backend (run 38965877829) e Deploy Frontend (38965877883) verdes; api.allka.store/api/health = ok; allka.store = 200. CI do GitHub segue vermelho pelos mesmos testes antigos de tela (já falhavam antes).
+**NÃO subiu (dados):** nenhum dado local. O Produto ID 1 local (rascunho, valores técnicos normalizados) NÃO foi enviado; nenhum produto foi publicado. O servidor continua com os produtos da cópia de 15/10.
+
+### Construtor universal de questionário (feito em 17/10 no local; subiu junto)
 - **Banco:** migração aditiva `20261017100000_questionnaire_builder_v2` (colunas `settings_json` nas perguntas; `revision`, `source_questionnaire_id`, `sections_json`, `is_global_model` nos questionários; tabela nova `task_briefing_files`). Nada apagado nem reescrito. Aplicada só no banco local.
 - **Backend:** 22 tipos de pergunta; configuração por pergunta; condições por resposta anterior (9 operadores); anexos seguros (`lib/briefing-files.ts`: extensão + tipo real pelo conteúdo + tamanho; rotas `/api/project-tasks/:id/briefing/files`); IDs estáveis ao editar; versão do questionário; duplicar, modelo global, biblioteca de perguntas; vincular sincronizado ou como cópia; edição de modelo compartilhado com escolha (`shared_mode`); briefing congelado com ID/versão; IA com os mesmos tipos.
 - **Frontend:** construtor compacto (`catalog2-questionnaire-builder.tsx`, `catalog2-questions-ui.tsx`), campo único de resposta do cliente (`components/briefing-question-field.tsx`, usado na tarefa), prévia, bloco de Entregáveis abaixo do questionário em largura total.
 - A tela de lançamento em lote (`bulk-task-launch-drawer`) também usa o campo único para as perguntas do construtor.
 - **NÃO subiu:** nenhum deploy, push, publicação ou dado. Produto ID 1 não foi tocado.
 
-## Pendente de deploy (correção de modalidades, primeira execução e continuidade — 2026-10-16, só LOCAL)
+### Detalhes — modalidades, primeira execução e continuidade (16/10)
 - **Banco:** migração aditiva `20261016120000_first_execution_continuity_deliverables` (colunas novas com padrão; nada apagado). Já aplicada no banco local; **não** aplicada no QA/produção.
 - **Backend:** preço separado em implantação (etapas "Só na primeira execução") × recorrente; primeira execução por projeto; continuidade com prazo de aceite e crédito; "exigir etapa" e "repetir primeira execução" (admin, com justificativa); produto individual sem dependência entre tarefas; "impedir venda separada" no pacote; entregável condicional estruturado; etapa com horas sem especialidade → preço "A definir".
 - **Frontend:** cartão de continuidade, cobrança estimada, questionário e entregáveis completos, modalidades só Avulso/Assinatura mensal, pergunta "gera nova entrega todo mês?", painel operacional da tarefa (exigir etapa / repetir primeira execução), Pacotes.
@@ -17,7 +26,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - **Testes:** backend novos 15 + 19 + 12 verdes; regressão de 151 arquivos sem falha nova (falhas antigas idênticas na base limpa); frontend focado 39 verdes.
 - **NÃO subiu:** nenhum deploy, push, publicação de versão ou dado. Só sobe com ordem do usuário.
 
-## Pendente de deploy (documentação para ChatGPT/Codex — 2026-10-16, só LOCAL)
+### Docs para ChatGPT/Codex (16/10; subiram junto no deploy-2026-10-16-1)
 - **Docs (somente arquivos de texto; não muda o comportamento do sistema e não dispara deploy de backend/frontend, mas só vai para o GitHub com `git push allka2 HEAD:main`, sob ordem do usuário):**
   - Novo [cadastro-produto-passo-a-passo.md](./cadastro-produto-passo-a-passo.md): o cadastro de produto item por item (5 passos, todos os campos, glossário, o que bloqueia a publicação, ficha modelo).
   - Novo [prompt-codex-cadastro-produto.md](./prompt-codex-cadastro-produto.md): prompt pronto para o Codex/ChatGPT ler a plataforma e montar a ficha de um produto.
