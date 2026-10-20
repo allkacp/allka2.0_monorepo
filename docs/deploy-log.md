@@ -3,7 +3,9 @@
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
 ## deploy-2026-10-20-1 — etapas/entregáveis universais, modelos globais, Painel Moldura e novo layout do cadastro (subindo em 20/10 com autorização expressa do usuário)
-**Backup antes:** workflow "DB Backup (manual)", run 39514689409.
+**Backup antes:** workflow "DB Backup (manual)", run 39514689409 (sucesso). Commit c4192be.
+**Conferido:** Deploy Backend (run 39514830452) e Deploy Frontend (39514830467) verdes; api.allka.store/api/health = ok; allka.store = 200; endpoint de login responde (401 para credencial errada, como esperado).
+**Espelho de DADOS 100%: NÃO feito neste deploy** — a ferramenta de execução bloqueou o envio do dump do banco local (usuários, hashes de senha) para um release público do GitHub; aguarda decisão do usuário. O servidor continua com a cópia de dados de 15/10 (+ as migrações novas aplicadas). Workflow pronto: mirror-local-to-qa.yml.
 **Banco (migrações ADITIVAS):** 20261018120000_step_draft_and_access_conditions e 20261018180000_deliverable_draft (colunas novas com padrão; nada apagado; há rollback.sql).
 **Backend:** edição de modelos globais (novo modelo × edição global, propagação só para rascunhos), rascunho de etapa/entregável/acessos, condição estruturada dos acessos, aprovação do cliente explícita, ajustes do stage-engine.
 **Frontend:** Painel Moldura (container grande com contorno violeta, margem de 30 px + 10 px internos, acompanha a sidebar), Janela Moldura (janela menor com véu claro), Abrir/Fechar todos nos acordeões, numeração em degradê, abas 1 a 5 do cadastro sem o container do meio e com espaçamentos padronizados, questionário/entregáveis/fluxo/variações/adicionais/prazos abrindo em painel, produto novo abre direto editável, camada (z-index) padrão de janelas elevada. Docs: padroes-globais.md, RETOMAR-AQUI.md e relatórios.
