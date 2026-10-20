@@ -790,9 +790,24 @@ async function seguirParaEspecialistaOuAprovacao(db: Db, stage: StageComTarefa, 
   return seguirParaAprovacaoOuConcluir(db, stage, opts, agora, round);
 }
 
+/** Modo de aprovação do cliente guardado no snapshot da etapa (nulo = comportamento anterior). */
+export function modoAprovacaoCliente(stage: { config_snapshot?: string | null }): "none" | "step" | "deliverables" | "awareness" | null {
+  try { const m = JSON.parse(stage.config_snapshot ?? "{}")?.client_approval_mode; return m === "none" || m === "step" || m === "deliverables" || m === "awareness" ? m : null; } catch { return null; }
+}
+/** A etapa passa pela aprovação do cliente? Visível ao cliente E sem o modo "não" / "apenas ciência" (que seguem sem bloquear). */
+export function exigeAprovacaoDoCliente(stage: { visivel_ao_cliente: boolean; config_snapshot?: string | null }): boolean {
+  const modo = modoAprovacaoCliente(stage);
+  return stage.visivel_ao_cliente && modo !== "none" && modo !== "awareness";
+}
+
 /** Depois da qualificação (ou sem ela): o cliente aprova a etapa; etapa interna conclui sem passar pelo cliente. */
 async function seguirParaAprovacaoOuConcluir(db: Db, stage: StageComTarefa, opts: { userId?: string }, agora: Date, round: number): Promise<ResultadoConclusao> {
-  if (stage.visivel_ao_cliente) {
+  if (exigeAprovacaoDoCliente(stage)) {
+    const approvalByDeliverables = modoAprovacaoCliente(stage) === "deliverables";
+    // Produtos antigos podem ter chegado a projetos antes da validação do cadastro.
+    // Eles continuam bloqueados aqui, em vez de perderem o fluxo em execução; a tela
+    // administrativa aponta a pendência e impede que uma nova versão seja concluída assim.
+    void approvalByDeliverables;
     // B5: prazo de aprovação da etapa, em horas úteis do calendário da plataforma (sem configuração, vale o prazo antigo).
     let prazoAprovacao: Date | undefined;
     if (stage.aprovacao_horas) { await ensureWorkCalendar(db); prazoAprovacao = addBusinessMinutes(agora, stage.aprovacao_horas * 60); }
@@ -802,7 +817,40 @@ async function seguirParaAprovacaoOuConcluir(db: Db, stage: StageComTarefa, opts
     return { ...baseResultado(stage), enviadaParaAprovacao: true, etapaEmConferencia: "aprovacao" };
   }
   await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.CONCLUIDA, concluida_em: agora, aprovada_em: agora } });
+  // "Apenas ciência": o cliente é avisado de que a etapa foi concluída, mas nada fica esperando por ele.
+  if (stage.visivel_ao_cliente && modoAprovacaoCliente(stage) === "awareness") {
+    await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: "ciencia_cliente", decision: "comentario", round, comment: "Etapa concluída — ciência do cliente (sem aprovação).", actor_user_id: opts.userId ?? null } }).catch(() => {});
+    await avisarAprovadores(db, stage.project_task_id, await nivelDoProjeto(db, stage.project_task_id), stage.titulo).catch(() => {});
+  }
   return seguirDepoisDeEtapaConcluida(db, stage, opts, agora);
+}
+
+/**
+ * A aprovação por entregáveis é a única fonte de liberação quando a etapa usa
+ * esse modo: somente depois de TODOS os entregáveis selecionados estarem
+ * aprovados a etapa conclui e o fluxo pode seguir. É idempotente para que a
+ * revisão de mais de um item não conclua nem libere duas vezes.
+ */
+export async function concluirAprovacaoPorEntregaveisSePronto(db: Db, stageId: string, opts: { userId?: string } = {}): Promise<boolean> {
+  const stage = await db.projectTaskStage.findUnique({
+    where: { id: stageId },
+    include: { project_task: true },
+  });
+  if (!stage || stage.project_task.stage_execution !== "stage" || modoAprovacaoCliente(stage) !== "deliverables") return false;
+  const selected = await db.projectTaskDeliverable.findMany({
+    where: { project_task_id: stage.project_task_id, project_task_stage_id: stage.id, requires_approval: true },
+    select: { status: true },
+  });
+  if (selected.length === 0 || selected.some((item) => item.status !== "aprovado")) return false;
+  // Evita executar o avanço do fluxo de novo se outra aprovação chegou ao mesmo tempo.
+  const changed = await db.projectTaskStage.updateMany({
+    where: { id: stage.id, status: STAGE_STATUS.EM_APROVACAO_CLIENTE },
+    data: { status: STAGE_STATUS.CONCLUIDA, concluida_em: new Date(), aprovada_em: new Date() },
+  });
+  if (changed.count !== 1) return false;
+  await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: "aprovacao_entregaveis", decision: "aprovada", round: (stage.rodada_ajuste ?? 0) + 1, comment: "Todos os entregáveis selecionados foram aprovados.", actor_user_id: opts.userId ?? null } });
+  await seguirDepoisDeEtapaConcluida(db, stage, opts, new Date());
+  return true;
 }
 
 /** Qualificação (líder) ou aprovação (quem contratou) de UMA etapa. Reprovar devolve ao mesmo executor, com o mesmo prazo. */
@@ -816,6 +864,7 @@ export async function decidirEtapa(
     include: { project_task: { select: { id: true, status: true, requires_qualification: true, qualification_round: true, stage_execution: true } } },
   });
   if (stage.project_task.stage_execution !== "stage") throw new EtapaDecisaoError("Esta tarefa não usa execução por etapa.");
+  if (opts.tipo === "aprovacao" && modoAprovacaoCliente(stage) === "deliverables") throw new EtapaDecisaoError("Esta etapa é liberada pelas decisões dos entregáveis selecionados. Aprove ou solicite ajuste no entregável, não na etapa.");
   const esperado = opts.tipo === "qualificacao" ? STAGE_STATUS.EM_QUALIFICACAO : opts.tipo === "especialista" ? STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA : STAGE_STATUS.EM_APROVACAO_CLIENTE;
   if (stage.status !== esperado) {
     throw new EtapaDecisaoError(`A etapa está "${stage.status}" e não aguarda ${opts.tipo === "qualificacao" ? "qualificação do líder" : opts.tipo === "especialista" ? "qualificação do especialista" : "aprovação"} agora.`);
@@ -846,12 +895,12 @@ export async function decidirEtapa(
   if (opts.tipo === "qualificacao") {
     await db.projectTaskStage.update({ where: { id: stage.id }, data: { qualificada_em: agora } });
     const r = await seguirParaEspecialistaOuAprovacao(db, stage, { userId: opts.userId }, agora, round);
-    return { ...r, decisao: "aprovar", status: stage.exige_qualificacao_especialista ? STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA : stage.visivel_ao_cliente ? STAGE_STATUS.EM_APROVACAO_CLIENTE : STAGE_STATUS.CONCLUIDA };
+    return { ...r, decisao: "aprovar", status: stage.exige_qualificacao_especialista ? STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA : exigeAprovacaoDoCliente(stage) ? STAGE_STATUS.EM_APROVACAO_CLIENTE : STAGE_STATUS.CONCLUIDA };
   }
   if (opts.tipo === "especialista") {
     await db.projectTaskStage.update({ where: { id: stage.id }, data: { qualificada_especialista_em: agora } });
     const r = await seguirParaAprovacaoOuConcluir(db, stage, { userId: opts.userId }, agora, round);
-    return { ...r, decisao: "aprovar", status: stage.visivel_ao_cliente ? STAGE_STATUS.EM_APROVACAO_CLIENTE : STAGE_STATUS.CONCLUIDA };
+    return { ...r, decisao: "aprovar", status: exigeAprovacaoDoCliente(stage) ? STAGE_STATUS.EM_APROVACAO_CLIENTE : STAGE_STATUS.CONCLUIDA };
   }
   await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.CONCLUIDA, concluida_em: agora, aprovada_em: agora } });
   const r = await seguirDepoisDeEtapaConcluida(db, stage, { userId: opts.userId }, agora);

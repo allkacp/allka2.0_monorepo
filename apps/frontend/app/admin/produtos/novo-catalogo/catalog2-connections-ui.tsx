@@ -9,10 +9,14 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api-client";
 import { ButtonLoader } from "@/components/ui/loading";
+import { AccessConditionBuilder } from "./access-condition-builder";
+import { conditionFromServer, conditionIssues, emptyCondition, emptyRule, sourcesFromVersion, triggersFromCondition, type AccessCondition } from "./access-condition";
+import { RevealBox } from "./reveal";
+import type { QuickCreate } from "./quick-variation";
 
-type Act = (fn: () => Promise<any>, ok?: string | ((r: any) => string | undefined), opts?: { rethrow?: boolean }) => Promise<any>;
-interface Opt { key: string; label: string }
-interface Vocab {
+export type Act = (fn: () => Promise<any>, ok?: string | ((r: any) => string | undefined), opts?: { rethrow?: boolean }) => Promise<any>;
+export interface Opt { key: string; label: string }
+export interface Vocab {
   methods: Opt[]; when_needed: Opt[]; obligations: Opt[]; pending_behaviors: Opt[]; grant_scopes: Opt[]; dependency_kinds: Opt[]; validation_modes: string[]; asset_rules: string[];
 }
 const VALIDATION_LABEL: Record<string, string> = { automatic: "Automática", manual: "Manual", automatic_with_human: "Automática com confirmação humana" };
@@ -25,7 +29,7 @@ const SEL = "h-11 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-
 const INP = "h-11 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-xs text-slate-800 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100";
 const LBL = "mb-0.5 block text-[11px] font-semibold text-slate-600 dark:text-slate-300";
 
-interface Form {
+export interface Form {
   key?: string; connection_type_id: number | ""; when_needed: string; when_task_key: string; when_step_key: string; condition_text: string;
   obligation: string; method: string; permission_level: string; pending_behavior: string;
   reason: string; instructions: string; default_grant_scope: string; validation_mode: string; asset_rule: string; revalidate_days: string; light_check: boolean;
@@ -33,18 +37,23 @@ interface Form {
   /** Só para acesso cadastrado dentro de uma etapa: fica disponível para as outras etapas escolherem usar. */
   shared_with_steps: boolean;
   dependents: { task_key: string; step_key: string; kind: string }[];
-  activation_mode: string; triggers: { kind: string; ref_key: string; ref_value?: string }[];
+  /** Condição de quando o acesso passa a ser necessário (construtor; vira ativação por gatilhos no servidor). */
+  condition: AccessCondition;
+  /** Obrigatoriedade que veio do servidor (para não apagar uma condição antiga ao salvar sem mexer). */
+  original_obligation?: string;
+  /** O servidor guardou este acesso como rascunho incompleto. */
+  draft_incomplete?: boolean;
 }
 // A posição é a regra: um acesso configurado dentro de uma tarefa/etapa já
 // sabe o que bloqueia. Não obrigamos a pessoa a escolher a mesma tarefa de
 // novo em uma lista técnica de dependentes.
 export type ConnectionScope = { kind: "product" | "task" | "step"; task?: { key: string; name: string }; step?: { key: string; name: string } };
-const emptyForm = (): Form => ({
+export const emptyForm = (): Form => ({
   connection_type_id: "", when_needed: "before_task", when_task_key: "", when_step_key: "", condition_text: "", obligation: "required", method: "", permission_level: "", pending_behavior: "block_dependents",
   reason: "", instructions: "", default_grant_scope: "project", validation_mode: "manual", asset_rule: "first_only", revalidate_days: "", light_check: false,
-  reminder_interval_hours: "", reminder_limit: "", escalate_after_reminders: "", visible_to_client: true, shared_with_steps: false, dependents: [], activation_mode: "manual", triggers: [],
+  reminder_interval_hours: "", reminder_limit: "", escalate_after_reminders: "", visible_to_client: true, shared_with_steps: false, dependents: [], condition: emptyCondition(),
 });
-const fromReq = (r: any): Form => ({
+export const fromReq = (r: any): Form => ({
   key: r.key, connection_type_id: r.connection_type.id, when_needed: r.when_needed, when_task_key: r.when_task_key ?? "", when_step_key: r.when_step_key ?? "", condition_text: r.condition_text ?? "",
   obligation: r.obligation, method: r.method, permission_level: r.permission_level, pending_behavior: r.pending_behavior,
   reason: r.advanced.reason ?? "", instructions: r.advanced.instructions ?? "", default_grant_scope: r.advanced.default_grant_scope, validation_mode: r.advanced.validation_mode, asset_rule: r.advanced.asset_rule,
@@ -52,10 +61,21 @@ const fromReq = (r: any): Form => ({
   reminder_interval_hours: r.advanced.reminder_interval_hours != null ? String(r.advanced.reminder_interval_hours) : "", reminder_limit: r.advanced.reminder_limit != null ? String(r.advanced.reminder_limit) : "",
   escalate_after_reminders: r.advanced.escalate_after_reminders != null ? String(r.advanced.escalate_after_reminders) : "", visible_to_client: r.advanced.visible_to_client !== false, shared_with_steps: !!r.shared_with_steps,
   dependents: r.dependents.map((d: any) => ({ task_key: d.task_key, step_key: d.step_key ?? "", kind: d.kind })),
-  activation_mode: r.activation?.mode ?? "manual", triggers: (r.activation?.triggers ?? []).map((t: any) => ({ kind: t.kind, ref_key: t.ref_key ?? "", ref_value: t.ref_value ?? undefined })),
+  condition: conditionFromServer(r.activation), original_obligation: r.obligation, draft_incomplete: !!r.draft_incomplete,
 });
 const num = (s: string) => (s.trim() === "" ? null : Number(s));
-const toBody = (f: Form) => ({
+/** O acesso é condicional (pela obrigatoriedade ou pelo "quando é pedido")? */
+export const isConditionalForm = (f: Form) => f.obligation === "conditional" || f.when_needed === "on_condition";
+/** Problemas do acesso para CONCLUIR (vazio = completo). A condição antiga em texto continua valendo como condição. */
+export function formIssues(f: Form): string[] {
+  const out: string[] = [];
+  if (f.connection_type_id === "") out.push("escolha o tipo de acesso");
+  if (!f.method) out.push("escolha como o cliente libera o acesso");
+  if (!f.permission_level) out.push("escolha a permissão necessária");
+  if (isConditionalForm(f) && !f.condition_text.trim()) out.push(...conditionIssues(f.condition));
+  return out;
+}
+export const toBody = (f: Form, opts: { draft?: boolean; requireComplete?: boolean } = {}) => ({
   connection_type_id: Number(f.connection_type_id), when_needed: f.when_needed,
   when_task_key: ["before_task", "before_step"].includes(f.when_needed) ? f.when_task_key || null : null, when_step_key: f.when_needed === "before_step" ? f.when_step_key || null : null,
   condition_text: f.condition_text.trim() || null, obligation: f.obligation, method: f.method, permission_level: f.permission_level, pending_behavior: f.pending_behavior,
@@ -63,11 +83,19 @@ const toBody = (f: Form) => ({
   revalidate_days: f.asset_rule === "every_x_days" ? num(f.revalidate_days) : null, light_check: f.light_check,
   reminder_interval_hours: num(f.reminder_interval_hours), reminder_limit: num(f.reminder_limit), escalate_after_reminders: num(f.escalate_after_reminders), visible_to_client: f.visible_to_client, shared_with_steps: f.shared_with_steps,
   dependents: f.dependents.map((d) => ({ task_key: d.task_key, step_key: d.step_key || null, kind: d.kind })),
-  activation_mode: f.activation_mode, triggers: f.activation_mode === "manual" ? [] : f.triggers.filter((t) => t.kind === "product" || t.ref_key).map((t) => ({ kind: t.kind, ref_key: t.ref_key || null, ref_value: t.ref_value || null })),
+  // A condição só segue se o acesso é condicional (ou se já tinha gatilhos e a obrigatoriedade não mudou: nada é apagado em silêncio).
+  ...(() => {
+    const keep = isConditionalForm(f) || (f.original_obligation === f.obligation && (f.condition.rules.length > 0 || (f.condition.preserved ?? []).length > 0));
+    const triggers = keep ? triggersFromCondition(f.condition) : [];
+    return { activation_mode: triggers.length ? f.condition.mode : "manual", triggers };
+  })(),
+  ...(opts.draft ? { draft: true } : {}), ...(opts.requireComplete ? { require_complete: true } : {}),
 });
 
-function RequirementRow({ initial, isNew, types, vocab, tasks, version, readOnly, onSave, onRemove, scope }: { initial: Form; isNew: boolean; types: any[]; vocab: Vocab; tasks: any[]; version: any; readOnly: boolean; onSave: (f: Form) => Promise<void>; onRemove: () => void; scope?: ConnectionScope }) {
+/** `embedded`: usado dentro da etapa (acessos em rascunho): não grava sozinho, só avisa cada mudança em `onChange` e esconde Salvar/Remover. */
+export function RequirementRow({ initial, isNew, types, vocab, tasks, version, readOnly, onSave, onRemove, scope, embedded = false, onChange, lockType = false, quick }: { quick?: QuickCreate; initial: Form; isNew: boolean; types: any[]; vocab: Vocab; tasks: any[]; version: any; readOnly: boolean; onSave?: (f: Form) => Promise<void>; onRemove?: () => void; scope?: ConnectionScope; embedded?: boolean; onChange?: (f: Form) => void; lockType?: boolean }) {
   const [f, setF] = useState<Form>(initial);
+  useEffect(() => { if (embedded && JSON.stringify(f) !== JSON.stringify(initial)) onChange?.(f); }, [f]); // eslint-disable-line react-hooks/exhaustive-deps
   const [advOpen, setAdvOpen] = useState(false);
   const [dep, setDep] = useState({ task_key: "", step_key: "", kind: "start" });
   const [busy, setBusy] = useState(false);
@@ -85,7 +113,8 @@ function RequirementRow({ initial, isNew, types, vocab, tasks, version, readOnly
   const effTask = f.when_task_key || f.dependents[0]?.task_key || "";
   const effStep = f.when_step_key || (f.when_needed === "before_step" ? f.dependents.find((d) => d.task_key === effTask)?.step_key ?? "" : "");
   const appliesToAllTasks = !scope || scope.kind === "product";
-  const valid = f.connection_type_id !== "" && !!f.method && !!f.permission_level && (appliesToAllTasks || ["before_task", "before_step"].indexOf(f.when_needed) < 0 || !!effTask) && (f.when_needed !== "before_step" || !!effStep);
+  const conditionOk = !isConditionalForm(f) || !!f.condition_text.trim() || conditionIssues(f.condition).length === 0;
+  const valid = conditionOk && f.connection_type_id !== "" && !!f.method && !!f.permission_level && (appliesToAllTasks || ["before_task", "before_step"].indexOf(f.when_needed) < 0 || !!effTask) && (f.when_needed !== "before_step" || !!effStep);
   const sel = (label: string, value: string, onChange: (v: string) => void, options: Opt[], aria: string, disabled = false) => (
     <div className="min-w-0"><label className={LBL}>{label}</label>
       <select aria-label={aria} className={SEL} disabled={readOnly || disabled} value={value} onChange={(e) => onChange(e.target.value)}>{options.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}</select>
@@ -95,12 +124,12 @@ function RequirementRow({ initial, isNew, types, vocab, tasks, version, readOnly
     <div className="space-y-2" data-testid="conn-requirement">
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
         <div className="min-w-0"><label className={LBL}>Tipo de acesso</label>
-          <select aria-label="Tipo de conexão" className={SEL} disabled={readOnly} value={f.connection_type_id} onChange={(e) => pickType(Number(e.target.value))}>
+          <select aria-label="Tipo de conexão" className={SEL} disabled={readOnly || lockType} value={f.connection_type_id} onChange={(e) => pickType(Number(e.target.value))}>
             <option value="">Selecione…</option>{types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </div>
         {false && !scope && sel("Quando será necessária", f.when_needed, (v) => set("when_needed", v), vocab.when_needed, "Quando será necessária")}
-        {sel("Obrigatoriedade", f.obligation, (v) => set("obligation", v), vocab.obligations, "Obrigatoriedade")}
+        {sel("Obrigatoriedade", f.obligation, (v) => setF((cur) => ({ ...cur, obligation: v, ...(v === "conditional" && cur.condition.rules.length === 0 && !(cur.condition.preserved ?? []).length ? { condition: { ...cur.condition, rules: [emptyRule()] } } : {}) })), vocab.obligations, "Obrigatoriedade")}
         {sel("Como será liberado", f.method, (v) => set("method", v), methods.map((m) => ({ key: m, label: methodLabel(m) })), "Forma de conexão")}
         {sel("Permissão necessária", f.permission_level, (v) => set("permission_level", v), levels, "Nível de permissão")}
         {false && !scope && ["before_task", "before_step"].includes(f.when_needed) && (
@@ -117,9 +146,10 @@ function RequirementRow({ initial, isNew, types, vocab, tasks, version, readOnly
           <span className="text-[11px] text-slate-500">Nas outras etapas ele aparece para marcar; não precisa cadastrar de novo.</span>
         </label>
       )}
-      {(f.obligation === "conditional" || f.when_needed === "on_condition") && (
-        <div className="mt-2"><label className={LBL}>Condição (quando passa a ser necessária)</label><input aria-label="Condição" className={INP} disabled={readOnly} value={f.condition_text} onChange={(e) => set("condition_text", e.target.value)} placeholder="Ex.: se o cliente já tiver CRM próprio" /></div>
-      )}
+      {/* Escolheu "Condicional": o construtor abre sozinho, a tela rola até ele, destaca e leva ao 1º campo ("Origem da condição"). */}
+      <RevealBox active={isConditionalForm(f)} missing={isConditionalForm(f) && !f.condition_text.trim() ? conditionIssues(f.condition).length : 0} testId="access-condition-reveal" className="mt-2">
+        <AccessConditionBuilder value={f.condition} onChange={(c) => set("condition", c)} sources={sourcesFromVersion(version, f.key)} readOnly={readOnly} legacyText={f.condition_text} accessName={type?.name} quick={quick} />
+      </RevealBox>
       {/* Os gatilhos de execução pertencem à configuração da própria tarefa.
           Mantemos qualquer regra antiga salva, mas não a exibimos no acesso geral
           do produto para não misturar acesso com ordem de execução. */}
@@ -169,10 +199,10 @@ function RequirementRow({ initial, isNew, types, vocab, tasks, version, readOnly
         </div>
       </details>
 
-      {!readOnly && (
+      {!readOnly && !embedded && (
         <div className="mt-2 flex items-center justify-end gap-2">
-          <button type="button" aria-label="Remover exigência" className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" onClick={onRemove}><Trash2 className="h-3.5 w-3.5" />{isNew ? "Descartar" : "Remover"}</button>
-          <button type="button" aria-label="Salvar exigência" disabled={!valid || busy} onClick={async () => { setBusy(true); try { await onSave({ ...f, when_task_key: effTask, when_step_key: effStep }); } finally { setBusy(false); } }} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 text-xs font-semibold text-white shadow-sm disabled:opacity-50"><Save className="h-3.5 w-3.5" />Salvar exigência</button>
+          <button type="button" aria-label="Remover exigência" className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40" onClick={() => onRemove?.()}><Trash2 className="h-3.5 w-3.5" />{isNew ? "Descartar" : "Remover"}</button>
+          <button type="button" aria-label="Salvar exigência" disabled={!valid || busy} onClick={async () => { setBusy(true); try { await onSave?.({ ...f, when_task_key: effTask, when_step_key: effStep }); } finally { setBusy(false); } }} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-3.5 text-xs font-semibold text-white shadow-sm disabled:opacity-50"><Save className="h-3.5 w-3.5" />Salvar exigência</button>
         </div>
       )}
     </div>
@@ -183,7 +213,7 @@ function RequirementRow({ initial, isNew, types, vocab, tasks, version, readOnly
 export function summarizeAccesses(version: any) {
   const tasks: any[] = version?.tasks ?? [];
   const stepRows = tasks.flatMap((t) => (t.steps ?? []).map((s: any) => ({ task: t, step: s })));
-  return ((version?.connection_requirements ?? []) as any[]).map((r) => {
+  return ((version?.connection_requirements ?? []) as any[]).filter((r) => !r.draft_incomplete).map((r) => {
     const name = r.label?.trim() || r.connection_type?.name || r.key;
     const ownerTask = tasks.find((t) => t.key === r.when_task_key);
     const ownerStep = r.when_step_key ? (ownerTask?.steps ?? []).find((s: any) => s.key === r.when_step_key) : null;
@@ -209,7 +239,8 @@ export interface StepAccessRow { stepKey: string; taskKey: string; taskName: str
 
 /** Resumo POR ETAPA: para cada etapa, os acessos que ela usa (os que cadastrou + os de outras etapas que marcou usar). */
 export function summarizeByStep(version: any): { general: StepAccessChip[]; steps: StepAccessRow[] } {
-  const reqs: any[] = version?.connection_requirements ?? [];
+  // Acesso salvo como rascunho incompleto NÃO conta como configurado.
+  const reqs: any[] = ((version?.connection_requirements ?? []) as any[]).filter((r) => !r.draft_incomplete);
   const tasks: any[] = version?.tasks ?? [];
   const nameOf = (r: any) => r.label?.trim() || r.connection_type?.name || r.key;
   const chip = (r: any, fromStep: string | null): StepAccessChip => ({ key: r.key, name: nameOf(r), type: r.connection_type ?? {}, fromStep, shared: !!r.shared_with_steps });
@@ -237,7 +268,8 @@ export interface AccessUsageRow { key: string; name: string; type: any; origin: 
  * Acesso antigo "geral do produto" (sem etapa) aparece como liberado em todas as etapas.
  */
 export function summarizeByAccess(version: any): AccessUsageRow[] {
-  const reqs: any[] = version?.connection_requirements ?? [];
+  // Acesso salvo como rascunho incompleto NÃO conta como configurado.
+  const reqs: any[] = ((version?.connection_requirements ?? []) as any[]).filter((r) => !r.draft_incomplete);
   const tasks: any[] = version?.tasks ?? [];
   const multiTask = tasks.length > 1;
   const rows: { task: any; step: any; position: number }[] = [];
@@ -265,6 +297,7 @@ export function AccessesSummary({ version, act, readOnly = true }: { version: an
   // O quadro mostra SÓ o que vem das etapas. Acesso antigo (cadastrado antes da regra por etapa, sem etapa) fica num aviso à parte.
   const rows = all.filter((r) => !r.allSteps);
   const legacy = all.filter((r) => r.allSteps);
+  const draftReqs = ((version?.connection_requirements ?? []) as any[]).filter((r) => r.draft_incomplete);
   const reqById = new Map<string, any>(((version?.connection_requirements ?? []) as any[]).map((r) => [r.key, r]));
   const [vocab, setVocab] = useState<any>(null);
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -318,10 +351,12 @@ export function AccessesSummary({ version, act, readOnly = true }: { version: an
           })}
         </ul>
       )}
-      <div className="flex items-center gap-3 rounded-xl border border-dashed border-violet-300 bg-violet-50/40 px-3 py-3 dark:border-violet-800 dark:bg-violet-950/20" data-testid="summary-add-hint">
+      {/* "Adicionar acesso" escondido (20/10): o resumo só mostra os acessos configurados; acessos se cadastram dentro da etapa. */}
+      <div hidden className="hidden items-center gap-3 rounded-xl border border-dashed border-violet-300 bg-violet-50/40 px-3 py-3 dark:border-violet-800 dark:bg-violet-950/20" data-testid="summary-add-hint">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-violet-300 bg-white text-violet-600"><Plus className="h-4 w-4" aria-hidden="true" /></span>
         <span><span className="block text-sm font-bold text-violet-700 dark:text-violet-300">Adicionar acesso</span><span className="block text-xs text-slate-500">Inclua outras plataformas ou ferramentas dentro da etapa que precisa delas (Editar etapa → Conexões e acessos desta etapa).</span></span>
       </div>
+      {draftReqs.length > 0 && <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200" data-testid="summary-drafts"><strong>Em rascunho incompleto ({draftReqs.length}):</strong> {draftReqs.map((r) => r.label?.trim() || r.connection_type?.name || r.key).join(", ")}. Não contam como configurados e não são pedidos ao cliente até a etapa ser concluída.</p>}
       {legacy.length > 0 && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs dark:border-amber-800 dark:bg-amber-950/20" data-testid="summary-legacy">
           <p className="font-bold text-amber-900 dark:text-amber-200">Acessos antigos, sem etapa ({legacy.length})</p>

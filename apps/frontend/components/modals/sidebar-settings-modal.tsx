@@ -1,7 +1,7 @@
 import type React from "react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { HeaderSlideScreen } from "@/components/header-slide-screen";
+import { FramedPanel, FRAMED_HEADER_CLASS, FRAMED_FOOTER_CLASS } from "@/components/framed-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -625,16 +625,10 @@ export function SidebarSettingsModal({
     // branco), abaixo do topo — não cobre o cabeçalho nem o menu.
     // Vai direto no <body> com zIndex 45 para os diálogos de confirmação
     // (z-50) ficarem por cima; dentro do menu ficariam escondidos.
-    createPortal(
-    <HeaderSlideScreen
-      open={open}
-      onClose={handleAttemptClose}
-      hideHeader
-      zIndex={45}
-    >
+    <FramedPanel open={open} onOpenChange={(o) => { if (!o) handleAttemptClose(); }} testId="sidebar-settings-panel" title="Personalizar cores da barra lateral">
       <div className="flex flex-col w-full h-full min-h-0 gap-0">
         {/* Header */}
-        <header className="relative overflow-hidden shrink-0 app-brand-header rounded-2xl lg:rounded-[1.25rem]">
+        <header className={`relative overflow-hidden shrink-0 app-brand-header rounded-2xl lg:rounded-[1.25rem] ${FRAMED_HEADER_CLASS}`}>
           {/* Decorative background layers */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full bg-white/5" />
@@ -1817,7 +1811,7 @@ export function SidebarSettingsModal({
         </Tabs>
 
         {/* Footer */}
-        <footer className="border-t px-4 py-2.5 flex gap-2 bg-gray-50 flex-shrink-0">
+        <footer className={`border-t pt-2.5 flex gap-2 bg-gray-50 flex-shrink-0 ${FRAMED_FOOTER_CLASS}`}>
           <Button
             variant="outline"
             size="sm"
@@ -2094,8 +2088,6 @@ export function SidebarSettingsModal({
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </HeaderSlideScreen>,
-    document.body,
-    )
+    </FramedPanel>
   );
 }

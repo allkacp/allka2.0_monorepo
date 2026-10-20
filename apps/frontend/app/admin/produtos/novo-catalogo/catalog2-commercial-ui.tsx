@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useAccordionAll } from "./accordion-toggle-all";
 
 export const COMMERCIAL_TEXT_FIELDS: { key: string; label: string; hint: string; rows: number; max: number }[] = [
   { key: "target_audience", label: "Público-alvo", hint: "Para quem este produto foi feito.", rows: 2, max: 1000 },
@@ -95,6 +96,7 @@ export function CommercialFieldsCard({ version, readOnly, onSave, registerFlush,
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  useAccordionAll(setOpen);
   const ref = useRef({ f, dirty });
   ref.current = { f, dirty };
   // Recarregamentos do editor chegam com o mesmo id de versão e um updated_at
@@ -173,7 +175,7 @@ export function CommercialFieldsCard({ version, readOnly, onSave, registerFlush,
   return <>
     <section id="catalog2-commercial-fields" className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900">
       <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2.5 text-left">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Info className="h-3.5 w-3.5" /></span>
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full section-number-badge text-xs font-bold text-white" data-testid="section-number">5</span>
         <div>
           <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Informações comerciais<span className="field-info" data-help="Defina o que o cliente vê, o que é interno e como o produto deve ser apresentado comercialmente." aria-hidden="true">i</span></h3>
           <p className="text-[11px] text-slate-500">Público, promessa, escopo e orientações comerciais.</p>
@@ -187,12 +189,12 @@ export function CommercialFieldsCard({ version, readOnly, onSave, registerFlush,
       </div>
       </div>}
     </section>
-    <section className="mt-3 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <details className="group" data-testid="commercial-accordion"><summary className="flex cursor-pointer select-none list-none items-center gap-2.5 [&::-webkit-details-marker]:hidden"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><ListChecks className="h-3.5 w-3.5" /></span><span className="flex-1 text-[13px] font-bold text-slate-900 dark:text-slate-100">Itens</span><ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" /></summary><div className="mt-2.5 space-y-2">{renderListFields(COMMERCIAL_LIST_FIELDS.filter((x) => x.key === "included_items" || x.key === "excluded_items"))}</div></details>
+    <section className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <details className="group" data-accordion data-testid="commercial-accordion"><summary className="flex cursor-pointer select-none list-none items-center gap-2.5 [&::-webkit-details-marker]:hidden"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full section-number-badge text-xs font-bold text-white" data-testid="section-number">6</span><span className="flex-1 text-[13px] font-bold text-slate-900 dark:text-slate-100">Itens</span><ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" /></summary><div className="mt-2.5 space-y-2">{renderListFields(COMMERCIAL_LIST_FIELDS.filter((x) => x.key === "included_items" || x.key === "excluded_items"))}</div></details>
     </section>
-    <section className="mt-3 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <details className="group" data-testid="commercial-accordion"><summary className="flex cursor-pointer select-none list-none items-center gap-2.5 [&::-webkit-details-marker]:hidden"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Info className="h-3.5 w-3.5" /></span><span className="flex-1 text-[13px] font-bold text-slate-900 dark:text-slate-100">Requisitos e resumo dos entregáveis</span><ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" /></summary><div className="mt-2.5">{renderListFields(COMMERCIAL_LIST_FIELDS.filter((x) => x.key === "client_requirements" || x.key === "deliverables_summary"))}</div></details>
+    <section className="rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <details className="group" data-accordion data-testid="commercial-accordion"><summary className="flex cursor-pointer select-none list-none items-center gap-2.5 [&::-webkit-details-marker]:hidden"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full section-number-badge text-xs font-bold text-white" data-testid="section-number">7</span><span className="flex-1 text-[13px] font-bold text-slate-900 dark:text-slate-100">Requisitos e resumo dos entregáveis</span><ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" /></summary><div className="mt-2.5">{renderListFields(COMMERCIAL_LIST_FIELDS.filter((x) => x.key === "client_requirements" || x.key === "deliverables_summary"))}</div></details>
     </section>
-    {!readOnly && <div className="mt-3 flex flex-wrap items-center gap-3">{tooLong && <span className="text-xs text-red-600">Algum campo passou do limite de caracteres.</span>}{saved && <span role="status" className="text-xs font-semibold text-emerald-700">✓ Informações comerciais salvas.</span>}{error && <span role="alert" className="text-xs text-red-600">{error}</span>}</div>}
+    {!readOnly && <div className="flex flex-wrap items-center gap-3 empty:hidden">{tooLong && <span className="text-xs text-red-600">Algum campo passou do limite de caracteres.</span>}{saved && <span role="status" className="text-xs font-semibold text-emerald-700">✓ Informações comerciais salvas.</span>}{error && <span role="alert" className="text-xs text-red-600">{error}</span>}</div>}
   </>;
 }

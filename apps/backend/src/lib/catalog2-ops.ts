@@ -97,7 +97,24 @@ export const EVIDENCE_TYPES = ["print", "arquivo", "pdf", "relatorio", "link", "
 export type EvidenceType = (typeof EVIDENCE_TYPES)[number];
 export const EVIDENCE_TYPE_LABEL: Record<EvidenceType, string> = { print: "Print da tela", arquivo: "Arquivo anexo", pdf: "PDF", relatorio: "Relatório", link: "Link", texto: "Texto / descrição" };
 
+/** Aprovação do cliente na etapa (19/10): como a etapa é aprovada e o que fazer com ajustes/silêncio. Só vale em tarefa com execução por etapa. */
+export const CLIENT_APPROVAL_MODES = ["none", "step", "deliverables", "awareness"] as const;
+export type ClientApprovalMode = (typeof CLIENT_APPROVAL_MODES)[number];
+export const CLIENT_SILENCE_ACTIONS = ["wait", "remind", "escalate"] as const;
+export const ADJUST_RECEIVERS = ["executor", "leader"] as const;
+export interface ClientApprovalOps {
+  mode: ClientApprovalMode;
+  /** O que fazer quando o cliente não responde no prazo (registrado no cadastro; hoje o prazo é mostrado e acompanhado). */
+  silence_action?: (typeof CLIENT_SILENCE_ACTIONS)[number];
+  adjust_receiver?: (typeof ADJUST_RECEIVERS)[number];
+  adjustment_limit?: number;
+}
+
 export interface StepOps {
+  /** A etapa foi declarada SEM entregáveis (19/10). Ausente = não declarado (vale o que estiver ligado à etapa). */
+  no_deliverables?: boolean;
+  /** Aprovação do cliente (explícita). Ausente = comportamento anterior (etapa visível ao cliente é aprovada por ele). */
+  client_approval?: ClientApprovalOps;
   checklist?: ChecklistItem[];
   /** Quem envia/confere a evidência da etapa (padrão: o executor). */
   evidence_owner?: EvidenceOwner;
@@ -150,6 +167,8 @@ export const stepOpsSchema = z
     ai_qualifier_kind: z.enum(["leader", "person", "leader_person", "nomad_pool"]).nullish(),
     ai_qualifier_user_id: z.string().max(60).nullish(),
     evidence_types: z.array(z.enum(EVIDENCE_TYPES)).max(EVIDENCE_TYPES.length).nullish(),
+    no_deliverables: z.boolean().nullish(),
+    client_approval: z.object({ mode: z.enum(CLIENT_APPROVAL_MODES), silence_action: z.enum(CLIENT_SILENCE_ACTIONS).nullish(), adjust_receiver: z.enum(ADJUST_RECEIVERS).nullish(), adjustment_limit: z.number().int().min(0).max(50).nullish() }).nullish(),
     access_scope: z.enum(["all", "some"]).nullish(),
     access_keys: z.array(z.string().max(60)).max(40).nullish(),
     access_parked: z.object({ reqs: z.array(z.record(z.string(), z.unknown())).max(40), keys: z.array(z.string().max(60)).max(40) }).nullish(),
@@ -217,6 +236,15 @@ export function normalizeStepOps(raw: unknown): StepOps | null {
       items.push({ id, text: t, kind, required: it.required !== false });
     }
     if (items.length) out.checklist = items;
+  }
+  if (r.no_deliverables === true) out.no_deliverables = true;
+  const ca = r.client_approval as { mode?: unknown; silence_action?: unknown; adjust_receiver?: unknown; adjustment_limit?: unknown } | undefined;
+  if (ca && typeof ca === "object" && (CLIENT_APPROVAL_MODES as readonly string[]).includes(ca.mode as string)) {
+    const o: ClientApprovalOps = { mode: ca.mode as ClientApprovalMode };
+    if ((CLIENT_SILENCE_ACTIONS as readonly string[]).includes(ca.silence_action as string)) o.silence_action = ca.silence_action as ClientApprovalOps["silence_action"];
+    if ((ADJUST_RECEIVERS as readonly string[]).includes(ca.adjust_receiver as string)) o.adjust_receiver = ca.adjust_receiver as ClientApprovalOps["adjust_receiver"];
+    if (typeof ca.adjustment_limit === "number" && Number.isInteger(ca.adjustment_limit) && ca.adjustment_limit >= 0 && ca.adjustment_limit <= 50) o.adjustment_limit = ca.adjustment_limit;
+    out.client_approval = o;
   }
   if (r.access_scope === "all") out.access_scope = "all";
   if (r.access_scope === "some" && Array.isArray(r.access_keys)) {

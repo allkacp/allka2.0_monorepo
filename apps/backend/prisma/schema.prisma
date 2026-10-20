@@ -6127,6 +6127,9 @@ model Catalog2TaskStep {
   // Quem qualifica (confere) a etapa quando ela exige qualificação: leader = líder da área · person = pessoa específica
   // (specialist_user_id) · leader_person = líder e depois a pessoa · nomad_pool = nômades qualificadores.
   qualifier_kind              String  @default("leader") @db.VarChar(20)
+  // Rascunho incompleto (18/10): salvo pelo botão "Salvar rascunho da etapa". Nunca vale para execução nem publicação.
+  draft_incomplete            Boolean @default(false)
+  draft_saved_at              DateTime?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -6852,6 +6855,8 @@ model Catalog2TaskDeliverable {
   cycle_scope           String   @default("every_cycle") @db.VarChar(20)
   is_conditional        Boolean  @default(false)
   condition_json        String?  @db.Text
+  // Salvo como rascunho incompleto (19/10): nunca conta como pronto e bloqueia a publicação até ser concluído.
+  draft_incomplete      Boolean  @default(false)
 
   @@unique([task_id, key])
   @@index([step_id])
@@ -7153,6 +7158,8 @@ model Catalog2ConnectionRequirement {
   visible_to_client   Boolean                @default(true)
   // Acesso cadastrado dentro de UMA etapa: true = disponível para as outras etapas escolherem usar (aparece na lista delas).
   shared_with_steps   Boolean                @default(false)
+  // Acesso salvo como rascunho (condição ou campos incompletos): não conta como configurado, não é pedido ao cliente e bloqueia a publicação.
+  draft_incomplete    Boolean                @default(false)
   sort_order          Int                    @default(0)
   created_at          DateTime               @default(now())
   updated_at          DateTime               @updatedAt

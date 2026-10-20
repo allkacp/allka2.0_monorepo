@@ -215,6 +215,10 @@ describe("Catálogo global de modelos de tarefa e etapa", () => {
     const t = await api(`/api/admin/catalog2/versions/${a.versionId}/tasks`, { method: "POST", token, body: { name: "Tarefa Escopo", estimated_minutes: 10 } });
     const b = await mkProduct(masterId, "[TESTE] Escopo B");
     const tb = await api(`/api/admin/catalog2/versions/${b.versionId}/tasks/from-model`, { method: "POST", token, body: { model_id: t.json.task_model_id } });
+    // um terceiro uso numa versão PUBLICADA (nunca muda sozinha)
+    const c = await mkProduct(masterId, "[TESTE] Escopo C");
+    const tc = await api(`/api/admin/catalog2/versions/${c.versionId}/tasks/from-model`, { method: "POST", token, body: { model_id: t.json.task_model_id } });
+    await prisma.catalog2ProductVersion.update({ where: { id: c.versionId }, data: { state: "publicada" } });
 
     // só neste produto (padrão)
     await api(`/api/admin/catalog2/tasks/${t.json.id}`, { method: "PUT", token, body: { estimated_minutes: 99 } });
@@ -233,15 +237,16 @@ describe("Catálogo global de modelos de tarefa e etapa", () => {
     da = (await api(`/api/admin/catalog2/products/${a.product.id}`, { token })).json.versions[0].tasks[0];
     assert.equal(da.model.customized, false);
     assert.equal(da.model.outdated, false);
+    // edição global (19/10): o uso em RASCUNHO recebe a mudança; o uso em versão PUBLICADA nunca muda sozinho
     const db = (await api(`/api/admin/catalog2/products/${b.product.id}`, { token })).json.versions[0].tasks[0];
-    assert.equal(db.estimated_minutes, 10, "o outro produto NÃO muda sozinho");
-    assert.equal(db.model.outdated, true);
-
-    const sync = await api(`/api/admin/catalog2/tasks/${tb.json.id}/sync-model`, { method: "POST", token });
-    assert.equal(sync.status, 200);
-    const tbRow = await prisma.catalog2Task.findUniqueOrThrow({ where: { id: tb.json.id } });
-    assert.equal(tbRow.estimated_minutes, 50);
-    assert.equal(tbRow.task_model_revision, 2);
+    assert.equal(db.estimated_minutes, 50, "o outro produto em rascunho é atualizado pela edição global");
+    assert.equal(db.model.outdated, false);
+    const dc = (await api(`/api/admin/catalog2/products/${c.product.id}`, { token })).json.versions[0].tasks[0];
+    assert.equal(dc.estimated_minutes, 10, "versão publicada NÃO muda sozinha");
+    assert.equal(dc.model.outdated, true, "e indica revisão nova disponível");
+    assert.equal(up.json.model_effect.updated, 1);
+    assert.equal(up.json.model_effect.locked, 1);
+    void tb; void tc;
   });
 
   it("acessos do produto (cadastro único): a rota antiga saiu; a nova versão herda as exigências de conexão", async () => {

@@ -99,6 +99,7 @@ const { api } = vi.hoisted(() => ({
   },
 }))
 vi.mock("@/lib/api-client", () => ({ apiClient: api }))
+vi.mock("@/hooks/useAppFrameMetrics", () => ({ useAppFrameMetrics: () => ({ sidebarWidth: 72 }) }))
 
 const REFS = {
   pillars: { data: [{ id: "p1", name: "A. Presença" }] },

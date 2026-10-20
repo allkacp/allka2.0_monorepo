@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, lazy, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, lazy, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin, Tag, Layers, ListChecks, CheckSquare, ListOrdered, DollarSign, CalendarClock, Info, Sparkles, UploadCloud, Undo2, Pencil, Lock, Eye, Check, Globe2, AlertCircle, Lightbulb, ExternalLink, User } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePinEntry, type PinnedEntry } from "@/contexts/open-screens-context";
@@ -17,9 +17,23 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useIallkaContext } from "@/contexts/iallka-context";
-import { ModelPickerDialog, TaskModelInfoDialog, ModelScopeDialog, SimilarModelsDialog, ModelStatusChips, TaskIndicators, EXEC_LABEL, PURPOSE_LABEL, CYCLE_TYPE_LABEL, REPEAT_RULE_LABEL, IMPLEMENTATION_RULE_LABEL, CONTINUITY_LABEL, ASSET_RULE_LABEL } from "./catalog2-models-ui";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
+import { AccordionToggleAll, useAccordionAll } from "./accordion-toggle-all";
+import { FramedModal, FramedPanel, FRAMED_HEADER_CLASS } from "@/components/framed-panel";
+import { ModelPickerDialog, TaskModelInfoDialog, ModelScopeDialog, ModelEditCtx, type ModelScope, SimilarModelsDialog, ModelStatusChips, TaskIndicators, EXEC_LABEL, PURPOSE_LABEL, CYCLE_TYPE_LABEL, REPEAT_RULE_LABEL, IMPLEMENTATION_RULE_LABEL, CONTINUITY_LABEL, ASSET_RULE_LABEL } from "./catalog2-models-ui";
 import { TaskOpsForm } from "./catalog2-ops-ui";
-import { TaskDeliverablesEditor } from "./catalog2-deliverables-ui";
+import { OPEN_STEP_EVENT, TaskDeliverablesEditor } from "./catalog2-deliverables-ui";
+import { StepBlock, useBlocks, useIsNarrow } from "./step-blocks";
+import { BLOCK_IDS, blockInfo, firstIssue, stepIssues, type BlockInfo, type StepBlockId, type StepIssue } from "./step-completeness";
+import { StepDeliverablesEditor } from "./step-deliverables-editor";
+import { activeDeliv, commitDelivItems, delivIssues, hasDelivPending, itemsFromTask, type DelivItem } from "./step-deliverables";
+import { deliverableBrief, deliverableIssues, deliverableSituation } from "./catalog2-deliverable-fields";
+import { ClientApprovalSection, MODE_LABEL, effectiveMode } from "./client-approval";
+import { StepFinalSummary } from "./step-final-summary";
+import { makeQuickCreate } from "./quick-variation";
+import { RevealBox, flashElement } from "./reveal";
+import { StepAccessesEditor } from "./step-accesses-editor";
+import { accessIssues, accessName, activeItems, commitAccessItems, configuredCount, hasPending, incompleteCount, itemsFromRequirements, opsAfterAccesses, type AccessItem } from "./step-accesses";
 import { AiConfig } from "./catalog2-ai-ui";
 import { CommercialConsistencyBanner } from "./commercial-consistency";
 import { CommercialFieldsCard } from "./catalog2-commercial-ui";
@@ -36,7 +50,10 @@ import { StepDetailsSummary } from "./step-details-summary";
 import { UnsavedChangesDialog, type UnsavedMode } from "./unsaved-dialog";
 import { ConfirmDeleteButton, EditableVariationName } from "./variation-actions-ui";
 import { StepChecklistDialog, checklistCount, type ChecklistItem } from "./catalog2-step-checklist-ui";
-import { AudienceCard } from "./catalog2-audience-ui";
+import { AudienceCard, audienceSummary } from "./catalog2-audience-ui";
+import { collectAiFreeStages } from "./catalog2-ai-free-changes";
+const aiFreeTotal = (v: any) => { const rows = collectAiFreeStages(v); return rows.length === 0 ? "—" : rows.reduce((n: number, r: any) => n + r.value, 0); };
+import { Users as AudienceIcon } from "lucide-react";
 import { AiFreeChangesCard } from "./catalog2-ai-free-changes";
 import { accessPatch } from "./step-access-picker";
 import { APPROVER_OPTIONS, applyApprover, approverOf, enforceApprover, type ApproverMode } from "./step-approver";
@@ -50,7 +67,7 @@ import { useWorkCalendar, fmtBusinessMinutes, businessDaysOf } from "@/lib/use-w
 import { specialtiesForMode, keepSpecialtyForMode, isSpecialtyCompatible, emptySpecialtyHint, EXEC_KIND_LABEL, specialtyKind } from "./catalog2-specialty-kind";
 import { EffortEffectForm, EFFORT_TYPES, isEffortType, effortEffectSummary, InternalNameEditor, ProductCounts, ApprovalGatesSection, SlaRulesSection, UniversalMemory, availabilityLabel } from "./catalog2-universal-ui";
 import { draftFromSuggestion, payloadFromDraft, questionTypeLabel, type QuestionDraft, type QuestionCtx } from "./catalog2-questions-ui";
-import { QuestionnaireEditor, QuestionnairePreview, questionnaireBody, stateFromServer, type QuestionnaireState } from "./catalog2-questionnaire-builder";
+import { QuestionList, QuestionnaireDataModal, QuestionnaireEditor, QuestionnairePreview, questionnaireBody, stateFromServer, type QuestionnaireState } from "./catalog2-questionnaire-builder";
 import { BillingSplitSection } from "@/components/catalog2-pricing-memory-popover";
 import { VariationSettings, OptionSettings, AddonSettings, ChargeScopeFields, chargeScopeLabel } from "./catalog2-choices-ui";
 import { CATALOG2_STATUSES, CATALOG2_STATUS_LABEL, CATALOG2_STATUS_MEANING, catalog2StatusLabel, catalog2StatusTone, type Catalog2Status } from "@/lib/catalog2-status";
@@ -79,9 +96,14 @@ const EFFECT_TYPES = [
 ] as const;
 const OPERATORS = [["eq", "igual a"], ["neq", "diferente de"], ["gte", "maior ou igual a"], ["lte", "menor ou igual a"], ["contains", "contém"], ["selected", "está selecionado"], ["not_selected", "não está selecionado"]] as const;
 const TRIGGERS = [["variation_option", "Opção de variação"], ["addon_selected", "Adicional selecionado"], ["quantity", "Quantidade"], ["client_answer", "Resposta do cliente"], ["contract_attribute", "Atributo da contratação"]] as const;
+/** Botões "Ajudante" ocultos por ora (pedido do usuário, 20/10): o código continua; mude para true quando for melhorá-los. */
+const SHOW_HELPER_BUTTON = false;
 const EXEC_MODES = [["humano", "Humano"], ["ia", "IA"], ["hibrido", "Humano ou IA"]] as const;
 
-export function ProductEditor({ productId, onBack, pin, notice }: { productId: string; onBack: () => void; pin?: PinnedEntry; notice?: React.ReactNode }) {
+/** Edição de um MODELO GLOBAL dentro de "Modelos globais": o mesmo editor do produto, focado na tarefa/etapa onde o modelo é usado. */
+export interface EmbeddedModel { kind: "task" | "step"; modelId: number; taskId: string; stepId?: string; modelName: string; onClose: () => void }
+
+export function ProductEditor({ productId, onBack, pin, notice, embedded, openInEditMode = false }: { productId: string; onBack: () => void; pin?: PinnedEntry; notice?: React.ReactNode; embedded?: EmbeddedModel | null; /** Produto recém-criado: já abre com os campos editáveis (sem o botão Editar). */ openInEditMode?: boolean }) {
   const [product, setProduct] = useState<any>(null);
   const [refs, setRefs] = useState<{ pillars: any[]; fourF: any[]; categories: any[]; specialties: any[]; questionnaires: any[]; qualifierPercent: number | null }>({ pillars: [], fourF: [], categories: [], specialties: [], questionnaires: [], qualifierPercent: null });
   // Posição na tela: ao dar F5 (ou Ctrl+R) a pessoa volta exatamente para o passo, a sub-aba, a versão, o modo de edição
@@ -136,7 +158,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   const [taskEditRequest, setTaskEditRequest] = useState<string | null>(null);
   // A tela abre TRAVADA (só leitura): só o botão "Editar" libera os campos, pra
   // ninguém alterar produto sem querer.
-  const [editMode, setEditMode] = useState(false);
+  const [editMode, setEditMode] = useState(openInEditMode);
   const [readinessData, setReadinessData] = useState<any>(null);
   const [publishing, setPublishing] = useState<{ title: string; done: boolean; error: string | null } | null>(null);
   async function startPublish(title: string, fn: () => Promise<any>) {
@@ -394,6 +416,19 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
 
   const version = useMemo(() => product?.versions.find((v: any) => v.id === selectedVersionId) ?? null, [product, selectedVersionId]);
   const readOnly = version?.state === "publicada" || !editMode;
+  // Modo "Modelos globais": usa a versão onde a tarefa/etapa está cadastrada e libera a edição (só se for rascunho; publicada nunca muda).
+  const embeddedOpened = useRef(false);
+  useEffect(() => {
+    if (!embedded || !product) return;
+    const v = (product.versions ?? []).find((x: any) => (x.tasks ?? []).some((t: any) => t.id === embedded.taskId));
+    if (!v) return;
+    if (selectedVersionId !== v.id) { setSelectedVersionId(v.id); return; }
+    if (v.state === "rascunho" && !editMode) setEditMode(true);
+    if (embedded.kind === "step" && embedded.stepId && !embeddedOpened.current && (v.state !== "rascunho" || editMode)) {
+      embeddedOpened.current = true;
+      window.setTimeout(() => window.dispatchEvent(new CustomEvent(OPEN_STEP_EVENT, { detail: { stepId: embedded.stepId } })), 400);
+    }
+  }, [embedded, product, selectedVersionId, editMode]);
 
   // Status COMERCIAL do produto (Ativo/Inativo…), separado do status da versão
   // (Rascunho/Publicada). Salva na hora, a partir do cabeçalho.
@@ -410,6 +445,12 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   // "Editar": libera os campos. Se a versão aberta é uma publicada e ainda não
   // há rascunho, cria o próximo (v2, v3…) — se ninguém mudar nada, é descartado
   // ao fechar (ver closeEditor).
+  // Botão "Editar" dentro dos painéis (ex.: Questionário) liga a edição do produto, igual ao Editar do rodapé.
+  useEffect(() => {
+    const h = () => { if (!editMode) void startEditing(); };
+    window.addEventListener("catalog2:start-editing", h);
+    return () => window.removeEventListener("catalog2:start-editing", h);
+  });
   async function startEditing() {
     if (starting) return;
     setMsg(null);
@@ -619,13 +660,56 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
   if (loading) return <PageLoader text="Carregando produto…" compact />;
   if (!product) return <div className="flex flex-1 flex-col items-start gap-3 p-10 text-sm text-red-600">Produto não encontrado.<Button size="sm" variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar</Button></div>;
 
+  // "Modelos globais": o MESMO editor da tarefa/etapa (as mesmas peças do produto), sem a casca do produto (abas, publicação, preço).
+  if (embedded) {
+    const focusTask = version ? { ...version, tasks: (version.tasks ?? []).filter((t: any) => t.id === embedded.taskId) } : null;
+    return (
+      <ModelEditCtx.Provider value={{ embedded: true }}>
+      <RingCtx.Provider value={ringOf}>
+      <FlushCtx.Provider value={registerFlusher}>
+      <FormsCtx.Provider value={registerForm}>
+      <RefsCtx.Provider value={refs}>
+      <FieldHelpLayer>
+      <div key={resetKey} className="product-editor relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-[#dfe5f6] p-3 dark:bg-slate-950" data-testid="embedded-model-editor"
+        onChangeCapture={() => { if (editMode) markDirty(); }} onInputCapture={() => { if (editMode) markDirty(); }}>
+        {toast && typeof document !== "undefined" && createPortal(
+          <div className="pointer-events-none fixed inset-0 z-[2147483000] flex items-center justify-center p-4">
+            <div role={toast.kind === "error" ? "alert" : "status"} aria-live="polite" data-testid={`save-toast-${toast.kind}`}
+              className={`pointer-events-auto flex max-w-lg items-center gap-3 rounded-2xl border-2 px-6 py-4 text-base font-bold shadow-2xl ${toast.kind === "ok" ? "border-emerald-400 bg-emerald-50 text-emerald-900" : toast.kind === "error" ? "border-red-400 bg-red-50 text-red-900" : "border-sky-400 bg-sky-50 text-sky-900"}`}>
+              {toast.kind === "saving" ? <Loader2 className="h-6 w-6 shrink-0 animate-spin" /> : toast.kind === "ok" ? <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-600" /> : <X className="h-6 w-6 shrink-0 text-red-600" />}
+              <span className="min-w-0 flex-1 break-words">{toast.text}</span>
+              {toast.kind === "error" && <button type="button" aria-label="Fechar aviso" className="ml-1 shrink-0 rounded-md p-1 hover:bg-red-100" onClick={() => setToast(null)}><X className="h-4 w-4" /></button>}
+            </div>
+          </div>,
+          document.body,
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-4 py-2.5 shadow-sm dark:bg-slate-900" data-testid="embedded-model-banner">
+          <div className="min-w-0">
+            <p data-no-info="" className="text-[10px] font-bold uppercase tracking-wide text-violet-700">Editando modelo global de {embedded.kind === "task" ? "tarefa" : "etapa"} #{embedded.modelId}</p>
+            <p className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">{embedded.modelName}</p>
+            <p className="text-[11px] text-slate-500">Usado em: {product.internal_name} · v{version?.version_number} ({version?.state === "rascunho" ? "rascunho" : "publicada"}). É o mesmo editor do produto: ao salvar você escolhe entre criar novo modelo ou editar globalmente.</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={embedded.onClose} data-testid="embedded-model-close">Fechar</Button>
+        </div>
+        {version && version.state !== "rascunho" && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900" data-testid="embedded-model-locked">Este uso está numa versão publicada, que nunca muda sozinha. Para editar, abra o produto, crie a próxima versão e edite lá — ou escolha outro produto que use este modelo.</p>}
+        {focusTask && <TasksTab taskStructure="single" version={focusTask} productId={productId} readOnly={readOnly} refs={refs} act={act} highlightTarget={null} highlightTaskIds={[]} clearHighlight={() => {}} editTaskId={null} onOpenPricing={undefined} />}
+      </div>
+      </FieldHelpLayer>
+      </RefsCtx.Provider>
+      </FormsCtx.Provider>
+      </FlushCtx.Provider>
+      </RingCtx.Provider>
+      </ModelEditCtx.Provider>
+    );
+  }
+
   return (
     <RingCtx.Provider value={ringOf}>
     <FlushCtx.Provider value={registerFlusher}>
     <FormsCtx.Provider value={registerForm}>
     <RefsCtx.Provider value={refs}>
     <FieldHelpLayer>
-    <div key={resetKey} className="product-editor relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 bg-[#dfe5f6] p-3 dark:bg-slate-950"
+    <div key={resetKey} className="product-editor relative flex min-h-0 min-w-0 flex-1 flex-col gap-2"
       onChangeCapture={() => { if (editMode) markDirty(); }} onInputCapture={() => { if (editMode) markDirty(); }}>
       {/* Aviso de salvamento: no CENTRO da tela e por cima de tudo (fora do editor, direto no <body>, para nenhuma camada cobrir). */}
       {toast && typeof document !== "undefined" && createPortal(
@@ -641,7 +725,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       )}
       <UnsavedChangesDialog mode={unsavedDlg} labels={dirtyForms().map((f) => f.label)} hasNewVersion={!!autoDraftRef.current.draftId} draftChanged={dirty} busy={unsavedBusy}
         onSave={() => void unsavedSave()} onDiscard={() => void unsavedDiscard()} onCancel={() => setUnsavedDlg(null)} />
-      {!previewOpen && <div className="shrink-0" style={{ marginRight: barW }} data-testid="editor-header-wrap"><EditorHeader
+      {!previewOpen && <div className="shrink-0" data-testid="editor-header-wrap"><EditorHeader
         product={product}
         selectedVersionId={selectedVersionId}
         onSelectVersion={setSelectedVersionId}
@@ -662,6 +746,7 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
         canNewVersion={!!product.published_version_id && !product.versions.some((v: any) => v.state === "rascunho")}
         onNewVersion={() => act(() => apiClient.newCatalog2Version(productId), "Nova versão rascunho criada.")}
         pin={pin}
+        readiness={<ProductReadinessPanel taskName={(version?.tasks ?? [])[0]?.name} productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onGoDetail={goToReadinessAdjustment} onItems={setReadinessItems} onData={setReadinessData} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} detailTargetFor={(key: string, index: number) => readinessDetailTargets(key, product, version, readinessItems?.[key]?.note)[index]} />}
       /></div>}
       <ConfirmationDialog
         open={leaveDlg !== null}
@@ -689,41 +774,60 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
       )}
       <div className={`min-h-0 flex-1 flex-col ${previewOpen ? "hidden" : "flex"}`}>
       <div ref={scrollerRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-3">
-      <ProductReadinessPanel taskName={(version?.tasks ?? [])[0]?.name} productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onGoDetail={goToReadinessAdjustment} onItems={setReadinessItems} onData={setReadinessData} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} detailTargetFor={(key: string, index: number) => readinessDetailTargets(key, product, version, readinessItems?.[key]?.note)[index]} />
-
       {version && (
-        <Tabs value={editorTab} onValueChange={setEditorTab}>
+        <Tabs value={editorTab} onValueChange={setEditorTab} className="!mt-[7px]" /* cabeçalho → abas = 15 px (8 do editor + 7) */>
           {/* Etapas de trabalho (reunião 10/09). As 10 seções originais
               continuam todas aqui — reagrupadas, nada removido. */}
           <Stepper current={editorTab} onSelect={(t: string) => { void flushPending().then(() => setEditorTab(t)); }} items={readinessItems} />
 
           <KeepTabsContent value="info" className="mt-2">
-            <div className="mb-3 space-y-2"><ProductCounts version={version} /><AudienceCard product={product} readOnly={!product || readOnly} registerFlush={registerFlusher} onDone={() => void load()} /><AiFreeChangesCard version={version} /></div>
-            <GeneralTab version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} />
+            <div className="mb-3 space-y-2"><div className="flex flex-wrap items-center justify-between gap-2"><ProductCounts version={version} /><AccordionToggleAll /></div>
+            </div>
+            <GeneralTab afterMain={<>
+              {/* Itens 2 e 3 da tela (o 1 é Dados principais): acordeão fechado por padrão (mesmo layout dos demais cartões desta tela). */}
+              <SectionCard number={2} icon={AudienceIcon} title="Quem pode ver este produto" subtitle={`Quem enxerga e contrata: ${audienceSummary(product?.visibility_mode)}`} help="Define para quais públicos o produto aparece e pode ser contratado. Vale na lista, no detalhe, na cotação, na cesta e nas recomendações da IA." collapsible defaultOpen={false} keepMounted>
+                <AudienceCard bare product={product} readOnly={!product || readOnly} registerFlush={registerFlusher} onDone={() => void load()} />
+              </SectionCard><SectionCard number={3} icon={Clock} title="Alterações por IA grátis neste produto" subtitle={`Total: ${aiFreeTotal(version)} — definido em cada etapa`} help="Soma das alterações por IA grátis definidas em cada etapa. Para mudar, edite o campo na própria etapa." collapsible defaultOpen={false}><AiFreeChangesCard bare version={version} /></SectionCard>
+</>} version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} />
           </KeepTabsContent>
 
           <KeepTabsContent value="opcoes" className={TAB_CARD}>
-            <StepIntro>Como o produto é classificado e as escolhas que o cliente faz na contratação.</StepIntro>
-            <Tabs value={subTabs.opcoes} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, opcoes: v }))}>
-              <TabsList className={SUB_TABS_LIST}>
-                <TabsTrigger value="class" className={SUB_TAB}><Tag className="h-3.5 w-3.5" />Classificação</TabsTrigger>
-                <TabsTrigger value="var" className={SUB_TAB}><Layers className="h-3.5 w-3.5" />Variações</TabsTrigger>
-                <TabsTrigger value="add" className={SUB_TAB}><Plus className="h-3.5 w-3.5" />Adicionais</TabsTrigger>
-                <TabsTrigger value="cond" className={SUB_TAB}><Clock className="h-3.5 w-3.5" />Prazos e condições</TabsTrigger>
-              </TabsList>
+            <Tabs value={subTabs.opcoes} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, opcoes: v }))} className="!mt-0 !gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <TabsList className={SUB_TABS_LIST}>
+                    <TabsTrigger value="class" className={SUB_TAB}><Tag className="h-3.5 w-3.5" />Classificação<span className="field-info" data-help="Define a base comercial e as classificações do produto (categoria, tags e tipo) usadas para organizar e encontrar o produto." aria-hidden="true">i</span></TabsTrigger>
+                    <TabsTrigger value="var" className={SUB_TAB}><Layers className="h-3.5 w-3.5" />Variações<span className="field-info" data-help="Escolhas que o cliente faz ao contratar (ex.: número de campanhas ou plataforma). Cada opção pode mudar preço, prazo, tarefas, etapas e entregáveis." aria-hidden="true">i</span></TabsTrigger>
+                    <TabsTrigger value="add" className={SUB_TAB}><Plus className="h-3.5 w-3.5" />Adicionais<span className="field-info" data-help="Itens extras que o cliente pode somar ao produto na contratação, cada um com seu preço e seus impactos." aria-hidden="true">i</span></TabsTrigger>
+                    <TabsTrigger value="cond" className={SUB_TAB}><Clock className="h-3.5 w-3.5" />Prazos e condições<span className="field-info" data-help="Regras de prazo e condições que entram no produto conforme o cenário (ex.: urgência e itens condicionais)." aria-hidden="true">i</span></TabsTrigger>
+                  </TabsList>
+                </div>
+                <AccordionToggleAll />
+              </div>
               <KeepTabsContent value="class"><ClassTab readOnly={readOnly} product={product} refs={refs}highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></KeepTabsContent>
               <KeepTabsContent value="var"><div id="sec-var" className={secRing("sec-var")}><VariationsTab version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
               <KeepTabsContent value="add"><div id="sec-add" className={secRing("sec-add")}><AddonsTab version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
-              <KeepTabsContent value="cond"><EmergencyCard version={version} readOnly={readOnly} act={act} /><ConditionsTab version={version} readOnly={readOnly} act={act} /><div className="mt-4 space-y-4"><p className="rounded-lg bg-white/70 px-3 py-2 text-xs text-slate-600 dark:bg-slate-900/40 dark:text-slate-300">Aprovações e prazos GERAIS do produto (implantação, ciclo recorrente, relatório, publicação…). A aprovação e o prazo de cada etapa se configuram dentro da própria etapa (aba Tarefa e etapas).</p><ApprovalGatesSection version={version} readOnly={readOnly} act={act} /><SlaRulesSection version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
+              <KeepTabsContent value="cond">
+                <div className="space-y-3" data-testid="deadline-rows">
+                  <PanelCard allowEdit readOnly={readOnly} icon={Clock} title="Entrega emergencial" summary={version.emergency_enabled ? "oferecida ao cliente" : "não oferecida"} help="O cliente pode pedir prazo menor pagando um adicional. Cada etapa diz quantas horas encurta e quanto cobra a mais; o sistema recalcula o prazo total e o preço final.">
+                    <EmergencyCard version={version} readOnly={readOnly} act={act} />
+                  </PanelCard>
+                  <PanelCard allowEdit readOnly={readOnly} icon={Link2} title="Regras de prazo" summary={`${(version.conditions ?? []).length} regra(s) · prazo base ${version.base_commercial_deadline_days ?? "—"} dias`} help="Regras tipadas (gatilho → efeito), sem código livre: por exemplo, um adicional escolhido que soma dias ao prazo.">
+                    <ConditionsTab version={version} readOnly={readOnly} act={act} />
+                  </PanelCard>
+                  <PanelCard allowEdit readOnly={readOnly} icon={ListChecks} title="Aprovações gerais do produto" summary={`${(version.approval_gates ?? []).length} aprovação(ões)`} help="Aprovações e prazos GERAIS do produto (implantação, ciclo recorrente, relatório, publicação…). A aprovação e o prazo de cada etapa se configuram dentro da própria etapa (aba Tarefa e etapas).">
+                    <ApprovalGatesSection version={version} readOnly={readOnly} act={act} />
+                  </PanelCard>
+                  <PanelCard allowEdit readOnly={readOnly} icon={CalendarClock} title="Prazos gerais (SLA)" summary={`${(version.sla_rules ?? []).length} regra(s)`} help="Prazos GERAIS do produto (implantação, ciclo recorrente, relatório…). O prazo de cada etapa se configura dentro da própria etapa.">
+                    <SlaRulesSection version={version} readOnly={readOnly} act={act} />
+                  </PanelCard>
+                </div>
+              </KeepTabsContent>
             </Tabs>
           </KeepTabsContent>
 
           <KeepTabsContent value="entrega" className="mt-2 space-y-2">
-            <div className="mb-3 space-y-3">
-              <DeliveryCommercialOverview version={version} readOnly={readOnly} act={act} ringOf={ringOf} locked={!editMode} product={product} onGoToRecurrence={goToDeliveryRecurrence} />
-              <AccessCatalogDialog open={accessCatalogOpen} onOpenChange={setAccessCatalogOpen} version={version} readOnly={readOnly} act={act} mode={accessCatalogMode} />
-            </div>
-            <Tabs value={subTabs.entrega} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, entrega: v }))}>
+            <Tabs value={subTabs.entrega} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, entrega: v }))} className="!mt-0 !gap-3">
               <div className="flex items-center gap-3">
                 <TabsList className={`${SUB_TABS_LIST} !gap-0.5 !p-0.5`}>
                   <TabsTrigger value="tarefas" className={`${SUB_TAB} !px-2.5 !py-1 !text-xs`}><ListOrdered className="h-3.5 w-3.5" />{product?.task_structure === "single" ? "Tarefa" : "Tarefas"}</TabsTrigger>
@@ -731,14 +835,17 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
                 <span className="min-w-0 flex-1 truncate text-[11px] text-violet-900 dark:text-violet-100" data-testid="task-structure-banner" title={product?.task_structure === "single" ? "Produto individual: uma tarefa principal. Todo o trabalho é dividido em etapas dentro da tarefa. Várias tarefas só existem em combos (tela de Combos)." : "Cada tarefa é um bloco de trabalho; as etapas são o passo a passo de cada uma."}><strong>{product?.task_structure === "single" ? "Produto individual: uma tarefa principal." : "Produto composto (combo): várias tarefas."}</strong> {product?.task_structure === "single" ? "Todo o trabalho é dividido em etapas." : "As etapas são o passo a passo de cada tarefa."}</span>
                 <div className="ml-auto flex items-center gap-1 text-[11px]">
                   <Tooltip><TooltipTrigger asChild><button type="button" className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:text-violet-700" aria-label={`Informações: ${entregaInfo.title}`}><Info className="h-3.5 w-3.5" /></button></TooltipTrigger><TooltipContent side="bottom" className="max-w-xs text-xs"><p className="font-bold">{entregaInfo.title}</p><p className="mt-1">{entregaInfo.text}</p></TooltipContent></Tooltip>
-                  <Tooltip><TooltipTrigger asChild><button type="button" aria-label="Recolher todas as tarefas" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-white hover:text-violet-700" onClick={() => window.dispatchEvent(new Event("catalog2:collapse-tasks"))}><ChevronUp className="h-4 w-4" /></button></TooltipTrigger><TooltipContent side="bottom">Recolher todas</TooltipContent></Tooltip>
-                  <Tooltip><TooltipTrigger asChild><button type="button" aria-label="Expandir todas as tarefas" className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-white hover:text-violet-700" onClick={() => window.dispatchEvent(new Event("catalog2:expand-tasks"))}><ChevronDown className="h-4 w-4" /></button></TooltipTrigger><TooltipContent side="bottom">Expandir todas</TooltipContent></Tooltip>
+                  <AccordionToggleAll />
                 </div>
+              </div>
+              <div className="space-y-3">
+                <DeliveryCommercialOverview version={version} readOnly={readOnly} act={act} ringOf={ringOf} locked={!editMode} product={product} onGoToRecurrence={goToDeliveryRecurrence} />
+                <AccessCatalogDialog open={accessCatalogOpen} onOpenChange={setAccessCatalogOpen} version={version} readOnly={readOnly} act={act} mode={accessCatalogMode} />
               </div>
               <KeepTabsContent value="tarefas"><TasksTab taskStructure={product?.task_structure ?? "multiple"} version={version} productId={productId} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} editTaskId={taskEditRequest} onOpenPricing={openPricingFromTask} /></KeepTabsContent>
             </Tabs>
             {/* Acessos necessários: fica DEPOIS das tarefas. Os acessos são cadastrados dentro de cada etapa; aqui é o resumo de tudo o que foi pedido. */}
-            <PersistDetails persistKey="d1" id="sec-connections" className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[30px] cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Lock className="h-4 w-4" /></span><span>Acessos necessários<span className="field-info" data-help="Resumo de todos os acessos pedidos no produto: onde cada um foi cadastrado, em quais etapas é usado e se está disponível para outras etapas. Para pedir um acesso, cadastre dentro da etapa (Conexões e acessos desta etapa)." aria-hidden="true">i</span></span><span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-semibold ${accessCount(version) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{accessCount(version) > 0 ? `${accessCount(version)} configurado${accessCount(version) === 1 ? "" : "s"}` : "nenhum pedido"}</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3 min-w-0 space-y-2"><p className="text-[11px] text-slate-500">Resumo, só leitura: os acessos de cada etapa. Para pedir um acesso, abra a etapa e use “Conexões e acessos desta etapa”.</p><AccessesSummary version={version} act={act} readOnly={readOnly} /></div></PersistDetails>
+            <PersistDetails persistKey="d1" id="sec-connections" className="mt-3 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><summary className="flex min-h-[30px] cursor-pointer list-none items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Lock className="h-4 w-4" /></span><span>Acessos necessários<span className="field-info" data-help="Resumo de todos os acessos pedidos no produto: onde cada um foi cadastrado, em quais etapas é usado e se está disponível para outras etapas. Para pedir um acesso, cadastre dentro da etapa (Conexões e acessos desta etapa)." aria-hidden="true">i</span></span><span className={`ml-auto rounded-full px-2.5 py-1 text-[10px] font-semibold ${accessCount(version) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>{accessCount(version) > 0 ? `${accessCount(version)} configurado${accessCount(version) === 1 ? "" : "s"}` : "nenhum pedido"}</span><ChevronDown className="h-4 w-4 text-slate-500" /></summary><div className="mt-3 min-w-0 space-y-2"><p className="text-[11px] text-slate-500">Resumo, só leitura: os acessos de cada etapa. Para pedir um acesso, abra a etapa e use “Conexões e acessos desta etapa”.</p><AccessesSummary version={version} act={act} readOnly={readOnly} /></div></PersistDetails>
           </KeepTabsContent>
 
           <KeepTabsContent value="precos" className={TAB_CARD}>
@@ -747,13 +854,17 @@ export function ProductEditor({ productId, onBack, pin, notice }: { productId: s
           </KeepTabsContent>
 
           <TabsContent value="revisao" className={TAB_CARD}>
-            <StepIntro>Confira como o produto aparece para o cliente e publique a versão quando estiver pronta.</StepIntro>
-            <Tabs value={subTabs.revisao} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, revisao: v }))}>
-              <TabsList className={SUB_TABS_LIST}>
-                <TabsTrigger value="preview" className={SUB_TAB}><Eye className="h-3.5 w-3.5" />Conferência final</TabsTrigger>
-                <TabsTrigger value="hist" className={SUB_TAB}><UploadCloud className="h-3.5 w-3.5" />Publicação e versões</TabsTrigger>
-                <TabsTrigger value="historico" className={SUB_TAB}><Clock className="h-3.5 w-3.5" />Histórico</TabsTrigger>
-              </TabsList>
+            <Tabs value={subTabs.revisao} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, revisao: v }))} className="!mt-0 !gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <TabsList className={SUB_TABS_LIST}>
+                    <TabsTrigger value="preview" className={SUB_TAB}><Eye className="h-3.5 w-3.5" />Conferência final<span className="field-info" data-help="Confere como o produto aparece para o cliente e o que ainda bloqueia a publicação." aria-hidden="true">i</span></TabsTrigger>
+                    <TabsTrigger value="hist" className={SUB_TAB}><UploadCloud className="h-3.5 w-3.5" />Publicação e versões<span className="field-info" data-help="Publica a versão do produto e controla as versões (o que está no ar e o que é rascunho)." aria-hidden="true">i</span></TabsTrigger>
+                    <TabsTrigger value="historico" className={SUB_TAB}><Clock className="h-3.5 w-3.5" />Histórico<span className="field-info" data-help="Registro das alterações e publicações feitas neste produto." aria-hidden="true">i</span></TabsTrigger>
+                  </TabsList>
+                </div>
+                <AccordionToggleAll />
+              </div>
               <TabsContent value="preview"><PreviewTab version={version} readOnly={readOnly} act={act} onResolveIssue={goToPublishIssue} /></TabsContent>
               <TabsContent value="hist"><div id="sec-publicacao" className={secRing("sec-publicacao")}><HistoryTab version={version} product={product} readOnly={readOnly} act={act} onResolveIssue={goToPublishIssue} /></div></TabsContent>
               <TabsContent value="historico"><ReviewHistoryTab productId={productId} version={version} /></TabsContent>
@@ -1131,7 +1242,7 @@ const FormsCtx = createContext<(id: string, api: OpenFormApi) => () => void>(() 
 // Cadastros de apoio (especialidades etc.) para componentes fundos que só precisam consultar.
 const RefsCtx = createContext<any>(null);
 
-function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clearHighlight }: any) {
+function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clearHighlight, afterMain }: any) {
   const ringOf = useContext(RingCtx);
   const [f, setF] = useState({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" });
   const [savingInfo, setSavingInfo] = useState(false);
@@ -1198,7 +1309,7 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
 
   return (
     <div id="catalog2-general" className="scroll-mt-6 space-y-2">
-      <SectionCard icon={FileText} title="Dados principais" subtitle="Nome e descrição comercial do produto." help="Preencha o nome comercial e um resumo curto que explicam este produto para o cliente." defaultOpen={false}>
+      <SectionCard number={1} icon={FileText} title="Dados principais" subtitle="Nome e descrição comercial do produto." help="Preencha o nome comercial e um resumo curto que explicam este produto para o cliente." defaultOpen={false}>
         <div className="grid items-start gap-3 lg:grid-cols-2">
           <div id="catalog2-field-title" className={ringOf("catalog2-field-title")}>
             <FieldAccordion title={<span>Título comercial <Req /></span>} help="O nome que aparece para o cliente ao contratar este produto." forceOpen={ringOf("catalog2-field-title") !== ""}><div className="space-y-1"><div className="relative"><Input aria-label="Título comercial" className="h-[62px] pr-16" disabled={readOnly} value={f.title} onChange={(e) => updateInfo({ title: e.target.value })} /><span className="absolute right-2 top-2"><AiFieldButton compact label="Título comercial" value={f.title} context={{ name: f.title, category: product.category?.name, other_fields: { "Descrição curta": f.summary, "Descrição completa": f.full_description } }} disabled={readOnly} onResult={(v) => updateInfo({ title: v.replace(/\n/g, " ").slice(0, 200) })} /></span></div><CharCount value={f.title} max={200} /></div></FieldAccordion>
@@ -1207,13 +1318,15 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
         </div>
       </SectionCard>
 
-      <SectionCard icon={FileText} title="Descrição completa" subtitle="Detalhe o produto com informações completas, benefícios e diferenciais." help="Apresente como o produto funciona, seus benefícios, limites e diferenciais de forma clara." collapsible defaultOpen={false} forceOpen={ringOf("catalog2-field-full-description") !== ""}>
+      {afterMain}
+
+      <SectionCard number={4} icon={FileText} title="Descrição completa" subtitle="Detalhe o produto com informações completas, benefícios e diferenciais." help="Apresente como o produto funciona, seus benefícios, limites e diferenciais de forma clara." collapsible defaultOpen={false} forceOpen={ringOf("catalog2-field-full-description") !== ""}>
         <div id="catalog2-field-full-description" className={ringOf("catalog2-field-full-description")}><FieldAccordion title={<span>Descrição <Req /></span>} help="Explicação completa do produto, com benefícios, funcionamento e diferenciais." forceOpen={ringOf("catalog2-field-full-description") !== ""}><div className="space-y-1"><div className="relative"><Textarea aria-label="Descrição" rows={5} className="pr-16" disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} /><span className="absolute right-2 top-2"><AiFieldButton compact label="Descrição completa" value={f.full_description} context={{ name: f.title, category: product.category?.name, other_fields: { "Descrição curta": f.summary, "Descrição completa": f.full_description } }} disabled={readOnly} onResult={(v) => updateInfo({ full_description: v.slice(0, 2000) })} /></span></div><CharCount value={f.full_description} max={4000} /></div></FieldAccordion></div>
       </SectionCard>
 
       <CommercialFieldsCard version={version} readOnly={readOnly} registerFlush={registerFlusher} registerSave={(fn) => { saveCommercialRef.current = fn; return () => { if (saveCommercialRef.current === fn) saveCommercialRef.current = async () => {}; }; }} onSave={(b) => onSave(b)} />
 
-      <SectionCard icon={Clock} title="Resumo da mudança" subtitle="Escrito pela IA a partir do que foi alterado — você pode editar." collapsible defaultOpen={false}>
+      <SectionCard number={8} tone="soft" icon={Clock} title="Resumo da mudança" subtitle="Escrito pela IA a partir do que foi alterado — você pode editar." collapsible defaultOpen={false}>
         <div className="space-y-1">
           <div className="relative"><Textarea rows={2} maxLength={500} className="pr-16" disabled={readOnly} placeholder="Deixe em branco: ao salvar, a IA descreve o que foi alterado (preço, prazo, textos, tarefas…)." value={f.change_summary} onChange={(e) => updateInfo({ change_summary: e.target.value })} /><span className="absolute right-2 top-2"><ChangeSummaryAiButton compact versionId={version.id} disabled={readOnly} onResult={(v) => updateInfo({ change_summary: v.slice(0, 500) })} /></span></div>
           <CharCount value={f.change_summary} max={500} />
@@ -1356,20 +1469,7 @@ function VariationsTab({ version, readOnly, act }: any) {
         {!readOnly && <AddBtn onClick={() => setAdding((v) => !v)}>Nova variação</AddBtn>}
       </div>
       {version.variations.map((va: any, vi: number) => (
-        <section key={va.id} className="rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-          <div className="flex min-h-[58px] items-center justify-between gap-2 px-3">
-            <div className="flex min-w-0 items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-200"><Layers className="h-4 w-4" /></span><span className="min-w-0"><EditableVariationName name={va.name} readOnly={readOnly} onRename={(next) => act(() => apiClient.updateCatalog2Variation(va.id, { name: next }), "Nome da variação salvo.")} /><span className="block text-[11px] text-slate-500">{va.options.length === 1 ? "1 opção disponível" : `${va.options.length} opções disponíveis`}</span></span><Badge className={va.is_required ? "border-0 bg-amber-100 text-amber-800" : "border-0 bg-slate-100 text-slate-600"}>{va.is_required ? "Obrigatória" : "Opcional"}</Badge>{va.options.find((o: any) => o.is_default) && <Badge className="border-0 bg-blue-100 text-blue-700">Padrão: {va.options.find((o: any) => o.is_default)?.label}</Badge>}<Badge className={va.options.some((o: any) => (o.effects ?? []).length > 0) ? "border-0 bg-emerald-100 text-emerald-700" : "border-0 bg-slate-100 text-slate-500"}>{va.options.some((o: any) => (o.effects ?? []).length > 0) ? "Configurada" : "A configurar"}</Badge>{va.is_active === false && <Badge className="border-0 bg-neutral-200 text-neutral-600">Inativa</Badge>}</div>
-            <span className="flex flex-wrap items-center justify-end gap-2">
-              <CheckPill disabled={readOnly} checked={va.base_included !== false}
-                hint={"Marcado: o produto ORIGINAL já inclui esta variação. Uma das opções pode ser o 'padrão' (não soma custo) e as outras somam.\nDesmarcado: a variação NÃO existe no produto original; nenhuma opção é padrão e TODAS somam custo."}
-                onChange={(v) => void act(() => apiClient.updateCatalog2Variation(va.id, { base_included: v }), v ? "A variação passa a existir no produto original." : "A variação não existe no produto original: todas as opções somam custo.")}>
-                Já no produto original
-              </CheckPill>
-              {!readOnly && <ConfirmDeleteButton testId="variation-delete" label="Excluir variação" title="Excluir esta variação?" message="A variação e todas as suas opções serão removidas. Esta ação não pode ser desfeita." onConfirm={() => act(() => apiClient.deleteCatalog2Variation(va.id), "Variação removida.")} />}
-            </span>
-          </div>
-          <VariationEditor va={va} index={vi} list={version.variations} version={version} readOnly={readOnly} act={act} />
-        </section>
+        <VariationRow key={va.id} va={va} vi={vi} version={version} readOnly={readOnly} act={act} />
       ))}
       {!readOnly && adding && (
         <div className="flex flex-wrap items-end gap-2 rounded-[14px] border border-dashed border-violet-300 bg-white p-3 dark:border-violet-800 dark:bg-slate-900/60">
@@ -1377,6 +1477,46 @@ function VariationsTab({ version, readOnly, act }: any) {
         </div>
       )}
     </div>
+  );
+}
+
+
+/** Variação em UMA linha (número, nome, resumo) com botão Ver; tudo é editado num PAINEL MOLDURA. */
+function VariationRow({ va, vi, version, readOnly, act }: any) {
+  const [open, setOpen] = useState(false);
+  const def = va.options.find((o: any) => o.is_default);
+  const configured = va.options.some((o: any) => (o.effects ?? []).length > 0);
+  return (
+    <section className="rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60" data-testid="variation-row">
+      <div className="flex min-h-[44px] items-center gap-2 px-3 py-1.5">
+        <span className="section-number-badge flex h-7 shrink-0 items-center justify-center rounded-full px-2.5 text-xs font-bold text-white">Variação {vi + 1}</span>
+        <span className="min-w-0 truncate text-[13px] font-bold text-slate-900 dark:text-slate-100" title={va.name}>{va.name}</span>
+        <span className="text-[11px] text-slate-500">{va.options.length === 1 ? "1 opção" : `${va.options.length} opções`}</span>
+        <Badge className={va.is_required ? "border-0 bg-amber-100 text-amber-800" : "border-0 bg-slate-100 text-slate-600"}>{va.is_required ? "Obrigatória" : "Opcional"}</Badge>
+        {def && <Badge className="border-0 bg-blue-100 text-blue-700">Padrão: {def.label}</Badge>}
+        <Badge className={configured ? "border-0 bg-emerald-100 text-emerald-700" : "border-0 bg-slate-100 text-slate-500"}>{configured ? "Configurada" : "A configurar"}</Badge>
+        {va.is_active === false && <Badge className="border-0 bg-neutral-200 text-neutral-600">Inativa</Badge>}
+        <button type="button" onClick={() => setOpen(true)} className="ml-auto inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="variation-open"><Eye className="h-3.5 w-3.5" />Ver</button>
+      </div>
+      {open && (
+        <FramedPanel open onOpenChange={setOpen} testId="variation-panel" title={`Variação ${vi + 1}`}>
+          <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+            <div className="flex min-w-0 items-center gap-2"><span className="section-number-badge flex h-7 shrink-0 items-center justify-center rounded-full px-2.5 text-xs font-bold text-white">Variação {vi + 1}</span><EditableVariationName name={va.name} readOnly={readOnly} onRename={(next: string) => act(() => apiClient.updateCatalog2Variation(va.id, { name: next }), "Nome da variação salvo.")} /></div>
+            <div className="flex flex-wrap items-center gap-2">
+              <CheckPill disabled={readOnly} checked={va.base_included !== false}
+                hint={"Marcado: o produto ORIGINAL já inclui esta variação. Uma das opções pode ser o 'padrão' (não soma custo) e as outras somam.\nDesmarcado: a variação NÃO existe no produto original; nenhuma opção é padrão e TODAS somam custo."}
+                onChange={(v) => void act(() => apiClient.updateCatalog2Variation(va.id, { base_included: v }), v ? "A variação passa a existir no produto original." : "A variação não existe no produto original: todas as opções somam custo.")}>
+                Já no produto original
+              </CheckPill>
+              {!readOnly && <ConfirmDeleteButton testId="variation-delete" label="Excluir variação" title="Excluir esta variação?" message="A variação e todas as suas opções serão removidas. Esta ação não pode ser desfeita." onConfirm={() => act(() => apiClient.deleteCatalog2Variation(va.id), "Variação removida.")} />}
+              {readOnly && <Button size="sm" onClick={() => window.dispatchEvent(new Event("catalog2:start-editing"))} data-testid="variation-edit"><Pencil className="mr-1 h-3.5 w-3.5" />Editar</Button>}
+              <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Fechar</Button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3"><VariationEditor va={va} index={vi} list={version.variations} version={version} readOnly={readOnly} act={act} /></div>
+        </FramedPanel>
+      )}
+    </section>
   );
 }
 
@@ -1392,15 +1532,15 @@ function VariationEditor({ va, index, list, version, readOnly, act }: any) {
   const [addErr, setAddErr] = useState("");
   const putVariation = (body: any, ok: string) => act(() => apiClient.updateCatalog2Variation(va.id, body), ok);
   const type = va.selection_type ?? "single";
-  return <div className="space-y-3 border-t border-slate-100 px-3 py-3 dark:border-slate-800">
+  return <div className="space-y-2 px-1 py-1">
     <div className="flex flex-wrap items-center gap-3 text-xs">
-      <label className="inline-flex items-center gap-1.5"><span className="font-semibold text-slate-700 dark:text-slate-200">Tipo de escolha<span className="field-info" data-help="Uma opção: o cliente escolhe só uma. Várias opções: pode marcar mais de uma. Quantidade: o cliente informa um número." aria-hidden="true">i</span></span><select disabled={readOnly} className="h-10 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={type} onChange={(e) => void putVariation({ selection_type: e.target.value }, "Tipo de escolha atualizado.")}><option value="single">Uma opção</option><option value="multiple">Várias opções</option><option value="quantity">Quantidade</option></select></label>
+      <label className="inline-flex items-center gap-1.5"><span className="font-semibold text-slate-700 dark:text-slate-200">Tipo de escolha<span className="field-info" data-help="Uma opção: o cliente escolhe só uma. Várias opções: pode marcar mais de uma. Quantidade: o cliente informa um número." aria-hidden="true">i</span></span><select disabled={readOnly} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={type} onChange={(e) => void putVariation({ selection_type: e.target.value }, "Tipo de escolha atualizado.")}><option value="single">Uma opção</option><option value="multiple">Várias opções</option><option value="quantity">Quantidade</option></select></label>
       <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200"><Switch aria-label="Obrigatória" disabled={readOnly} checked={!!va.is_required} onCheckedChange={(v) => void putVariation({ is_required: !!v }, "Obrigatoriedade atualizada.")} />Obrigatória<span className="field-info" data-help="Obrigatória: o cliente precisa escolher uma opção desta variação para contratar." aria-hidden="true">i</span></label>
       <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200"><Switch aria-label="Ativa" disabled={readOnly} checked={va.is_active !== false} onCheckedChange={(v) => void putVariation({ is_active: !!v }, "Variação atualizada.")} />Ativa<span className="field-info" data-help="Desligada, a variação não aparece para o cliente, mas continua cadastrada." aria-hidden="true">i</span></label>
       {!readOnly && <span className="ml-auto"><IconBtn label="Reordenar variação" onClick={() => void putVariation({ sort_order: Math.max(1, (va.sort_order ?? index + 1) - 1) }, "Ordem atualizada.")}><ListOrdered className="h-4 w-4" /></IconBtn></span>}
     </div>
-    <label className="block"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Ajuda para o cliente<span className="field-info" data-help="Texto curto que explica ao cliente como escolher entre as opções desta variação." aria-hidden="true">i</span></span><Input disabled={readOnly} className="h-10 text-xs" maxLength={2000} value={help} onChange={(e) => setHelp(e.target.value)} onBlur={() => { if (help !== (va.notes ?? "")) void putVariation({ notes: help.trim() || null }, "Ajuda salva."); }} placeholder="Explique como o cliente deve escolher" /></label>
-    <ul className="space-y-2">
+    <label className="block"><span className="mb-1 block text-[11px] font-semibold text-slate-500">Ajuda para o cliente<span className="field-info" data-help="Texto curto que explica ao cliente como escolher entre as opções desta variação." aria-hidden="true">i</span></span><Input disabled={readOnly} className="h-8 text-xs" maxLength={2000} value={help} onChange={(e) => setHelp(e.target.value)} onBlur={() => { if (help !== (va.notes ?? "")) void putVariation({ notes: help.trim() || null }, "Ajuda salva."); }} placeholder="Explique como o cliente deve escolher" /></label>
+    <ul className="space-y-1.5">
       {va.options.map((option: any, optionIndex: number) => <VariationOptionRow key={option.id} option={option} variation={va} index={optionIndex} list={va.options} version={version} readOnly={readOnly} act={act} />)}
     </ul>
     {!readOnly && <div className="flex flex-wrap items-center justify-between gap-2 pt-1"><div className="flex items-center gap-2"><Input className="h-8 w-56 text-xs" placeholder="Título da nova opção" value={newLabel} onChange={(e) => { setNewLabel(e.target.value); setAddErr(""); }} /><AddBtn onClick={() => !newLabel.trim() ? setAddErr("Digite o título da nova opção antes de clicar em Adicionar opção.") : (setAddErr(""), act(() => apiClient.addCatalog2Option(va.id, { key: newLabel.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""), label: newLabel.trim() }), "Opção adicionada.").then(() => setNewLabel("")))}>Adicionar opção</AddBtn>{addErr && <span role="alert" data-testid="add-option-error" className="text-xs font-semibold text-red-600">{addErr}</span>}</div><SaveButton onClick={() => void putVariation({ notes: help.trim() || null }, "Variação salva.")}>Salvar variação</SaveButton></div>}
@@ -1409,7 +1549,7 @@ function VariationEditor({ va, index, list, version, readOnly, act }: any) {
 
 function VariationOptionRow({ option, variation, index, list, version, readOnly, act }: any) {
   const refsCtx = useContext(RefsCtx);
-  const [detailOpen, setDetailOpen] = usePersistedFlag(`opt-detail:${option.id}`, false);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [label, setLabel] = useState(option.label);
   const [message, setMessage] = useState(option.availability_note ?? "");
   const put = (body: any, ok: string) => act(() => apiClient.updateCatalog2Option(option.id, body), ok);
@@ -1421,20 +1561,20 @@ function VariationOptionRow({ option, variation, index, list, version, readOnly,
     reader.readAsDataURL(file);
   };
   const mediaIcon = option.icon_key === "globe" ? <Globe2 className="h-4 w-4" /> : option.icon_key === "tag" ? <Tag className="h-4 w-4" /> : <Layers className="h-4 w-4" />;
-  return <li className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-950/20">
+  return <li className="rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-950/20">
     <div className="flex flex-wrap items-start gap-x-3 gap-y-2" data-testid="option-row">
-      <label title="Clique para enviar uma imagem (PNG, JPG ou WEBP até 1 MB). Para usar um ícone, abra o menu ⋮ da opção." className="grid h-10 w-10 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-lg border border-violet-200 bg-white text-violet-600 hover:border-violet-400 dark:border-violet-900 dark:bg-slate-900">
+      <label title="Clique para enviar uma imagem (PNG, JPG ou WEBP até 1 MB). Para usar um ícone, abra o menu ⋮ da opção." className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-lg border border-violet-200 bg-white text-violet-600 hover:border-violet-400 dark:border-violet-900 dark:bg-slate-900">
         <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" disabled={readOnly} onChange={(e) => { const file = e.target.files?.[0]; if (file) saveImage(file); e.currentTarget.value = ""; }} />
         {option.media_url ? <img className="h-full w-full object-cover" src={option.media_url} alt="Mídia da opção" /> : option.icon_key ? <span data-testid="option-icon" className="[&>svg]:h-5 [&>svg]:w-5">{mediaIcon}</span> : <UploadCloud className="h-4 w-4 text-slate-400" />}
         <span className="sr-only">Adicionar ícone ou imagem</span>
       </label>
       <div className="min-w-[12rem] flex-1">
-        <Input id={`option-title-${option.id}`} disabled={readOnly} aria-label="Título da opção" className="h-10 text-xs" maxLength={160} value={label} onChange={(e) => setLabel(e.target.value)} onBlur={() => { if (label.trim() && label !== option.label) void put({ label: label.trim() }, "Título salvo."); }} />
+        <Input id={`option-title-${option.id}`} disabled={readOnly} aria-label="Título da opção" className="h-8 text-xs" maxLength={160} value={label} onChange={(e) => setLabel(e.target.value)} onBlur={() => { if (label.trim() && label !== option.label) void put({ label: label.trim() }, "Título salvo."); }} />
         <div className="mt-1 flex flex-wrap items-center gap-1" data-testid="option-actions">
           {!readOnly && <button type="button" data-testid="option-rename" onClick={() => { const el = document.getElementById(`option-title-${option.id}`) as HTMLInputElement | null; el?.focus(); el?.select(); }} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"><Pencil className="h-3 w-3" />Editar nome</button>}
           {!readOnly && <ConfirmDeleteButton size="sm" testId="option-delete" label="Excluir" title="Excluir esta opção?" message={`A opção “${option.label}” será removida. Esta ação não pode ser desfeita.`} onConfirm={() => act(() => apiClient.deleteCatalog2Option(option.id), "Opção removida.")} />}
         </div></div>
-      <div className="w-52 shrink-0"><label className="min-w-0"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Disponibilidade</span><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={option.availability ?? "auto"} onChange={(e) => void put({ availability: e.target.value }, "Disponibilidade atualizada.")}><option value="auto">Contratação automática</option><option value="commercial_review">Exige revisão comercial</option><option value="custom_quote">Orçamento personalizado</option><option value="assisted_only">Só com atendimento</option><option value="unavailable">Indisponível</option></select></label></div>
+      <div className="w-52 shrink-0"><label className="min-w-0"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Disponibilidade</span><select disabled={readOnly} className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900" value={option.availability ?? "auto"} onChange={(e) => void put({ availability: e.target.value }, "Disponibilidade atualizada.")}><option value="auto">Contratação automática</option><option value="commercial_review">Exige revisão comercial</option><option value="custom_quote">Orçamento personalizado</option><option value="assisted_only">Só com atendimento</option><option value="unavailable">Indisponível</option></select></label></div>
       <div className="min-w-[7rem] max-w-[16rem] shrink-0"><div className="min-w-0"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Impactos</span><div className="flex flex-wrap items-center gap-2"><EffectChips effects={option.effects ?? []} /><button type="button" aria-expanded={detailOpen} onClick={() => setDetailOpen((v) => !v)} data-testid="option-detail-toggle" className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-900 dark:bg-slate-900"><Settings2 className="h-3.5 w-3.5" />{detailOpen ? "Fechar detalhes" : "Configurar impactos"}</button></div></div></div>
       {!typeIsQuantity(variation) && (
         <div className="pt-5" data-testid="option-default-box">
@@ -1445,17 +1585,23 @@ function VariationOptionRow({ option, variation, index, list, version, readOnly,
           </CheckPill>
         </div>
       )}
-      <div className="pt-5"><label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200"><Switch aria-label="Opção ativa" disabled={readOnly} checked={option.is_active !== false} onCheckedChange={(v) => void put({ is_active: !!v }, "Opção atualizada.")} />Ativa</label></div>
-      <div className="pt-5"><DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Mais ações da opção"><MoreVertical className="h-4 w-4" /></button></DropdownMenuTrigger><DropdownMenuContent align="end">{!readOnly && <><DropdownMenuItem onClick={() => void put({ icon_key: "layers", media_url: null }, "Ícone de camadas definido.")}>{option.icon_key === "layers" ? "✓ " : ""}Usar ícone de camadas</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "globe", media_url: null }, "Ícone de globo definido.")}>{option.icon_key === "globe" ? "✓ " : ""}Usar ícone de globo</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "tag", media_url: null }, "Ícone de etiqueta definido.")}>{option.icon_key === "tag" ? "✓ " : ""}Usar ícone de etiqueta</DropdownMenuItem>{(option.media_url || option.icon_key) && <DropdownMenuItem onClick={() => void put({ icon_key: null, media_url: null }, "Mídia removida.")}>Manter sem mídia</DropdownMenuItem>}<DropdownMenuItem className="text-red-600" onClick={() => void act(() => apiClient.deleteCatalog2Option(option.id), "Opção removida.")}>Remover opção</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div>
+      <div className="pt-4"><label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200"><Switch aria-label="Opção ativa" disabled={readOnly} checked={option.is_active !== false} onCheckedChange={(v) => void put({ is_active: !!v }, "Opção atualizada.")} />Ativa</label></div>
+      <div className="pt-4"><DropdownMenu><DropdownMenuTrigger asChild><button type="button" className="grid h-8 w-8 place-items-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Mais ações da opção"><MoreVertical className="h-4 w-4" /></button></DropdownMenuTrigger><DropdownMenuContent align="end">{!readOnly && <><DropdownMenuItem onClick={() => void put({ icon_key: "layers", media_url: null }, "Ícone de camadas definido.")}>{option.icon_key === "layers" ? "✓ " : ""}Usar ícone de camadas</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "globe", media_url: null }, "Ícone de globo definido.")}>{option.icon_key === "globe" ? "✓ " : ""}Usar ícone de globo</DropdownMenuItem><DropdownMenuItem onClick={() => void put({ icon_key: "tag", media_url: null }, "Ícone de etiqueta definido.")}>{option.icon_key === "tag" ? "✓ " : ""}Usar ícone de etiqueta</DropdownMenuItem>{(option.media_url || option.icon_key) && <DropdownMenuItem onClick={() => void put({ icon_key: null, media_url: null }, "Mídia removida.")}>Manter sem mídia</DropdownMenuItem>}<DropdownMenuItem className="text-red-600" onClick={() => void act(() => apiClient.deleteCatalog2Option(option.id), "Opção removida.")}>Remover opção</DropdownMenuItem></>}</DropdownMenuContent></DropdownMenu></div>
     </div>
     {customQuote && <label className="mt-2 block pl-[60px]"><span className="mb-1 block text-[10px] font-semibold text-slate-500">Mensagem ao cliente (opcional)</span><Input disabled={readOnly} className="h-8 text-xs" maxLength={1000} placeholder="Explique como o cliente receberá o orçamento" value={message} onChange={(e) => setMessage(e.target.value)} onBlur={() => { if (message !== (option.availability_note ?? "")) void put({ availability_note: message.trim() || null }, "Mensagem salva."); }} /></label>}
     {detailOpen && (
-      <div className="mt-3 grid gap-x-6 gap-y-3 border-t border-slate-100 pt-3 md:grid-cols-2 dark:border-slate-800" data-testid="option-detail">
+      <FramedModal open onOpenChange={setDetailOpen} testId="option-impacts-panel" title={`Impactos — ${option.label}`}>
+        <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+          <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">Configurar impactos · {option.label}</p><p className="truncate text-xs text-slate-500">Variação: {variation.name} — o que muda (preço, prazo, tarefas, etapas, entregáveis) quando o cliente escolhe esta opção.</p></div>
+          <Button size="sm" variant="outline" onClick={() => setDetailOpen(false)}>Fechar</Button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-[2px] py-1">
+      <div className="mt-2 grid gap-y-4 rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900" data-testid="option-detail">
         <div className="min-w-0 space-y-2">
           <p className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><User className="h-4 w-4 text-violet-600" aria-hidden="true" />Para o cliente</p>
           <OptionExamples option={option} readOnly={readOnly} put={put} />
         </div>
-        <div className="min-w-0 space-y-2 md:border-l md:border-slate-200 md:pl-6 dark:md:border-slate-700">
+        <div className="min-w-0 space-y-2 border-t border-slate-100 pt-4 dark:border-slate-800">
           <p className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><Layers className="h-4 w-4 text-violet-600" aria-hidden="true" />Impactos da opção</p>
           <OptionImpactSummary effects={option.effects ?? []} />
           <details open className="group rounded-xl border border-slate-200 dark:border-slate-700" data-testid="option-hours-accordion">
@@ -1468,6 +1614,8 @@ function VariationOptionRow({ option, variation, index, list, version, readOnly,
           </details>
         </div>
       </div>
+        </div>
+      </FramedModal>
     )}
   </li>;
 }
@@ -1555,13 +1703,7 @@ function AddonsTab({ version, readOnly, act }: any) {
     <div className="mt-3 space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500"><span>Escolhas opcionais. Uma contratação sem adicional continua válida.</span><span className="ml-auto text-violet-700">Os impactos atualizam automaticamente prazo, preço e entrega.</span>{!readOnly && <AddBtn onClick={() => setAdding((v) => !v)}>Novo adicional</AddBtn>}</div>
       {version.addons.map((a: any, ai: number) => (
-        <section key={a.id} className="rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-          <div className="flex min-h-[56px] items-center justify-between gap-2 px-3">
-            <div className="flex min-w-0 items-center gap-2"><AddonMedia addon={a} readOnly={true} /><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-fuchsia-100 text-fuchsia-700"><Plus className="h-4 w-4" /></span><span className="min-w-0"><span className="block truncate font-semibold text-slate-800 dark:text-slate-100">{a.name}</span><span className="block text-[11px] text-slate-500">{a.base_cost != null ? `R$ ${Number(a.base_cost).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "Valor pelos impactos"}</span></span><AddonImpactChips effects={a.effects ?? []} compact />{a.is_active === false && <Badge className="border-0 bg-slate-100 text-slate-500">Inativo</Badge>}</div>
-            <span className="flex items-center gap-1">{!readOnly && <DeleteBtn label="Remover adicional?" tip="Remover este adicional" onConfirm={() => act(() => apiClient.deleteCatalog2Addon(a.id), "Adicional removido.")} />}</span>
-          </div>
-          <AddonEditor addon={a} index={ai} list={version.addons} version={version} readOnly={readOnly} act={act} />
-        </section>
+        <AddonRow key={a.id} a={a} ai={ai} version={version} readOnly={readOnly} act={act} />
       ))}
       {!readOnly && adding && (
         <div className="rounded-[14px] border border-dashed border-violet-300 bg-white p-3 dark:border-violet-800 dark:bg-slate-900/60">
@@ -1571,6 +1713,58 @@ function AddonsTab({ version, readOnly, act }: any) {
             <AddBtn onClick={() => na.name.trim() && act(() => apiClient.addCatalog2Addon(version.id, { key: keyFromName(na.name), name: na.name.trim(), base_cost: na.base_cost ? Number(na.base_cost) : null }), "Adicional criado.").then(() => { setNa({ name: "", base_cost: "" }); setAdding(false); })}>Adicionar adicional</AddBtn>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Adicional em UMA linha (nome, preço, impactos) com botão Ver; tudo é editado num PAINEL MOLDURA. */
+function AddonRow({ a, ai, version, readOnly, act }: any) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60" data-testid="addon-row">
+      <div className="flex min-h-[44px] items-center gap-2 px-3 py-1.5">
+        <span className="flex h-7 shrink-0 items-center justify-center rounded-full bg-fuchsia-100 px-2.5 text-xs font-bold text-fuchsia-700"><Plus className="mr-0.5 h-3 w-3" />Adicional {ai + 1}</span>
+        <span className="min-w-0 truncate text-[13px] font-bold text-slate-900 dark:text-slate-100" title={a.name}>{a.name}</span>
+        <span className="text-[11px] text-slate-500">{a.base_cost == null ? "sem preço" : brl2(Number(a.base_cost))}</span>
+        <AddonImpactChips effects={a.effects ?? []} compact />
+        {a.is_active === false && <Badge className="border-0 bg-neutral-200 text-neutral-600">Inativo</Badge>}
+        <button type="button" onClick={() => setOpen(true)} className="ml-auto inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="addon-open"><Eye className="h-3.5 w-3.5" />Ver</button>
+      </div>
+      {open && (
+        <FramedPanel open onOpenChange={setOpen} testId="addon-panel" title={`Adicional ${ai + 1}`}>
+          <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+            <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 shrink-0 items-center justify-center rounded-full bg-fuchsia-100 px-2.5 text-xs font-bold text-fuchsia-700">Adicional {ai + 1}</span><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">{a.name}</p></div>
+            <div className="flex flex-wrap items-center gap-2">
+              {!readOnly && <DeleteBtn label="Remover adicional?" tip="Remover este adicional" onConfirm={() => act(() => apiClient.deleteCatalog2Addon(a.id), "Adicional removido.")} />}
+              {readOnly && <Button size="sm" onClick={() => window.dispatchEvent(new Event("catalog2:start-editing"))} data-testid="addon-edit"><Pencil className="mr-1 h-3.5 w-3.5" />Editar</Button>}
+              <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Fechar</Button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3"><AddonEditor addon={a} index={ai} list={version.addons} version={version} readOnly={readOnly} act={act} /></div>
+        </FramedPanel>
+      )}
+    </section>
+  );
+}
+
+/** Impactos do adicional: resumo + botão "Configurar impactos" que abre uma JANELA MOLDURA (padrão global). */
+function AddonImpactsBox({ addon, readOnly, children }: { addon: any; readOnly: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const n = (addon.effects ?? []).length;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-950/20" data-testid="addon-impacts-box">
+      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Impactos</span>
+      {n === 0 ? <span className="text-[11px] text-slate-400">Sem impactos configurados</span> : <AddonImpactChips effects={addon.effects ?? []} />}
+      <button type="button" onClick={() => setOpen(true)} className="ml-auto inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50" data-testid="addon-impacts-open"><Settings2 className="h-3.5 w-3.5" />{readOnly ? "Ver impactos" : "Configurar impactos"}</button>
+      {open && (
+        <FramedModal open onOpenChange={setOpen} testId="addon-impacts-modal" title={`Impactos — ${addon.name}`}>
+          <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+            <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">Configurar impactos · {addon.name}</p><p className="truncate text-xs text-slate-500">O que muda (preço, prazo, tarefas, etapas, entregáveis) quando o cliente contrata este adicional.</p></div>
+            <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Fechar</Button>
+          </div>
+          <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">{children}</div>
+        </FramedModal>
       )}
     </div>
   );
@@ -1598,7 +1792,9 @@ function AddonEditor({ addon, index, list, version, readOnly, act }: any) {
     <MiniField label="Texto de ajuda ao cliente"><Input disabled={readOnly} className="h-10 text-xs" value={help} onChange={(e) => setHelp(e.target.value)} onBlur={() => help !== (addon.description ?? "") && void put({ description: help.trim() || null })} placeholder="Explique o que este adicional inclui" /></MiniField>
     <div className="grid gap-3 lg:grid-cols-3"><MiniField label="Forma de cobrança"><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs" value={addon.charge_scope ?? "recurring"} onChange={(e) => void put({ charge_scope: e.target.value })}><option value="recurring">Uma única vez</option><option value="per_cycle">Por ciclo</option><option value="per_quantity">Por quantidade</option></select></MiniField><MiniField label="Tipo de seleção"><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs" value={addon.addon_type ?? "checkbox"} onChange={(e) => void put({ addon_type: e.target.value })}><option value="checkbox">Seleção simples</option><option value="quantity">Quantidade</option><option value="single_select">Escolha única</option><option value="multi_select">Várias escolhas</option></select></MiniField><MiniField label="Vincular à tarefa"><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs" value={addon.target_task_id ?? ""} onChange={(e) => void put({ target_task_id: e.target.value || null, target_step_id: null })}><option value="">Sem tarefa específica</option>{tasks.map((task: any) => <option key={task.id} value={task.id}>{task.name}</option>)}</select></MiniField></div>
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><MiniField label="Vincular à etapa"><select disabled={readOnly} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs" value={addon.target_step_id ?? ""} onChange={(e) => void put({ target_step_id: e.target.value || null })}><option value="">Sem etapa específica</option>{steps.map((step: any) => <option key={step.id} value={step.id}>{step.name}</option>)}</select></MiniField><div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2"><span className="text-xs font-semibold text-blue-700">Impactos configurados</span><div className="mt-1"><AddonImpactChips effects={addon.effects ?? []} /></div></div></div>
-    <EffectList version={version} effects={addon.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2AddonEffect(addon.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2AddonEffect(id), "Impacto removido.")} />
+    <AddonImpactsBox addon={addon} readOnly={readOnly}>
+      <EffectList version={version} effects={addon.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2AddonEffect(addon.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2AddonEffect(id), "Impacto removido.")} />
+    </AddonImpactsBox>
     <div className="flex items-center justify-between border-t border-slate-100 pt-2"><button type="button" disabled={readOnly} className="text-xs font-medium text-rose-600" onClick={() => void act(() => apiClient.deleteCatalog2Addon(addon.id), "Adicional removido.")}>Remover</button>{!readOnly && <SaveButton onClick={() => void put({ name: name.trim() || addon.name, description: help.trim() || null, base_cost: cost === "" ? null : Number(cost) })}>Salvar adicional</SaveButton>}</div>
   </div>;
 }
@@ -1616,7 +1812,7 @@ function AddonEditor({ addon, index, list, version, readOnly, act }: any) {
 // Cartão recolhível de configuração do produto (modalidades, pré-requisitos, acessos).
 function SetupCard({ icon: Icon, title, summary, help, children, defaultOpen = false, onToggle, scroll = false }: { icon: React.ComponentType<{ className?: string }>; title: string; summary?: React.ReactNode; help?: string; children: React.ReactNode; defaultOpen?: boolean; onToggle?: (e: React.SyntheticEvent<HTMLDetailsElement>) => void; scroll?: boolean }) {
   return (
-    <details open={readOpen("setup:" + title, defaultOpen) || undefined} onToggle={(e) => { writeOpen("setup:" + title, (e.currentTarget as HTMLDetailsElement).open); onToggle?.(e); }} className="group h-full min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+    <details data-accordion open={readOpen("setup:" + title, defaultOpen) || undefined} onToggle={(e) => { writeOpen("setup:" + title, (e.currentTarget as HTMLDetailsElement).open); onToggle?.(e); }} className="group h-full min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
       <summary className="flex cursor-pointer select-none list-none items-center gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"><Icon className="h-3.5 w-3.5" /></span>
         <span data-no-info={help ? "" : undefined} className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">{title}</span>
@@ -1626,6 +1822,49 @@ function SetupCard({ icon: Icon, title, summary, help, children, defaultOpen = f
       </summary>
       <div className={`min-w-0 space-y-2 border-t border-slate-100 px-3 py-2.5 dark:border-slate-800 ${scroll ? "max-h-56 overflow-y-auto overflow-x-hidden" : ""}`}>{children}</div>
     </details>
+  );
+}
+/** Botão "Ver fluxo" (no cartão das etapas): abre o fluxo das etapas num PAINEL MOLDURA. É só uma visão do cadastro das etapas. */
+function FlowPanelButton({ task, readOnly, act, hoursPerDay }: { task: any; readOnly: boolean; act: any; hoursPerDay: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-200 bg-white px-2 text-[11px] font-semibold text-violet-700 hover:bg-violet-50" data-testid="open-step-flow"><RefreshCw className="h-3.5 w-3.5" />Ver fluxo das etapas</button>
+      {open && (
+        <FramedPanel open onOpenChange={setOpen} testId="step-flow-panel" title="Fluxo das etapas">
+          <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+            <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">Fluxo das etapas · {task.name}</p><p className="truncate text-xs text-slate-500">Mostra, em ordem, como as etapas cadastradas se encadeiam. Para mudar, edite a etapa.</p></div>
+            <Button size="sm" variant="outline" onClick={() => setOpen(false)}>Fechar</Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3"><StepFlowEditor task={task} readOnly={readOnly} act={act} hoursPerDay={hoursPerDay} /></div>
+        </FramedPanel>
+      )}
+    </>
+  );
+}
+
+/** Cartão em UMA linha (ícone, título, resumo) com botão "Ver / editar" que abre o conteúdo num PAINEL MOLDURA (padrão global; ver docs/padroes-globais.md). */
+function PanelCard({ icon: Icon, title, summary, help, children, readOnly = false, allowEdit = false }: { allowEdit?: boolean; icon: React.ComponentType<{ className?: string }>; title: string; summary?: React.ReactNode; help?: string; children: React.ReactNode; readOnly?: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60" data-testid="panel-card">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"><Icon className="h-3.5 w-3.5" /></span>
+        <span data-no-info={help ? "" : undefined} className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">{title}</span>
+        {help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}
+        {summary != null && <span title={typeof summary === "string" ? summary : undefined} className="min-w-0 flex-1 truncate text-xs text-slate-500 dark:text-slate-400">{summary}</span>}
+        <button type="button" onClick={() => setOpen(true)} className="ml-auto inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="panel-card-open"><Pencil className="h-3.5 w-3.5" />Ver</button>
+      </div>
+      {open && (
+        <FramedPanel open onOpenChange={setOpen} testId="panel-card-panel" title={title}>
+          <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+            <div className="flex min-w-0 items-center gap-2"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700"><Icon className="h-4 w-4" /></span><div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">{title}</p>{summary != null && <p className="truncate text-xs text-slate-500">{summary}</p>}</div></div>
+            <div className="flex items-center gap-2">{readOnly && allowEdit && <Button size="sm" onClick={() => window.dispatchEvent(new Event("catalog2:start-editing"))} data-testid="panel-card-edit"><Pencil className="mr-1 h-3.5 w-3.5" />Editar</Button>}<Button size="sm" variant="outline" onClick={() => setOpen(false)} data-testid="panel-card-close">Fechar</Button></div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">{children}</div>
+        </FramedPanel>
+      )}
+    </div>
   );
 }
 // Botãozinho com quadradinho de marcar.
@@ -1743,7 +1982,7 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
       { key: "accepts_one_time", label: "Avulso", hint: "Compra de um único ciclo, sem renovação automática. Atividades exclusivas da primeira execução podem ser cobradas quando aplicáveis." },
       { key: "accepts_recurring", label: "Assinatura mensal", hint: "Abre um novo ciclo a cada mês. Atividades exclusivas da primeira execução não são cobradas novamente nas renovações." },
     ] as const;
-    return <>
+    return <div id="catalog2-contract-modes" className="contents">
       <div className={CARD} data-testid="price-type-card">
         <div className="flex items-start gap-2.5"><span className={ICON}><DollarSign className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100">Preço desta versão<span className="field-info" data-help="Como o preço desta versão é definido: calculado pelas tarefas (custo + taxas), preço fixo informado ou sob consulta (sem compra automática nem cotação pública)." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Como o preço desta versão é definido</span></span></div>
         <select aria-label="Tipo de preço" disabled={readOnly} className={FIELD} value={f.pricing_mode} onChange={(e) => set({ pricing_mode: e.target.value })}>
@@ -1783,7 +2022,7 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
         )}
         {!readOnly && <p className={`mt-auto flex items-center justify-end gap-1.5 text-xs ${JSON.stringify(f) === sig ? "text-slate-500" : "text-amber-700"}`}>{JSON.stringify(f) === sig ? <><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />Alterações salvas</> : "Alteração pendente — vale ao clicar em “Salvar rascunho”."}</p>}
       </div>
-    </>;
+    </div>;
   }
   // O cartão de modalidades só existe na versão compacta do Passo 2 (Avulso e Assinatura mensal). Os controles antigos de
   // "implementação inicial", "implementação roda" e "só em pacote" foram removidos do cadastro (16/10): a implantação vem das etapas
@@ -1793,6 +2032,8 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
 
 export function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked, product, onGoToRecurrence }: any) {
   const [open, setOpen] = usePersistedFlag("commercial-overview", false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  useAccordionAll(setOpen);
   const tasks = version.tasks ?? [];
   const dependencyCount = tasks.reduce((n: number, task: any) => n + (task.depends_on?.length ?? 0), 0);
   // Cada parte diz exatamente o que falta (aparece no "i" ao lado do nome). Completa = nada faltando.
@@ -1814,16 +2055,19 @@ export function DeliveryCommercialOverview({ version, readOnly, act, ringOf, loc
   const ready = readyParts.filter((part) => part.ok).length;
   const percent = Math.round((ready / readyParts.length) * 100);
   return <section className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
-    <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-start gap-2.5 text-left">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/40"><CalendarClock className="h-4 w-4" /></span>
-      <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Entrega comercial<span className="field-info" data-help="Reúne o prazo prometido ao cliente, o tipo de preço, as modalidades de contratação e a prontidão da entrega (o que já está completo e o que falta)." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Defina prazo, preço, modalidades e prontidão.</span></span>
-      {open ? <ChevronUp className="mt-2 h-4 w-4 text-slate-500" /> : <ChevronDown className="mt-2 h-4 w-4 text-slate-500" />}
-    </button>
+    <div className="flex items-start gap-2.5">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex min-w-0 flex-1 items-start gap-2.5 text-left">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/40"><CalendarClock className="h-4 w-4" /></span>
+        <span className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Entrega comercial<span className="field-info" data-help="Reúne o prazo prometido ao cliente, o tipo de preço, as modalidades de contratação e a prontidão da entrega (o que já está completo e o que falta)." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Defina prazo, preço, modalidades e prontidão.</span></span>
+        {open ? <ChevronUp className="mt-2 h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="mt-2 h-4 w-4 shrink-0 text-slate-500" />}
+      </button>
+      {SHOW_HELPER_BUTTON && <button type="button" onClick={() => setGuideOpen(true)} title="Abrir ajudante de cadastro" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 text-xs font-semibold text-violet-700 transition hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-200"><Lightbulb className="h-3.5 w-3.5" />Ajudante</button>}
+    </div>
     {open && <div className="mt-3 space-y-3 border-t border-slate-100 pt-3 dark:border-slate-800">
       <CommercialConsistencyBanner version={version} readOnly={readOnly} act={act} />
       <div className="grid items-stretch gap-4 md:grid-cols-3"><DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={locked} compact /><ContractModesSection version={version} readOnly={readOnly} act={act} compact product={product} onGoToRecurrence={onGoToRecurrence} /></div>
       <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-900/40" data-testid="charge-summary-card"><p className="mb-2 flex items-center gap-1 text-sm font-bold text-slate-900 dark:text-slate-100" data-no-info="">Cobrança estimada<span className="field-info" data-help="Implantação/primeira execução (etapas “Só na primeira execução”), ciclo recorrente, primeira cobrança, renovação mensal e compra avulsa — calculados pelo servidor com as opções padrão. A implantação nasce sozinha das etapas marcadas; não há botão de “Implementação inicial”." aria-hidden="true">i</span></p><ChargeSummaryLoader version={version} refreshKey={String(version.updated_at ?? "")} /></section>
-      <section className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20 lg:grid-cols-[auto_minmax(9rem,1fr)_repeat(3,minmax(0,1fr))] lg:items-center">
+      <section id="delivery-readiness" className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20 lg:grid-cols-[auto_minmax(9rem,1fr)_repeat(3,minmax(0,1fr))] lg:items-center">
         <div className="flex items-center gap-2"><span className="flex h-12 w-12 items-center justify-center rounded-full border-[5px] border-emerald-500 bg-white text-sm font-extrabold text-slate-900 dark:bg-slate-900 dark:text-slate-100">{percent}%</span><span><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Prontidão da entrega</span><span className="block text-[10px] text-slate-500" data-testid="readiness-subtitle">Verifica se a estrutura para <strong>executar</strong> o produto está configurada.</span></span></div>
         <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><div className="h-full rounded-full bg-emerald-500 transition-[width]" style={{ width: `${percent}%` }} /></div>
         {readyParts.map((part) => <div key={part.label} className={`flex min-w-0 items-center gap-1.5 border-l border-emerald-100 pl-2 text-[11px] dark:border-emerald-900/40 ${part.ok ? "text-emerald-800 dark:text-emerald-200" : "text-amber-800 dark:text-amber-200"}`}><CheckCircle2 className="h-4 w-4 shrink-0" /><span className="min-w-0"><span className="block" data-no-info="">{part.label}<span className="field-info" data-help={part.help} aria-hidden="true">i</span></span><strong className="block text-xs">{part.ok ? "OK" : "REVISAR"}</strong></span></div>)}
@@ -1839,7 +2083,32 @@ export function DeliveryCommercialOverview({ version, readOnly, act, ringOf, loc
         </details>
       </section>
     </div>}
+    <DeliverySetupGuide open={guideOpen} onOpenChange={setGuideOpen} />
   </section>;
+}
+
+/** Guia contextual: fica na própria área para a pessoa preencher um campo e avançar ao próximo. */
+function DeliverySetupGuide({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [current, setCurrent] = useState(0);
+  const steps = [
+    { title: "Prazo comercial", text: "É o prazo que o cliente vê. Informe em horas úteis: 24 h equivalem a 1 dia. Ele é a promessa comercial; as horas das etapas servem para o esforço interno.", target: "catalog2-deadline-base" },
+    { title: "Preço desta versão", text: "Escolha como este preço será definido: calculado pelas tarefas, preço fixo ou sob consulta. No preço calculado, o valor vem das horas, especialidades, impostos e margem; no fixo, preencha valor e prazo manualmente.", target: "catalog2-contract-modes" },
+    { title: "Modalidades de contratação", text: "Defina se o cliente pode comprar uma vez, assinar recorrência ou as duas formas. Marque recorrência apenas quando uma nova entrega deve ser criada em cada ciclo pago.", target: "catalog2-contract-modes" },
+    { title: "Cobrança estimada", text: "Este quadro é somente de leitura: ele mostra a previsão calculada para primeira cobrança, recorrência e avulso. Para mudar valores, ajuste etapas ou a precificação — nunca se digita aqui.", target: "charge-summary-card" },
+    { title: "Prontidão da entrega", text: "É uma conferência da estrutura: tarefas, etapas e acessos. Ela não publica o produto. Use-a para descobrir exatamente o que falta antes de avançar.", target: "delivery-readiness" },
+  ];
+  const item = steps[current];
+  const go = (next: number) => {
+    setCurrent(next);
+    window.setTimeout(() => document.getElementById(steps[next].target)?.scrollIntoView({ block: "center", behavior: "smooth" }), 0);
+  };
+  if (!open) return null;
+  return <aside className="mt-3 rounded-xl border border-violet-200 bg-violet-50/80 p-3 shadow-sm" data-testid="delivery-setup-guide">
+    <div className="flex items-start justify-between gap-3"><div><p className="flex items-center gap-1.5 text-sm font-bold text-violet-950"><Lightbulb className="h-4 w-4 text-violet-700" />Ajudante de cadastro</p><p className="mt-0.5 text-[11px] text-violet-700">Passo {current + 1} de {steps.length} · ele só orienta; não altera nem salva dados.</p></div><button type="button" aria-label="Fechar ajudante" onClick={() => onOpenChange(false)} className="rounded-md p-1 text-violet-700 hover:bg-violet-100"><X className="h-4 w-4" /></button></div>
+    <div className="mt-2 flex gap-1" aria-hidden="true">{steps.map((_, index) => <span key={index} className={`h-1.5 flex-1 rounded-full ${index <= current ? "bg-violet-600" : "bg-violet-200"}`} />)}</div>
+    <h3 className="mt-3 text-sm font-bold text-slate-900">{item.title}</h3><p className="mt-1 text-sm leading-relaxed text-slate-700">{item.text}</p>
+    <div className="mt-3 flex items-center justify-between gap-2"><Button type="button" variant="outline" size="sm" disabled={current === 0} onClick={() => go(current - 1)}>Anterior</Button>{current < steps.length - 1 ? <Button type="button" size="sm" onClick={() => go(current + 1)}>Próximo campo<ChevronRight className="h-4 w-4" /></Button> : <Button type="button" size="sm" onClick={() => onOpenChange(false)}>Terminar ajuda</Button>}</div>
+  </aside>;
 }
 
 // Pré-requisitos do PRODUTO: exige outro produto/tarefa/aprovação já concluído pelo mesmo cliente
@@ -1949,10 +2218,11 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
     .catch((e: any) => { if (e?.code === "duplicate_model_candidates" && Array.isArray(e?.data?.details?.candidates)) setSimilarAsk(e.data.details.candidates); });
   const [pickTask, setPickTask] = useState(false);
   const [viewModel, setViewModel] = useState<number | null>(null);
+  const [guidedTaskId, setGuidedTaskId] = useState<string | null>(null);
   const tasks = version.tasks;
   const [advancedTask, setAdvancedTask] = useState<string | null>(null);
   // Acordeão: cada tarefa pode ser recolhida; abre sozinha quando a prontidão aponta para ela.
-  const [closed, setClosed] = useState<Set<string>>(() => (single ? new Set<string>() : new Set(tasks.map((task: any) => task.id))));
+  const [closed, setClosed] = useState<Set<string>>(() => new Set(tasks.map((task: any) => task.id)));
   const toggleTask = (id: string) => setClosed((cur) => {
     if (!cur.has(id)) return new Set([...tasks.map((task: any) => task.id), id]);
     const next = new Set(tasks.map((task: any) => task.id)); next.delete(id); return next;
@@ -1984,13 +2254,16 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
     setAdvancedTask(editTaskId);
   }, [editTaskId, tasks]);
   return (
-    <div id="catalog2-tasks" className="mt-3 scroll-mt-6 space-y-3">
+    <div id="catalog2-tasks" className="scroll-mt-6 space-y-3">
       {tasks.map((t: any, i: number) => (
-        <div id={`catalog2-task-${t.id}`} key={t.id} className="scroll-mt-8 rounded-xl border border-violet-200 border-l-4 border-l-violet-500 bg-white p-3 shadow-sm dark:border-violet-900/60 dark:border-l-violet-500 dark:bg-slate-900/60">
+        <Fragment key={t.id}>
+        <div id={`catalog2-task-${t.id}`} className="scroll-mt-8 rounded-xl border border-violet-200 border-l-4 border-l-violet-500 bg-white p-2 shadow-sm dark:border-violet-900/60 dark:border-l-violet-500 dark:bg-slate-900/60">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300" data-testid="task-summary-label">Resumo da tarefa</p>
               <div className="flex flex-wrap items-center gap-1.5">
-                <IconBtn label={closed.has(t.id) && !highlightTaskIds.includes(t.id) ? "Expandir esta tarefa (mostrar etapas e configurações)" : "Recolher esta tarefa (esconder etapas e configurações)"} onClick={() => toggleTask(t.id)}>{closed.has(t.id) && !highlightTaskIds.includes(t.id) ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</IconBtn><span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-violet-600 px-1 text-xs font-bold text-white">{i + 1}</span><span className="text-sm font-semibold text-slate-900 dark:text-slate-50">{t.name}</span>
+                <IconBtn label={closed.has(t.id) && !highlightTaskIds.includes(t.id) ? "Expandir esta tarefa (mostrar etapas e configurações)" : "Recolher esta tarefa (esconder etapas e configurações)"} onClick={() => toggleTask(t.id)}>{closed.has(t.id) && !highlightTaskIds.includes(t.id) ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</IconBtn><span className="section-number-badge flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-xs font-bold text-white">{i + 1}</span><span className="text-sm font-semibold text-slate-900 dark:text-slate-50">{t.name}</span>
+                {SHOW_HELPER_BUTTON && <button type="button" onClick={() => { setClosed((cur) => { const next = new Set(cur); next.delete(t.id); return next; }); setGuidedTaskId((id) => id === t.id ? null : t.id); }} className="inline-flex h-7 items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 text-[11px] font-semibold text-violet-700 hover:bg-violet-100"><Lightbulb className="h-3.5 w-3.5" />Ajudante</button>}
                 {t.task_model_id != null && <button type="button" title="Ver o modelo global desta tarefa" onClick={() => setViewModel(t.task_model_id)} className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700 hover:bg-violet-200 dark:bg-violet-900/40 dark:text-violet-200">Tarefa #{t.task_model_id}</button>}
                 <ModelStatusChips model={t.model} readOnly={readOnly} onSync={() => act(() => apiClient.syncCatalog2TaskModel(t.id), "Tarefa atualizada para a revisão atual do modelo global.")} />
               </div>
@@ -2028,21 +2301,23 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
             </div>
           </TaskSummaryCard>
           </div>
+          {guidedTaskId === t.id && <TaskSetupGuide task={t} onClose={() => setGuidedTaskId(null)} />}
+          {/* Questionário e Entregáveis: botões sempre visíveis, mesmo com a tarefa fechada. */}
+        <div className="mt-1.5 flex w-full min-w-0 flex-col gap-2" data-testid="task-cards-stack">
+          <PanelCard allowEdit readOnly={readOnly} icon={ListChecks} title="Questionário de contratação" summary={t.questionnaire ? `${t.questionnaire.name} · ${t.questionnaire.questions.length} pergunta(s)` : "nenhum questionário"} help="Perguntas que o cliente responde ao contratar. As respostas orientam a equipe e a IA. Pode ser um questionário já existente (busque pelo nome ou pelo ID) ou um novo.">
+            <QuestionnaireSection task={t} refs={refs} act={act} version={version} readOnly={readOnly} />
+          </PanelCard>
+        </div>
           <div className={closed.has(t.id) && !highlightTaskIds.includes(t.id) ? "hidden" : ""}>
            {!readOnly && <RestoreTaskPanel task={t} act={act} />}
            {/* Continuidade do executor (configuração simples), Questionário de contratação e Entregáveis: sempre visíveis (a tarefa não tem mais o painel antigo). */}
            <ContinuityCard task={t} readOnly={readOnly} act={act} />
-           <div className="mt-2 flex w-full min-w-0 flex-col gap-2" data-testid="task-cards-stack">
-             <SetupCard icon={ListChecks} title="Questionário de contratação" summary={t.questionnaire ? `${t.questionnaire.name} · ${t.questionnaire.questions.length} pergunta(s)` : "nenhum questionário"} help="Perguntas que o cliente responde ao contratar. As respostas orientam a equipe e a IA. Pode ser um questionário já existente (busque pelo nome ou pelo ID) ou um novo.">
-               <QuestionnaireSection task={t} refs={refs} act={act} version={version} readOnly={readOnly} />
-             </SetupCard>
-             <SetupCard icon={UploadCloud} title="Entregáveis" summary={`${(t.deliverables ?? []).length} entregável(is)`} help="O que precisa ser entregue nesta tarefa: nome, descrição, etapa, momento, formato, arquivo-modelo, prova, quem confere, se é só na primeira execução ou em todo ciclo, e quem pode ver.">
-               <TaskDeliverablesEditor task={t} act={act} readOnly={readOnly} version={version} />
-             </SetupCard>
-           </div>
            {/* A tarefa não tem painel de configuração: tudo é configurado nas etapas. Só a IA (tarefa com etapa de IA) abre seu painel próprio. */}
            {!readOnly && advancedTask === t.id && ["ia", "hibrido"].includes(t.execution_mode) && <section className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2 text-xs dark:border-slate-800 dark:bg-slate-800/30"><AiConfig task={t} act={act} onOpenPricing={() => void onOpenPricing?.(t.id)} /></section>}
-          <p className="mt-4 ml-2 text-[15px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300" data-testid="task-checklist-title">Etapas da tarefa · {t.steps.length}<span className="field-info" data-help="Tudo o que você cadastra nas etapas abaixo (quem executa, especialidade, horas, prazo e custo) é somado automaticamente no resumo, em cima. O resumo é atualizado sozinho." aria-hidden="true">i</span>{t.steps.length === 0 ? <span className="ml-1 normal-case font-semibold text-amber-700"> · cadastre ao menos uma etapa</span> : null}</p>
+          </div>
+        </div>
+        {/* Etapas, entregáveis e fluxo: cada um no SEU cartão, abaixo do cartão da tarefa (pedido 20/10). */}
+        <SectionCard headerAction={t.steps.length >= 2 ? <FlowPanelButton task={t} readOnly={readOnly} act={act} hoursPerDay={wc.business_hours_per_day} /> : undefined} storeKey={`task-steps:${t.id}`} icon={ListOrdered} title="Etapas da tarefa" subtitle={`${t.steps.length} etapa(s)${t.steps.length === 0 ? " · cadastre ao menos uma etapa" : ""}`} help="Tudo o que você cadastra nas etapas abaixo (quem executa, especialidade, horas, prazo e custo) é somado automaticamente no resumo, em cima. O resumo é atualizado sozinho." collapsible defaultOpen={false} keepMounted forceOpen={highlightTaskIds.includes(t.id)}>
           {(() => {
             const together = flowSummary(t.steps ?? []).waves.filter((w) => w.length > 1);
             if (together.length === 0) return null;
@@ -2057,9 +2332,11 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
             })}
             {!readOnly && <AddStepControl ringClass={ringOf("catalog2-step-add:" + t.id)} domId={"catalog2-step-add:" + t.id} refs={refs} task={t} act={act} />}
           </ul>
-          <StepFlowEditor task={t} readOnly={readOnly} act={act} hoursPerDay={wc.business_hours_per_day} />
-          </div>
-        </div>
+        </SectionCard>
+        <div data-testid="task-deliverables-after-steps"><PanelCard icon={UploadCloud} title="Entregáveis da tarefa" summary={`${(t.deliverables ?? []).length} entregável(is)${(t.deliverables ?? []).some((d: any) => !d.step_id) ? " · há entregável sem etapa responsável" : ""}`} help="Vistos por etapa: cada entregável pertence a uma etapa (a etapa responsável). Para criar ou ligar um entregável, abra a etapa e use o bloco “Entregáveis desta etapa”; aqui você acompanha, filtra, edita e vê o que ficou sem etapa. É sempre o mesmo cadastro: o que muda em um lugar muda no outro." readOnly={readOnly}>
+        <TaskDeliverablesEditor task={t} act={act} readOnly={readOnly} version={version} />
+        </PanelCard></div>
+        </Fragment>
       ))}
       {!readOnly && !(single && hasBaseTask) && (
         <div id="catalog2-task-create" className={`space-y-2 rounded-xl border-2 border-dashed border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900/60 dark:bg-violet-950/10 ${ringOf("catalog2-task-create")}`}>
@@ -2101,16 +2378,67 @@ function TaskField({ label, children }: { label: string; children: React.ReactNo
   return <label className="flex min-w-[8.5rem] flex-col gap-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300"><span>{label}</span>{children}</label>;
 }
 
-function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, version, parallelWith = [] }: any) {
+function TaskSetupGuide({ task, onClose }: { task: any; onClose: () => void }) {
+  const [current, setCurrent] = useState(0);
+  const steps = [
+    { title: "Nome da tarefa", text: "Use o resultado que será entregue, não um nome técnico. Exemplo: Gestão mensal de campanhas. A tarefa agrupa as etapas abaixo." },
+    { title: "Resumo calculado", text: "Etapas, horas, prazo e custo neste resumo não são digitados na tarefa. Eles são atualizados automaticamente pela soma e pelo fluxo das etapas." },
+    { title: "Execução por etapa", text: "Mantenha ligada quando cada etapa precisa ser conferida antes de liberar a próxima. É a melhor opção para testar liberações, aprovações e dependências." },
+    { title: "Etapas da tarefa", text: "Cada etapa representa uma ação concreta. Cadastre nome, quem executa, especialidade e horas. A primeira pode liberar duas em paralelo; outra pode depender das duas." },
+    { title: "Entregáveis e fluxo", text: "Use um entregável quando houver algo verificável. Depois configure o fluxo para decidir quais etapas começam juntas, quais aguardam outra e quais dependem de acessos." },
+  ];
+  const item = steps[current];
+  return <aside className="mt-2 rounded-xl border border-violet-200 bg-violet-50/80 p-3" data-testid="task-setup-guide"><div className="flex items-start justify-between gap-2"><div><p className="flex items-center gap-1.5 text-sm font-bold text-violet-950"><Lightbulb className="h-4 w-4 text-violet-700" />Ajudante da tarefa</p><p className="mt-0.5 text-[11px] text-violet-700">{task.name} · passo {current + 1} de {steps.length}</p></div><button type="button" aria-label="Fechar ajudante da tarefa" onClick={onClose} className="rounded-md p-1 text-violet-700 hover:bg-violet-100"><X className="h-4 w-4" /></button></div><div className="mt-2 flex gap-1" aria-hidden="true">{steps.map((_, index) => <span key={index} className={`h-1.5 flex-1 rounded-full ${index <= current ? "bg-violet-600" : "bg-violet-200"}`} />)}</div><h3 className="mt-3 text-sm font-bold text-slate-900">{item.title}</h3><p className="mt-1 text-sm leading-relaxed text-slate-700">{item.text}</p><div className="mt-3 flex justify-between"><Button type="button" size="sm" variant="outline" disabled={current === 0} onClick={() => setCurrent((value) => value - 1)}>Anterior</Button>{current === steps.length - 1 ? <Button type="button" size="sm" onClick={onClose}>Terminar ajuda</Button> : <Button type="button" size="sm" onClick={() => setCurrent((value) => value + 1)}>Próximo<ChevronRight className="h-4 w-4" /></Button>}</div></aside>;
+}
+
+function StepSetupGuide({ guide, onGo, onClose }: { guide: number; onGo: (step: number) => void; onClose: () => void }) {
+  const steps = [
+    { title: "Nome e descrição", text: "Dê um nome que deixe claro a ação. Na descrição, escreva o que acontece aqui e o resultado esperado." },
+    { title: "Quem faz e horas", text: "Escolha quem executa, a especialidade e as horas estimadas. Essas horas entram no esforço e no custo calculado da tarefa." },
+    { title: "Conclusão e liberação", text: "Defina o critério que prova que a etapa terminou. Configure qualificação quando alguém precisa conferir antes de liberar o próximo passo." },
+    { title: "Instruções e evidências", text: "Inclua somente orientações úteis para a execução. Peça evidência quando for necessário comprovar que a ação aconteceu." },
+    { title: "Entregáveis", text: "Cadastre algo que será entregue ou aprovado: por exemplo, um plano, relatório, arquivo ou link. Se não houver entregável, informe isso no próprio bloco." },
+    { title: "Conexões e acessos", text: "Ative apenas quando esta etapa depende de login, permissão ou integração. Um acesso aqui deve bloquear só as etapas que realmente dependem dele." },
+    { title: "Resumo e salvar", text: "Revise as pendências. Salvar rascunho guarda o que já foi feito sem liberar a etapa; concluir e salvar só é usado quando os campos obrigatórios estiverem completos." },
+  ];
+  const current = Math.max(1, Math.min(guide, steps.length));
+  const item = steps[current - 1];
+  return <aside className="mx-4 mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3" data-testid="step-setup-guide"><div className="flex items-start justify-between gap-2"><div><p className="flex items-center gap-1.5 text-sm font-bold text-sky-950"><Lightbulb className="h-4 w-4 text-sky-700" />Ajudante da etapa</p><p className="mt-0.5 text-[11px] text-sky-700">Passo {current} de {steps.length} · o bloco indicado foi aberto para você.</p></div><button type="button" aria-label="Fechar ajudante da etapa" onClick={onClose} className="rounded-md p-1 text-sky-700 hover:bg-sky-100"><X className="h-4 w-4" /></button></div><div className="mt-2 flex gap-1" aria-hidden="true">{steps.map((_, index) => <span key={index} className={`h-1.5 flex-1 rounded-full ${index < current ? "bg-sky-500" : "bg-sky-200"}`} />)}</div><h3 className="mt-3 text-sm font-bold text-slate-900">{item.title}</h3><p className="mt-1 text-sm leading-relaxed text-slate-700">{item.text}</p><div className="mt-3 flex justify-between"><Button type="button" size="sm" variant="outline" disabled={current === 1} onClick={() => onGo(current - 1)}>Anterior</Button>{current === steps.length ? <Button type="button" size="sm" onClick={onClose}>Terminar ajuda</Button> : <Button type="button" size="sm" onClick={() => onGo(current + 1)}>Próximo campo<ChevronRight className="h-4 w-4" /></Button>}</div></aside>;
+}
+
+export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, version, parallelWith = [] }: any) {
   // Não é lembrado no F5: o texto digitado se perderia e a etapa voltaria "presa" no formulário. A etapa sempre abre na ficha de leitura.
   const [editing, setEditing] = useState(false);
-  // Cada etapa é um cartão que pode ser recolhido (vem aberta). Mover para cima/baixo sempre pergunta antes.
-  const [open, setOpen] = usePersistedFlag(`step-open:${step.id}`, true);
+  // Cada etapa é um acordeão: vem FECHADA (clicou abre, clicou fecha) e o lápis de editar fica sempre no cabeçalho.
+  // Mover para cima/baixo sempre pergunta antes.
+  const [open, setOpen] = usePersistedFlag(`step-open:${step.id}`, false);
   const [moveAsk, setMoveAsk] = useState<null | -1 | 1>(null);
   const [viewModel, setViewModel] = useState(false);
   const [scopeAsk, setScopeAsk] = useState(false);
   const [checklistOpen, setChecklistOpen] = usePersistedFlag(`step-checklist:${step.id}`, false);
   const [savingChecklist, setSavingChecklist] = useState(false);
+  // Rascunho da etapa (18/10): blocos em acordeão, erros sem perder nada, acessos em rascunho da tela, confirmação ao fechar.
+  const narrow = useIsNarrow();
+  // Os 5 blocos vêm FECHADOS ao clicar em Editar; o que o usuário abrir/fechar é lembrado nesta aba (sobrevive ao F5).
+  const blockFlag = (n: number) => `step-block:${step.id}:${n}`;
+  const blocks = useBlocks(BLOCK_IDS.filter((n) => readOpen(blockFlag(n), false)), narrow, (openNow) => { for (const n of BLOCK_IDS) writeOpen(blockFlag(n), openNow.includes(n)); });
+  /** Bloco "atual" do passo-a-passo (Anterior / Próximo); 7 = resumo final. */
+  const [guide, setGuide] = useState<number>(1);
+  const [helperOpen, setHelperOpen] = useState(false);
+  const editFlag = `step-editing:${step.id}`;
+  const editRestored = useRef(false);
+  const editPrev = useRef(false);
+  const [showErrors, setShowErrors] = useState(false);
+  const [saving, setSaving] = useState<null | "draft" | "final">(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [draftNote, setDraftNote] = useState<string | null>(null);
+  const [closeAsk, setCloseAsk] = useState(false);
+  const [accessItems, setAccessItems] = useState<AccessItem[]>([]);
+  const [accessOn, setAccessOn] = useState(false);
+  // Entregáveis desta etapa: também ficam em rascunho da tela e só são gravados ao salvar a etapa (ver StepDeliverablesEditor).
+  const [delivItems, setDelivItems] = useState<DelivItem[]>([]);
+  const baseline = useRef<{ f: string; on: boolean }>({ f: "", on: false });
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const [leaders, setLeaders] = useState<{ id: string; name: string; kind: string }[]>([]);
   const [specialists, setSpecialists] = useState<{ id: string; name: string; kind: string }[]>([]);
   useEffect(() => {
@@ -2157,22 +2485,125 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
     setF(enforceApprover(next));
   };
   const payload = () => ({ ai_specialty_id: f.execution_mode === "hibrido" ? f.ai_specialty_id || null : null, ai_estimated_minutes: f.execution_mode === "hibrido" && f.ai_estimated_hours !== "" ? Math.round(Number(f.ai_estimated_hours) * 60) : null, ai_free_changes: f.ai_free_changes.trim() === "" || aiBad ? null : Number(f.ai_free_changes.trim()), approval_hours: hoursOf(f.approval_hours) === "bad" ? null : hoursOf(f.approval_hours), rework_hours: hoursOf(f.rework_hours) === "bad" ? null : hoursOf(f.rework_hours), executor_accept_hours: step.executor_policy === "prefer_same_as_step" ? (hoursOf(f.executor_accept_hours) === "bad" ? null : hoursOf(f.executor_accept_hours)) : (step.executor_accept_hours ?? null), name: f.name, estimated_minutes: f.estimated_hours === "" ? null : Math.round(Number(f.estimated_hours) * 60), specialty_id: f.specialty_id || null, purpose: f.purpose, execution_mode: f.execution_mode, completion_criteria: f.completion_criteria.trim() ? f.completion_criteria : null, first_execution_only: f.first_execution_only, skip_when_same_executor: f.skip_when_same_executor, description: f.description.trim() ? f.description : null, ops: f.ops, executor_kind: f.executor_kind, leader_mode: f.executor_kind === "leader" ? f.leader_mode : "auto", leader_user_id: f.executor_kind === "leader" && f.leader_mode === "specific" ? f.leader_user_id || null : null, internal_step: f.internal_step, ...qualPayload() });
-  const doSave = (scope?: "product" | "model") => act(() => apiClient.updateCatalog2Step(step.id, { ...payload(), ...(scope ? { scope } : {}), ...(scope === "model" ? { confirm_model_update: true } : {}) }), "Etapa salva.").then(() => setEditing(false));
-  const save = () => { if (aiBad) { void act(() => Promise.reject(new Error("Alterações por IA grátis: use um número inteiro de 0 a 100 (ou deixe vazio).")), ""); return; } if (hoursBad) { void act(() => Promise.reject(new Error("Os prazos em horas precisam ser números inteiros a partir de 1 (ou ficar vazios para usar o padrão).")), ""); return; } return step.step_model_id != null ? setScopeAsk(true) : void doSave(); };
+  const stepReqs = () => ((version?.connection_requirements ?? []) as any[]).filter((r) => r.when_task_key === task?.key && r.when_step_key === step.key);
+  /** Abre o painel com os valores salvos agora. Os acessos viram uma lista de RASCUNHO da tela (o servidor só muda ao salvar a etapa). */
+  /** `restore`: voltando do F5 — mantém os blocos como estavam; num clique em Editar, começa com todos fechados. */
+  const openEditor = (restore = false) => {
+    if (restore !== true) blocks.collapseAll();
+    const items = itemsFromRequirements(stepReqs());
+    const keys: string[] = Array.isArray(step.ops?.access_keys) ? step.ops.access_keys : [];
+    const borrowed = ((version?.connection_requirements ?? []) as any[]).some((r) => !r.draft_incomplete && r.when_step_key && r.when_step_key !== step.key && r.shared_with_steps && keys.includes(r.key));
+    const on = items.length > 0 || borrowed;
+    const fresh = initial();
+    setF(fresh); setAccessItems(items); setAccessOn(on); setDelivItems(itemsFromTask(task?.deliverables ?? [], step.id)); setGuide(1);
+    setShowErrors(false); setFormError(null); setDraftNote(null); setCloseAsk(false);
+    baseline.current = { f: JSON.stringify(fresh), on };
+    setEditing(true);
+  };
+  // F5 / Ctrl+R: se o painel desta etapa estava aberto, abre de novo (o texto ainda não salvo não volta: por isso o navegador avisa antes de recarregar).
+  // (a página volta travada por um instante no F5: espera destravar para reabrir, uma única vez)
+  useEffect(() => { if (editRestored.current || readOnly) return; editRestored.current = true; if (readOpen(editFlag, false)) openEditor(true); }, [readOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (editing === editPrev.current) return; editPrev.current = editing; writeOpen(editFlag, editing); }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  // "Ir para a etapa" (vindo do resumo de entregáveis da tarefa): abre o editor desta etapa.
+  const liRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => {
+      if ((e as CustomEvent).detail?.stepId !== step.id) return;
+      if (readOnly) { setOpen(true); window.setTimeout(() => flashElement(liRef.current), 60); return; }
+      if (!editing) openEditor();
+    };
+    window.addEventListener(OPEN_STEP_EVENT, on);
+    return () => window.removeEventListener(OPEN_STEP_EVENT, on);
+  });
+  const accIssues = accessIssues(accessItems, accessOn);
+  const delivNone = !!f.ops?.no_deliverables;
+  const delivIss = delivIssues(delivItems, delivNone);
+  const approvableNames = delivNone ? [] : activeDeliv(delivItems).filter((i) => i.fields.requires_approval).map((i) => i.fields.name.trim() || "(sem nome)");
+  const issues: StepIssue[] = stepIssues(f as any, { taskSpecialtyId: task?.specialty?.id ?? null, stageExecution: task?.stage_execution === "stage", acceptHoursApplies: step.executor_policy === "prefer_same_as_step", accessIssues: accIssues, deliverableIssues: delivIss, approvableDeliverables: approvableNames.length, approvalDeliverables: approvableNames.length });
+  const dirty = editing && (JSON.stringify(f) !== baseline.current.f || accessOn !== baseline.current.on || hasPending(accessItems) || hasDelivPending(delivItems));
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  const goToIssue = (it: StepIssue | null) => {
+    if (!it) return;
+    blocks.reveal(it.block as StepBlockId);
+    window.setTimeout(() => {
+      const root = modalRef.current; if (!root) return;
+      const el = root.querySelector<HTMLElement>(`[data-field="${it.field}"]`);
+      if (!el) return;
+      el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+      const target = el.matches("input,select,textarea,button") ? el : el.querySelector<HTMLElement>("input,select,textarea,button,[tabindex]");
+      target?.focus?.({ preventScroll: true });
+    }, 60);
+  };
+  /**
+   * Grava a etapa. "draft" = Salvar rascunho da etapa (aceita tudo incompleto, marca como rascunho incompleto, nunca altera o modelo global, a tela continua aberta).
+   * "final" = Concluir e salvar etapa (o chamador já validou; tira a marca de rascunho e fecha a tela). Em erro: a tela NÃO fecha e nada é apagado.
+   */
+  const commitStep = async (mode: "draft" | "final", scope?: ModelScope) => {
+    setFormError(null); setSaving(mode);
+    try {
+      const stepScope = { task: { key: task?.key ?? "", name: task?.name ?? "" }, step: { key: step.key, name: step.name } };
+      let newOps: any = f.ops;
+      await act(async () => {
+        const ownKeys = new Set(accessItems.map((i) => i.key).filter(Boolean) as string[]);
+        const keysNow: string[] = Array.isArray(f.ops?.access_keys) ? f.ops.access_keys : [];
+        const borrowedKeys = keysNow.filter((k) => !ownKeys.has(k));
+        const c = await commitAccessItems(accessItems, { version, scope: stepScope, draft: mode === "draft", turnedOff: !accessOn, borrowedKeys, onProgress: setAccessItems });
+        setAccessItems(c.items);
+        newOps = opsAfterAccesses(f.ops, { ownKeys: c.ownKeys, borrowedKeys, turnedOff: !accessOn, parked: c.parked });
+        // Entregáveis desta etapa: mesmo registro de sempre, gravado pelas rotas oficiais antes de a etapa ser salva.
+        if (hasDelivPending(delivItems)) {
+          // Salvar como rascunho aceita entregável incompleto: ele vai marcado como rascunho (nunca é descartado nem inventado).
+          const toSave = mode === "draft" ? delivItems.map((i) => (deliverableIssues(i.fields).length ? { ...i, draft: true } : i)) : delivItems;
+          const order = [...(task?.deliverables ?? [])].sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((d: any) => d.id as string);
+          const dc = await commitDelivItems(toSave, { taskId: task.id, stepId: step.id, taskDeliverableIds: order, onProgress: setDelivItems });
+          setDelivItems(dc.items);
+        }
+        return apiClient.updateCatalog2Step(step.id, { ...payload(), ops: newOps, draft: mode === "draft", ...(mode === "draft" ? { scope: "product" } : scope ? { scope } : {}), ...(mode === "final" && scope === "model" ? { confirm_model_update: true } : {}) });
+      }, mode === "draft" ? "Rascunho da etapa salvo." : "Etapa concluída e salva.", { rethrow: true });
+      setF((cur) => ({ ...cur, ops: newOps }));
+      baseline.current = { f: JSON.stringify({ ...f, ops: newOps }), on: accessOn };
+      if (mode === "final") { setShowErrors(false); setEditing(false); }
+      else setDraftNote(`Rascunho salvo às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Você pode fechar e continuar depois do mesmo ponto.`);
+    } catch (e: any) {
+      setFormError(e?.message ?? "Não foi possível salvar a etapa. Nada do que você preencheu foi apagado.");
+      throw e;
+    } finally { setSaving(null); }
+  };
+  const concludeClick = () => {
+    if (issues.length > 0) {
+      setShowErrors(true); setDraftNote(null);
+      const withIssues = Array.from(new Set(issues.map((i) => i.block)));
+      if (!narrow) withIssues.forEach((b) => blocks.reveal(b as StepBlockId));
+      goToIssue(firstIssue(issues));
+      return;
+    }
+    if (step.step_model_id != null) {
+      // Modelo usado só por esta etapa (ex.: etapa recém-criada): editar o modelo não afeta ninguém, então não pergunta.
+      void Promise.resolve(apiClient.getCatalog2ModelImpact?.("step", step.step_model_id)).then((r: any) => {
+        if (typeof r?.instances === "number" && r.instances <= 1) void commitStep("final", "model").catch(() => {});
+        else setScopeAsk(true);
+      }).catch(() => setScopeAsk(true));
+      return;
+    }
+    void commitStep("final").catch(() => {});
+  };
+  const discardAll = () => { setF(initial()); setAccessItems([]); setDelivItems([]); setCloseAsk(false); setEditing(false); };
+  const requestClose = () => { if (saving) return; if (dirty) setCloseAsk(true); else setEditing(false); };
   // Registra a etapa aberta no editor: "Salvar rascunho"/"Travar edição" sabem se há alteração não salva aqui.
   const registerOpenForm = useContext(FormsCtx);
+  const inModels = useContext(ModelEditCtx).embedded;
   const formApi = useRef<{ label: string; isDirty: () => boolean; save: () => Promise<void>; discard: () => void }>({ label: "", isDirty: () => false, save: async () => {}, discard: () => {} });
   formApi.current = {
     label: `Etapa ${index + 1} — ${step.name}`,
-    isDirty: () => editing && JSON.stringify(f) !== JSON.stringify(initial()),
-    save: async () => {
-      if (aiBad) throw new Error("Alterações por IA grátis: use um número inteiro de 0 a 100 (ou deixe vazio).");
-      if (hoursBad) throw new Error("Os prazos em horas precisam ser números inteiros a partir de 1 (ou ficar vazios para usar o padrão).");
-      // Pelo rascunho, a etapa grava só neste produto (nunca altera o modelo global).
-      await act(() => apiClient.updateCatalog2Step(step.id, { ...payload(), scope: "product" }), "Etapa salva.", { rethrow: true });
-      setEditing(false);
-    },
-    discard: () => { setF(initial()); setEditing(false); },
+    isDirty: () => dirty,
+    // O "Salvar rascunho" da página grava esta etapa SÓ NESTE PRODUTO (nunca mexe no modelo global): completa = concluída; incompleta = rascunho incompleto.
+    save: async () => { await commitStep(issues.length === 0 ? "final" : "draft", "product"); },
+    discard: () => discardAll(),
   };
   useEffect(() => {
     if (!editing) return;
@@ -2187,33 +2618,56 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
   // Edição travada (ou versão publicada): a etapa nunca fica com o formulário aberto.
   useEffect(() => { if (readOnly && editing) { setF(initial()); setEditing(false); } }, [readOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Edição em MODAL (17/10): na página só fica a etapa pronta; "Editar" abre o modal com o formulário completo.
+  let editModal: React.ReactNode = null;
   if (editing) {
     const draftCost = (() => { const h = Number(f.estimated_hours); const sp = (refs?.specialties ?? []).find((x: any) => x.id === (f.specialty_id || task?.specialty?.id)); return f.estimated_hours !== "" && h > 0 && sp?.max_hourly_rate != null ? (h * Number(sp.max_hourly_rate)) : null; })();
     // Etapa "Humano ou IA": custo da opção IA (horas da IA × valor/hora da especialidade de IA).
     const draftAiCost = (() => { const h = Number(f.ai_estimated_hours); const sp = (refs?.specialties ?? []).find((x: any) => x.id === f.ai_specialty_id); return f.ai_estimated_hours !== "" && h > 0 && sp?.max_hourly_rate != null ? (h * Number(sp.max_hourly_rate)) : null; })();
     const draftChecklist: ChecklistItem[] = (f.ops?.checklist as ChecklistItem[] | undefined) ?? [];
+    const draftChecklistN = checklistCount(draftChecklist);
     const setOps = (patch: Record<string, unknown>) => setF({ ...f, ops: { ...(f.ops ?? {}), ...patch } });
-    // Usar / deixar de usar / adicionar acesso na etapa SALVA NA HORA só os campos de acesso (o resto do formulário segue
-    // como está, ainda não salvo), para o resumo "Acessos necessários" já mostrar a etapa.
-    const persistAccessOps = (patch: Record<string, unknown>) => {
-      setOps(patch);
-      const next: Record<string, unknown> = { ...(step.ops ?? {}), ...patch };
-      for (const k of Object.keys(next)) if (next[k] === undefined) delete next[k];
-      return act(() => apiClient.updateCatalog2Step(step.id, { ops: next, scope: "product" }), "Acesso da etapa atualizado.");
+    // Acessos da etapa: tudo fica em RASCUNHO DA TELA e só é gravado ao salvar a etapa (ver StepAccessesEditor).
+    const err = (field: string): string | null => (showErrors ? issues.find((i) => i.field === field)?.message ?? null : null);
+    const delivAct = activeDeliv(delivItems);
+    // Situação REAL de cada bloco (completo / incompleto com a quantidade de pendências / não se aplica), nunca escondida no selo geral.
+    const infos = Object.fromEntries(BLOCK_IDS.map((n) => [n, blockInfo(n, issues, showErrors, n === 4 ? { hasContent: draftChecklistN > 0 || !!f.ops?.instructions || !!f.ops?.evidence_required } : n === 5 ? { applies: !delivNone || delivAct.length > 0, hasContent: delivAct.length > 0 } : n === 6 ? { applies: accessOn } : {})])) as Record<StepBlockId, BlockInfo>;
+    const bp = (n: StepBlockId) => ({ status: infos[n].status, count: infos[n].count });
+    const approvalMode = effectiveMode(f.ops, !!f.internal_step);
+    const stageOn = task?.stage_execution === "stage";
+    const approvalLine = !stageOn ? "Não se aplica: a tarefa não executa por etapa (a aprovação acontece no fim da tarefa)." : f.internal_step ? "Etapa interna: o cliente não vê nem aprova." : `${MODE_LABEL[approvalMode]}${approvalMode === "deliverables" ? ` (${approvableNames.length ? approvableNames.join(", ") : "nenhum entregável marcado"})` : ""}${approvalMode === "step" || approvalMode === "deliverables" ? ` · prazo do cliente: ${f.approval_hours.trim() ? `${f.approval_hours} h úteis` : "padrão da plataforma"}` : ""}`;
+    const hasNext = index < (steps?.length ?? 0) - 1;
+    const releaseLine = (stageOn && !f.internal_step && (approvalMode === "step" || approvalMode === "deliverables")) ? (hasNext ? "Liberada só depois da aprovação do cliente." : "Última etapa: a tarefa só encerra depois da aprovação do cliente.") : qualOn && stageOn ? (hasNext ? "Liberada depois da qualificação desta etapa." : "Última etapa da tarefa.") : (hasNext ? (stageOn ? "Liberada assim que esta etapa for concluída." : "Segue o fluxo da tarefa (qualificação e aprovação no fim da tarefa).") : "Última etapa da tarefa.");
+    const accessLine = !accessOn ? "Esta etapa não precisa de acesso." : activeItems(accessItems).length === 0 ? "Nenhum acesso configurado ainda." : activeItems(accessItems).map((a) => accessName(a)).join(" · ");
+    const goStep = (n: number) => {
+      setGuide(n);
+      if (n <= 6) blocks.reveal(n as StepBlockId);
+      window.setTimeout(() => { const el = modalRef.current?.querySelector<HTMLElement>(n <= 6 ? `[data-testid="step-block-${n}"]` : '[data-testid="step-final-summary"]'); el?.scrollIntoView?.({ block: "start", behavior: "smooth" }); }, 60);
     };
+    const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n).trim()}…` : t);
+    const specLabel = (id: string) => (refs?.specialties ?? []).find((x: any) => x.id === (id || task?.specialty?.id))?.name ?? "sem especialidade";
+    const hoursLabel = (h: string) => (h.trim() !== "" && Number(h) > 0 ? `${h} h` : "sem horas");
+    const receiverLabel = f.executor_kind === "leader" ? "Líder" : f.executor_kind === "internal" ? "Equipe interna" : "Nômade";
+    const sum1 = `${f.name.trim() || "(sem nome)"}${f.description.trim() ? ` — ${clip(f.description.trim(), 90)}` : ""}`;
+    const sum2 = `${EXEC_LABEL[f.execution_mode] ?? f.execution_mode} · ${specLabel(f.specialty_id)} · ${hoursLabel(f.estimated_hours)}${f.execution_mode === "hibrido" ? ` · IA: ${specLabel(f.ai_specialty_id)} · ${hoursLabel(f.ai_estimated_hours)}` : ""} · recebe: ${receiverLabel}`;
+    const sum3 = `Conclui quando: ${f.completion_criteria.trim() ? clip(f.completion_criteria.trim(), 70) : "não informado"}${f.first_execution_only ? " · só na 1ª execução" : ""}${f.skip_when_same_executor ? " · dispensável" : ""} · qualificação: ${qualOn ? "sim" : "não"}`;
+    const sum4 = `${draftChecklistN} ${draftChecklistN === 1 ? "item" : "itens"} de checklist · orientações ${f.ops?.instructions ? "preenchidas" : "vazias"} · evidência ${f.ops?.evidence_required ? "obrigatória" : "não exigida"}`;
+    const sum5 = delivNone ? "Esta etapa não tem entregáveis" : delivAct.length === 0 ? "Nenhum entregável ainda" : `${delivAct.length} entregável${delivAct.length === 1 ? "" : "is"}: ${clip(delivAct.map((i) => i.fields.name.trim() || "(sem nome)").join(", "), 80)}${delivIss.length ? ` · ${delivIss.length} incompleto${delivIss.length === 1 ? "" : "s"}` : ""}`;
+    const sum6 = !accessOn ?"Esta etapa não precisa de acesso" : `${configuredCount(accessItems)} acesso${configuredCount(accessItems) === 1 ? "" : "s"} configurado${configuredCount(accessItems) === 1 ? "" : "s"}${incompleteCount(accessItems) ? ` · ${incompleteCount(accessItems)} incompleto${incompleteCount(accessItems) === 1 ? "" : "s"}` : ""}`;
     // Formulário COMPACTO: campos baixos (h-8), espaçamentos curtos e cabeçalho fixo com o custo, para enxergar tudo ao configurar.
-    const CTL = "h-8 w-full min-w-0 max-w-full truncate rounded-md border border-slate-200 bg-white px-2 text-[13px] dark:border-slate-700 dark:bg-slate-900";
-    const SECTION = "min-w-0 space-y-1.5 px-3 py-2";
-    const TITLE = "text-[10px] font-bold uppercase tracking-wide text-slate-500";
-    return (
-      <li className="relative rounded-xl border border-sky-400 bg-white shadow-sm before:absolute before:-left-[14px] before:top-6 before:h-px before:w-3.5 before:bg-violet-300 after:absolute after:-left-[17px] after:top-[21px] after:h-1.5 after:w-1.5 after:rounded-full after:bg-violet-400 dark:border-sky-700 dark:bg-slate-900/60 [&_label>span:first-child]:text-[11px]" data-testid="step-edit-form">
+    const CTL = "h-9 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white px-2.5 text-sm dark:border-slate-600 dark:bg-slate-900";
+    editModal = (
+      <FramedPanel open onOpenChange={(o) => { if (!o) requestClose(); }} testId="step-edit-panel" title="Editar etapa">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="relative rounded-xl [&_label>span:first-child]:text-xs [&_label>span:first-child]:font-semibold [&_label>span:first-child]:text-slate-600" data-testid="step-edit-form" ref={modalRef}>
         <fieldset disabled={readOnly} className="contents">
-        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b border-slate-200 bg-white/95 px-3 py-1.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="flex h-6 min-w-6 items-center justify-center rounded-md bg-sky-500 px-1.5 text-xs font-bold text-white">{index + 1}</span>
-            <span className="rounded-md bg-sky-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-sky-700 dark:bg-sky-900/40 dark:text-sky-200">Etapa {index + 1}</span>
-            <span className="h-4 w-px bg-slate-300" />
-            <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{f.name || step.name}</span>
+            <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-sky-500 px-2 text-sm font-bold text-white">{index + 1}</span>
+            <span className="min-w-0">
+              <span className="block text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">Editar etapa {index + 1}</span>
+              <span className="block truncate text-base font-bold leading-tight text-slate-900 dark:text-slate-100">{f.name || step.name}</span>
+            </span>
           </div>
           {f.execution_mode === "hibrido" ? (
             // Humano ou IA: os DOIS custos aparecem sempre, lado a lado.
@@ -2226,20 +2680,44 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
           )}
         </div>
 
-        {/* Uma coluna só, 100% da largura: 1, 2, 3, 4 e 5 empilhados, nunca lado a lado. */}
-        <div className="flex flex-col divide-y divide-slate-200 dark:divide-slate-700">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3" data-testid="step-modal-toolbar">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {step.draft_incomplete && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800" data-testid="step-draft-badge">Rascunho incompleto</span>}
+            {/* Pendências REAIS de todos os blocos, consolidadas aqui (nunca escondidas): clicar leva ao primeiro campo que falta. */}
+            {issues.length > 0
+              ? <button type="button" onClick={() => goToIssue(firstIssue(issues))} className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-200" data-testid="step-pending-chip" title="Clique para ir ao primeiro campo que falta">{issues.length} {issues.length === 1 ? "pendência" : "pendências"} para concluir</button>
+              : <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800" data-testid="step-pending-chip">Rascunho pronto para concluir</span>}
+            {draftNote && <span role="status" className="text-[11px] font-semibold text-emerald-700" data-testid="step-draft-note">{draftNote}</span>}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {SHOW_HELPER_BUTTON && <button type="button" onClick={() => setHelperOpen((value) => !value)} className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"><Lightbulb className="h-3.5 w-3.5" />Ajudante</button>}
+            <button type="button" onClick={blocks.expandAll} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Expandir todos</button>
+            <button type="button" onClick={blocks.collapseAll} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Recolher todos</button>
+          </div>
+        </div>
+        {showErrors && issues.length > 0 && (
+          <div role="alert" className="mx-4 mt-3 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="step-error-summary">
+            <p className="font-bold">A etapa ainda não pode ser concluída ({issues.length} {issues.length === 1 ? "pendência" : "pendências"}). Nada do que você preencheu foi apagado.</p>
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+              {issues.map((it, i) => <li key={`${it.field}-${i}`}><button type="button" className="text-left underline decoration-dotted hover:text-rose-700" onClick={() => goToIssue(it)}>{it.message}</button></li>)}
+            </ul>
+            <p className="mt-1.5">Corrija e clique em “Concluir e salvar etapa”, ou use “Salvar rascunho da etapa” para guardar assim mesmo e continuar depois.</p>
+          </div>
+        )}
+        {formError && <p role="alert" className="mx-4 mt-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="step-save-error">Não foi possível salvar: {formError} Nada do que você preencheu foi apagado.</p>}
+        {helperOpen && <StepSetupGuide guide={guide} onGo={goStep} onClose={() => setHelperOpen(false)} />}
+        {/* Uma coluna só, 100% da largura: os 5 blocos empilhados (acordeões), nunca lado a lado. */}
+        <div className="flex flex-col gap-3 p-4">
           {/* 1 · O que é esta etapa */}
-          <section className={SECTION}>
-            <h5 className={TITLE}>1 · O que é esta etapa</h5>
+          <StepBlock n={1} title="O que é esta etapa" {...bp(1)} summary={sum1} open={blocks.open.has(1)} onToggle={() => blocks.toggle(1)}>
             {/* Nome e descrição lado a lado: o nome é curto, a descrição ocupa o resto. */}
             <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
-              <Field label="Nome da etapa"><input className={CTL} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-              <Field label={<span className="inline-flex items-center gap-2">Descrição (o que acontece nesta etapa)<AiFieldButton compact label="Descrição (o que acontece nesta etapa)" value={f.description} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Critério de conclusão": f.completion_criteria } }} disabled={readOnly} onResult={(v) => setF({ ...f, description: v.slice(0, 8000) })} /></span>}><Textarea rows={1} maxLength={8000} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-[32px] py-1.5 text-[13px]" /></Field>
+              <Field field="name" error={err("name")} label="Nome da etapa"><input className={CTL} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+              <Field field="description" error={err("description")} label={<span className="inline-flex items-center gap-2">Descrição (o que acontece nesta etapa)<AiFieldButton compact label="Descrição (o que acontece nesta etapa)" value={f.description} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Critério de conclusão": f.completion_criteria } }} disabled={readOnly} onResult={(v) => setF({ ...f, description: v.slice(0, 8000) })} /></span>}><Textarea rows={1} maxLength={8000} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-[32px] py-1.5 text-[13px]" /></Field>
             </div>
-          </section>
+          </StepBlock>
           {/* 2 · Quem faz e quanto tempo leva */}
-          <section className={SECTION}>
-            <h5 className={TITLE}>2 · Quem faz e quanto tempo leva</h5>
+          <StepBlock n={2} title="Quem faz e quanto tempo leva" {...bp(2)} summary={sum2} open={blocks.open.has(2)} onToggle={() => blocks.toggle(2)}>
             {f.execution_mode === "hibrido" ? (
               <>
                 <div className="grid grid-cols-1 gap-x-2 gap-y-1.5 sm:grid-cols-2">
@@ -2251,16 +2729,16 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                   <div className="space-y-1.5 rounded-lg border border-sky-200 bg-sky-50/50 p-2 dark:border-sky-900 dark:bg-sky-950/20">
                     <p className="text-[11px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">Opção humano</p>
                     <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
-                      <Field label="Especialidade (humana)"><SpecialtyCombobox specialties={refs?.specialties ?? []} mode="humano" value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} /></Field>
-                      <Field label="Horas / prazo"><input className={CTL} aria-label="Horas estimadas do humano" type="number" min="0" step="0.25" value={f.estimated_hours} onChange={(e) => setF({ ...f, estimated_hours: e.target.value })} /></Field>
+                      <Field field="specialty" error={err("specialty")} label="Especialidade (humana)"><SpecialtyCombobox specialties={refs?.specialties ?? []} mode="humano" value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} /></Field>
+                      <Field field="hours" error={err("hours")} label="Horas / prazo"><input className={CTL} aria-label="Horas estimadas do humano" type="number" min="0" step="0.25" value={f.estimated_hours} onChange={(e) => setF({ ...f, estimated_hours: e.target.value })} /></Field>
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300" data-testid="hybrid-human-cost">Custo humano: {draftCost == null ? "a definir" : <strong>{brl2(draftCost)}</strong>}</p>
                   </div>
                   <div className="space-y-1.5 rounded-lg border border-violet-200 bg-violet-50/50 p-2 dark:border-violet-900 dark:bg-violet-950/20">
                     <p className="text-[11px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">Opção IA</p>
                     <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
-                      <Field label="Especialidade (IA)"><SpecialtyCombobox specialties={refs?.specialties ?? []} mode="ia" value={f.ai_specialty_id} onChange={(v: string) => setF({ ...f, ai_specialty_id: v })} /></Field>
-                      <Field label="Horas / prazo"><input className={CTL} aria-label="Horas estimadas da IA" type="number" min="0" step="0.25" value={f.ai_estimated_hours} onChange={(e) => setF({ ...f, ai_estimated_hours: e.target.value })} /></Field>
+                      <Field field="ai_specialty" error={err("ai_specialty")} label="Especialidade (IA)"><SpecialtyCombobox specialties={refs?.specialties ?? []} mode="ia" value={f.ai_specialty_id} onChange={(v: string) => setF({ ...f, ai_specialty_id: v })} /></Field>
+                      <Field field="ai_hours" error={err("ai_hours")} label="Horas / prazo"><input className={CTL} aria-label="Horas estimadas da IA" type="number" min="0" step="0.25" value={f.ai_estimated_hours} onChange={(e) => setF({ ...f, ai_estimated_hours: e.target.value })} /></Field>
                     </div>
                     <p className="text-[11px] text-slate-600 dark:text-slate-300" data-testid="hybrid-ai-cost">Custo IA: {draftAiCost == null ? "a definir" : <strong>{brl2(draftAiCost)}</strong>}</p>
                   </div>
@@ -2270,8 +2748,8 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
             <div className="grid grid-cols-1 gap-x-2 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-4">
               <Field label="Finalidade"><select className={CTL} value={f.purpose} onChange={(e) => setF({ ...f, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
               <Field label="Quem executa"><select className={CTL} aria-label="Quem executa" value={f.execution_mode} onChange={(e) => changeMode(e.target.value)}>{EXEC_MODES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
-              <Field label="Especialidade"><SpecialtySelect refs={refs} mode={f.execution_mode} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} /></Field>
-              <Field label="Horas estimadas"><input className={CTL} type="number" min="0" step="0.25" value={f.estimated_hours} onChange={(e) => setF({ ...f, estimated_hours: e.target.value })} /></Field>
+              <Field field="specialty" error={err("specialty")} label="Especialidade"><SpecialtySelect refs={refs} mode={f.execution_mode} value={f.specialty_id} onChange={(v: string) => setF({ ...f, specialty_id: v })} /></Field>
+              <Field field="hours" error={err("hours")} label="Horas estimadas"><input className={CTL} type="number" min="0" step="0.25" value={f.estimated_hours} onChange={(e) => setF({ ...f, estimated_hours: e.target.value })} /></Field>
             </div>
             )}
             <div className="grid grid-cols-1 gap-x-2 gap-y-1.5 sm:grid-cols-2" data-testid="step-receiver">
@@ -2283,7 +2761,7 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                 </select>
               </Field>
               {f.executor_kind === "leader" ? (
-                <Field label="Qual líder">
+                <Field field="leader" error={err("leader")} label="Qual líder">
                   <select className={CTL} aria-label="Qual líder" value={f.leader_mode === "specific" ? f.leader_user_id : "__auto"} onChange={(e) => setF({ ...f, leader_mode: e.target.value === "__auto" ? "auto" : "specific", leader_user_id: e.target.value === "__auto" ? "" : e.target.value })}>
                     <option value="__auto">Qualquer líder da área (o com menos tarefas abertas)</option>
                     {leaders.map((u) => <option key={u.id} value={u.id}>Sempre {u.name}</option>)}
@@ -2291,20 +2769,18 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                 </Field>
               ) : <div className="self-end pb-2 text-[11px] text-slate-500">{f.executor_kind === "nomad" ? "A etapa vai para a fila de nômades habilitados na especialidade." : "A equipe interna executa sem passar pela fila de nômades."}</div>}
             </div>
-          </section>
-        </div>
-
-        <div className="flex flex-col divide-y divide-slate-200 border-t border-slate-200 dark:divide-slate-700 dark:border-slate-700">
+          </StepBlock>
           {/* 3 · Quando a etapa termina */}
-          <section className={SECTION}>
-            <h5 className={TITLE}>3 · Quando a etapa termina<span className="field-info" data-help={"Aqui você define:\n• quando a etapa é considerada PRONTA (critério de conclusão);\n• se ela se repete nos meses seguintes, em produtos mensais;\n• e, em tarefas com execução por etapa, quem aprova e em quanto tempo."} aria-hidden="true">i</span></h5>
-            <Field label={<span className="inline-flex items-center gap-2">Critério de conclusão<AiFieldButton compact label="Critério de conclusão" value={f.completion_criteria} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Descrição da etapa": f.description } }} disabled={readOnly} onResult={(v) => setF({ ...f, completion_criteria: v.replace(/\n/g, " ").slice(0, 4000) })} /></span>}><input className={CTL} value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
-            <label className="flex items-center gap-2 text-sm" title="Nunca se repete nos ciclos seguintes"><input type="checkbox" className="h-4 w-4" checked={f.first_execution_only} onChange={(e) => setF({ ...f, first_execution_only: e.target.checked })} /> Só na primeira execução</label>
-            <label className="flex items-center gap-2 text-sm" title="Se o mesmo executor for mantido no ciclo seguinte, esta etapa é dispensada"><input type="checkbox" className="h-4 w-4" checked={f.skip_when_same_executor} onChange={(e) => setF({ ...f, skip_when_same_executor: e.target.checked })} /> Dispensável quando o mesmo executor continua</label>
-            {f.first_execution_only && <p className="rounded-md bg-violet-50 px-2 py-1 text-[11px] text-violet-900 dark:bg-violet-950/30 dark:text-violet-100" data-testid="first-execution-effect">Esta etapa forma a <strong>implantação</strong>: entra na primeira cobrança e só roda no primeiro ciclo deste produto neste projeto. <strong>Não entra no preço das renovações.</strong></p>}
-            {f.skip_when_same_executor && ((task?.executor_continuity ?? "not_allowed") === "not_allowed"
+          <StepBlock n={3} title="Quando a etapa termina" {...bp(3)} summary={sum3} open={blocks.open.has(3)} onToggle={() => blocks.toggle(3)} help={"Aqui você define:\n• quando a etapa é considerada PRONTA (critério de conclusão);\n• se ela se repete nos meses seguintes, em produtos mensais;\n• e, em tarefas com execução por etapa, quem aprova e em quanto tempo."}>
+            <Field field="completion_criteria" error={err("completion_criteria")} label={<span className="inline-flex items-center gap-2">Critério de conclusão<AiFieldButton compact label="Critério de conclusão" value={f.completion_criteria} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Descrição da etapa": f.description } }} disabled={readOnly} onResult={(v) => setF({ ...f, completion_criteria: v.replace(/\n/g, " ").slice(0, 4000) })} /></span>}><input className={CTL} value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
+            <div className="grid gap-2 sm:grid-cols-2" data-testid="repeat-options">
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/40" title="Nunca se repete nos ciclos seguintes"><input type="checkbox" className="h-4 w-4" checked={f.first_execution_only} onChange={(e) => setF({ ...f, first_execution_only: e.target.checked })} /> Só na primeira execução</label>
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/40" title="Se o mesmo executor for mantido no ciclo seguinte, esta etapa é dispensada"><input type="checkbox" className="h-4 w-4" checked={f.skip_when_same_executor} onChange={(e) => setF({ ...f, skip_when_same_executor: e.target.checked })} /> Dispensável quando o mesmo executor continua</label>
+            </div>
+            <RevealBox active={f.first_execution_only} onReveal={() => blocks.reveal(3)} testId="first-execution-reveal"><p className="rounded-md bg-violet-50 px-2 py-1 text-[11px] text-violet-900 dark:bg-violet-950/30 dark:text-violet-100" data-testid="first-execution-effect">Esta etapa forma a <strong>implantação</strong>: entra na primeira cobrança e só roda no primeiro ciclo deste produto neste projeto. <strong>Não entra no preço das renovações.</strong></p></RevealBox>
+            <RevealBox active={f.skip_when_same_executor} onReveal={() => blocks.reveal(3)} testId="dispensable-reveal">{((task?.executor_continuity ?? "not_allowed") === "not_allowed"
               ? <p className="rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-900 dark:bg-amber-950/30 dark:text-amber-100" data-testid="dispensable-effect-off">Sem efeito por enquanto: a continuidade do executor desta tarefa está como <strong>“Não permitida”</strong>. Mude no cartão “Continuidade do executor nos próximos ciclos”, acima das etapas.</p>
-              : <p className="rounded-md bg-sky-50 px-2 py-1 text-[11px] text-sky-900 dark:bg-sky-950/30 dark:text-sky-100" data-testid="dispensable-effect-on">Se o mesmo executor continuar (no mesmo projeto, com os acessos ainda válidos e sem mudança de plataforma ou escopo), esta etapa é <strong>dispensada</strong> no ciclo seguinte e as horas dela <strong>não são cobradas</strong> (crédito na próxima fatura). O administrador pode exigi-la mesmo assim, com justificativa.</p>)}
+              : <p className="rounded-md bg-sky-50 px-2 py-1 text-[11px] text-sky-900 dark:bg-sky-950/30 dark:text-sky-100" data-testid="dispensable-effect-on">Se o mesmo executor continuar (no mesmo projeto, com os acessos ainda válidos e sem mudança de plataforma ou escopo), esta etapa é <strong>dispensada</strong> no ciclo seguinte e as horas dela <strong>não são cobradas</strong> (crédito na próxima fatura). O administrador pode exigi-la mesmo assim, com justificativa.</p>)}</RevealBox>
             <details className="rounded-md border border-sky-200 bg-sky-50/60 px-2 py-1 text-[11px] text-slate-700 dark:border-sky-900 dark:bg-sky-950/20 dark:text-slate-200" data-testid="recurrence-explainer">
               <summary className="cursor-pointer font-semibold text-sky-800 dark:text-sky-200">Como as duas opções acima funcionam em produtos mensais? Veja um exemplo</summary>
               <div className="mt-1.5 space-y-1.5 leading-snug">
@@ -2346,13 +2822,16 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                       <option value="nomad_pool">Nômades qualificadores</option>
                     </select>
                   </Field>
-                  {(f.qualifier_kind === "person" || f.qualifier_kind === "leader_person") && (
-                    <Field label="Pessoa que qualifica">
+                  {/* A condição fica no `active` (o bloco já está montado): assim, ao escolher "pessoa específica", ele abre, rola, destaca e diz o que falta. */}
+                  {(
+                    <RevealBox active={f.qualifier_kind === "person" || f.qualifier_kind === "leader_person"} missing={f.specialist_user_id ? 0 : 1} onReveal={() => blocks.reveal(3)} testId="qualifier-person-box">
+                    <Field field="qualifier_person" error={err("qualifier_person")} label="Pessoa que qualifica">
                       <select aria-label="Pessoa que qualifica" className={CTL} value={f.specialist_user_id} onChange={(e) => setF({ ...f, specialist_user_id: e.target.value })}>
                         <option value="">Escolha a pessoa…</option>
                         {specialists.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.kind === "nomade" ? "nômade" : u.kind === "admin" ? "administração" : "líder"})</option>)}
                       </select>
                     </Field>
+                    </RevealBox>
                   )}
                 </div>
               )}
@@ -2368,13 +2847,15 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                         <option value="nomad_pool">Nômades qualificadores</option>
                       </select>
                     </Field>
-                    {(f.ops?.ai_qualifier_kind === "person" || f.ops?.ai_qualifier_kind === "leader_person") && (
-                      <Field label="Pessoa que qualifica (se a IA executar)">
+                    {(
+                      <RevealBox active={f.ops?.ai_qualifier_kind === "person" || f.ops?.ai_qualifier_kind === "leader_person"} missing={f.ops?.ai_qualifier_user_id ? 0 : 1} onReveal={() => blocks.reveal(3)} testId="ai-qualifier-person-box">
+                      <Field field="ai_qualifier_person" error={err("ai_qualifier_person")} label="Pessoa que qualifica (se a IA executar)">
                         <select aria-label="Pessoa que qualifica se a IA executar" className={CTL} disabled={readOnly} value={(f.ops?.ai_qualifier_user_id as string) ?? ""} onChange={(e) => setOps({ ai_qualifier_user_id: e.target.value || undefined })}>
                           <option value="">Escolha a pessoa…</option>
                           {specialists.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.kind === "nomade" ? "nômade" : u.kind === "admin" ? "administração" : "líder"})</option>)}
                         </select>
                       </Field>
+                      </RevealBox>
                     )}
                   </div>
                 </div>
@@ -2386,24 +2867,12 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                 <span><strong>Esta tarefa executa por etapa</strong> — cada etapa é qualificada e aprovada antes de liberar a próxima. Sem isso, a qualificação acontece só no fim da tarefa. (Vale para todas as etapas da tarefa; salva na hora.)</span>
               </label>
             </div>
-            {task?.stage_execution === "stage" && (
-              <div className="mt-1 space-y-1.5 rounded-lg border border-violet-200 bg-violet-50/50 p-2.5 dark:border-violet-900 dark:bg-violet-950/20" data-testid="stage-flags">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">Execução por etapa</p>
-                <label className="flex items-center gap-2 text-sm" title="O cliente não vê nem aprova esta etapa (ex.: validação de briefing ou de acessos). Se achar um problema, o líder pode avisar o cliente."><input type="checkbox" className="h-4 w-4" checked={f.internal_step} onChange={(e) => setF({ ...f, internal_step: e.target.checked })} /> Etapa interna (o cliente não vê nem aprova)</label>
-                <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4" data-testid="stage-hours">
-                  <Field label="Prazo de aprovação do cliente (h úteis)"><input type="number" min={1} step={1} aria-label="Prazo de aprovação do cliente (horas úteis)" title="Quantas horas úteis o cliente tem para aprovar esta etapa. Vazio = padrão da plataforma." className={CTL} value={f.approval_hours} onChange={(e) => setF({ ...f, approval_hours: e.target.value })} placeholder="padrão" /></Field>
-                  <Field label="Prazo de refação (h úteis)"><input type="number" min={1} step={1} aria-label="Prazo de refação (horas úteis)" title="Quantas horas úteis o executor tem para refazer depois de uma reprovação. Vazio = mantém o prazo anterior." className={CTL} value={f.rework_hours} onChange={(e) => setF({ ...f, rework_hours: e.target.value })} placeholder="mantém" /></Field>
-                  <Field label="Alterações por IA grátis (cota da etapa)"><input type="number" min={0} max={100} step={1} aria-label="Alterações por IA grátis desta etapa" title="Quantas alterações por IA o cliente faz sem pagar NESTA etapa, em cada contratação. Vazio = a etapa não tem cota própria. Depois das grátis, cada alteração é cobrada do saldo da carteira. O produto mostra a soma e o detalhamento por etapa." className={CTL} value={f.ai_free_changes} onChange={(e) => setF({ ...f, ai_free_changes: e.target.value })} placeholder="sem cota" /></Field>
-                  {step.executor_policy === "prefer_same_as_step" && <Field label="Prazo de aceite do preferido (h)"><input type="number" min={1} step={1} aria-label="Prazo de aceite do preferido (horas)" title="Quantas horas o executor preferido tem para aceitar antes de a etapa abrir para os demais. Vazio = 2 h." className={CTL} value={f.executor_accept_hours} onChange={(e) => setF({ ...f, executor_accept_hours: e.target.value })} placeholder="2 h" /></Field>}
-                </div>
-                {hoursBad && <p role="alert" className="text-[11px] font-semibold text-red-600">Use números inteiros a partir de 1 (ou deixe vazio).</p>}
-              </div>
-            )}
-          </section>
+            <ClientApprovalSection task={task} step={step} f={f} patch={(p) => setF({ ...f, ...p })} setOps={(p) => setOps(p)} readOnly={readOnly} err={err} hoursBad={hoursBad}
+              approvable={approvableNames} hasNext={index < (steps?.length ?? 0) - 1} onReveal={() => blocks.reveal(3)} onClearDeliverableApprovals={() => setDelivItems((old) => old.map((item) => item.fields.requires_approval ? { ...item, fields: { ...item.fields, requires_approval: false } } : item))} />
+          </StepBlock>
           {/* 4 · Checklist, orientações e evidência */}
-          <section className={SECTION}>
-            <div className="flex items-center justify-between gap-2">
-              <h5 className={TITLE}>4 · Checklist, orientações e evidência<span className="field-info" data-help={"Três coisas diferentes:\n• Orientações: o passo a passo de COMO executar.\n• Checklist: a lista de itens que serão CONFERIDOS.\n• Evidência: a PROVA da entrega (arquivo ou link anexado)."} aria-hidden="true">i</span></h5>
+          <StepBlock n={4} title="Checklist, orientações e evidência" {...bp(4)} summary={sum4} open={blocks.open.has(4)} onToggle={() => blocks.toggle(4)} help={"Três coisas diferentes:\n• Orientações: o passo a passo de COMO executar.\n• Checklist: a lista de itens que serão CONFERIDOS.\n• Evidência: a PROVA da entrega (arquivo ou link anexado)."}>
+            <div className="flex items-center justify-end gap-2">
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600" data-testid="step-checklist-count">{checklistCount(draftChecklist)} {checklistCount(draftChecklist) === 1 ? "item" : "itens"}</span>
                 <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setChecklistOpen(true)} data-testid="open-step-checklist"><ListChecks className="mr-1.5 h-4 w-4" />Gerenciar checklist</Button>
@@ -2454,7 +2923,7 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
               <Switch aria-label="Evidência obrigatória" checked={!!f.ops?.evidence_required} onCheckedChange={(v) => setOps({ evidence_required: !!v, ...(v ? {} : { evidence_types: undefined }) })} />
               Evidência obrigatória
             </label>
-            {f.ops?.evidence_required && (
+            <RevealBox active={!!f.ops?.evidence_required} onReveal={() => blocks.reveal(4)} testId="evidence-reveal">
               <fieldset className="rounded-lg border border-violet-200 bg-violet-50/50 px-2.5 py-2 dark:border-violet-900 dark:bg-violet-950/20" data-testid="evidence-types">
                 <legend className="px-1 text-[11px] font-semibold text-violet-800 dark:text-violet-200">Que tipo de evidência você quer?<span className="field-info" data-help={"Marque o que vale como prova nesta etapa (pode marcar mais de um).\nO executor vê o tipo pedido e entrega do jeito certo.\nExemplo: Print da tela + Relatório."} aria-hidden="true">i</span></legend>
                 <div className="flex flex-wrap gap-1.5">
@@ -2471,7 +2940,7 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                 </div>
                 {(!Array.isArray(f.ops?.evidence_types) || f.ops.evidence_types.length === 0) && <p className="mt-1 text-[11px] text-slate-500">Nenhum tipo marcado: qualquer prova (arquivo ou link) vale.</p>}
               </fieldset>
-            )}
+            </RevealBox>
             {/* Responsável e exemplo só aparecem com a evidência obrigatória LIGADA; desligada, não há o que configurar. */}
             {f.ops?.evidence_required && (
               <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2" data-testid="evidence-details">
@@ -2483,38 +2952,57 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                 <Field label="Exemplo de evidência (opcional)"><input className={CTL} maxLength={1000} value={f.ops?.evidence_hint ?? ""} onChange={(e) => setOps({ evidence_hint: e.target.value })} placeholder="Ex.: print da tela com a campanha publicada" /></Field>
               </div>
             )}
-          </section>
+          </StepBlock>
+          {/* 5 · Entregáveis desta etapa (a etapa é a fonte do vínculo; o resumo da tarefa só reflete) */}
+          <StepBlock n={5} title="Entregáveis desta etapa" {...bp(5)} summary={sum5} open={blocks.open.has(5)} onToggle={() => blocks.toggle(5)} help={"O que esta etapa precisa entregar. É o MESMO cadastro de entregáveis da tarefa (nada é copiado): o que você vincular, criar ou editar aqui aparece na seção Entregáveis da tarefa, e vice-versa. Só é gravado quando você salva a etapa."}>
+            <StepDeliverablesEditor task={task} step={{ id: step.id, name: f.name || step.name }} stepIndex={index + 1} readOnly={readOnly} items={delivItems} setItems={setDelivItems}
+              declaredNone={delivNone} setDeclaredNone={(v) => setOps({ no_deliverables: v ? true : undefined })} issues={delivIss} showErrors={showErrors} />
+          </StepBlock>
+          {/* 6 · Conexões e acessos (largura total) */}
+        <StepBlock n={6} title="Conexões e acessos desta etapa" {...bp(6)} summary={sum6} open={blocks.open.has(6)} onToggle={() => blocks.toggle(6)}>
+          <StepAccessesEditor version={version} readOnly={readOnly} quick={makeQuickCreate(version, act)} scope={{ task: { key: task.key, name: task.name }, step: { key: step.key, name: step.name } }}
+            items={accessItems} setItems={setAccessItems} accessOn={accessOn} setAccessOn={setAccessOn} ops={f.ops} setOps={(patch) => setOps(patch)}
+            stepNames={Object.fromEntries((version?.tasks ?? []).flatMap((t: any) => (t.steps ?? []).map((st: any) => [st.key, st.name])))}
+            issues={accIssues} showErrors={showErrors} />
+        </StepBlock>
+          {/* Resumo final: o que está completo, o que falta e como a próxima etapa é liberada. */}
+          <StepFinalSummary infos={infos} issues={issues} deliverables={delivNone ? [] : delivAct.map((i) => i.fields.name.trim() || "(sem nome)")} accessLine={accessLine} approvalLine={approvalLine}
+            qualificationLine={qualOn ? `Sim — ${f.qualifier_kind === "person" ? "pessoa específica" : f.qualifier_kind === "leader_person" ? "líder e depois uma pessoa" : f.qualifier_kind === "nomad_pool" ? "nômades qualificadores" : "líder da área"}` : "Não precisa de qualificação"}
+            releaseLine={releaseLine} onGo={goToIssue} />
         </div>
-
-        {/* 5 · Conexões e acessos (largura total) */}
-        <section className="space-y-2.5 border-t border-slate-200 p-4 dark:border-slate-700">
-          <h5 className={TITLE}>5 · Conexões e acessos desta etapa</h5>
-          {/* Uma lista só: liga/desliga → lista de acessos da etapa + "Adicionar acesso" + acessos de outras etapas para usar aqui. */}
-          <ConnectionsSection version={version} readOnly={readOnly} act={act} scope={{ kind: "step", task: { key: task.key, name: task.name }, step: { key: step.key, name: step.name } }}
-            stepOps={f.ops} onStepOps={(patch) => persistAccessOps(patch)}
-            stepNames={Object.fromEntries((version?.tasks ?? []).flatMap((t: any) => (t.steps ?? []).map((s: any) => [s.key, s.name])))}
-            onLinked={(key) => {
-            // O acesso cadastrado nesta etapa já passa a ser usado por ela, e isso é salvo na hora (o resumo de baixo atualiza).
-            const cur = f.ops ?? {};
-            if (cur.access_scope === "all") return;
-            const keys: string[] = Array.isArray(cur.access_keys) ? cur.access_keys : [];
-            if (!keys.includes(key)) persistAccessOps(accessPatch("some", [...keys, key]));
-          }} />
-        </section>
 
         <StepChecklistDialog open={checklistOpen} title={f.name || step.name} value={draftChecklist} qualificationEnabled={qualAny} onClose={() => setChecklistOpen(false)} onSave={(list) => { setOps({ checklist: list }); setChecklistOpen(false); }} />
 
-        <div className="sticky bottom-0 flex gap-2 rounded-b-xl border-t border-slate-200 bg-white/95 px-3 py-1.5 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-          <SaveButton onClick={save}>Salvar etapa</SaveButton>
-          <Button size="sm" variant="ghost" className="h-9" onClick={() => { setF(initial()); setEditing(false); }}>Cancelar</Button>
+        <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 rounded-b-xl border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+          <div className="mr-auto flex items-center gap-1.5" data-testid="step-guide-nav">
+            <Button size="sm" variant="outline" className="h-9" disabled={guide <= 1} onClick={() => goStep(Math.max(1, guide - 1))} data-testid="step-guide-prev">Anterior</Button>
+            <Button size="sm" variant="outline" className="h-9" disabled={guide >= 7} onClick={() => goStep(Math.min(7, guide + 1))} data-testid="step-guide-next">{guide === 6 ? "Próximo: resumo" : "Próximo"}</Button>
+            <span className="hidden text-[11px] text-slate-500 sm:inline" data-testid="step-guide-where">{guide <= 6 ? `Bloco ${guide} de 6` : "Resumo final"}</span>
+          </div>
+          <Button size="sm" variant="ghost" className="h-9" disabled={saving !== null} onClick={requestClose}>Cancelar</Button>
+          <Button size="sm" variant="outline" className="h-9" disabled={saving !== null} onClick={() => { setDraftNote(null); void commitStep("draft").catch(() => {}); }} data-testid="step-save-draft" title="Guarda tudo o que já foi preenchido, mesmo incompleto. A etapa fica marcada como rascunho incompleto e não é liberada para execução nem publicada.">{saving === "draft" ? "Salvando…" : "Salvar rascunho da etapa"}</Button>
+          <SaveButton onClick={concludeClick} disabled={saving !== null}>{saving === "final" ? "Salvando…" : "Concluir e salvar etapa"}</SaveButton>
         </div>
-        <ModelScopeDialog open={scopeAsk} kindLabel="etapa" modelId={step.step_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void doSave(sc); }} />
+        <ModelScopeDialog embedded={inModels} open={scopeAsk} kindLabel="etapa" modelId={step.step_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void commitStep("final", sc).catch(() => {}); }} />
+        <Dialog open={closeAsk} onOpenChange={(o) => { if (!o) setCloseAsk(false); }}>
+          <DialogContent className="max-w-md" data-testid="step-close-ask">
+            <DialogTitle>Há alterações não salvas</DialogTitle>
+            <p className="text-sm text-slate-600 dark:text-slate-300">O que você preencheu nesta etapa ainda não foi salvo. O que você prefere fazer?</p>
+            <div className="flex flex-col gap-2 pt-1">
+              <Button type="button" onClick={() => setCloseAsk(false)} data-testid="step-close-continue">Continuar editando</Button>
+              <Button type="button" variant="outline" disabled={saving !== null} onClick={() => { void commitStep("draft").then(() => { setCloseAsk(false); setEditing(false); }).catch(() => setCloseAsk(false)); }} data-testid="step-close-draft">Salvar como rascunho e fechar</Button>
+              <Button type="button" variant="ghost" className="text-rose-600 hover:text-rose-700" onClick={discardAll} data-testid="step-close-discard">Descartar alterações</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
         </fieldset>
-      </li>
+      </div>
+      </div>
+      </FramedPanel>
     );
   }
   return (
-    <li data-testid={`step-card-${index + 1}`} className={`relative rounded-xl border bg-white px-3 py-2.5 text-[13px] shadow-sm before:absolute before:-left-[26px] before:top-[18px] before:h-3 before:w-3 before:rounded-full before:border-2 before:border-white before:bg-violet-500 dark:bg-slate-900/60 ${parallelWith.length > 0 ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900" : open ? "border-cyan-300 bg-sky-50/40 ring-1 ring-cyan-200 dark:border-cyan-800 dark:ring-cyan-900" : "border-slate-200 dark:border-slate-700"}`}>
+    <li ref={liRef} data-testid={`step-card-${index + 1}`} className={`relative rounded-xl border bg-white px-3 py-2.5 text-[13px] shadow-sm before:absolute before:-left-[26px] before:top-[18px] before:h-3 before:w-3 before:rounded-full before:border-2 before:border-white before:bg-violet-500 dark:bg-slate-900/60 ${parallelWith.length > 0 ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900" : open ? "border-cyan-300 bg-sky-50/40 ring-1 ring-cyan-200 dark:border-cyan-800 dark:ring-cyan-900" : "border-slate-200 dark:border-slate-700"}`}>
       <div className="flex items-start gap-3" data-testid="step-header">
         <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white ${open ? "bg-sky-500" : "bg-indigo-400"}`}>{index + 1}</span>
         <div role="button" tabIndex={0} aria-expanded={open} aria-label={open ? `Recolher a etapa ${index + 1}` : `Abrir a etapa ${index + 1}`} onClick={() => setOpen((v) => !v)} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpen((v) => !v); } }} className="min-w-0 flex-1 cursor-pointer text-left" data-testid="step-toggle">
@@ -2523,6 +3011,7 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
             {parallelWith.length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" data-testid="step-parallel-chip" title="Estas etapas acontecem ao mesmo tempo">⇄ Ao mesmo tempo que a etapa {parallelWith.join(", ")}</span>}
             {step.step_model_id != null && <button type="button" title="Ver o modelo global desta etapa" onClick={(e) => { e.stopPropagation(); setViewModel(true); }} className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-200">Etapa #{step.step_model_id}</button>}
             <ModelStatusChips model={step.model} readOnly={readOnly} onSync={() => act(() => apiClient.syncCatalog2StepModel(step.id), "Etapa atualizada para a revisão atual do modelo global.")} />
+            {step.draft_incomplete && <span data-testid="step-draft-chip" title="Salva como rascunho: ainda falta preencher. Não é liberada para execução nem publicada." className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Rascunho incompleto</span>}
             {step.first_execution_only && <span className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">Só na 1ª execução</span>}
             {step.skip_when_same_executor && <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-[11px] font-semibold text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">Dispensável c/ mesmo executor</span>}
             {step.is_access_validation && <span title="Bloqueia as etapas seguintes até os acessos serem validados" className="rounded-full bg-teal-100 px-2.5 py-0.5 text-[11px] font-semibold text-teal-800 dark:bg-teal-900/40 dark:text-teal-200">Pré-requisito: acessos</span>}
@@ -2537,7 +3026,21 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
               return <span data-testid="step-ai-option" className="font-semibold text-violet-700 dark:text-violet-300"> · Opção IA: {aiSp?.name ?? "sem especialidade"} · {formatStageHours(step.ai_estimated_minutes)}</span>;
             })()}
           </span>
+          {(() => {
+            // Resumo dos entregáveis desta etapa (vem dos mesmos registros da tarefa): quantidade, nomes, aprovação, ciclo e se estão completos.
+            const mine = ((task?.deliverables ?? []) as any[]).filter((d) => d.step_id === step.id).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+            const none = !!step.ops?.no_deliverables;
+            if (mine.length === 0) return <span className="mt-0.5 block text-[12px] text-slate-500" data-testid="step-deliverable-summary" data-count="0">{none ? "Sem entregáveis (declarado)" : "Nenhum entregável nesta etapa"}</span>;
+            const pend = mine.filter((d) => !deliverableSituation(d).complete).length;
+            return (
+              <span className="mt-0.5 block text-[12px] text-slate-600 dark:text-slate-300" data-testid="step-deliverable-summary" data-count={mine.length}>
+                <strong>{mine.length} entregável{mine.length === 1 ? "" : "is"}</strong> — {mine.map((d) => deliverableBrief(d)).join(" · ")}
+                <span className={`ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${pend ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`} data-testid="step-deliverable-state">{pend ? `${pend} incompleto${pend === 1 ? "" : "s"}` : "completos"}</span>
+              </span>
+            );
+          })()}
         </div>
+        {!readOnly && <button type="button" data-testid="step-edit-btn" aria-label={`Editar etapa ${index + 1}`} title="Editar esta etapa (nome, executor, especialidade, tempo…)" onClick={() => openEditor()} className="mt-0.5 inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200"><Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">Editar</span></button>}
         <button type="button" aria-expanded={open} aria-label={open ? `Recolher a etapa ${index + 1}` : `Abrir a etapa ${index + 1}`} onClick={() => setOpen((v) => !v)} className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">{open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</button>
       </div>
       {open && (
@@ -2553,7 +3056,6 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
                   onClick={() => act(() => apiClient.updateCatalog2Step(step.id, { name: step.name, estimated_minutes: step.estimated_minutes ?? null, specialty_id: step.specialty_id ?? task?.specialty?.id ?? null }), "Etapa confirmada.")}>Ok, conferi</button>
               )}
               <button type="button" data-testid="step-checklist-btn" title="Ver e cadastrar o checklist desta etapa (execução, aprovação e qualificação)" onClick={() => setChecklistOpen(true)} className="inline-flex h-8 items-center gap-1 rounded-md border border-sky-200 bg-white px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-50"><ListChecks className="h-3.5 w-3.5" />Checklist ({checklistCount((step.ops?.checklist as ChecklistItem[] | undefined) ?? [])})</button>
-              <button type="button" title="Editar esta etapa (nome, executor, especialidade, tempo…)" onClick={() => setEditing(true)} className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50"><Pencil className="h-3.5 w-3.5" />Editar etapa</button>
               <button type="button" disabled={index === 0} title="Mover etapa para cima — ela passa a acontecer antes da anterior" onClick={() => setMoveAsk(-1)} className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"><ChevronUp className="h-3.5 w-3.5" />Subir</button>
               <button type="button" disabled={index === steps.length - 1} title="Mover etapa para baixo — ela passa a acontecer depois da próxima" onClick={() => setMoveAsk(1)} className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"><ChevronDown className="h-3.5 w-3.5" />Descer</button>
               <ConfirmDeleteButton testId="step-delete" label="Excluir etapa" title="Remover etapa desta tarefa?" onConfirm={() => act(() => apiClient.deleteCatalog2Step(step.id), "Etapa removida da tarefa.")} />
@@ -2572,6 +3074,7 @@ function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, versio
       />
       <StepChecklistDialog open={checklistOpen} title={step.name} readOnly={readOnly} saving={savingChecklist} qualificationEnabled={step.execution_mode !== "humano" && step.execution_mode != null ? true : step.requires_qualification !== false || !!step.requires_specialist_qualification} value={(step.ops?.checklist as ChecklistItem[] | undefined) ?? []} onClose={() => setChecklistOpen(false)}
         onSave={(list) => { setSavingChecklist(true); void act(() => apiClient.updateCatalog2Step(step.id, { ops: { ...(step.ops ?? {}), checklist: list }, scope: "product" }), "Checklist da etapa salvo.").then(() => setChecklistOpen(false)).finally(() => setSavingChecklist(false)); }} />
+      {editModal}
     </li>
   );
 }
@@ -2596,7 +3099,8 @@ function TaskInlineEdit({ task, version, refs, act, effortHighlighted, durationH
   useEffect(() => {
     if ((t.requires_qualification || t.requires_review) && qualifiers.length === 0) apiClient.getCatalog2Qualifiers().then((r) => setQualifiers(r.data)).catch(() => {});
   }, [t.requires_qualification, t.requires_review]); // eslint-disable-line react-hooks/exhaustive-deps
-  const doSaveTask = (scope?: "product" | "model") => act(
+  const inModelsTask = useContext(ModelEditCtx).embedded;
+  const doSaveTask = (scope?: ModelScope) => act(
     () => apiClient.updateCatalog2Task(task.id, { ...t, description: descT.trim() ? descT : null, ops: opsT, qualifier_user_id: t.requires_qualification ? (qualifier || null) : null, reviewer_user_id: t.requires_review ? (reviewer || null) : null, review_minutes: t.requires_review && reviewMin !== "" ? Number(reviewMin) : null, review_specialty_id: t.requires_review ? (reviewSpec || null) : null, estimated_minutes: null, specialty_id: t.specialty_id || null, repeat_every_cycles: t.repeat_rule === "every_n_cycles" && t.repeat_every_cycles !== "" ? Number(t.repeat_every_cycles) : null, asset_revalidate_days: t.asset_rule === "every_x_days" && t.asset_revalidate_days !== "" ? Number(t.asset_revalidate_days) : null, ...(scope ? { scope } : {}), ...(scope === "model" ? { confirm_model_update: true } : {}) }),
     scope === "model" ? "Modelo global atualizado." : "Tarefa salva."
   ).then((result: any) => {
@@ -2699,7 +3203,7 @@ function TaskInlineEdit({ task, version, refs, act, effortHighlighted, durationH
       {(t.execution_mode === "ia" || t.execution_mode === "hibrido") && <AiConfig task={task} act={act} onOpenPricing={() => void onOpenPricing?.(task.id)} />}
       {t.execution_mode === "humano" && task.ai && <p className="rounded-md bg-slate-100 px-2 py-1 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">Esta tarefa está em execução humana. A configuração de IA existente fica inativa, não entra no preço e pode ser reaproveitada caso a execução por IA seja habilitada futuramente.</p>}
       <QuestionnaireSection task={task} refs={refs} act={act} />
-      {task.task_model_id != null && <ModelScopeDialog open={scopeAsk} kindLabel="tarefa" modelId={task.task_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void doSaveTask(sc); }} />}
+      {task.task_model_id != null && <ModelScopeDialog embedded={inModelsTask} open={scopeAsk} kindLabel="tarefa" modelId={task.task_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void doSaveTask(sc); }} />}
     </div>
     </section>
   );
@@ -2772,13 +3276,18 @@ function NewSpecialtyForm({ onCreated, act }: { onCreated: (s: any) => void; act
   );
 }
 
-// Questionário de contratação — construtor universal (17/10). A tarefa VINCULA um questionário (sincronizado com o modelo) ou uma CÓPIA
-// independente. Editar um modelo usado por mais de uma tarefa pede a escolha: editar o modelo (confirmando) ou criar uma cópia só para esta tarefa.
+// Questionário de contratação — estilo da plataforma antiga (17/10): na página só o questionário PRONTO (perguntas recolhíveis, só leitura);
+// "+ Adicionar" e o lápis de cada pergunta abrem um MODAL; criar questionário novo também abre modal. A tarefa VINCULA um questionário
+// (sincronizado com o modelo) ou uma CÓPIA independente. Editar um modelo usado por 2+ tarefas pede a escolha (cópia ou editar o modelo).
 export function QuestionnaireSection({ task, refs, act, version, readOnly }: any) {
-  const [mode, setMode] = useState<"idle" | "picker" | "create" | "edit" | "preview">("idle");
+  const [mode, setMode] = useState<"idle" | "picker" | "create" | "preview">("idle");
   const [prefill, setPrefill] = useState<QuestionnaireState | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
+  const [showData, setShowData] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [pending, setPending] = useState<QuestionnaireState | null>(null);
+  const [confirm, setConfirm] = useState(false);
   const q = task.questionnaire;
   const ctx: Omit<QuestionCtx, "otherQuestions" | "sections"> = {
     steps: (task.steps ?? []).map((s: any) => ({ key: s.key, name: s.name })),
@@ -2797,41 +3306,64 @@ export function QuestionnaireSection({ task, refs, act, version, readOnly }: any
   };
   const suggestMore = async (labels: string[]) => (await apiClient.suggestCatalog2TaskQuestionnaire(task.id, labels)).questions.map(draftFromSuggestion);
 
+  // Grava o conteúdo inteiro (perguntas com IDs estáveis). Modelo usado por 2+ tarefas: antes pergunta (cópia ou editar o modelo).
+  const run = (st: QuestionnaireState, extra: Record<string, unknown>) => {
+    setSaving(true);
+    act(async () => {
+      const r: any = await apiClient.updateCatalog2TaskQuestionnaireContent(task.id, { ...questionnaireBody(st), ...extra } as any);
+      if (st.is_global_model !== !!r.questionnaire?.is_global_model) await apiClient.setCatalog2QuestionnaireGlobal(r.questionnaire.id, st.is_global_model);
+      return r;
+    }, (r: any) => (r?.forked ? "Cópia independente salva só para esta tarefa — o modelo compartilhado ficou intacto." : "Questionário salvo."))
+      .then((r: any) => { if (r) setPending(null); })
+      .finally(() => setSaving(false));
+  };
+  const persist = (st: QuestionnaireState) => (usedBy > 1 ? setPending(st) : run(st, {}));
+
   if (q) {
-    if (mode === "edit" && !readOnly) {
-      return <EditQuestionnaire task={task} q={q} usedBy={usedBy} ctx={ctx} act={act} onSuggest={suggestMore} onDone={() => setMode("idle")} onCancel={() => setMode("idle")} />;
-    }
     const st = stateFromServer(q);
     return (
-      <div className="w-full min-w-0 rounded border border-neutral-200 p-2 dark:border-neutral-800" data-testid="questionnaire-view">
-        <div className="flex flex-wrap items-center justify-between gap-1">
-          <span className="min-w-0 font-medium">Questionário: {q.name}
-            <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-600" title="Identificador permanente do questionário" data-testid="questionnaire-id">ID {String(q.id).slice(0, 8)}</span>
-            <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-600" title="Versão do conteúdo (sobe a cada edição)">v{q.revision ?? 1}</span>
-            {q.is_global_model && <span className="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-normal text-violet-800">modelo global</span>}
-            {usedBy > 1 && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-normal text-amber-800" title="Editar o modelo afeta todas as tarefas que o usam">usado por {usedBy} tarefas</span>}
-          </span>
-          <div className="flex shrink-0 flex-wrap gap-1">
-            <Button size="sm" variant="ghost" onClick={() => setMode(mode === "preview" ? "idle" : "preview")}><Eye className="h-3.5 w-3.5" /> {mode === "preview" ? "Fechar prévia" : "Visualizar como cliente"}</Button>
-            {!readOnly && <>
-              <Button size="sm" variant="ghost" onClick={() => setMode("edit")}>Editar</Button>
-              <Button size="sm" variant="ghost" title="Cria uma cópia independente (IDs novos) e vincula a cópia a esta tarefa" onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, q.id, "copy"), "Cópia independente criada e vinculada a esta tarefa.")}><Copy className="h-3.5 w-3.5" /> Duplicar</Button>
-              <Button size="sm" variant="ghost" onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, null), "Questionário desvinculado.")}><Unlink className="h-3.5 w-3.5" /> Desvincular</Button>
-            </>}
+      <div className="w-full min-w-0 space-y-3" data-testid="questionnaire-view">
+        <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="min-w-0 text-sm font-semibold">Questionário: {q.name}
+              <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-600" title="Identificador permanente do questionário" data-testid="questionnaire-id">ID {String(q.id).slice(0, 8)}</span>
+              <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-normal text-slate-600" title="Versão do conteúdo (sobe a cada edição)">v{q.revision ?? 1}</span>
+              {q.is_global_model && <span className="ml-1 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-normal text-violet-800">modelo global</span>}
+              {usedBy > 1 && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-normal text-amber-800" title="Editar o modelo afeta todas as tarefas que o usam">usado por {usedBy} tarefas</span>}
+            </span>
+            <div className="flex shrink-0 flex-wrap gap-1">
+              <Button size="sm" variant="ghost" onClick={() => setMode(mode === "preview" ? "idle" : "preview")}><Eye className="h-3.5 w-3.5" /> {mode === "preview" ? "Fechar prévia" : "Visualizar como cliente"}</Button>
+              {!readOnly && <>
+                <Button size="sm" variant="ghost" onClick={() => setShowData(true)}><Pencil className="h-3.5 w-3.5" /> Dados e seções</Button>
+                <Button size="sm" variant="ghost" title="Cria uma cópia independente (IDs novos) e vincula a cópia a esta tarefa" onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, q.id, "copy"), "Cópia independente criada e vinculada a esta tarefa.")}><Copy className="h-3.5 w-3.5" /> Duplicar</Button>
+                <Button size="sm" variant="ghost" onClick={() => act(() => apiClient.setCatalog2TaskQuestionnaire(task.id, null), "Questionário desvinculado.")}><Unlink className="h-3.5 w-3.5" /> Desvincular</Button>
+              </>}
+            </div>
           </div>
+          {q.description && <p className="mt-1 text-xs text-neutral-500">{q.description}</p>}
         </div>
-        {q.description && <p className="mt-0.5 text-neutral-500">{q.description}</p>}
-        {mode === "preview" && <div className="mt-2"><QuestionnairePreview state={st} /></div>}
-        <ul className="mt-1 ml-3 list-disc space-y-0.5">
-          {q.questions.map((qq: any) => (
-            <li key={qq.id}>{qq.label} {qq.is_required && <span className="text-red-500">*</span>} <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600" title="Tipo da pergunta">{questionTypeLabel(qq.question_type)}</span>
-              {qq.settings?.is_active === false && <span className="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700">inativa</span>}
-              {qq.settings?.attachments?.allowed && <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-800">anexo</span>}
-              {qq.target_step_key && <span className="ml-1 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-800" title="A resposta é usada só nesta etapa">etapa: {(task.steps ?? []).find((s: any) => s.key === qq.target_step_key)?.name ?? qq.target_step_key}</span>}
-              {qq.condition && <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800" title="Só aparece quando a condição é atendida">condicional</span>}</li>
-          ))}
-          {q.questions.length === 0 && <li className="list-none text-neutral-400">Nenhuma pergunta ainda{readOnly ? "." : " — clique em “Editar” pra adicionar."}</li>}
-        </ul>
+        {mode === "preview" && <QuestionnairePreview state={st} />}
+        <QuestionList questions={st.questions} sections={st.sections} ctx={ctx} readOnly={readOnly} busy={saving} onChange={(qs) => persist({ ...st, questions: qs })} />
+        {showData && <QuestionnaireDataModal initial={{ name: st.name, description: st.description, sections: st.sections, is_global_model: st.is_global_model }} usedByCount={usedBy} onClose={() => setShowData(false)} onSave={(v) => { setShowData(false); persist({ ...st, ...v }); }} />}
+        {pending && (
+          <Dialog open onOpenChange={(o) => { if (!o) setPending(null); }}>
+            <DialogContent className="max-w-xl" data-testid="shared-choice">
+              <DialogTitle>Este questionário é usado por {usedBy} tarefas</DialogTitle>
+              <div className="space-y-3 text-sm">
+                <p>Escolha como salvar. Nada muda em silêncio e contratações já feitas nunca são alteradas.</p>
+                <div className="space-y-1 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <Button size="sm" disabled={saving} onClick={() => run(pending, { shared_mode: "copy" })}>Criar uma cópia independente (só esta tarefa)</Button>
+                  <p className="text-[11px] text-emerald-900">Recomendado: o modelo e os outros produtos ficam como estão.</p>
+                </div>
+                <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold"><input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />Entendo que isto altera o modelo para todas as tarefas que o usam</label>
+                  <Button size="sm" variant="outline" disabled={saving || !confirm} onClick={() => run(pending, { shared_mode: "edit_shared", confirm_shared: true })}>Editar o modelo global</Button>
+                </div>
+                <div className="flex justify-end"><Button size="sm" variant="ghost" onClick={() => setPending(null)}>Voltar</Button></div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     );
   }
@@ -2841,12 +3373,19 @@ export function QuestionnaireSection({ task, refs, act, version, readOnly }: any
     <div className="w-full min-w-0 space-y-2">
       <div className="flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={() => setMode(mode === "picker" ? "idle" : "picker")}><Link2 className="h-3.5 w-3.5" /> Selecionar questionário existente</Button>
-        <Button size="sm" variant="outline" onClick={() => { setMode(mode === "create" && !prefill ? "idle" : "create"); setPrefill(null); }}><Plus className="h-3.5 w-3.5" /> Criar novo questionário</Button>
+        <Button size="sm" variant="outline" onClick={() => { setPrefill(null); setMode("create"); }}><Plus className="h-3.5 w-3.5" /> Criar novo questionário</Button>
         <button type="button" data-testid="ai-questionnaire" disabled={aiBusy} onClick={() => void generate()} title="A IA lê tudo o que está cadastrado no produto e sugere as perguntas, com os mesmos tipos e configurações do construtor. Você revisa antes de criar." className="inline-flex h-8 items-center gap-1 rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#2563eb,#7c3aed))] px-3 text-xs font-semibold text-white disabled:opacity-60"><Sparkles className="h-3.5 w-3.5" />{aiBusy ? "Gerando…" : "Gerar questionário com IA"}</button>
       </div>
       {aiErr && <p role="alert" className="text-[11px] font-semibold text-red-600">{aiErr}</p>}
       {mode === "picker" && <QuestionnairePicker task={task} act={act} />}
-      {mode === "create" && <NewQuestionnaireForm key={prefill ? "ai" : "manual"} taskId={task.id} act={act} ctx={ctx} initial={prefill ?? undefined} onSuggest={suggestMore} onDone={() => { setMode("idle"); setPrefill(null); }} />}
+      {mode === "create" && (
+        <Dialog open onOpenChange={(o) => { if (!o) { setMode("idle"); setPrefill(null); } }}>
+          <DialogContent className="max-h-[calc(100dvh-9rem)] w-[96vw] max-w-4xl overflow-y-auto sm:max-w-4xl" data-testid="questionnaire-create-modal">
+            <DialogTitle>Novo questionário</DialogTitle>
+            <NewQuestionnaireForm key={prefill ? "ai" : "manual"} taskId={task.id} act={act} ctx={ctx} initial={prefill ?? undefined} onSuggest={suggestMore} onDone={() => { setMode("idle"); setPrefill(null); }} />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -2896,7 +3435,7 @@ function QuestionnairePicker({ task, act }: { task: any; act: any }) {
   );
 }
 
-// Cria um questionário novo (nome + seções + perguntas) e já vincula à tarefa atual ao salvar.
+// Cria um questionário novo (nome + seções + perguntas) e já vincula à tarefa atual ao salvar. Roda dentro de um modal.
 function NewQuestionnaireForm({ taskId, act, onDone, initial, ctx, onSuggest }: { taskId: string; act: any; onDone: () => void; initial?: QuestionnaireState; ctx: Omit<QuestionCtx, "otherQuestions" | "sections">; onSuggest?: (labels: string[]) => Promise<QuestionDraft[]> }) {
   // Evita duplicar o questionário se o admin clicar "Criar e vincular" repetidas vezes enquanto as chamadas ainda estão em andamento.
   const [saving, setSaving] = useState(false);
@@ -2916,49 +3455,6 @@ function NewQuestionnaireForm({ taskId, act, onDone, initial, ctx, onSuggest }: 
     />
   );
 }
-
-// Editar um questionário JÁ VINCULADO. Modelo usado por mais de uma tarefa: pergunta antes de salvar (editar o modelo ou criar cópia).
-function EditQuestionnaire({ task, q, usedBy, ctx, act, onDone, onCancel, onSuggest }: { task: any; q: any; usedBy: number; ctx: Omit<QuestionCtx, "otherQuestions" | "sections">; act: any; onDone: () => void; onCancel: () => void; onSuggest?: (labels: string[]) => Promise<QuestionDraft[]> }) {
-  const [saving, setSaving] = useState(false);
-  const [pending, setPending] = useState<QuestionnaireState | null>(null);
-  const [confirm, setConfirm] = useState(false);
-  const run = (s: QuestionnaireState, extra: Record<string, unknown>) => {
-    setSaving(true);
-    act(async () => {
-      const r: any = await apiClient.updateCatalog2TaskQuestionnaireContent(task.id, { ...questionnaireBody(s), ...extra } as any);
-      if (s.is_global_model !== !!r.questionnaire?.is_global_model) await apiClient.setCatalog2QuestionnaireGlobal(r.questionnaire.id, s.is_global_model);
-      return r;
-    }, (r: any) => (r?.forked ? "Cópia independente salva só para esta tarefa — o modelo compartilhado ficou intacto." : "Questionário salvo."))
-      .then((r: any) => { if (r) onDone(); })
-      .finally(() => setSaving(false));
-  };
-  return (
-    <div className="w-full min-w-0 space-y-2">
-      <QuestionnaireEditor
-        initial={stateFromServer(q)} ctx={ctx} saving={saving} saveLabel="Salvar" usedByCount={usedBy} onSuggest={onSuggest}
-        onSave={(s) => (usedBy > 1 ? setPending(s) : run(s, {}))}
-        onCancel={onCancel}
-      />
-      {pending && (
-        <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950" role="dialog" aria-label="Questionário compartilhado" data-testid="shared-choice">
-          <p className="font-bold">Este questionário é usado por {usedBy} tarefas (outros produtos).</p>
-          <p>Escolha como salvar. Nada muda em silêncio e contratações já feitas nunca são alteradas.</p>
-          <div className="flex flex-wrap items-start gap-3">
-            <div className="space-y-1">
-              <Button size="sm" disabled={saving} onClick={() => run(pending, { shared_mode: "copy" })}>Criar uma cópia independente (só esta tarefa)</Button>
-              <p className="text-[11px]">Recomendado: o modelo e os outros produtos ficam como estão.</p>
-            </div>
-            <div className="space-y-1">
-              <label className="flex items-center gap-1.5 font-semibold"><input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} />Entendo que isto altera o modelo para todas as tarefas que o usam</label>
-              <Button size="sm" variant="outline" disabled={saving || !confirm} onClick={() => run(pending, { shared_mode: "edit_shared", confirm_shared: true })}>Editar o modelo global</Button>
-            </div>
-            <Button size="sm" variant="ghost" onClick={() => setPending(null)}>Voltar</Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 // A duração pertence à etapa. A tarefa reúne o total de suas etapas, sem
 // transferir horas antigas para novas linhas automaticamente.
 function AddStepControl({ refs, ringClass, domId, task, act }: { refs?: any; ringClass?: string; domId?: string; task?: any; act: any }) {
@@ -2974,10 +3470,16 @@ function AddStepControl({ refs, ringClass, domId, task, act }: { refs?: any; rin
   const [showCreate, setShowCreate] = useState(false);
   const [pick, setPick] = useState(false);
   const [similarAsk, setSimilarAsk] = useState<any[] | null>(null);
-  const createStep = (justification?: string) => act(() => apiClient.addCatalog2Step(task.id, { name: s.name.trim(), estimated_minutes: s.estimated_hours ? Math.round(Number(s.estimated_hours) * 60) : null, specialty_id: s.specialty_id || null, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria.trim() || null, client_action_id: `step-${task.id}-${Date.now()}`, ...(justification ? { duplicate_resolution: "create_anyway", duplicate_justification: justification } : {}) }), "Etapa criada e cadastrada no catálogo global de modelos.", { rethrow: true })
+  const [asDraft, setAsDraft] = useState(false);
+  const createStep = (justification?: string, draft?: boolean) => act(() => apiClient.addCatalog2Step(task.id, { name: s.name.trim(), estimated_minutes: s.estimated_hours ? Math.round(Number(s.estimated_hours) * 60) : null, specialty_id: s.specialty_id || null, purpose: s.purpose, execution_mode: s.execution_mode, completion_criteria: s.completion_criteria.trim() || null, client_action_id: `step-${task.id}-${Date.now()}`, ...(justification ? { duplicate_resolution: "create_anyway", duplicate_justification: justification } : {}), ...((draft ?? asDraft) ? { draft: true } : {}) }), (draft ?? asDraft) ? "Rascunho da etapa criado. Abra “Editar” para continuar do mesmo ponto." : "Etapa criada e cadastrada no catálogo global de modelos.", { rethrow: true })
     .then((r: any) => { if (r) { setS(defaults()); setShowCreate(false); } })
     .catch((e: any) => { if (e?.code === "duplicate_model_candidates" && Array.isArray(e?.data?.details?.candidates)) setSimilarAsk(e.data.details.candidates); });
   useEffect(() => { setS(defaults()); }, [task?.id, task?.name, task?.specialty?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // "Criar nova etapa": nasce como RASCUNHO e abre direto o editor completo da etapa (Painel Moldura, 6 blocos), sem formulário pequeno.
+  const startNew = async () => {
+    const r: any = await act(() => apiClient.addCatalog2Step(task.id, { name: "Nova etapa", specialty_id: task?.specialty?.id ?? null, execution_mode: task?.execution_mode ?? "humano", purpose: "execucao", client_action_id: `step-${task.id}-${Date.now()}`, duplicate_resolution: "create_anyway", duplicate_justification: "Etapa nova criada como rascunho para ser configurada no editor completo.", draft: true }), "Etapa nova criada como rascunho: preencha e salve.", { rethrow: true }).catch(() => null);
+    if (r?.id) window.setTimeout(() => window.dispatchEvent(new CustomEvent(OPEN_STEP_EVENT, { detail: { stepId: r.id } })), 700);
+  };
   return (
     <li id={domId} className={`space-y-2 ${ringClass ?? ""}`}>
       <DropdownMenu>
@@ -2986,12 +3488,14 @@ function AddStepControl({ refs, ringClass, domId, task, act }: { refs?: any; rin
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
           <DropdownMenuItem onClick={() => { setPick(true); setShowCreate(false); }}><Search className="h-4 w-4" /> Selecionar etapa existente</DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> Criar nova etapa</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void startNew()} data-testid="create-new-step"><Plus className="h-4 w-4" /> Criar nova etapa</DropdownMenuItem>
           <DropdownMenuItem onClick={() => act(() => apiClient.addCatalog2AccessValidationStep(task.id), "Etapa \"Validação e organização dos acessos\" adicionada no início da tarefa.")}><ChevronRight className="h-4 w-4" /> Validação e organização dos acessos (padrão)</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      {showCreate && (
-        <div className="space-y-2 rounded border border-dashed border-neutral-300 p-2 dark:border-neutral-700">
+      <Dialog open={showCreate} onOpenChange={(o) => { if (!o) setShowCreate(false); }}>
+        <DialogContent className="max-h-[calc(100dvh-9rem)] w-[96vw] max-w-2xl overflow-y-auto sm:max-w-2xl">
+          <DialogTitle>Nova etapa</DialogTitle>
+        <div className="space-y-3" data-testid="step-create-modal">
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Nome"><Input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} /></Field>
             <Field label="Finalidade"><select className="h-9 rounded border border-neutral-300 bg-transparent px-1 text-sm dark:border-neutral-700" value={s.purpose} onChange={(e) => setS({ ...s, purpose: e.target.value })}>{Object.entries(PURPOSE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></Field>
@@ -3001,11 +3505,13 @@ function AddStepControl({ refs, ringClass, domId, task, act }: { refs?: any; rin
           </div>
           <Field label="Critério de conclusão"><Input value={s.completion_criteria} onChange={(e) => setS({ ...s, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
           <div className="flex gap-2">
-            <Button size="sm" disabled={!s.name.trim()} onClick={() => void createStep()}>Criar etapa</Button>
+            <Button size="sm" disabled={!s.name.trim()} onClick={() => { setAsDraft(false); void createStep(undefined, false); }}>Criar etapa</Button>
+            <Button size="sm" variant="outline" disabled={!s.name.trim()} data-testid="step-create-draft" title="Cria a etapa só com o que já foi preenchido, marcada como rascunho incompleto (não é liberada para execução nem publicada). Dê ao menos um nome." onClick={() => { setAsDraft(true); void createStep(undefined, true); }}>Salvar rascunho da etapa</Button>
             <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>Cancelar</Button>
           </div>
         </div>
-      )}
+        </DialogContent>
+      </Dialog>
       {similarAsk && <SimilarModelsDialog kind="step" similar={similarAsk} onCancel={() => setSimilarAsk(null)} onUse={(id) => { setSimilarAsk(null); void act(() => apiClient.addCatalog2StepFromModel(task.id, id), "Etapa adicionada a partir do modelo global.").then(() => { setS(defaults()); setShowCreate(false); }); }} onCreateAnyway={(why) => { setSimilarAsk(null); void createStep(why); }} />}
       <ModelPickerDialog kind="step" open={pick} refs={refs} onClose={() => setPick(false)} onPick={(id) => act(() => apiClient.addCatalog2StepFromModel(task.id, id), "Etapa adicionada a partir do modelo global.")} />
     </li>
@@ -3067,7 +3573,12 @@ function ConditionsTab({ version, readOnly, act }: any) {
         <Popover><PopoverTrigger asChild><button type="button" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-xl border border-violet-400 bg-white px-3 text-xs font-semibold text-violet-700 transition hover:bg-violet-50 dark:bg-slate-900"><CalendarClock className="h-3.5 w-3.5" />{simulating ? "Calculando…" : "Simular prazo"}</button></PopoverTrigger><PopoverContent align="end" className="w-72 p-3"><p className="text-sm font-semibold text-slate-900">Adicionais do cenário</p><p className="mt-0.5 text-xs text-slate-500">Marque as opções para recalcular o prazo real.</p><div className="mt-3 space-y-2">{(version.addons ?? []).map((addon: any) => <label key={addon.id} className="flex cursor-pointer items-center gap-2 text-xs text-slate-700"><input type="checkbox" checked={selectedAddonKeys.includes(addon.key)} onChange={(event) => setSelectedAddonKeys((keys) => event.target.checked ? [...keys, addon.key] : keys.filter((key) => key !== addon.key))} />{addon.name}</label>)}</div><p className="mt-3 rounded-lg bg-violet-50 px-2.5 py-2 text-xs font-semibold text-violet-800">Prazo simulado: {simulatedDeadline == null ? "a calcular" : `${simulatedDeadline} dias`}</p></PopoverContent></Popover>
       </div>
       {!readOnly && newConditionOpen && (
-        <SetupCard icon={Plus} title="Nova condição" summary="gatilho → efeito" defaultOpen>
+        <FramedModal open onOpenChange={setNewConditionOpen} testId="new-condition-modal" title="Nova condição">
+          <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+            <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">Nova condição</p><p className="truncate text-xs text-slate-500">Regra tipada: quando o gatilho acontece, o efeito é aplicado ao prazo ou ao preço.</p></div>
+            <Button size="sm" variant="outline" onClick={() => setNewConditionOpen(false)}>Fechar</Button>
+          </div>
+          <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             <MiniField label="Chave"><Input className="h-8 text-xs" value={c.key} onChange={(e) => setC({ ...c, key: e.target.value })} /></MiniField>
             <MiniField label="Nome"><Input className="h-8 text-xs" value={c.name} onChange={(e) => setC({ ...c, name: e.target.value })} /></MiniField>
@@ -3080,7 +3591,8 @@ function ConditionsTab({ version, readOnly, act }: any) {
           </div>
           {(c.effect_type === "add_fixed_amount" || c.effect_type === "add_percent") && <div className="mt-1"><ChargeScopeFields value={c as any} onChange={(v) => setC({ ...c, ...v } as any)} /></div>}
           <AddBtn onClick={() => c.key && c.name && c.effect_value && act(() => apiClient.addCatalog2Condition(version.id, { ...c, trigger_ref: c.trigger_ref || null, comparison_value: c.comparison_value || null }), "Condição criada.").then(() => setC({ ...c, key: "", name: "", effect_value: "" }))}>Adicionar condição</AddBtn>
-        </SetupCard>
+          </div>
+        </FramedModal>
       )}
     </div>
   );
@@ -4187,6 +4699,8 @@ const LEVEL_META: Record<string, { label: string; chip: string; border: string; 
 type ReadinessFilter = "todos" | "pronto" | "bloqueador" | "pendente" | "opcional";
 
 function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDetail, onItems, onData, detailFor, detailTargetFor, taskName }: { taskName?: string; productId: string; versionId?: string; versionKey: string; onGo: (key: string) => void; onGoDetail: (key: string, targetId: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void; onData?: (d: any) => void; detailFor?: (key: string) => string[]; detailTargetFor?: (key: string, index: number) => string | undefined }) {
+  const { sidebarWidth } = useAppFrameMetrics();
+  const sidebarWidthPx = typeof sidebarWidth === "number" ? sidebarWidth : parseInt(String(sidebarWidth)) || 0;
   const [data, setData] = useState<any>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -4248,8 +4762,8 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
         <div
           role="button"
           tabIndex={0}
-          onClick={() => (isAttention ? setSelectedKey(it.key) : onGo(it.key))}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (isAttention) setSelectedKey(it.key); else onGo(it.key); } }}
+          onClick={() => (isAttention ? setSelectedKey(it.key) : (setOpen(false), onGo(it.key)))}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (isAttention) setSelectedKey(it.key); else { setOpen(false); onGo(it.key); } } }}
           className={"flex cursor-pointer items-center gap-3 rounded-xl border bg-white px-3 py-2 transition-colors hover:border-violet-300 dark:bg-slate-900 " + (selected ? "border-violet-400 ring-1 ring-violet-300" : "border-slate-200 dark:border-slate-700")}
         >
           <span className={BADGE + " min-w-[72px] " + meta.chip}>{meta.label}</span>
@@ -4259,7 +4773,7 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
             {compact && <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400" title={it.note}>{it.note}</span>}
           </span>
           {!compact && <span className="hidden min-w-0 max-w-[45%] flex-1 truncate text-xs text-slate-500 dark:text-slate-400 md:block" title={it.note}>{it.note}</span>}
-          <button type="button" onClick={(e) => { e.stopPropagation(); onGo(it.key); }} className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-violet-700 hover:underline dark:text-violet-300">
+          <button type="button" onClick={(e) => { e.stopPropagation(); setOpen(false); onGo(it.key); }} className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-violet-700 hover:underline dark:text-violet-300">
             {stepOf(it.key)} <ChevronRight className="h-4 w-4" />
           </button>
         </div>
@@ -4268,45 +4782,29 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="block w-full px-4 py-2.5 text-left" aria-expanded={open}>
-        <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <span className="flex items-center gap-2.5">
-            <CheckSquare className="h-5 w-5 text-violet-600" aria-hidden="true" />
-            <span className="text-base font-bold text-slate-900 dark:text-slate-100">Checklist do produto</span>
-          </span>
-          {data?.error ? (
-            <span className="text-sm text-red-600">não foi possível carregar</span>
-          ) : loading && !data ? (
-            <span className="text-sm text-slate-500">carregando…</span>
-          ) : (
-            <>
-              {data?.items && <span className="text-sm text-slate-500"><strong className="text-emerald-600">{readyCount} de {entries.length}</strong> prontos</span>}
-              {nBlock === 0 && nPend === 0 ? (
-                <span className={BADGE + " bg-emerald-100 text-emerald-700"}>nada pendente</span>
-              ) : (
-                <>
-                  {nBlock > 0 && <span className={BADGE + " gap-1 bg-red-100 text-red-700"}><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{nBlock} {nBlock === 1 ? "bloqueio" : "bloqueios"}</span>}
-                  {nPend > 0 && <span className={BADGE + " gap-1 bg-amber-100 text-amber-700"}><Clock className="h-3.5 w-3.5" aria-hidden="true" />{nPend} {nPend === 1 ? "pendência" : "pendências"}</span>}
-                </>
-              )}
-            </>
-          )}
-          {data?.items && (
-            <span className="flex min-w-[14rem] flex-1 items-center gap-3">
-              <span className="shrink-0 text-sm text-slate-600 dark:text-slate-300">{pct}% concluído</span>
-              <span className="flex h-2 min-w-[8rem] flex-1 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-700/60" aria-hidden>
-                <span className="h-full bg-emerald-500" style={{ width: seg(readyCount) + "%" }} />
-                <span className="h-full bg-pink-300" style={{ width: seg(nPend) + "%" }} />
-                <span className="h-full bg-red-500" style={{ width: seg(nBlock) + "%" }} />
-              </span>
-            </span>
-          )}
-          {open ? <ChevronDown className="h-5 w-5 shrink-0 text-violet-600" /> : <ChevronRight className="h-5 w-5 shrink-0 text-violet-600" />}
-        </span>
+    <>
+      <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Ver preenchimento do produto" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white/15 px-2 text-xs font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25" title="Ver o preenchimento do produto">
+        <CheckSquare className="h-3.5 w-3.5" aria-hidden="true" />
+        <span className="hidden xl:inline">Preenchimento</span>
+        {data?.error ? <span className="text-red-100">indisponível</span> : loading && !data ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>
+          {data?.items && <span className="text-white/80">{readyCount}/{entries.length}</span>}
+          {nBlock > 0 ? <span className="rounded-full bg-red-400/90 px-1.5 py-0.5 text-[10px] leading-none text-white">{nBlock}</span> : nPend > 0 ? <span className="rounded-full bg-amber-300 px-1.5 py-0.5 text-[10px] leading-none text-amber-950">{nPend}</span> : <Check className="h-3.5 w-3.5 text-emerald-300" />}
+        </>}
       </button>
-      {open && (
-        <div className="space-y-3 border-t border-slate-100 bg-[#f4f6fc] px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+      <FramedPanel open={open} onOpenChange={setOpen} testId="product-readiness-dialog">
+          <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+            <button type="button" onClick={() => setOpen(false)} aria-label="Fechar preenchimento" title="Fechar" className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"><X className="h-4 w-4" /></button>
+            <DialogTitle className="flex flex-wrap items-center gap-2.5 pr-10 text-base font-bold text-slate-900 dark:text-slate-100">
+              <CheckSquare className="h-5 w-5 text-violet-600" aria-hidden="true" />
+              Preenchimento do produto
+              {data?.items && <span className="text-sm font-medium text-slate-500"><strong className="text-emerald-600">{readyCount} de {entries.length}</strong> campos prontos</span>}
+              {nBlock > 0 && <span className={BADGE + " gap-1 bg-red-100 text-red-700"}><AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />{nBlock} {nBlock === 1 ? "bloqueio" : "bloqueios"}</span>}
+              {nPend > 0 && <span className={BADGE + " gap-1 bg-amber-100 text-amber-700"}><Clock className="h-3.5 w-3.5" aria-hidden="true" />{nPend} {nPend === 1 ? "pendência" : "pendências"}</span>}
+              {nBlock === 0 && nPend === 0 && data?.items && <span className={BADGE + " bg-emerald-100 text-emerald-700"}>Tudo pronto</span>}
+            </DialogTitle>
+            {data?.items && <div className="mt-3 flex items-center gap-3"><span className="shrink-0 text-xs font-medium text-slate-600 dark:text-slate-300">{pct}% preenchido</span><span className="flex h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-700/60" aria-hidden><span className="h-full bg-emerald-500" style={{ width: seg(readyCount) + "%" }} /><span className="h-full bg-pink-300" style={{ width: seg(nPend) + "%" }} /><span className="h-full bg-red-500" style={{ width: seg(nBlock) + "%" }} /></span></div>}
+          </div>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
           {data?.error ? (
             <p className="text-sm text-red-600">Não foi possível carregar a prontidão.</p>
           ) : !data?.items ? (
@@ -4322,7 +4820,7 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
                     aria-selected={filter === f.id}
                     onClick={() => setFilter(f.id)}
                     style={filter === f.id ? { background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" } : undefined}
-                    className={"inline-flex h-8 items-center rounded-full border px-3.5 text-xs font-semibold transition-colors " + (filter === f.id ? "border-transparent text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300")}
+                    className={"inline-flex h-7 items-center rounded-full border px-3 text-[11px] font-semibold transition-colors " + (filter === f.id ? "border-transparent text-white shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-violet-300 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300")}
                   >
                     {f.label} <span className={"ml-1 " + (filter === f.id ? "text-white/80" : "text-slate-400")}>({f.n})</span>
                   </button>
@@ -4330,8 +4828,8 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
               </div>
 
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-                <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-                  <h3 className="mb-2 text-sm font-bold text-slate-900 dark:text-slate-100">Itens do checklist</h3>
+                <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
+                  <h3 className="mb-1.5 text-sm font-bold text-slate-900 dark:text-slate-100">Itens do preenchimento</h3>
                   {visible.length === 0 ? (
                     <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 dark:bg-slate-800/40">Nenhum item nesta categoria.</p>
                   ) : (
@@ -4355,10 +4853,18 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
                   )}
                 </div>
 
-                <aside className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900" data-testid="readiness-resolve">
+                <aside className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900" data-testid="readiness-resolve">
                   {active ? (() => {
                     const meta = LEVEL_META[active.level] ?? LEVEL_META.opcional;
-                    const details = detailFor?.(active.key) ?? [];
+                    const configuredDetails = detailFor?.(active.key) ?? [];
+                    // A validação final pode reunir várias etapas em uma única
+                    // nota do servidor. No painel, cada uma vira uma linha
+                    // curta: assim não há parágrafo técnico misturando tudo.
+                    const details = configuredDetails.length > 0
+                      ? configuredDetails
+                      : active.key === "validacao"
+                        ? active.note.replace(/^\s*\d+\s+pendência\(s\)\s+para\s+publicar:\s*/i, "").split(/\s+\|\s+/).map((line) => line.trim()).filter(Boolean)
+                        : [];
                     const help = (READINESS_HELP[active.key] as any)?.[active.level] as string | undefined;
                     return (
                       <div className="space-y-3">
@@ -4369,7 +4875,7 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
                         </div>
                         <div>
                           <p className="text-[15px] font-bold text-slate-900 dark:text-slate-100">{READINESS_ITEM_LABEL[active.key] ?? active.key}</p>
-                          <p className="mt-0.5 text-[13px] text-slate-600 dark:text-slate-300">{active.note}</p>
+                          <p className="mt-0.5 text-[13px] text-slate-600 dark:text-slate-300">{details.length > 0 ? `${details.length} item(ns) para revisar antes de publicar.` : active.note}</p>
                         </div>
                         {details.length > 0 && (
                           <div className="border-t border-slate-100 pt-3 dark:border-slate-800">
@@ -4379,7 +4885,7 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
                                 const targetId = detailTargetFor?.(active.key, i);
                                 return (
                                   <li key={i}>
-                                    <button type="button" disabled={!targetId} onClick={() => targetId && onGoDetail(active.key, targetId)} className="group flex w-full items-start gap-2.5 text-left text-[13px] text-slate-700 hover:text-violet-700 disabled:cursor-default dark:text-slate-200">
+                                    <button type="button" disabled={!targetId} onClick={() => { if (targetId) { setOpen(false); onGoDetail(active.key, targetId); } }} className="group flex w-full items-start gap-2.5 text-left text-[13px] text-slate-700 hover:text-violet-700 disabled:cursor-default dark:text-slate-200">
                                       <span className="mt-0.5 h-4 w-4 shrink-0 rounded border border-slate-300 bg-white group-hover:border-violet-500 dark:border-slate-600 dark:bg-slate-800" aria-hidden="true" />
                                       <span className="min-w-0 flex-1">{line}</span>
                                     </button>
@@ -4391,7 +4897,7 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
                         )}
                         <button
                           type="button"
-                          onClick={() => onGo(active.key)}
+                          onClick={() => { setOpen(false); onGo(active.key); }}
                           style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }}
                           className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold text-white shadow-md hover:brightness-110"
                           data-testid="readiness-open"
@@ -4399,7 +4905,7 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
                           {isTaskItem(active.key) ? "Abrir etapa" : "Ir resolver"} <ExternalLink className="h-4 w-4" aria-hidden="true" />
                         </button>
                         {isTaskItem(active.key) && (
-                          <button type="button" onClick={() => onGoDetail(active.key, "catalog2-tasks")} className="mx-auto flex items-center gap-1.5 text-[13px] font-semibold text-violet-700 hover:underline dark:text-violet-300">
+                          <button type="button" onClick={() => { setOpen(false); onGoDetail(active.key, "catalog2-tasks"); }} className="mx-auto flex items-center gap-1.5 text-[13px] font-semibold text-violet-700 hover:underline dark:text-violet-300">
                             <FileText className="h-4 w-4" aria-hidden="true" />Ver tarefa{taskName ? " " + taskName : ""} <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                           </button>
                         )}
@@ -4431,8 +4937,8 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
             </>
           )}
         </div>
-      )}
-    </section>
+      </FramedPanel>
+    </>
   );
 }
 
@@ -4444,7 +4950,8 @@ const MAIN_TABS_LIST = "h-auto w-full flex-nowrap justify-start gap-1 overflow-x
 const MAIN_TAB = "-mb-px flex-none rounded-none border-0 border-b-2 border-transparent bg-transparent px-4 py-3 text-[13px] font-semibold text-slate-500 shadow-none hover:text-slate-700 data-[state=active]:border-violet-600 data-[state=active]:bg-transparent data-[state=active]:text-violet-700 data-[state=active]:shadow-none dark:text-slate-400 dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-violet-300";
 const SUB_TABS_LIST = "h-auto w-fit flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900";
 const SUB_TAB = "flex-none rounded-lg px-3.5 py-1.5 text-[13px] font-semibold text-slate-600 transition data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#2558FF] data-[state=active]:via-[#6E2C96] data-[state=active]:to-[#D92293] data-[state=active]:text-white data-[state=active]:shadow-md dark:text-slate-300";
-const TAB_CARD = "mt-2 rounded-2xl border border-white/70 bg-[#e8ecf9] p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900";
+// Abas 3, 4 e 5: sem o container do meio (igual às abas 1 e 2) — só o fundo do painel; blocos separados por 11,25 px.
+const TAB_CARD = "mt-2";
 
 // Estado aberto/fechado das seções: lembrado enquanto a página não é recarregada (trocar de aba do produto e voltar mantém como estava; F5 volta tudo fechado).
 // Guardado também no sessionStorage: F5 volta tudo exatamente como estava (aberto continua aberto).
@@ -4455,6 +4962,8 @@ const openStoreAll = (): Record<string, boolean> => {
   try { openStoreCache = JSON.parse(window.sessionStorage.getItem(OPEN_STORE_KEY) ?? "{}") ?? {}; } catch { openStoreCache = {}; }
   return openStoreCache as Record<string, boolean>;
 };
+/** Só para testes: esquece o que estava aberto/fechado (a memória do módulo sobrevive entre testes). */
+export const resetOpenStoreForTests = () => { openStoreCache = null; };
 const storeKey = (k: string) => `${typeof window !== "undefined" ? window.location.pathname : ""}|${k}`;
 const readOpen = (k: string, fallback: boolean) => openStoreAll()[storeKey(k)] ?? fallback;
 const writeOpen = (k: string, v: boolean) => {
@@ -4474,16 +4983,17 @@ function KeepTabsContent({ className, ...props }: React.ComponentProps<typeof Ta
 }
 
 function PersistDetails({ persistKey, open: _ignored, onToggle, children, ...rest }: React.DetailsHTMLAttributes<HTMLDetailsElement> & { persistKey: string }) {
-  return <details {...rest} open={readOpen(persistKey, false) || undefined} onToggle={(e) => { writeOpen(persistKey, (e.currentTarget as HTMLDetailsElement).open); onToggle?.(e); }}>{children}</details>;
+  return <details data-accordion {...rest} open={readOpen(persistKey, false) || undefined} onToggle={(e) => { writeOpen(persistKey, (e.currentTarget as HTMLDetailsElement).open); onToggle?.(e); }}>{children}</details>;
 }
 
-function SectionCard({ icon: Icon, title, subtitle, help, headerAction, children, collapsible = true, defaultOpen = true, forceOpen = false }: { icon: React.ComponentType<{ className?: string }>; title: string; subtitle: string; help?: string; headerAction?: React.ReactNode; children: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean; forceOpen?: boolean }) {
-  const [open, setOpenRaw] = useState(() => readOpen("sec:" + title, defaultOpen));
-  const setOpen = (fn: (o: boolean) => boolean) => setOpenRaw((o) => { const v = fn(o); writeOpen("sec:" + title, v); return v; });
+function SectionCard({ icon: Icon, title, subtitle, help, headerAction, children, collapsible = true, defaultOpen = true, forceOpen = false, keepMounted = false, number, tone, storeKey }: { storeKey?: string; tone?: "soft"; number?: number; keepMounted?: boolean; icon: React.ComponentType<{ className?: string }>; title: string; subtitle: string; help?: string; headerAction?: React.ReactNode; children: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean; forceOpen?: boolean }) {
+  const [open, setOpenRaw] = useState(() => readOpen("sec:" + (storeKey ?? title), defaultOpen));
+  const setOpen = (fn: (o: boolean) => boolean) => setOpenRaw((o) => { const v = fn(o); writeOpen("sec:" + (storeKey ?? title), v); return v; });
+  useAccordionAll((o) => { if (collapsible) setOpenRaw(o); });
   const shown = !collapsible || open || forceOpen;
   const head = (
     <>
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-3.5 w-3.5" /></span>
+      {number != null ? <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full section-number-badge text-xs font-bold text-white" data-testid="section-number">{number}</span> : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-3.5 w-3.5" /></span>}
       <div className="min-w-0 flex-1 text-left">
         <h3 className="text-[13px] font-bold leading-tight text-slate-900 dark:text-slate-100">{title}{help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}</h3>
         <p className="truncate text-[11px] text-slate-500 dark:text-slate-400" title={subtitle}>{subtitle}</p>
@@ -4492,9 +5002,9 @@ function SectionCard({ icon: Icon, title, subtitle, help, headerAction, children
   );
   const toggleIcon = shown ? <ChevronUp className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" />;
   const heading = collapsible ? <div className="flex min-w-0 items-center gap-2"><button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={shown} className="flex min-w-0 flex-1 items-center gap-2.5">{head}{!headerAction && toggleIcon}</button>{headerAction && <span className="shrink-0" onClick={(e) => e.stopPropagation()}>{headerAction}</span>}{headerAction && <button type="button" aria-label={shown ? "Recolher" : "Expandir"} onClick={() => setOpen((o) => !o)} className="shrink-0 p-1">{toggleIcon}</button>}</div> : <header className="flex items-center gap-2.5">{head}<span className="ml-auto shrink-0">{headerAction}</span></header>;
-  const card = <section className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
+  const card = <section className={`rounded-2xl border border-slate-200 px-3 py-2 shadow-sm dark:border-slate-800 ${tone === "soft" ? "bg-slate-100/80 dark:bg-slate-800/50" : "bg-white dark:bg-slate-900/60"}`}>
       {heading}
-      {shown && <div className="mt-2.5 space-y-2">{children}</div>}
+      {(shown || keepMounted) && <div className={shown ? "mt-2.5 space-y-2" : "hidden"}>{children}</div>}
     </section>;
   return card;
 }
@@ -4603,8 +5113,11 @@ function VersionPicker({ versions, selectedVersionId, onSelect, unsavedDraftId, 
   );
 }
 
-function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish, versionInfo, priceInfo, editMode, onStartEdit, onStopEdit, onChangeStatus, onSaveDraft, unsavedDraftId, onClientView, previewOpen }: any) {
-  const { pinned, toggle } = usePinEntry(pin ?? null);
+function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish, versionInfo, priceInfo, editMode, onStartEdit, onStopEdit, onChangeStatus, onSaveDraft, unsavedDraftId, onClientView, previewOpen, readiness }: any) {
+  // O atalho para a Bandeja precisa existir mesmo se o editor for aberto por
+  // uma rota alternativa (sem o `pin` explícito do painel pai).
+  const trayEntry: PinnedEntry = pin ?? { id: `catalog2-produto-${product.id}`, label: "Editor de produto", icon: Layers, path: `/admin/cadastro-produtos/${product.sequence_number ?? product.id}` };
+  const { pinned, toggle } = usePinEntry(trayEntry);
   const [spinning, setSpinning] = useState(false);
   const refresh = async () => {
     setSpinning(true);
@@ -4658,6 +5171,7 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
         </div>
       </div>
       <VersionPicker versions={product.versions} selectedVersionId={selectedVersionId} onSelect={onSelectVersion} unsavedDraftId={unsavedDraftId} />
+      {readiness}
       {versionInfo?.published && (
         <TooltipProvider delayDuration={100}>
           <Tooltip>
@@ -4676,15 +5190,13 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
         </TooltipProvider>
       )}
       <HeaderIconBtn label="Visualizar como o cliente vê (prévia da versão que está aberta)" onClick={onClientView} className={`flex shrink-0 items-center gap-1.5 !px-2.5 !py-1.5 text-xs font-semibold ${previewOpen ? "!bg-white/25 !text-white" : "bg-white/10"}`}><Eye className="h-4.5 w-4.5" /><span className="hidden sm:inline" data-testid="client-view-label">Ver como o cliente vê</span></HeaderIconBtn>
-      {pin && (
-        <HeaderIconBtn label={pinned ? "Remover da Bandeja de Telas" : "Fixar na Bandeja de Telas"} onClick={toggle} className={pinned ? "!text-amber-300" : ""}>
-          <Pin className={`h-5 w-5 ${pinned ? "fill-current" : ""}`} />
-        </HeaderIconBtn>
-      )}
+      <HeaderIconBtn label={pinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"} onClick={toggle} className={pinned ? "!text-amber-300" : ""}>
+        <Pin className={`h-5 w-5 ${pinned ? "fill-current" : ""}`} />
+      </HeaderIconBtn>
       <HeaderIconBtn label="Recarregar dados do produto (busca de novo no servidor o que foi salvo)" onClick={refresh}>
         <RefreshCw className={`h-5 w-5 ${spinning ? "animate-spin" : ""}`} />
       </HeaderIconBtn>
-      {(canNewVersion || pin) && (
+      {canNewVersion && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" aria-label="Mais ações" className="rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white">
@@ -4693,11 +5205,6 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {canNewVersion && <DropdownMenuItem onClick={onNewVersion}>Nova versão (rascunho)</DropdownMenuItem>}
-            {pin && (
-              <DropdownMenuItem onClick={toggle}>
-                <Pin className="h-4 w-4" /> {pinned ? "Remover da Bandeja de Telas" : "Fixar na Bandeja de Telas"}
-              </DropdownMenuItem>
-            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}
@@ -4707,10 +5214,17 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
 }
 
 function StepIntro({ children }: { children: React.ReactNode }) {
-  return <p className="mb-3 rounded-lg bg-violet-50/70 px-3 py-1.5 text-xs text-slate-600 dark:bg-violet-950/20 dark:text-slate-300">{children}</p>;
+  // A frase explicativa virou um botãozinho "i" (aparece ao passar o mouse): economiza altura.
+  return <div className="mb-3 flex items-center justify-end gap-2"><span className="field-info" data-help={typeof children === "string" ? children : undefined} aria-hidden="true">i</span><AccordionToggleAll /></div>;
 }
-function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
-  return <label className="block min-w-0 space-y-0.5"><span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>{children}</label>;
+/** `field`: nome do campo para rolar até ele; `error`: destaca o campo e explica o que falta. */
+function Field({ label, children, field, error }: { label: React.ReactNode; children: React.ReactNode; field?: string; error?: string | null }) {
+  return (
+    <label data-field={field} data-invalid={error ? "true" : undefined} className={`block min-w-0 space-y-0.5 ${error ? "rounded-md ring-2 ring-rose-400 ring-offset-2" : ""}`}>
+      <span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span>{children}
+      {error && <span role="alert" className="block text-[11px] font-semibold text-rose-600">{error}</span>}
+    </label>
+  );
 }
 function DeleteBtn({ label, onConfirm, tip }: { label: string; onConfirm: () => void; tip?: string }) {
   const [open, setOpen] = useState(false);

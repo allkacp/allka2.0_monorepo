@@ -26,11 +26,11 @@ export function collectAiFreeStages(version: { tasks?: any[] } | null | undefine
   return rows;
 }
 
-export function AiFreeChangesCard({ version }: { version: { tasks?: any[] } | null | undefined }) {
+export function AiFreeChangesCard({ version, bare = false }: { version: { tasks?: any[] } | null | undefined; /** Dentro de um acordeão: sem moldura própria. */ bare?: boolean }) {
   const rows = collectAiFreeStages(version);
   const total = rows.reduce((n, r) => n + r.value, 0);
   return (
-    <div className="rounded-md border bg-card p-3 text-sm" data-testid="ai-free-changes">
+    <div className={bare ? "text-sm" : "rounded-md border bg-card p-3 text-sm"} data-testid="ai-free-changes">
       <p className="font-medium" title="Soma das alterações por IA grátis definidas em cada etapa. Para mudar, edite o campo na própria etapa (Tarefas e etapas). Depois das grátis, cada alteração é cobrada do saldo da carteira.">
         Alterações por IA grátis neste produto: <span className="font-bold" data-testid="ai-free-total">{rows.length === 0 ? "—" : total}</span>
       </p>

@@ -369,6 +369,8 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
           ai_specialty_id: s.ai_specialty_id,
           ai_estimated_minutes: s.ai_estimated_minutes,
           qualifier_kind: s.qualifier_kind,
+          draft_incomplete: s.draft_incomplete,
+          draft_saved_at: s.draft_saved_at,
           rework_hours: s.rework_hours,
           task_id: nt.id,
           key: s.key,
@@ -657,6 +659,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
       if (!(st.estimated_minutes && st.estimated_minutes > 0) || !(st.specialty_id ?? t.specialty_id)) {
         issues.push(`A etapa "${st.name}" da tarefa "${t.name}" precisa de especialidade e horas.`);
       }
+      if (st.draft_incomplete) issues.push(`A etapa "${st.name}" da tarefa "${t.name}" está salva como rascunho incompleto — conclua a etapa ("Concluir e salvar etapa") antes de publicar.`);
     }
   }
 
@@ -739,6 +742,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
   for (const t of v.tasks) if (t.is_conditional && !includedTaskKeys.has(t.key)) issues.push(`A tarefa condicional "${t.name}" nunca é incluída por nenhum efeito.`);
 
   // Conexões e acessos necessários (módulo opcional: desativado = nenhuma pendência).
+  for (const dl of await prisma.catalog2TaskDeliverable.findMany({ where: { draft_incomplete: true, task: { version_id: versionId } }, select: { name: true, task: { select: { name: true } } } })) issues.push(`O entregável "${dl.name}" da tarefa "${dl.task.name}" está salvo como rascunho incompleto — conclua o entregável antes de publicar.`);
   for (const m of await validateConnectionConfig(prisma, versionId)) issues.push(m);
   for (const m of await validateUniversalV2(prisma, versionId)) issues.push(m);
 
@@ -1487,7 +1491,7 @@ export async function getProductDetail(productId: string) {
         reviewer_user_id: t.reviewer_user_id,
         review_minutes: t.review_minutes,
         review_specialty_id: t.review_specialty_id,
-        deliverables: t.deliverables.map((d) => ({ id: d.id, key: d.key, name: d.name, description: d.description, type: d.type, responsible: d.responsible, is_required: d.is_required, requires_approval: d.requires_approval, visibility: d.visibility, step_id: d.step_id, sort_order: d.sort_order, format: d.format, delivery_moment: d.delivery_moment, template_url: d.template_url, template_name: d.template_name, evidence_required: d.evidence_required, requires_qualification: d.requires_qualification, cycle_scope: d.cycle_scope, is_conditional: d.is_conditional, condition_json: d.condition_json })),
+        deliverables: t.deliverables.map((d) => ({ id: d.id, key: d.key, name: d.name, description: d.description, type: d.type, responsible: d.responsible, is_required: d.is_required, requires_approval: d.requires_approval, visibility: d.visibility, step_id: d.step_id, sort_order: d.sort_order, format: d.format, delivery_moment: d.delivery_moment, template_url: d.template_url, template_name: d.template_name, evidence_required: d.evidence_required, requires_qualification: d.requires_qualification, cycle_scope: d.cycle_scope, is_conditional: d.is_conditional, condition_json: d.condition_json, draft_incomplete: d.draft_incomplete })),
         ops: t.ops ?? null,
         // "Modelo global" x "Configuração específica deste produto" (+ modelo mudou depois?)
         model: t.task_model
@@ -1576,6 +1580,8 @@ export async function getProductDetail(productId: string) {
           ai_specialty_id: s.ai_specialty_id ?? null,
           ai_estimated_minutes: s.ai_estimated_minutes ?? null,
           qualifier_kind: s.qualifier_kind ?? "leader",
+          draft_incomplete: s.draft_incomplete ?? false,
+          draft_saved_at: s.draft_saved_at ?? null,
           rework_hours: s.rework_hours ?? null,
           specialty_id: s.specialty_id,
           step_model_id: s.step_model_id,

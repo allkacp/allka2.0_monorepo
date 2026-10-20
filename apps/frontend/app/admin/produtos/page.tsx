@@ -67,6 +67,7 @@ import {
   catalog2CategoryTone,
   catalog2EditorialImage,
 } from "@/lib/catalog2-editorial";
+import { FramedPanel } from "@/components/framed-panel";
 import { ProductEditor, READINESS_ITEM_LABEL } from "@/app/admin/produtos/novo-catalogo/product-editor";
 import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memory-popover";
@@ -628,13 +629,14 @@ export default function AdminProdutosPage() {
     }
   }
 
+  const [newlyCreatedId, setNewlyCreatedId] = useState<string | null>(null);
   async function createProduct() {
     setMsg(null);
     try {
-      const name = window.prompt("Nome do produto:");
-      if (!name) return;
-      const p = await apiClient.createCatalog2Product({ internal_name: name, task_structure: "single" });
+      // Abre direto o editor (Painel Moldura) com tudo zerado; o nome real é preenchido lá.
+      const p = await apiClient.createCatalog2Product({ internal_name: "Novo produto", task_structure: "single" });
       await bootstrap();
+      setNewlyCreatedId(String(p.id));
       openProduct(p.id);
     } catch (e: any) {
       setMsg(e?.message ?? "Falha ao criar.");
@@ -803,14 +805,7 @@ export default function AdminProdutosPage() {
                     <TooltipTrigger asChild>
                       <button
                         data-tour-id="catalog2-admin-create"
-                        onClick={() =>
-                          setConfirm({
-                            title: "Criar produto",
-                            message:
-                              "Um novo produto (em preparação) com uma versão rascunho será criado.",
-                            onConfirm: () => createProduct(),
-                          })
-                        }
+                        onClick={() => void createProduct()}
                         className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/70 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/20"
                       >
                         <Plus className="h-3.5 w-3.5 shrink-0" />
@@ -1709,19 +1704,23 @@ export default function AdminProdutosPage() {
         {/* O construtor abre AQUI DENTRO — container padrão, cabeçalho padrão,
             fechar/fixar na bandeja — nunca como área separada ("Novo
             Catálogo"/"Preparação de Produtos"). Reunião 2026-09. */}
-        <EmbeddedSlideScreen
+        <FramedPanel
           open={!!openProductId}
-          onClose={() => {
-            openProduct(null);
-            void loadList();
-            void bootstrap();
+          onOpenChange={(o) => {
+            if (!o) {
+              openProduct(null);
+              void loadList();
+              void bootstrap();
+            }
           }}
-          hideHeader
-          bare
+          testId="product-editor-panel"
+          title="Editar produto"
+          className="!bg-[#d6daf0] dark:!bg-violet-950"
         >
           {openProductId && (
             <ProductEditor
               productId={openProductId}
+              openInEditMode={String(openProductId) === newlyCreatedId}
               onBack={() => {
                 openProduct(null);
                 void loadList();
@@ -1735,7 +1734,7 @@ export default function AdminProdutosPage() {
               }}
             />
           )}
-        </EmbeddedSlideScreen>
+        </FramedPanel>
 
         {/* Detalhe comercial completo (só leitura) — ação do ícone de olho,
             SEPARADA do construtor. Mesma convenção de container/bandeja. */}

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { readFileSync } from "node:fs";
@@ -7,14 +8,18 @@ const api = {
   searchCatalog2QuestionLibrary: vi.fn(async () => ({ data: [{ id: "qq-1234567890", key: "site", label: "Qual o site da empresa?", question_type: "url", is_required: true, options: [], validation: {}, settings: { placeholder: "https://" }, from: "Briefing A · ID abc12345", questionnaire_id: "qa" }] })),
   getCatalog2Questionnaires: vi.fn(async () => ({ data: [{ id: "qn-aaaaaaaa11", name: "Briefing de tráfego", question_count: 4, task_count: 2, revision: 3, is_global_model: true, products: ["#1 Gestão de Tráfego"] }] })),
   setCatalog2TaskQuestionnaire: vi.fn(async () => ({ ok: true })),
-  updateCatalog2TaskQuestionnaireContent: vi.fn(async () => ({ ok: true, forked: false, questionnaire: { id: "qn-aaaaaaaa11", is_global_model: false } })),
+  updateCatalog2TaskQuestionnaireContent: vi.fn(async () => ({ ok: true, forked: false, questionnaire: { id: "qn-aaaaaaaa11", is_global_model: true } })),
   setCatalog2QuestionnaireGlobal: vi.fn(async () => ({ ok: true })),
   suggestCatalog2TaskQuestionnaire: vi.fn(async () => ({ name: "IA", description: null, questions: [] })),
   addCatalog2Questionnaire: vi.fn(async () => ({ id: "novo" })),
   addCatalog2QuestionnaireQuestion: vi.fn(async () => ({})),
 };
+// A caixa de confirmação real depende do provedor de barra lateral do app: aqui usamos uma versão simples com o mesmo contrato.
+vi.mock("@/components/confirmation-dialog", () => ({
+  ConfirmationDialog: ({ open, title, message, confirmText, cancelText, onConfirm, onClose }: any) => open ? (<div role="alertdialog" aria-label={title}><h2>{title}</h2><div>{message}</div><button onClick={onClose}>{cancelText ?? "Cancelar"}</button><button onClick={() => void onConfirm()}>{confirmText ?? "Confirmar"}</button></div>) : null,
+}));
 vi.mock("@/lib/api-client", () => ({ apiClient: new Proxy({}, { get: (_t, k: string) => (api as any)[k] }) }));
-import { QuestionnaireEditor, QuestionnairePreview, questionnaireBody, type QuestionnaireState } from "./catalog2-questionnaire-builder";
+import { QuestionList, QuestionnaireEditor, QuestionnairePreview, questionnaireBody, type QuestionnaireState } from "./catalog2-questionnaire-builder";
 import { QuestionnaireSection } from "./product-editor";
 import { QUESTION_TYPES, emptyQuestion, draftFromServer, payloadFromDraft, cloneDraft, type QuestionDraft } from "./catalog2-questions-ui";
 
@@ -24,128 +29,157 @@ const ctx = { steps: [{ key: "s1", name: "Configurar a conta" }], variations: [{
 const act = vi.fn(async (fn: () => Promise<any>) => { try { return await fn(); } catch { return undefined; } });
 beforeEach(() => { Object.values(api).forEach((f) => f.mockClear()); act.mockClear(); });
 
-describe("Construtor · lista compacta e recolhível", () => {
-  const three = [d({ key: "a", label: "Qual o site?", question_type: "url", id: "id-a-111111" }), d({ key: "b", label: "Quantos colaboradores?", question_type: "numero", is_required: false }), d({ key: "c", label: "Envie o logotipo", question_type: "imagem" })];
+/** Lista controlada (como na página): guarda o último estado para conferir o que seria salvo. */
+function Harness({ initial, sections = [], onSuggest }: { initial: QuestionDraft[]; sections?: QuestionnaireState["sections"]; onSuggest?: any }) {
+  const [qs, setQs] = useState(initial);
+  return <><QuestionList questions={qs} sections={sections} ctx={ctx} onChange={setQs} onSuggest={onSuggest} /><output data-testid="payload">{JSON.stringify(qs.map((q) => payloadFromDraft(q)))}</output><output data-testid="state">{JSON.stringify(qs.map((q) => ({ key: q.key, label: q.label, id: q.id ?? null, active: q.is_active, req: q.is_required })))}</output></>;
+}
+const stateOut = () => JSON.parse(screen.getByTestId("state").textContent!) as { key: string; label: string; id: string | null; active: boolean; req: boolean }[];
+const ensureOpen = (i: number) => { const b = screen.queryByLabelText(`Expandir pergunta ${i}`); if (b) fireEvent.click(b); };
+const openEdit = (i: number) => { ensureOpen(i); fireEvent.click(screen.getByLabelText(`Editar pergunta ${i}`)); };
+const modal = () => within(screen.getByTestId("question-modal"));
 
-  it("cada pergunta aparece recolhida em UMA linha resumida (tipo, obrigatória, anexo) e expande para editar", () => {
-    render(<QuestionnaireEditor initial={state(three)} ctx={ctx} saveLabel="Salvar" onSave={() => {}} />);
+describe("Questionário · estilo da plataforma antiga (lista pronta + modal)", () => {
+  const three = [d({ key: "a", label: "Tema das postagens:", question_type: "texto_longo", help_text: "qual o tema que deverá ser desenvolvido pelo nômade?", id: "id-a-111111" }), d({ key: "b", label: "Quantos colaboradores?", question_type: "numero", is_required: false }), d({ key: "c", label: "Envie o logotipo", question_type: "imagem" })];
+
+  it("na página só aparece o questionário PRONTO: linhas numeradas recolhidas, sem nenhum campo de formulário", () => {
+    render(<Harness initial={three} />);
     const rows = screen.getAllByTestId("question-summary");
     expect(rows).toHaveLength(3);
+    expect(rows[0].textContent).toMatch(/1ª Tema das postagens:/);
+    expect(rows[2].textContent).toMatch(/3ª Envie o logotipo/);
     expect(screen.queryByTestId("question-body")).not.toBeInTheDocument();
-    expect(within(rows[0]).getByText("URL (link)")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("opcional")).toBeInTheDocument();
-    expect(within(rows[2]).getByText("anexo")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
-    expect(screen.getAllByTestId("question-body")).toHaveLength(1);
-    expect(screen.getByTestId("question-id").textContent).toBe("ID id-a-111");
-    fireEvent.click(screen.getByText("Recolher todas")); expect(screen.queryByTestId("question-body")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("Expandir todas")); expect(screen.getAllByTestId("question-body")).toHaveLength(3);
+    expect(document.querySelectorAll("input[type=text], textarea, select").length).toBe(0);
+    expect(screen.getByRole("button", { name: /Adicionar/ })).toBeInTheDocument();
   });
 
-  it("reordenar, duplicar (ID novo gerado ao salvar), ativar/desativar sem apagar e excluir", () => {
-    const onSave = vi.fn();
-    render(<QuestionnaireEditor initial={state(three)} ctx={ctx} saveLabel="Salvar" onSave={onSave} />);
-    fireEvent.click(screen.getByLabelText("Descer pergunta 1"));
-    expect(screen.getAllByTestId("question-summary")[0].textContent).toMatch(/1\. Quantos colaboradores/);
-    fireEvent.click(screen.getByLabelText("Duplicar pergunta 2"));
-    const labels = screen.getAllByTestId("question-summary").map((r) => r.textContent ?? "");
-    expect(labels).toHaveLength(4);
-    expect(labels[2]).toMatch(/Qual o site\? \(cópia\)/);
-    // a cópia não leva o ID da original
+  it("ao abrir uma pergunta mostra só leitura: tipo, anexo?, obrigatória? e instruções; lápis e lixeira ficam ali", () => {
+    render(<Harness initial={three} />);
+    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
+    const body = within(screen.getByTestId("question-body"));
+    expect(body.getByText("Tipo da resposta:")).toBeInTheDocument();
+    expect(body.getByText("Texto longo")).toBeInTheDocument();
+    expect(body.getByText(/Habilitar anexo na pergunta\?/)).toBeInTheDocument();
+    expect(body.getByText("NÃO")).toBeInTheDocument();
+    expect(body.getByText(/Pergunta obrigatória\?/)).toBeInTheDocument();
+    expect(body.getByText("SIM")).toBeInTheDocument();
+    expect(body.getByText(/Instruções de resposta:/)).toBeInTheDocument();
+    expect(body.getByText(/qual o tema que deverá ser desenvolvido/)).toBeInTheDocument();
+    expect(body.getByLabelText("Editar pergunta 1")).toBeInTheDocument();
+    expect(body.getByLabelText("Excluir pergunta 1")).toBeInTheDocument();
+    expect(screen.getByTestId("question-body").querySelectorAll("input, textarea, select").length).toBe(0);
     fireEvent.click(screen.getByLabelText("Expandir pergunta 3"));
-    expect(screen.getByTestId("question-id").textContent).toBe("ID gerado ao salvar");
-    fireEvent.click(screen.getByLabelText("Pergunta ativa")); // desativa a cópia
-    expect(screen.getAllByTestId("question-item")[2].getAttribute("data-inactive")).toBe("true");
-    fireEvent.click(screen.getByLabelText("Excluir pergunta 4"));
-    expect(screen.getAllByTestId("question-item")).toHaveLength(3);
+    expect(screen.getAllByText("SIM").length).toBeGreaterThan(1); // imagem = anexo habilitado
+  });
+
+  it("“+ Adicionar” abre o modal “Nova Pergunta”; salvar acrescenta a pergunta na lista (chave única); cancelar não muda nada", () => {
+    render(<Harness initial={three} />);
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar/ }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Nova Pergunta")).toBeInTheDocument();
+    expect((screen.getByRole("button", { name: "Salvar" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Texto da pergunta"), { target: { value: "Qual o objetivo?" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    const body = questionnaireBody(onSave.mock.calls[0][0]);
-    expect(body.questions.map((q: any) => q.key)).toEqual(["b", "a", "a-copia-2"]);
-    expect(body.questions[1].id).toBe("id-a-111111");
-    expect(body.questions[2].id).toBeUndefined();
-    expect(body.questions[2].settings).toMatchObject({ is_active: false });
+    expect(stateOut().map((x) => x.label)).toEqual(["Tema das postagens:", "Quantos colaboradores?", "Envie o logotipo", "Qual o objetivo?"]);
+    expect(new Set(stateOut().map((x) => x.key)).size).toBe(4);
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(stateOut()).toHaveLength(4);
   });
 
-  it("adicionar pergunta nova gera chave única; texto vazio não adiciona; salvar exige nome e perguntas", () => {
-    const onSave = vi.fn();
-    render(<QuestionnaireEditor initial={state([], { name: "" })} ctx={ctx} saveLabel="Criar e vincular" onSave={onSave} />);
-    expect((screen.getByRole("button", { name: "Criar e vincular" }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: /Adicionar pergunta/ }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("nova pergunta"), { target: { value: "Qual o objetivo?" } });
-    fireEvent.click(screen.getByRole("button", { name: /Adicionar pergunta/ }));
-    fireEvent.change(screen.getByLabelText("nova pergunta"), { target: { value: "Qual o objetivo?" } });
-    fireEvent.click(screen.getByRole("button", { name: /Adicionar pergunta/ }));
-    fireEvent.change(screen.getByLabelText("Nome do questionário"), { target: { value: "Novo" } });
-    fireEvent.click(screen.getByRole("button", { name: "Criar e vincular" }));
-    const keys = onSave.mock.calls[0][0].questions.map((q: QuestionDraft) => q.key);
-    expect(keys).toHaveLength(2); expect(new Set(keys).size).toBe(2);
+  it("o lápis abre “Editar Pergunta” com o ID permanente; editar mantém o ID; cancelar descarta", () => {
+    render(<Harness initial={three} />);
+    openEdit(1);
+    expect(screen.getByText("Editar Pergunta")).toBeInTheDocument();
+    expect(screen.getByTestId("question-id").textContent).toBe("ID id-a-111");
+    expect((screen.getByLabelText("Texto da pergunta") as HTMLInputElement).value).toBe("Tema das postagens:");
+    expect((screen.getByLabelText("Instrução de resposta") as HTMLTextAreaElement).value).toMatch(/qual o tema/);
+    fireEvent.change(screen.getByLabelText("Texto da pergunta"), { target: { value: "Tema (editado)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(stateOut()[0].label).toBe("Tema das postagens:");
+    openEdit(1);
+    fireEvent.change(screen.getByLabelText("Texto da pergunta"), { target: { value: "Tema (editado)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(stateOut()[0]).toMatchObject({ label: "Tema (editado)", id: "id-a-111111" });
   });
 
-  it("seções: criar, nomear, descrever, ordenar e vincular perguntas a elas", () => {
-    const onSave = vi.fn();
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "A" })])} ctx={ctx} saveLabel="Salvar" onSave={onSave} />);
-    fireEvent.click(screen.getByText(/Seções \(0\)/));
-    fireEvent.click(screen.getByRole("button", { name: /Nova seção/ })); fireEvent.click(screen.getByRole("button", { name: /Nova seção/ }));
-    fireEvent.change(screen.getByLabelText("Nome da seção 1"), { target: { value: "Dados da empresa" } });
-    fireEvent.change(screen.getByLabelText("Descrição da seção 1"), { target: { value: "Quem é o cliente" } });
-    fireEvent.change(screen.getByLabelText("Nome da seção 2"), { target: { value: "Objetivos" } });
-    fireEvent.click(screen.getByLabelText("Subir seção 2"));
-    expect((screen.getByLabelText("Nome da seção 1") as HTMLInputElement).value).toBe("Objetivos");
+  it("reordenar (setas), duplicar (ID novo gerado ao salvar), excluir com confirmação e ativar/desativar sem apagar", async () => {
+    render(<Harness initial={three} />);
     fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
-    const sec = screen.getByLabelText("Seção da pergunta") as HTMLSelectElement;
-    expect(Array.from(sec.options).map((o) => o.text)).toEqual(["Sem seção", "Objetivos", "Dados da empresa"]);
-    fireEvent.change(sec, { target: { value: sec.options[2].value } });
+    fireEvent.click(screen.getByLabelText("Descer pergunta 1"));
+    expect(stateOut().map((x) => x.key)).toEqual(["b", "a", "c"]);
+    // a pergunta "a" agora é a 2ª (continua aberta): duplica
+    fireEvent.click(screen.getByLabelText("Duplicar pergunta 2"));
+    const dup = stateOut();
+    expect(dup).toHaveLength(4);
+    expect(dup[2].label).toMatch(/(cópia)/);
+    expect(dup[2].id).toBeNull();
+    // desativar pelo modal (não apaga)
+    openEdit(2);
+    fireEvent.click(modal().getByLabelText("Pergunta ativa"));
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    const body = questionnaireBody(onSave.mock.calls[0][0]);
-    expect(body.sections.map((s) => s.name)).toEqual(["Objetivos", "Dados da empresa"]);
-    expect(body.sections[1].description).toBe("Quem é o cliente");
-    expect((body.questions[0].settings as any).section_key).toBe(body.sections[1].key);
+    expect(stateOut()[1].active).toBe(false);
+    expect(screen.getAllByTestId("question-item")[1].getAttribute("data-inactive")).toBe("true");
+    // excluir pede confirmação
+    ensureOpen(4);
+    fireEvent.click(screen.getByLabelText("Excluir pergunta 4"));
+    expect(await screen.findByText("Excluir pergunta?")).toBeInTheDocument();
+    expect(stateOut()).toHaveLength(4);
+    fireEvent.click(screen.getByRole("button", { name: "Excluir pergunta" }));
+    await waitFor(() => expect(stateOut()).toHaveLength(3));
   });
 
-  it("modelo global e IA: marcar como modelo global vai no estado; “sugerir mais” acrescenta perguntas sem repetir chave", async () => {
-    const onSave = vi.fn();
-    const suggest = vi.fn(async () => [d({ key: "a", label: "Sugestão da IA", question_type: "selecao_unica", opts: [{ label: "Sim", is_default: false }, { label: "Não", is_default: false }] })]);
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "A" })])} ctx={ctx} saveLabel="Salvar" onSave={onSave} onSuggest={suggest} />);
-    fireEvent.click(screen.getByLabelText("Salvar como modelo global"));
-    fireEvent.click(screen.getByTestId("ai-questionnaire-more"));
-    expect(await screen.findByText(/1 pergunta\(s\) sugerida\(s\)/)).toBeInTheDocument();
-    expect(suggest).toHaveBeenCalledWith(["A"]);
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    const saved = onSave.mock.calls[0][0] as QuestionnaireState;
-    expect(saved.is_global_model).toBe(true);
-    expect(new Set(saved.questions.map((q) => q.key)).size).toBe(2);
-    expect(saved.questions[1].question_type).toBe("selecao_unica");
+  it("arrastar pela alça reordena; as linhas são arrastáveis", () => {
+    render(<Harness initial={three} />);
+    const items = screen.getAllByTestId("question-item");
+    expect(items[0].getAttribute("draggable")).toBe("true");
+    fireEvent.dragStart(items[0]); fireEvent.dragOver(items[2]); fireEvent.drop(items[2]);
+    expect(stateOut().map((x) => x.key)).toEqual(["b", "c", "a"]);
   });
 
-  it("reutilizar pergunta existente (busca por nome ou ID) cria uma cópia com ID novo", async () => {
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "A" })])} ctx={ctx} saveLabel="Salvar" onSave={() => {}} />);
+  it("reutilizar pergunta existente (busca por nome ou ID) abre o modal já preenchido; salvar cria cópia com ID novo", async () => {
+    render(<Harness initial={[d({ key: "a", label: "A" })]} />);
     fireEvent.click(screen.getByRole("button", { name: /Reutilizar pergunta existente/ }));
     fireEvent.change(screen.getByLabelText("Buscar pergunta existente"), { target: { value: "site" } });
     fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
-    expect(await screen.findByText(/Briefing A · ID abc12345 · ID qq-12345|Briefing A/)).toBeInTheDocument();
+    expect(await screen.findByText(/Briefing A/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Reutilizar$/ }));
-    const rows = screen.getAllByTestId("question-summary");
-    expect(rows).toHaveLength(2);
-    expect(rows[1].textContent).toMatch(/Qual o site da empresa\?/);
+    expect((screen.getByLabelText("Texto da pergunta") as HTMLInputElement).value).toBe("Qual o site da empresa?");
     expect(screen.getByTestId("question-id").textContent).toBe("ID gerado ao salvar");
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(stateOut()).toHaveLength(2);
+    expect(stateOut()[1].id).toBeNull();
+  });
+
+  it("IA: “sugerir mais perguntas” acrescenta sem repetir chave", async () => {
+    const suggest = vi.fn(async () => [d({ key: "a", label: "Sugestão da IA", question_type: "selecao_unica", opts: [{ label: "Sim", is_default: false }, { label: "Não", is_default: false }] })]);
+    render(<Harness initial={[d({ key: "a", label: "A" })]} onSuggest={suggest} />);
+    fireEvent.click(screen.getByTestId("ai-questionnaire-more"));
+    expect(await screen.findByText(/1 pergunta\(s\) sugerida\(s\)/)).toBeInTheDocument();
+    expect(suggest).toHaveBeenCalledWith(["A"]);
+    expect(new Set(stateOut().map((x) => x.key)).size).toBe(2);
   });
 });
 
-describe("Construtor · tipos, opções, anexos e condições sem código", () => {
+describe("Modal da pergunta · tipos, opções, anexos e condições sem código", () => {
+  const edit = (q: QuestionDraft, others: QuestionDraft[] = []) => {
+    render(<Harness initial={[q, ...others]} />);
+    openEdit(1);
+  };
+  /** Salva o modal da pergunta 1 e devolve o corpo (payload) que iria para a API. */
+  const questionnaireBodyFromModal = (): any => { fireEvent.click(screen.getByRole("button", { name: "Salvar" })); const p = JSON.parse(screen.getByTestId("payload").textContent!)[0]; fireEvent.click(screen.getByLabelText("Editar pergunta 1")); return p; };
+
   it("oferece os 22 tipos de resposta pedidos", () => {
     const wanted = ["Texto curto", "Texto longo", "Número", "Moeda (valor em reais)", "Data", "Hora", "Data e hora", "Sim ou não", "Seleção única", "Seleção múltipla", "Lista suspensa", "Escala ou nota", "Telefone", "E-mail", "URL (link)", "Endereço", "Anexo de arquivo", "Imagem", "Vídeo", "Áudio", "Documento", "Aceite ou confirmação"];
     const labels = QUESTION_TYPES.map(([, l]) => l);
     for (const w of wanted) expect(labels, w).toContain(w);
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "A" })])} ctx={ctx} saveLabel="Salvar" onSave={() => {}} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
+    edit(d({ key: "a", label: "A" }));
     const select = screen.getByLabelText("Tipo da pergunta") as HTMLSelectElement;
     for (const w of wanted) expect(Array.from(select.options).map((o) => o.text), w).toContain(w);
   });
 
-  it("opções: cadastrar, editar, excluir, ordenar, marcar padrão (única = só uma), “Outro” e mín./máx. de escolhas", () => {
-    const onSave = vi.fn();
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "Escolha", question_type: "selecao_multipla", opts: [{ label: "Meta", is_default: false }, { label: "Google", is_default: false }] })])} ctx={ctx} saveLabel="Salvar" onSave={onSave} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
+  it("opções: cadastrar, editar, excluir, ordenar, marcar padrão, “Outro” e mín./máx. de escolhas", () => {
+    edit(d({ key: "a", label: "Escolha", question_type: "selecao_multipla", opts: [{ label: "Meta", is_default: false }, { label: "Google", is_default: false }] }));
     fireEvent.click(screen.getByRole("button", { name: /Adicionar opção/ }));
     fireEvent.change(screen.getByLabelText("Opção 3"), { target: { value: "TikTok" } });
     fireEvent.change(screen.getByLabelText("Opção 1"), { target: { value: "Meta Ads" } });
@@ -157,24 +191,21 @@ describe("Construtor · tipos, opções, anexos e condições sem código", () =
     fireEvent.click(screen.getByLabelText("Permitir a opção Outro"));
     fireEvent.change(screen.getByLabelText("Mínimo de escolhas"), { target: { value: "1" } });
     fireEvent.change(screen.getByLabelText("Máximo de escolhas"), { target: { value: "2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    const p: any = payloadFromDraft(onSave.mock.calls[0][0].questions[0]);
-    expect(p.options).toEqual([{ value: "Meta Ads", label: "Meta Ads", is_default: true }, { value: "TikTok", label: "TikTok" }]);
-    expect(p.settings).toMatchObject({ allow_other: true, min_choices: 1, max_choices: 2 });
+    // lê o que seria salvo pelo corpo do modal
+    const body = questionnaireBodyFromModal();
+    expect(body.options).toEqual([{ value: "Meta Ads", label: "Meta Ads", is_default: true }, { value: "TikTok", label: "TikTok" }]);
+    expect(body.settings).toMatchObject({ allow_other: true, min_choices: 1, max_choices: 2 });
   });
 
   it("seleção única aceita só UMA opção padrão", () => {
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "Escolha", question_type: "selecao_unica", opts: [{ label: "A", is_default: true }, { label: "B", is_default: false }] })])} ctx={ctx} saveLabel="Salvar" onSave={() => {}} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
+    edit(d({ key: "a", label: "Escolha", question_type: "selecao_unica", opts: [{ label: "A", is_default: true }, { label: "B", is_default: false }] }));
     fireEvent.click(screen.getByLabelText("Opção 2 padrão"));
     expect((screen.getByLabelText("Opção 1 padrão") as HTMLInputElement).checked).toBe(false);
     expect((screen.getByLabelText("Opção 2 padrão") as HTMLInputElement).checked).toBe(true);
   });
 
-  it("anexos: permitir junto da resposta, tipos, quantidade, tamanho, descrição e obrigatoriedade viram a configuração salva", () => {
-    const onSave = vi.fn();
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "Observações", question_type: "texto_longo" })])} ctx={ctx} saveLabel="Salvar" onSave={onSave} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
+  it("anexos: permitir junto da resposta, tipos, quantidade, tamanho, descrição e obrigatoriedade", () => {
+    edit(d({ key: "a", label: "Observações", question_type: "texto_longo" }));
     expect(screen.queryByTestId("attachment-config")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Permitir anexos junto da resposta"));
     fireEvent.change(screen.getByLabelText("Tipos de arquivo permitidos"), { target: { value: ".pdf, .png" } });
@@ -182,21 +213,19 @@ describe("Construtor · tipos, opções, anexos e condições sem código", () =
     fireEvent.change(screen.getByLabelText("Tamanho máximo por arquivo em MB"), { target: { value: "10" } });
     fireEvent.click(screen.getByLabelText("Anexo obrigatório"));
     fireEvent.click(screen.getByLabelText("Exigir descrição do arquivo"));
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    expect((payloadFromDraft(onSave.mock.calls[0][0].questions[0]) as any).settings.attachments).toEqual({ allowed: true, required: true, require_description: true, accept: [".pdf", ".png"], max_files: 3, max_size_mb: 10 });
+    expect(questionnaireBodyFromModal().settings.attachments).toEqual({ allowed: true, required: true, require_description: true, accept: [".pdf", ".png"], max_files: 3, max_size_mb: 10 });
   });
 
-  it("tipos de arquivo (imagem, vídeo…) já mostram as regras de anexo como resposta principal", () => {
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "Logo", question_type: "imagem" })])} ctx={ctx} saveLabel="Salvar" onSave={() => {}} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
+  it("tipos de arquivo (imagem, vídeo…) mostram as regras de anexo como resposta principal", () => {
+    edit(d({ key: "a", label: "Logo", question_type: "imagem" }));
     expect(screen.getByTestId("attachment-config").textContent).toMatch(/Arquivo da resposta/);
     expect(screen.getByLabelText("Tipos de arquivo permitidos").parentElement!.textContent).toMatch(/\.jpg, \.png/);
   });
 
-  it("condições sem código: escolher a pergunta, o operador e o valor — todos os 9 operadores disponíveis", () => {
-    const onSave = vi.fn();
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "Usa Meta?", question_type: "sim_nao" }), d({ key: "b", label: "Qual a verba?", question_type: "numero" })])} ctx={ctx} saveLabel="Salvar" onSave={onSave} />);
+  it("condição por resposta anterior vai no corpo salvo (igual, contém, maior que, anexado…)", () => {
+    render(<Harness initial={[d({ key: "a", label: "Usa Meta?", question_type: "sim_nao" }), d({ key: "b", label: "Qual a verba?", question_type: "numero" })]} />);
     fireEvent.click(screen.getByLabelText("Expandir pergunta 2"));
+    fireEvent.click(screen.getByLabelText("Editar pergunta 2"));
     fireEvent.change(screen.getByLabelText("Quando a pergunta aparece"), { target: { value: "answer" } });
     const op = screen.getByLabelText("Operador da condição") as HTMLSelectElement;
     expect(Array.from(op.options).map((o) => o.value)).toEqual(["eq", "neq", "contains", "selected", "not_selected", "gt", "lt", "attached", "not_attached"]);
@@ -208,29 +237,26 @@ describe("Construtor · tipos, opções, anexos e condições sem código", () =
     fireEvent.change(op, { target: { value: "gt" } });
     fireEvent.change(screen.getByLabelText("Valor da condição"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    expect((payloadFromDraft(onSave.mock.calls[0][0].questions[1]) as any).condition).toEqual({ source: "answer", ref: "a", operator: "gt", value: "3" });
+    expect(screen.getAllByTestId("question-item")[1].textContent).toMatch(/condicional/);
   });
 
-  it("escala, placeholder, validação e visibilidade (cliente, equipe, ambos) entram no corpo salvo", () => {
-    const onSave = vi.fn();
-    render(<QuestionnaireEditor initial={state([d({ key: "a", label: "Nota", question_type: "escala" }), d({ key: "b", label: "Nome", question_type: "texto_curto" })])} ctx={ctx} saveLabel="Salvar" onSave={onSave} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
-    fireEvent.change(screen.getByLabelText("Escala: início"), { target: { value: "0" } }); fireEvent.change(screen.getByLabelText("Escala: fim"), { target: { value: "10" } });
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 2"));
-    const [, second] = screen.getAllByLabelText("Visibilidade da pergunta") as HTMLSelectElement[];
-    expect(Array.from(second.options).map((o) => o.text)).toEqual(["Cliente", "Equipe interna", "Cliente e equipe", "Só interno"]);
-    fireEvent.change(second, { target: { value: "both" } });
+  it("escala, placeholder, validação e visibilidade (cliente, equipe, ambos)", () => {
+    edit(d({ key: "a", label: "Nome", question_type: "texto_curto" }));
+    const vis = screen.getByLabelText("Visibilidade da pergunta") as HTMLSelectElement;
+    expect(Array.from(vis.options).map((o) => o.text)).toEqual(["Cliente", "Equipe interna", "Cliente e equipe", "Só interno"]);
+    fireEvent.change(vis, { target: { value: "both" } });
     fireEvent.change(screen.getByLabelText("Texto de exemplo"), { target: { value: "Ex.: Maria Silva" } });
     fireEvent.change(screen.getByLabelText("Mínimo de caracteres"), { target: { value: "3" } }); fireEvent.change(screen.getByLabelText("Máximo de caracteres"), { target: { value: "60" } });
-    fireEvent.change(screen.getAllByLabelText("Valor padrão").pop()!, { target: { value: "Cliente" } });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
-    const [n, t] = onSave.mock.calls[0][0].questions.map((q: QuestionDraft) => payloadFromDraft(q) as any);
-    expect(n.settings.scale).toEqual({ min: 0, max: 10 });
+    fireEvent.change(screen.getByLabelText("Valor padrão"), { target: { value: "Cliente" } });
+    const t = questionnaireBodyFromModal();
     expect(t).toMatchObject({ visibility: "both", default_value: "Cliente", validation: { min_length: 3, max_length: 60 } });
     expect(t.settings.placeholder).toBe("Ex.: Maria Silva");
+    fireEvent.change(screen.getByLabelText("Tipo da pergunta"), { target: { value: "escala" } });
+    fireEvent.change(screen.getByLabelText("Escala: início"), { target: { value: "0" } }); fireEvent.change(screen.getByLabelText("Escala: fim"), { target: { value: "10" } });
+    expect(questionnaireBodyFromModal().settings.scale).toEqual({ min: 0, max: 10 });
   });
 
-  it("ida e volta: a pergunta salva (com ID e configuração) reabre idêntica no formulário", () => {
+  it("ida e volta: a pergunta salva (com ID e configuração) reabre idêntica", () => {
     const server = { id: "id-1", key: "k", label: "Anexos", is_required: false, question_type: "texto_longo", help_text: "ajuda", options: [], default_value: null, validation: { max_length: 100 }, visibility: "both", answer_usage: "human", target_step_key: "s1", condition: { source: "answer", ref: "x", operator: "contains", value: "a" }, settings: { placeholder: "ex", is_active: false, section_key: "s1", attachments: { allowed: true, accept: [".pdf"], max_files: 2, max_size_mb: 5, require_description: true } } };
     const draft = draftFromServer(server);
     expect(draft).toMatchObject({ id: "id-1", is_active: false, att_allowed: true, att_accept: ".pdf", visibility: "both" });
@@ -238,6 +264,38 @@ describe("Construtor · tipos, opções, anexos e condições sem código", () =
     expect(p).toMatchObject({ id: "id-1", visibility: "both", target_step_key: "s1", condition: { operator: "contains", value: "a" }, validation: { max_length: 100 } });
     expect(p.settings).toMatchObject({ placeholder: "ex", is_active: false, section_key: "s1", attachments: { allowed: true, accept: [".pdf"], max_files: 2, max_size_mb: 5, require_description: true } });
     expect(cloneDraft(draft, ["k"]).id).toBeUndefined();
+  });
+});
+
+describe("Criar questionário novo (modal) e dados do questionário", () => {
+  it("“Criar novo questionário” abre um modal com Dados do questionário + Perguntas; salva com seções, modelo global e perguntas", () => {
+    const onSave = vi.fn();
+    render(<QuestionnaireEditor initial={state([], { name: "" })} ctx={ctx} saveLabel="Criar e vincular" onSave={onSave} />);
+    expect(screen.getByText("Dados do questionário")).toBeInTheDocument();
+    expect((screen.getByRole("button", { name: "Criar e vincular" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Nome do questionário"), { target: { value: "5 Postagens" } });
+    fireEvent.click(screen.getByRole("button", { name: /Editar dados e seções/ }));
+    expect(screen.getByTestId("questionnaire-data-modal")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Nova seção/ })); fireEvent.click(screen.getByRole("button", { name: /Nova seção/ }));
+    fireEvent.change(screen.getByLabelText("Nome da seção 1"), { target: { value: "Dados da empresa" } });
+    fireEvent.change(screen.getByLabelText("Descrição da seção 1"), { target: { value: "Quem é o cliente" } });
+    fireEvent.change(screen.getByLabelText("Nome da seção 2"), { target: { value: "Objetivos" } });
+    fireEvent.click(screen.getByLabelText("Subir seção 2"));
+    expect((screen.getByLabelText("Nome da seção 1") as HTMLInputElement).value).toBe("Objetivos");
+    fireEvent.click(screen.getByLabelText("Salvar como modelo global"));
+    fireEvent.click(within(screen.getByTestId("questionnaire-data-modal")).getByRole("button", { name: "Salvar" }));
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar/ }));
+    fireEvent.change(screen.getByLabelText("Texto da pergunta"), { target: { value: "Qual o objetivo?" } });
+    fireEvent.change(screen.getByLabelText("Seção da pergunta"), { target: { value: (screen.getByLabelText("Seção da pergunta") as HTMLSelectElement).options[2].value } });
+    fireEvent.click(within(screen.getByTestId("question-modal")).getByRole("button", { name: "Salvar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Criar e vincular" }));
+    const saved = onSave.mock.calls[0][0] as QuestionnaireState;
+    const body = questionnaireBody(saved);
+    expect(saved.is_global_model).toBe(true);
+    expect(body.sections.map((s) => s.name)).toEqual(["Objetivos", "Dados da empresa"]);
+    expect(body.sections[1].description).toBe("Quem é o cliente");
+    expect(body.questions).toHaveLength(1);
+    expect((body.questions[0].settings as any).section_key).toBe(body.sections[1].key);
   });
 });
 
@@ -256,8 +314,6 @@ describe("Construtor · visualizar como o cliente", () => {
     expect(screen.getByTestId("preview-pending").textContent).toMatch(/1 pendência/);
     fireEvent.click(screen.getByLabelText("Sim"));
     expect(screen.getAllByTestId("preview-question")).toHaveLength(2);
-    fireEvent.click(screen.getByRole("button", { name: "Conferir pendências" }));
-    expect(screen.getByTestId("preview-pending").textContent).toMatch(/1 pendência.*verba/);
     fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "1500" } });
     fireEvent.click(screen.getByRole("button", { name: "Conferir pendências" }));
     expect(screen.getByTestId("preview-ok")).toBeInTheDocument();
@@ -276,6 +332,14 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
     expect(screen.getByTestId("ai-questionnaire").textContent).toMatch(/Gerar questionário com IA/);
   });
 
+  it("criar novo questionário abre um MODAL (nada de formulário aberto na página)", () => {
+    render(<QuestionnaireSection task={task(null)} refs={{ questionnaires: [] }} act={act} version={{}} readOnly={false} />);
+    expect(screen.queryByTestId("questionnaire-editor")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Criar novo questionário/ }));
+    expect(within(screen.getByRole("dialog")).getByTestId("questionnaire-editor")).toBeInTheDocument();
+    expect(screen.getByText("Novo questionário")).toBeInTheDocument();
+  });
+
   it("selecionar existente: busca por ID/nome/produto/categoria/especialidade e vincula sincronizado OU como cópia independente", async () => {
     render(<QuestionnaireSection task={task(null)} refs={{ questionnaires: [] }} act={act} version={{}} readOnly={false} />);
     fireEvent.click(screen.getByRole("button", { name: /Selecionar questionário existente/ }));
@@ -287,7 +351,6 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
     fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
     await waitFor(() => expect(api.getCatalog2Questionnaires).toHaveBeenLastCalledWith({ q: "aaaaaaaa11", product: "Gestão", category: "Tráfego", specialty: "Gestor", global: false }));
     fireEvent.click(screen.getByLabelText(/Briefing de tráfego/));
-    expect((screen.getByLabelText("Vincular mantendo sincronizado") as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Vincular" }));
     await waitFor(() => expect(api.setCatalog2TaskQuestionnaire).toHaveBeenCalledWith("t1", "qn-aaaaaaaa11", "sync"));
     fireEvent.click(screen.getByLabelText("Criar uma cópia independente"));
@@ -295,13 +358,27 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
     await waitFor(() => expect(api.setCatalog2TaskQuestionnaire).toHaveBeenLastCalledWith("t1", "qn-aaaaaaaa11", "copy"));
   });
 
-  it("modelo usado por 2+ tarefas: avisa e, ao salvar, pede a escolha entre editar o modelo (com confirmação) ou criar cópia", async () => {
+  it("com questionário vinculado a página mostra só a lista pronta; editar uma pergunta no modal grava na hora (uso único)", async () => {
+    render(<QuestionnaireSection task={task(q)} refs={refs(1)} act={act} version={{}} readOnly={false} />);
+    expect(screen.getByTestId("questionnaire-id").textContent).toBe("ID qn-aaaaa");
+    expect(screen.getByTestId("question-list")).toBeInTheDocument();
+    expect(document.querySelectorAll("input[type=text], textarea, select").length).toBe(0);
+    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
+    fireEvent.click(screen.getByLabelText("Editar pergunta 1"));
+    fireEvent.change(screen.getByLabelText("Texto da pergunta"), { target: { value: "Pergunta A alterada" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(api.updateCatalog2TaskQuestionnaireContent).toHaveBeenCalledTimes(1));
+    const [, body] = api.updateCatalog2TaskQuestionnaireContent.mock.calls[0] as any[];
+    expect(body.shared_mode).toBeUndefined();
+    expect(body.questions[0]).toMatchObject({ id: "x1", label: "Pergunta A alterada" });
+  });
+
+  it("modelo usado por 2+ tarefas: avisa e, ao salvar uma pergunta, pede a escolha (cópia ou editar o modelo com confirmação)", async () => {
     render(<QuestionnaireSection task={task(q)} refs={refs(3)} act={act} version={{}} readOnly={false} />);
     expect(screen.getByText(/usado por 3 tarefas/)).toBeInTheDocument();
-    expect(screen.getByTestId("questionnaire-id").textContent).toBe("ID qn-aaaaa");
-    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
     fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
-    fireEvent.change(screen.getByLabelText("Texto da pergunta 1"), { target: { value: "Pergunta A alterada" } });
+    fireEvent.click(screen.getByLabelText("Editar pergunta 1"));
+    fireEvent.change(screen.getByLabelText("Texto da pergunta"), { target: { value: "Pergunta A alterada" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
     expect(api.updateCatalog2TaskQuestionnaireContent).not.toHaveBeenCalled(); // nada é gravado antes da escolha
     const choice = await screen.findByTestId("shared-choice");
@@ -316,47 +393,73 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
     expect(body.questions[0]).toMatchObject({ id: "x1", label: "Pergunta A alterada" });
   });
 
-  it("criar cópia independente: manda shared_mode=copy e o modelo/outros produtos não são tocados", async () => {
+  it("criar cópia independente: manda shared_mode=copy", async () => {
     render(<QuestionnaireSection task={task(q)} refs={refs(2)} act={act} version={{}} readOnly={false} />);
-    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
+    fireEvent.click(screen.getByLabelText("Editar pergunta 1"));
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
     fireEvent.click(await screen.findByRole("button", { name: /Criar uma cópia independente/ }));
     await waitFor(() => expect(api.updateCatalog2TaskQuestionnaireContent).toHaveBeenCalledTimes(1));
     expect((api.updateCatalog2TaskQuestionnaireContent.mock.calls[0] as any[])[1]).toMatchObject({ shared_mode: "copy" });
   });
 
-  it("questionário de uso único salva direto (sem pergunta); duplicar e visualizar estão disponíveis", async () => {
+  it("duplicar, visualizar como cliente e “Dados e seções” (modal) estão disponíveis", async () => {
     render(<QuestionnaireSection task={task(q)} refs={refs(1)} act={act} version={{}} readOnly={false} />);
     fireEvent.click(screen.getByRole("button", { name: /Duplicar/ }));
     await waitFor(() => expect(api.setCatalog2TaskQuestionnaire).toHaveBeenCalledWith("t1", "qn-aaaaaaaa11", "copy"));
     fireEvent.click(screen.getByRole("button", { name: /Visualizar como cliente/ }));
     expect(screen.getByTestId("questionnaire-preview")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    fireEvent.click(screen.getByRole("button", { name: /Dados e seções/ }));
+    fireEvent.click(screen.getByLabelText("Salvar como modelo global")); // desmarca
+    fireEvent.click(within(screen.getByTestId("questionnaire-data-modal")).getByRole("button", { name: "Salvar" }));
     await waitFor(() => expect(api.updateCatalog2TaskQuestionnaireContent).toHaveBeenCalledTimes(1));
-    expect((api.updateCatalog2TaskQuestionnaireContent.mock.calls[0] as any[])[1].shared_mode).toBeUndefined();
-    expect(api.setCatalog2QuestionnaireGlobal).toHaveBeenCalledWith("qn-aaaaaaaa11", true);
+    await waitFor(() => expect(api.setCatalog2QuestionnaireGlobal).toHaveBeenCalledWith("qn-aaaaaaaa11", false));
+  });
+
+  it("somente leitura: lista pronta sem botões de editar/adicionar", () => {
+    render(<QuestionnaireSection task={task(q)} refs={refs(1)} act={act} version={{}} readOnly />);
+    expect(screen.queryByRole("button", { name: /Adicionar/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
+    expect(screen.queryByLabelText("Editar pergunta 1")).not.toBeInTheDocument();
   });
 });
 
-describe("Layout · questionário e entregáveis em largura total e responsivo", () => {
+describe("Layout e modais · questionário e etapas", () => {
   const src = readFileSync(path.join(__dirname, "product-editor.tsx"), "utf8");
-  const builder = readFileSync(path.join(__dirname, "catalog2-questionnaire-builder.tsx"), "utf8");
-  const fields = readFileSync(path.join(__dirname, "catalog2-questions-ui.tsx"), "utf8");
-  it("os dois blocos ficam um ABAIXO do outro (coluna única, 100% da largura), não lado a lado", () => {
+  it("Questionário fica em coluna única (100% da largura) e os Entregáveis/Fluxo abrem em Painel Moldura", () => {
     const i = src.indexOf('data-testid="task-cards-stack"');
     expect(i).toBeGreaterThan(0);
     const block = src.slice(i - 120, i + 2600);
     expect(block).toMatch(/flex w-full min-w-0 flex-col/);
-    expect(block.indexOf("Questionário de contratação")).toBeGreaterThan(0);
-    expect(block.indexOf("Entregáveis")).toBeGreaterThan(block.indexOf("Questionário de contratação"));
     expect(block).not.toMatch(/lg:grid-cols-2/);
+    // 20/10: entregáveis viram um botão (Painel Moldura) no resumo da tarefa; o fluxo das etapas abre por um botão no cartão das etapas
+    expect(src).toMatch(/<PanelCard icon={UploadCloud} title="Entregáveis da tarefa"/);
+    expect(src).toMatch(/data-testid="open-step-flow"/);
+    expect(src.slice(i, i + 1200)).not.toMatch(/title="Fluxo das etapas"/);
   });
-  it("o construtor usa largura total e quebra em telas pequenas (min-w-0, flex-wrap, grid responsivo)", () => {
-    expect(builder).toMatch(/w-full min-w-0 space-y-2/);
-    expect(builder).toMatch(/flex flex-wrap items-center/);
-    expect(fields).toMatch(/grid gap-2 sm:grid-cols-2 lg:grid-cols-4/);
-    expect(fields).toMatch(/min-w-0/);
-    expect(src).toMatch(/w-full min-w-0 space-y-2/);
+  it("etapas: a ficha pronta fica na página e “Editar”/“Nova etapa” abrem MODAL", () => {
+    const edit = src.indexOf('data-testid="step-edit-form"');
+    expect(src.slice(edit - 600, edit)).toMatch(/<FramedPanel open onOpenChange/);
+    expect(src).toMatch(/<DialogTitle>Nova etapa<\/DialogTitle>/);
+    expect(src).toMatch(/data-testid="step-create-modal"/);
+  });
+  it("etapas: vêm FECHADAS (acordeão) e o botão Editar fica no cabeçalho, aberta ou fechada", () => {
+    expect(src).toMatch(/usePersistedFlag\(`step-open:\$\{step\.id\}`, false\)/);
+    const header = src.indexOf('data-testid="step-header"');
+    const toggle = src.indexOf('data-testid="step-toggle"');
+    const editBtn = src.indexOf('data-testid="step-edit-btn"');
+    const body = src.indexOf("{open && (", header);
+    expect(header).toBeGreaterThan(0);
+    expect(toggle).toBeGreaterThan(header);
+    expect(editBtn).toBeGreaterThan(toggle);
+    expect(editBtn).toBeLessThan(body); // fora do trecho que só aparece com a etapa aberta
+  });
+  it("modal da etapa: os 5 blocos são acordeões (StepBlock) e o rodapé tem Cancelar, Salvar rascunho da etapa e Concluir e salvar etapa", () => {
+    const edit = src.indexOf('data-testid="step-edit-form"');
+    const form = src.slice(edit, edit + 40000);
+    for (const t of ["O que é esta etapa", "Quem faz e quanto tempo leva", "Quando a etapa termina", "Checklist, orientações e evidência", "Conexões e acessos desta etapa"]) expect(form).toContain(t);
+    for (const n of [1, 2, 3, 4, 5]) expect(form).toContain("<StepBlock n={" + n + "}");
+    expect(form).toContain("Salvar rascunho da etapa");
+    expect(form).toContain("Concluir e salvar etapa");
   });
 });

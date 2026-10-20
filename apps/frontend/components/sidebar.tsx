@@ -1538,7 +1538,7 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="relative group/sbhover h-screen flex-shrink-0">
+      <div className="relative z-[1250] group/sbhover h-screen flex-shrink-0">
         <div
           ref={sidebarRootRef}
           data-sidebar-root
@@ -1639,6 +1639,32 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
               </div>
             )}
           </div>
+
+          {/* Recolhida: expandir e personalizar ficam DENTRO da barra, logo abaixo do logo (nada aparece fora dela ao passar o mouse). */}
+          {collapsed && (
+            <div className="relative flex flex-col items-center gap-1.5 px-2 pb-2 pt-1" data-testid="sidebar-collapsed-actions">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" onClick={toggleCollapsed} aria-label="Expandir Sidebar"
+                    className="text-white bg-white/15 hover:bg-white/30 backdrop-blur-sm transition-all duration-200 p-2 rounded-full h-8 w-8 flex items-center justify-center">
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="z-[1251] bg-white/90 text-gray-900 text-xs font-medium">Expandir Sidebar</TooltipContent>
+              </Tooltip>
+              {accountType === "admin" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="sm" onClick={() => setSettingsModalOpen(true)} aria-label="Personalizar Cores"
+                      className="text-white bg-white/15 hover:bg-white/30 backdrop-blur-sm transition-all duration-200 p-2 rounded-full h-8 w-8 flex items-center justify-center">
+                      <Palette className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="z-[1251] bg-white/90 text-gray-900 text-xs font-medium">Personalizar Cores</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          )}
 
           {accountType === "nomades" && !collapsed && nomadUser && (() => {
             const rawLevel = (nomadUser.level ?? nomadUser.nivel ?? "bronze").toLowerCase();
@@ -2205,53 +2231,6 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
             </div>
           )}
         </div>
-
-        {/* Floating hover buttons outside sidebar, right side, only when collapsed */}
-        {collapsed && (
-          <div
-            className="absolute top-0 left-full flex flex-col gap-1 px-1 pt-3 pb-2 rounded-r-xl opacity-0 group-hover/sbhover:opacity-100 transition-opacity duration-200 z-[60] pointer-events-none group-hover/sbhover:pointer-events-auto brand-surface"
-            style={getSidebarStyle()}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleCollapsed}
-                  className="text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all duration-200 p-2 rounded-full h-8 w-8 flex items-center justify-center"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent
-                side="right"
-                className="bg-white/90 text-gray-900 text-xs font-medium"
-              >
-                Expandir Sidebar
-              </TooltipContent>
-            </Tooltip>
-            {accountType === "admin" && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSettingsModalOpen(true)}
-                  className="text-white bg-white/20 hover:bg-white/30 backdrop-blur-sm transition-all duration-200 p-2 rounded-full h-8 w-8 flex items-center justify-center"
-                >
-                  <Palette className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent
-                side="right"
-                className="bg-white/90 text-gray-900 text-xs font-medium"
-              >
-                Personalizar Cores
-              </TooltipContent>
-            </Tooltip>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Modals */}

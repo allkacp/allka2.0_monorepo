@@ -188,6 +188,7 @@ A documentação técnica completa está em [`/docs`](./docs):
 | [produtos.md](./docs/produtos.md)                               | **Legado** (modelo antigo de produto pai/variações). O cadastro atual está em `cadastro-produto-passo-a-passo.md` |
 | [telas-e-funcionalidades.md](./docs/telas-e-funcionalidades.md) | Mapa das páginas de cada portal + onde editar cada uma                             |
 | [ui-e-padroes.md](./docs/ui-e-padroes.md)                       | Padrões visuais, drawers laterais, tema, componentes reutilizáveis                 |
+| [padroes-globais.md](./docs/padroes-globais.md)                  | **Padrões globais com nome** (ex.: **Painel Moldura**): o que são, onde estão e como pedir |
 | [padrao-tabela-empresas.md](./docs/padrao-tabela-empresas.md)   | Especificação completa do padrão de tabela (referência `admin/empresas`) — usar sempre que replicar o padrão em outra tela |
 | [regras-de-negocio.md](./docs/regras-de-negocio.md)             | Regras importantes (perfis, produtos, financeiro, permissões, segurança)           |
 | [boas-praticas-dev.md](./docs/boas-praticas-dev.md)             | Como mexer sem quebrar, identificar impacto, documentar mudanças                   |

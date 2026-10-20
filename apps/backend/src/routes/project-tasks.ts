@@ -21,6 +21,7 @@ import { assertTaskStatusTransitionAllowed, TaskStatusGuardError } from "../lib/
 import { decideContinuity, ContinuityError, CONTINUITY_CHOICES, requireDispensedStage } from "../lib/catalog2-continuity";
 import { audienceOf, canSee, type Visibility } from "../lib/catalog2-ops";
 import { listDeliverablesFor, submitDeliverable, reviewDeliverable, type DeliverableActor } from "../lib/task-deliverables";
+import { concluirAprovacaoPorEntregaveisSePronto } from "../lib/stage-engine";
 import { getTaskAIConfig, runTaskAI, adoptRun, discardRun, listRuns, canRunAI } from "../lib/task-ai";
 import { loadOperationalGuide } from "../lib/task-operational";
 import { isAssetValid, ASSET_RULE_LABEL } from "../lib/client-assets";
@@ -2265,6 +2266,7 @@ router.post("/:id/deliverables/:did/review", verifyToken, validate(deliverableRe
     const item = await prisma.projectTaskDeliverable.findFirst({ where: { id: req.params.did as string, project_task_id: ctx.task.id }, select: { id: true } });
     if (!item) { res.status(404).json({ error: "Entregável não encontrado." }); return; }
     const updated = await reviewDeliverable(prisma, item.id, ctx.actor, req.body.decisao, req.body.comentario);
+    if (updated.status === "aprovado" && updated.project_task_stage_id) await concluirAprovacaoPorEntregaveisSePronto(prisma, updated.project_task_stage_id, { userId: ctx.actor.userId });
     kickDependenciesForTask(ctx.task.id);
     res.json({ id: updated.id, status: updated.status });
   } catch (err) { next(err); }

@@ -65,18 +65,18 @@ export function TaskSummaryCard({ task, specialties, metrics = [], children }: {
   const Item = ({ label, value, help, testId }: { label: string; value: string; help?: string; testId?: string }) => {
     const Icon = ICONS[label] ?? ListChecks;
     return (
-      <div className="flex min-w-[10.5rem] flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-700 dark:bg-slate-900/60" data-testid="task-summary-item">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-[18px] w-[18px]" aria-hidden="true" /></span>
+      <div className="flex min-w-[8.5rem] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/60" data-testid="task-summary-item">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-3.5 w-3.5" aria-hidden="true" /></span>
         <div className="min-w-0">
-          <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}{help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}</dt>
-          <dd className="truncate text-[14px] font-bold leading-snug text-slate-900 dark:text-slate-100" data-testid={testId}>{value}</dd>
+          <dt className="text-[9px] font-semibold uppercase leading-tight tracking-wide text-slate-500 dark:text-slate-400">{label}{help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}</dt>
+          <dd className="truncate text-[12px] font-bold leading-tight text-slate-900 dark:text-slate-100" data-testid={testId}>{value}</dd>
         </div>
       </div>
     );
   };
   return (
     <section className="w-full" data-testid="task-summary-card">
-      <dl className="flex w-full flex-wrap gap-2.5 text-xs">
+      <dl className="flex w-full flex-wrap gap-1.5 text-xs">
         <Item label="Quem executa" value={s.executorLabel} help={s.executorHelp} testId="task-summary-executor" />
         <Item label="Especialidades" value={s.specialties.length ? s.specialties.join(", ") : "sem especialidade"} help={s.specialtiesHelp} testId="task-summary-specialties" />
         {metrics.map((m) => <Item key={m.label} label={m.label} value={m.value} help={m.help} />)}

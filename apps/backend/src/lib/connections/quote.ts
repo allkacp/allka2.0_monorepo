@@ -15,7 +15,7 @@ export const quoteOwner = (q: { account_kind: string; account_id: string }): Own
 export async function quoteRequirementsView(db: Db, quote: { id: string; version_id: string; account_kind: string; account_id: string }) {
   const version = await db.catalog2ProductVersion.findUnique({ where: { id: quote.version_id }, select: { requires_connections: true } });
   if (!version?.requires_connections) return { requires_connections: false, message: null, data: [] };
-  const allReqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: quote.version_id, visible_to_client: true }, include: { connection_type: true, dependencies: true, triggers: true }, orderBy: { sort_order: "asc" } })
+  const allReqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: quote.version_id, visible_to_client: true, draft_incomplete: false }, include: { connection_type: true, dependencies: true, triggers: true }, orderBy: { sort_order: "asc" } })
   // Exigências ativadas por gatilho aparecem só quando a seleção da cotação as aciona. Na vitrine (sem seleção) aparecem todas, com a regra de ativação.
   const isPreview = quote.id === "preview";
   let tctx: TriggerContext | null = null;
@@ -79,7 +79,7 @@ export async function assertConnectionsForCheckout(db: Db, quoteIds: string[]): 
     if (!quote) continue;
     const version = await db.catalog2ProductVersion.findUnique({ where: { id: quote.version_id }, select: { requires_connections: true } });
     if (!version?.requires_connections) continue;
-    const reqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: quote.version_id, pending_behavior: "block_checkout", obligation: "required" }, include: { connection_type: true } });
+    const reqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: quote.version_id, pending_behavior: "block_checkout", obligation: "required", draft_incomplete: false }, include: { connection_type: true } });
     for (const r of reqs) {
       const choice = await db.connectionQuoteChoice.findUnique({ where: { quote_id_requirement_id: { quote_id: qid, requirement_id: r.id } } });
       const conn = choice?.connection_id ? await db.clientConnection.findUnique({ where: { id: choice.connection_id }, select: { status: true } }) : null;

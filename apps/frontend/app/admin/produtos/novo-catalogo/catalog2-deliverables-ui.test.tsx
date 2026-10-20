@@ -5,73 +5,196 @@ const api = {
   createCatalog2Deliverable: vi.fn(async () => ({})),
   updateCatalog2Deliverable: vi.fn(async () => ({})),
   deleteCatalog2Deliverable: vi.fn(async () => ({})),
+  reorderCatalog2Deliverables: vi.fn(async () => ({})),
   searchCatalog2DeliverableLibrary: vi.fn(async () => ({ data: [{ id: "lib1", name: "Relatório mensal", description: "PDF", type: "arquivo", format: "PDF", responsible: "executor", is_required: true, requires_approval: true, visibility: "client", evidence_required: false, requires_qualification: false, delivery_moment: "cycle_end", cycle_scope: "every_cycle", template_url: null, template_name: null, from: "Produto #3 · Rotina" }] })),
   uploadCatalog2DeliverableFile: vi.fn(),
   downloadCatalog2DeliverableFile: vi.fn(),
 };
 vi.mock("@/lib/api-client", () => ({ apiClient: new Proxy({}, { get: (_t, k: string) => (api as any)[k] }) }));
-import { TaskDeliverablesEditor } from "./catalog2-deliverables-ui";
+vi.mock("@/components/confirmation-dialog", () => ({
+  ConfirmationDialog: ({ open, title, message, confirmText, cancelText, onConfirm, onClose }: any) => open ? (<div role="alertdialog" aria-label={title}><h2>{title}</h2><div>{message}</div><button onClick={onClose}>{cancelText ?? "Cancelar"}</button><button onClick={() => void onConfirm()}>{confirmText ?? "Confirmar"}</button></div>) : null,
+}));
+import { OPEN_STEP_EVENT, TaskDeliverablesEditor } from "./catalog2-deliverables-ui";
 
 const act = vi.fn(async (fn: () => Promise<any>) => { await fn(); });
-const task = (deliverables: any[] = []) => ({ id: "t1", steps: [{ id: "s1", name: "Configurar a conta" }, { id: "s2", name: "Otimizar campanhas" }], deliverables });
+const task = (deliverables: any[] = []) => ({ id: "t1", name: "Gestão de anúncios", steps: [{ id: "s1", name: "Configurar a conta", sort_order: 1 }, { id: "s2", name: "Otimizar campanhas", sort_order: 2 }], deliverables });
 const full = {
   id: "d1", key: "relatorio-mensal", name: "Relatório mensal", description: "PDF com métricas", type: "arquivo", responsible: "executor", is_required: true, requires_approval: true, visibility: "client", step_id: "s2",
   format: "PDF", delivery_moment: "cycle_end", template_url: "https://exemplo.test/modelo.pdf", template_name: "Modelo.pdf", evidence_required: true, requires_qualification: true, cycle_scope: "first_execution", is_conditional: false, condition_json: null,
 };
+const other = { ...full, id: "d2", key: "print-campanha", name: "Print da campanha", cycle_scope: "every_cycle", template_url: null, template_name: null };
+const orphan = { ...full, id: "d3", key: "sem-etapa", name: "Contrato assinado", step_id: null };
 beforeEach(() => { Object.values(api).forEach((f) => f.mockClear()); act.mockClear(); });
 
-describe("Entregáveis · cadastro completo na tela", () => {
-  it("cada entregável mostra ID permanente, etapa, momento, formato, arquivo-modelo, prova, qualificação, aprovação, visibilidade e recorrência", () => {
-    render(<TaskDeliverablesEditor task={task([full])} act={act} />);
-    const row = screen.getByTestId("deliverable-row");
-    expect(within(row).getByTestId("deliverable-id").textContent).toBe("ID relatorio-mensal");
-    expect((within(row).getByLabelText("Nome do entregável") as HTMLInputElement).value).toBe("Relatório mensal");
-    expect((within(row).getByLabelText("Etapa") as HTMLSelectElement).value).toBe("s2");
-    expect((within(row).getByLabelText("Momento da entrega") as HTMLSelectElement).value).toBe("cycle_end");
-    expect((within(row).getByLabelText("Formato") as HTMLInputElement).value).toBe("PDF");
-    expect((within(row).getByLabelText("Recorrência do entregável") as HTMLSelectElement).value).toBe("first_execution");
-    expect(within(row).getByText("Modelo.pdf")).toBeInTheDocument();
-    expect((within(row).getByLabelText("Exige evidência") as HTMLInputElement).checked).toBe(true);
-    expect((within(row).getByLabelText("Exige aprovação") as HTMLInputElement).checked).toBe(true);
-    expect(within(row).getByLabelText(/qualificação/i)).toBeInTheDocument();
+describe("Entregáveis da tarefa · resumo derivado das etapas", () => {
+  it("agrupa pela etapa responsável (número + nome) e mostra tipo, recorrência, responsável, momento, obrigatoriedade, aprovação e visibilidade", () => {
+    render(<TaskDeliverablesEditor task={task([full, { ...other, step_id: "s1" }])} act={act} />);
+    const titles = screen.getAllByTestId("deliverable-group-title").map((t) => t.textContent);
+    expect(titles[0]).toContain("Etapa 1 — Configurar a conta");
+    expect(titles[1]).toContain("Etapa 2 — Otimizar campanhas");
+    const chips = within(screen.getAllByTestId("deliverable-row")[1]).getByTestId("deliverable-chips").textContent!;
+    for (const t of ["Arquivo", "só 1ª execução", "Executor", "No fim do ciclo", "obrigatório", "aprovação do cliente"]) expect(chips).toContain(t);
+    expect(screen.queryByTestId("deliverable-body")).not.toBeInTheDocument(); // recolhidos por padrão
   });
 
-  it("a recorrência oferece 'Todo ciclo' e 'Só na primeira execução'; mudar habilita Salvar e envia o corpo completo", async () => {
+  it("entregável sem etapa vai para o grupo 'Entregáveis sem etapa responsável' com aviso de pendência", () => {
+    render(<TaskDeliverablesEditor task={task([full, orphan])} act={act} />);
+    const groups = screen.getAllByTestId("deliverable-group");
+    expect(groups.at(-1)!.textContent).toContain("Entregáveis sem etapa responsável");
+    expect(groups.at(-1)!.textContent).toContain("Contrato assinado");
+    expect(screen.getByTestId("deliverables-orphans").textContent).toContain("1 entregável sem etapa responsável");
+  });
+
+  it("expandir mostra os detalhes (ID permanente, etapa, momento, recorrência, evidência, aprovação, modelo); recolher esconde", () => {
+    render(<TaskDeliverablesEditor task={task([full, other])} act={act} />);
+    fireEvent.click(screen.getByLabelText("Expandir entregável Relatório mensal"));
+    const body = screen.getByTestId("deliverable-body");
+    expect(within(body).getByTestId("deliverable-id").textContent).toBe("ID relatorio-mensal");
+    expect(body.textContent).toContain("Etapa 2 — Otimizar campanhas");
+    expect(body.textContent).toContain("No fim do ciclo");
+    expect(body.textContent).toContain("Só na primeira execução");
+    expect(within(body).getByText("Modelo.pdf")).toBeInTheDocument();
+    expect(within(body).getByText(/Exige evidência\?/).textContent).toContain("SIM");
+    fireEvent.click(screen.getByLabelText("Recolher entregável Relatório mensal"));
+    expect(screen.queryByTestId("deliverable-body")).not.toBeInTheDocument();
+  });
+
+  it("busca só aparece com mais de 3 entregáveis e filtra por nome sem acento", () => {
+    const many = ["Plano estratégico", "Relatório", "Print", "Contrato"].map((name, i) => ({ ...full, id: `x${i}`, key: `k${i}`, name, step_id: "s1" }));
+    render(<TaskDeliverablesEditor task={task(many)} act={act} />);
+    fireEvent.change(screen.getByTestId("deliverable-search"), { target: { value: "relatorio" } });
+    expect(screen.getAllByTestId("deliverable-row")).toHaveLength(1);
+    fireEvent.change(screen.getByTestId("deliverable-search"), { target: { value: "zzz" } });
+    expect(screen.getByTestId("deliverable-search-empty")).toBeInTheDocument();
+  });
+
+  it("'Ir para a etapa' pede ao editor da etapa para abrir (mesmo registro, sem copiar)", () => {
+    const got: string[] = [];
+    const on = (e: Event) => got.push((e as CustomEvent).detail.stepId);
+    window.addEventListener(OPEN_STEP_EVENT, on);
+    render(<TaskDeliverablesEditor task={task([full])} act={act} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ir para a etapa" }));
+    window.removeEventListener(OPEN_STEP_EVENT, on);
+    expect(got).toEqual(["s2"]);
+  });
+
+  it("o lápis abre o modal com tudo preenchido e o contexto da tarefa/etapa; mudar a recorrência e salvar envia o corpo completo do MESMO registro", async () => {
     render(<TaskDeliverablesEditor task={task([{ ...full, cycle_scope: "every_cycle" }])} act={act} />);
-    const sel = screen.getByLabelText("Recorrência do entregável") as HTMLSelectElement;
-    expect(Array.from(sel.options).map((o) => o.text)).toEqual(["Todo ciclo", "Só na primeira execução"]);
-    expect(screen.queryByRole("button", { name: "Salvar" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Editar entregável Relatório mensal"));
+    const modal = screen.getByTestId("deliverable-modal");
+    expect(within(modal).getByText("Editar entregável")).toBeInTheDocument();
+    expect(within(modal).getByTestId("deliverable-modal-context").textContent).toContain("Etapa 2 — Otimizar campanhas");
+    expect(within(modal).getByTestId("deliverable-go-step")).toBeInTheDocument();
+    expect((within(modal).getByLabelText("Nome do entregável") as HTMLInputElement).value).toBe("Relatório mensal");
+    expect((within(modal).getByLabelText("Etapa") as HTMLSelectElement).value).toBe("s2");
+    expect((within(modal).getByLabelText("Exige aprovação") as HTMLInputElement).checked).toBe(true);
+    // rodapé sempre à vista, em 3 botões
+    const foot = within(screen.getByTestId("deliverable-modal-footer"));
+    expect(foot.getByRole("button", { name: "Cancelar" })).toBeInTheDocument();
+    expect(foot.getByTestId("deliverable-save-draft")).toBeInTheDocument();
+    const sel = within(modal).getByLabelText("Recorrência do entregável") as HTMLSelectElement;
     fireEvent.change(sel, { target: { value: "first_execution" } });
-    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(within(modal).getByTestId("deliverable-dirty")).toBeInTheDocument();
+    fireEvent.click(within(modal).getByTestId("deliverable-save"));
     await waitFor(() => expect(api.updateCatalog2Deliverable).toHaveBeenCalledTimes(1));
     const [id, body] = api.updateCatalog2Deliverable.mock.calls[0] as any[];
     expect(id).toBe("d1");
-    expect(body).toMatchObject({ cycle_scope: "first_execution", delivery_moment: "cycle_end", format: "PDF", step_id: "s2", evidence_required: true, requires_qualification: true, template_name: "Modelo.pdf" });
+    expect(body).toMatchObject({ cycle_scope: "first_execution", delivery_moment: "cycle_end", format: "PDF", step_id: "s2", evidence_required: true, requires_qualification: true, template_name: "Modelo.pdf", draft: false });
+    expect(api.createCatalog2Deliverable).not.toHaveBeenCalled(); // nada de cópia paralela
   });
 
-  it("condição em texto fica como orientação (não promete filtrar sozinha)", () => {
-    render(<TaskDeliverablesEditor task={task([{ ...full, is_conditional: true, condition_json: JSON.stringify({ text: "só se tiver Meta" }) }])} act={act} />);
-    expect(screen.getByText(/texto de orientação para quem executa/i)).toBeInTheDocument();
-    expect((screen.getByLabelText("Condição do entregável") as HTMLInputElement).value).toBe("só se tiver Meta");
+  it("modal tem 8 blocos recolhíveis com nomes completos", () => {
+    render(<TaskDeliverablesEditor task={task([full])} act={act} />);
+    fireEvent.click(screen.getByLabelText("Editar entregável Relatório mensal"));
+    const names = ["Identificação", "Entrega e formato", "Responsável e etapa", "Momento e recorrência", "Evidência e aprovação", "Condições", "Arquivo-modelo", "Visibilidade e avançado"];
+    names.forEach((n, i) => expect(screen.getByTestId(`deliverable-section-${i + 1}`).textContent).toContain(n));
   });
 
-  it("reaproveitar: busca pelo nome na biblioteca e cria uma cópia nesta tarefa", async () => {
+  it("concluir com campos faltando NÃO fecha, NÃO apaga e explica; 'Salvar rascunho' guarda assim mesmo", async () => {
     render(<TaskDeliverablesEditor task={task()} act={act} />);
-    fireEvent.click(screen.getByRole("button", { name: /Reutilizar/ }));
-    fireEvent.change(screen.getByLabelText("Buscar entregável existente"), { target: { value: "Relat" } });
-    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
-    expect(await screen.findByText("Produto #3 · Rotina")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: /Reutilizar/ }).pop()!);
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar/ }));
+    const modal = screen.getByTestId("deliverable-modal");
+    expect(within(modal).getByText("Novo entregável")).toBeInTheDocument();
+    fireEvent.change(within(modal).getByLabelText("Nome do entregável"), { target: { value: "Contrato assinado" } });
+    fireEvent.click(within(modal).getByTestId("deliverable-save"));
+    const sum = await within(modal).findByTestId("deliverable-error-summary");
+    expect(sum.textContent).toContain("Descreva o que é o entregável");
+    expect(api.createCatalog2Deliverable).not.toHaveBeenCalled();
+    expect((within(modal).getByLabelText("Nome do entregável") as HTMLInputElement).value).toBe("Contrato assinado");
+    fireEvent.click(within(modal).getByTestId("deliverable-save-draft"));
     await waitFor(() => expect(api.createCatalog2Deliverable).toHaveBeenCalledTimes(1));
-    expect(api.createCatalog2Deliverable.mock.calls[0]).toMatchObject(["t1", { name: "Relatório mensal", delivery_moment: "cycle_end", cycle_scope: "every_cycle" }]);
+    expect(api.createCatalog2Deliverable.mock.calls[0]).toMatchObject(["t1", { name: "Contrato assinado", draft: true }]);
+  });
+
+  it("condicional: marcar revela o campo da condição e conta o que falta", () => {
+    render(<TaskDeliverablesEditor task={task([full])} act={act} />);
+    fireEvent.click(screen.getByLabelText("Editar entregável Relatório mensal"));
+    const modal = screen.getByTestId("deliverable-modal");
+    expect(within(modal).queryByTestId("deliverable-condition-box")).not.toBeInTheDocument();
+    fireEvent.click(within(modal).getByLabelText("Entregável condicional"));
+    const box = within(modal).getByTestId("deliverable-condition-box");
+    expect(within(box).getByTestId("reveal-missing").textContent).toBe("falta 1 campo");
+    fireEvent.change(within(box).getByLabelText("Condição do entregável"), { target: { value: "só se tiver Meta" } });
+    expect(within(modal).queryByTestId("reveal-missing")).not.toBeInTheDocument();
+  });
+
+  it("cancelar o modal sem mexer fecha direto e não grava; com alterações pergunta antes", () => {
+    render(<TaskDeliverablesEditor task={task([full])} act={act} />);
+    fireEvent.click(screen.getByLabelText("Editar entregável Relatório mensal"));
+    fireEvent.click(within(screen.getByTestId("deliverable-modal-footer")).getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByTestId("deliverable-modal")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Editar entregável Relatório mensal"));
+    fireEvent.change(screen.getByLabelText("Nome do entregável"), { target: { value: "Outro nome" } });
+    fireEvent.click(within(screen.getByTestId("deliverable-modal-footer")).getByRole("button", { name: "Cancelar" }));
+    expect(screen.getByTestId("deliverable-close-ask")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("deliverable-close-discard"));
+    expect(screen.queryByTestId("deliverable-modal")).not.toBeInTheDocument();
+    expect(api.updateCatalog2Deliverable).not.toHaveBeenCalled();
+  });
+
+  it("a lixeira pede confirmação antes de excluir; recusa do servidor (entregável já usado) não perde nada", async () => {
+    render(<TaskDeliverablesEditor task={task([full, other])} act={act} />);
+    fireEvent.click(screen.getByLabelText("Excluir entregável Print da campanha"));
+    const dlg = screen.getByRole("alertdialog");
+    expect(dlg.textContent).toContain("Print da campanha");
+    expect(api.deleteCatalog2Deliverable).not.toHaveBeenCalled();
+    fireEvent.click(within(dlg).getByRole("button", { name: "Cancelar" }));
+    expect(api.deleteCatalog2Deliverable).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText("Excluir entregável Print da campanha"));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Excluir entregável" }));
+    await waitFor(() => expect(api.deleteCatalog2Deliverable).toHaveBeenCalledWith("d2"));
+  });
+
+  it("duplicar cria um novo registro com '(cópia)' no nome e os mesmos campos", async () => {
+    render(<TaskDeliverablesEditor task={task([full])} act={act} />);
+    fireEvent.click(screen.getByLabelText("Duplicar entregável Relatório mensal"));
+    await waitFor(() => expect(api.createCatalog2Deliverable).toHaveBeenCalledTimes(1));
+    expect(api.createCatalog2Deliverable.mock.calls[0]).toMatchObject(["t1", { name: "Relatório mensal (cópia)", format: "PDF", cycle_scope: "first_execution", step_id: "s2" }]);
+  });
+
+  it("ordenar dentro da etapa: subir/descer manda a nova ordem dos ids; o primeiro não sobe e o último não desce", async () => {
+    render(<TaskDeliverablesEditor task={task([full, other])} act={act} />);
+    expect(screen.getByLabelText("Subir entregável Relatório mensal")).toBeDisabled();
+    expect(screen.getByLabelText("Descer entregável Print da campanha")).toBeDisabled();
+    fireEvent.click(screen.getByLabelText("Descer entregável Relatório mensal"));
+    await waitFor(() => expect(api.reorderCatalog2Deliverables).toHaveBeenCalledWith("t1", ["d2", "d1"]));
   });
 
   it("somente leitura: nada de editar, adicionar ou remover; sem entregáveis explica que a tarefa conclui pelas etapas", () => {
-    const { rerender } = render(<TaskDeliverablesEditor task={task()} act={act} readOnly />);
-    expect(screen.getByText(/Nenhum entregável/)).toBeInTheDocument();
-    expect(screen.queryByTitle("Adicionar entregável")).not.toBeInTheDocument();
-    rerender(<TaskDeliverablesEditor task={task([full])} act={act} readOnly />);
-    expect((screen.getByLabelText("Nome do entregável") as HTMLInputElement).disabled).toBe(true);
-    expect(screen.queryByLabelText("Remover entregável")).not.toBeInTheDocument();
+    const { rerender } = render(<TaskDeliverablesEditor task={task([full])} act={act} readOnly />);
+    expect(screen.queryByLabelText("Editar entregável Relatório mensal")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Excluir entregável Relatório mensal")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Adicionar/ })).not.toBeInTheDocument();
+    rerender(<TaskDeliverablesEditor task={task()} act={act} readOnly />);
+    expect(screen.getByText(/A tarefa conclui só pelas etapas/)).toBeInTheDocument();
+  });
+
+  it("reutilizar existente busca na biblioteca e cria o entregável nesta tarefa", async () => {
+    render(<TaskDeliverablesEditor task={task()} act={act} />);
+    fireEvent.click(screen.getByRole("button", { name: /Reutilizar existente/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Buscar" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Reutilizar$/ }));
+    await waitFor(() => expect(api.createCatalog2Deliverable).toHaveBeenCalledTimes(1));
+    expect(api.createCatalog2Deliverable.mock.calls[0]).toMatchObject(["t1", { name: "Relatório mensal" }]);
   });
 });

@@ -117,7 +117,7 @@ const ConexoesLeaderPage = React.lazy(() => import("@/app/conexoes/page").then((
 const ConexoesAdminPage = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesAdminPage })));
 const ConexoesRedirect = React.lazy(() => import("@/app/conexoes/page").then((m) => ({ default: m.ConexoesRedirect })));
 const AdminModelosTarefasPage = React.lazy(
-  () => import("@/app/admin/modelos-tarefas/page"),
+  () => import("@/app/admin/modelos-tarefas/catalog2-page"),
 );
 const AdminNiveisPage = React.lazy(() => import("@/app/admin/niveis/page"));
 const AdminNiveisNomades = React.lazy(

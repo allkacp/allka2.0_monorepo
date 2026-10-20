@@ -5,7 +5,7 @@
 //  • seletor de modelo existente (busca por #ID, nome, especialidade, executor…)
 //  • visualização do modelo global sem sair do cadastro do produto
 //  • pergunta "somente neste produto" x "atualizar modelo global"
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useEffect, useState } from "react";
 import { Loader2, Search } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -327,39 +327,66 @@ export function TaskModelInfoDialog({ id, onClose, kind = "task" }: { id: number
   );
 }
 
-// ── "Somente neste produto" x "Atualizar modelo global" ─────────────────────
+// ── Onde aplicar a alteração de um modelo global ─────────────────────────────
+/** Dentro de "Modelos globais" o editor é o MESMO do produto, mas "somente neste produto" não faz sentido (o que se edita é o modelo). */
+export const ModelEditCtx = createContext<{ embedded: boolean }>({ embedded: false });
+export type ModelScope = "product" | "model" | "new_model";
+
 export function ModelScopeDialog({
-  open, kindLabel, modelId, onChoose, onCancel,
-}: { open: boolean; kindLabel: string; modelId: number; onChoose: (scope: "product" | "model") => void; onCancel: () => void }) {
+  open, kindLabel, modelId, onChoose, onCancel, embedded = false,
+}: { open: boolean; kindLabel: string; modelId: number; onChoose: (scope: ModelScope) => void; onCancel: () => void; embedded?: boolean }) {
   const [confirmModel, setConfirmModel] = useState(false);
+  const [impact, setImpact] = useState<any | null>(null);
+  const [impactErr, setImpactErr] = useState(false);
+  const kind: "task" | "step" = kindLabel === "tarefa" ? "task" : "step";
+  const noun = kind === "task" ? "tarefa" : "etapa";
+  useEffect(() => {
+    if (!open) { setConfirmModel(false); return; }
+    let live = true; setImpact(null); setImpactErr(false);
+    Promise.resolve(apiClient.getCatalog2ModelImpact(kind, modelId)).then((r: any) => { if (live) setImpact(r); }).catch(() => { if (live) setImpactErr(true); });
+    return () => { live = false; };
+  }, [open, kind, modelId]);
+  const plural = (n: number, one: string, many: string) => (n === 1 ? `1 ${one}` : `${n} ${many}`);
+  const summary = impact
+    ? `Este modelo global (${noun} #${modelId}) é usado em ${plural(impact.instances, noun, noun === "tarefa" ? "tarefas" : "etapas")}, em ${plural(impact.products, "produto", "produtos")}. ${plural(impact.editable, "vínculo editável (versão em rascunho)", "vínculos editáveis (versões em rascunho)")} ${impact.editable === 1 ? "será atualizado" : "serão atualizados"}. ${impact.locked === 0 ? "Nenhum está em versão publicada." : impact.locked === 1 ? "1 está em versão publicada: não muda sozinho e só passa a indicar “revisão nova disponível”." : `${impact.locked} estão em versões publicadas: não mudam sozinhos e só passam a indicar “revisão nova disponível”.`}`
+    : impactErr ? "Não foi possível calcular o impacto agora." : "Calculando o impacto…";
   if (confirmModel) {
     return (
       <Dialog open={open} onOpenChange={(v) => { if (!v) { setConfirmModel(false); onCancel(); } }}>
-        <DialogContent className="max-w-lg">
-          <DialogTitle>Confirmar alteração do modelo global?</DialogTitle>
-          <p className="text-sm text-neutral-700 dark:text-neutral-200">Você está alterando o modelo global <strong>#{modelId}</strong>. Ele é reutilizado por outros produtos: eles receberão o aviso de “modelo global atualizado” e poderão trazer a mudança nas próximas versões. Versões já publicadas não mudam.</p>
+        <DialogContent className="max-w-lg" data-testid="model-scope-confirm">
+          <DialogTitle>Confirmar edição global?</DialogTitle>
+          <p className="text-sm text-neutral-700 dark:text-neutral-200" data-testid="model-impact">{summary}</p>
+          <p className="text-sm text-neutral-700 dark:text-neutral-200">O modelo sobe de revisão. Versões publicadas <strong>nunca</strong> mudam automaticamente.</p>
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmModel(false)}>Voltar</Button>
-            <Button size="sm" onClick={() => { setConfirmModel(false); onChoose("model"); }}>Sim, atualizar o modelo global</Button>
+            <Button size="sm" onClick={() => { setConfirmModel(false); onChoose("model"); }} data-testid="model-scope-confirm-yes">Sim, editar globalmente</Button>
           </div>
         </DialogContent>
       </Dialog>
     );
   }
+  const opt = "w-full rounded-lg border border-neutral-300 p-3 text-left hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900";
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onCancel(); }}>
-      <DialogContent className="max-w-lg">
-        <DialogTitle>Onde aplicar esta alteração?</DialogTitle>
-        <p className="text-sm text-neutral-600 dark:text-neutral-300">Esta {kindLabel} usa o modelo global #{modelId}. Escolha explicitamente:</p>
+      <DialogContent className="max-w-lg" data-testid="model-scope-dialog">
+        <DialogTitle>Esta {noun} é um modelo global usado em outros lugares</DialogTitle>
+        <p className="text-sm text-neutral-600 dark:text-neutral-300" data-testid="model-impact">{summary}</p>
+        <p className="text-sm font-semibold">O que você quer fazer com esta alteração?</p>
         <div className="space-y-2">
-          <button type="button" className="w-full rounded-lg border border-neutral-300 p-3 text-left hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900" onClick={() => onChoose("product")}>
-            <p className="text-sm font-semibold">Alterar somente neste produto</p>
-            <p className="text-xs text-neutral-500">Cria uma configuração própria deste produto. O modelo original continua intacto.</p>
+          <button type="button" className={opt} onClick={() => onChoose("new_model")} data-testid="scope-new-model">
+            <p className="text-sm font-semibold">Criar novo modelo a partir deste</p>
+            <p className="text-xs text-neutral-500">Duplica o modelo com a sua alteração (ID novo). Só este item passa a usar o novo modelo; os vínculos atuais ficam como estão. Depois você pode vincular o novo modelo a outras {noun === "tarefa" ? "tarefas" : "etapas"}.</p>
           </button>
-          <button type="button" className="w-full rounded-lg border border-neutral-300 p-3 text-left hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900" onClick={() => setConfirmModel(true)}>
-            <p className="text-sm font-semibold">Atualizar modelo global</p>
-            <p className="text-xs text-neutral-500">Altera o modelo reutilizável (sobe a revisão). Outros produtos não mudam sozinhos: recebem o aviso "modelo global atualizado" e você decide quando trazer. Versões já publicadas nunca mudam.</p>
+          <button type="button" className={opt} onClick={() => setConfirmModel(true)} data-testid="scope-global">
+            <p className="text-sm font-semibold">Editar globalmente</p>
+            <p className="text-xs text-neutral-500">Altera o modelo #{modelId} e leva a mudança a todos os vínculos editáveis. Versões publicadas não mudam: só indicam “revisão nova disponível”.</p>
           </button>
+          {!embedded && (
+            <button type="button" className={opt} onClick={() => onChoose("product")} data-testid="scope-product">
+              <p className="text-sm font-semibold">Alterar somente neste produto</p>
+              <p className="text-xs text-neutral-500">Ajuste próprio deste produto. O modelo original continua intacto.</p>
+            </button>
+          )}
         </div>
         <div className="flex justify-end"><Button variant="ghost" size="sm" onClick={onCancel}>Cancelar</Button></div>
       </DialogContent>

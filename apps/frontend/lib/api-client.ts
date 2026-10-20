@@ -962,6 +962,7 @@ class ApiClient {
   }
   getCatalog2TaskModel(id: number) { return this.c2<any>("GET", `/task-models/${id}`); }
   updateCatalog2TaskModel(id: number, body: Record<string, any>) { return this.c2("PUT", `/task-models/${id}`, body); }
+  setCatalog2TaskModelSteps(id: number, stepModelIds: number[]) { return this.c2("PUT", `/task-models/${id}/steps`, { step_model_ids: stepModelIds }); }
   setCatalog2TaskModelActive(id: number, is_active: boolean) { return this.c2("PATCH", `/task-models/${id}/active`, { is_active }); }
   createCatalog2TaskModel(body: Record<string, any>) { return this.c2<{ id: number }>("POST", `/task-models`, body); }
   getCatalog2StepModels(params: Record<string, string | number | undefined> = {}) {
@@ -971,6 +972,7 @@ class ApiClient {
   }
   getCatalog2StepModel(id: number) { return this.c2<any>("GET", `/step-models/${id}`); }
   updateCatalog2StepModel(id: number, body: Record<string, any>) { return this.c2("PUT", `/step-models/${id}`, body); }
+  copyCatalog2StepModel(id: number, body: { name: string; task_model_ids: number[] }) { return this.c2<{ id: number }>("POST", `/step-models/${id}/copy`, body); }
   setCatalog2StepModelActive(id: number, is_active: boolean) { return this.c2("PATCH", `/step-models/${id}/active`, { is_active }); }
   createCatalog2StepModel(body: Record<string, any>) { return this.c2<{ id: number }>("POST", `/step-models`, body); }
   addCatalog2TaskFromModel(versionId: string, modelId: number) { return this.c2("POST", `/versions/${versionId}/tasks/from-model`, { model_id: modelId }); }
@@ -995,6 +997,8 @@ class ApiClient {
   deleteConnectionRequirement(id: string) { return this.c2<any>("DELETE", `/connection-requirements/${id}`); }
   getConnectors() { return this.c2<{ data: any[] }>("GET", "/connectors"); }
   addCatalog2AccessValidationStep(taskId: string) { return this.c2("POST", `/tasks/${taskId}/steps/access-validation`); }
+  getCatalog2ModelImpact(kind: "task" | "step", id: number) { return this.c2<any>("GET", `/${kind === "task" ? "task-models" : "step-models"}/${id}/impact`); }
+  linkCatalog2StepModelTasks(id: number, taskModelIds: number[]) { return this.c2<{ added: number }>("POST", `/step-models/${id}/link-tasks`, { task_model_ids: taskModelIds }); }
   syncCatalog2TaskModel(taskId: string) { return this.c2("POST", `/tasks/${taskId}/sync-model`); }
   syncCatalog2StepModel(stepId: string) { return this.c2("POST", `/steps/${stepId}/sync-model`); }
   // variações / opções / efeitos
@@ -1099,6 +1103,7 @@ class ApiClient {
   createCatalog2Deliverable(taskId: string, body: Record<string, any>) { return this.c2("POST", `/tasks/${taskId}/deliverables`, body); }
   updateCatalog2Deliverable(id: string, body: Record<string, any>) { return this.c2("PUT", `/deliverables/${id}`, body); }
   deleteCatalog2Deliverable(id: string) { return this.c2("DELETE", `/deliverables/${id}`); }
+  reorderCatalog2Deliverables(taskId: string, order: string[]) { return this.c2("PUT", `/tasks/${taskId}/deliverables/order`, { order }); }
   /** Entregáveis já cadastrados em outros produtos (para reutilizar como modelo). */
   searchCatalog2DeliverableLibrary(q: string) { return this.c2<{ data: any[] }>("GET", `/deliverables-library?q=${encodeURIComponent(q)}`); }
   addCatalog2TaskDependency(taskId: string, dependsOn: string) { return this.c2("POST", `/tasks/${taskId}/dependencies`, { depends_on_task_id: dependsOn }); }

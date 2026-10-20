@@ -38,13 +38,13 @@ async function reqDef(db: Db, id: string) {
 export async function ensureProjectConnectionRequirements(db: Db, p: { projectId: string; projectProductId: string; versionId: string; quoteId?: string | null; actor?: Actor | null }): Promise<PcrRow[]> {
   const version = await db.catalog2ProductVersion.findUnique({ where: { id: p.versionId }, select: { requires_connections: true } });
   if (!version?.requires_connections) return [];
-  const reqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: p.versionId }, include: { connection_type: true, triggers: true }, orderBy: { sort_order: "asc" } });
+  const reqs = await db.catalog2ConnectionRequirement.findMany({ where: { version_id: p.versionId, draft_incomplete: false }, include: { connection_type: true, triggers: true }, orderBy: { sort_order: "asc" } });
   const owner = await ownerOfProject(db, p.projectId);
   // Ativação por gatilhos (variação, opção, adicional, tarefa, etapa, resposta, produto vinculado). Contexto montado só se algum gatilho existir.
   let tctx: TriggerContext | null = null;
   const triggered = async (r: (typeof reqs)[number]): Promise<boolean | null> => {
     if (r.activation_mode === "manual" || r.triggers.length === 0) return null;
-    tctx ??= await buildTriggerContext(db, { projectId: p.projectId, versionId: p.versionId, quoteId: p.quoteId ?? null });
+    tctx ??= await buildTriggerContext(db, { projectId: p.projectId, versionId: p.versionId, quoteId: p.quoteId ?? null, projectProductId: p.projectProductId });
     return evaluateActivation(r.activation_mode, r.triggers, tctx);
   };
   const companyId = owner.company_id ?? null;

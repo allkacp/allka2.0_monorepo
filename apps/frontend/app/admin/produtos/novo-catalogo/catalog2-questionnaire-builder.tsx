@@ -1,17 +1,21 @@
 "use client";
 
-// Construtor universal de questionário (17/10): perguntas compactas e recolhíveis (uma linha resumida, expande para editar), seções,
-// reordenar/duplicar/excluir/ativar, reutilizar pergunta existente (por nome ou ID), modelo global e "visualizar como o cliente vê".
+// Questionário de contratação — estilo da plataforma antiga (17/10): na PÁGINA só aparece o questionário pronto (lista de perguntas
+// recolhíveis, só leitura). "+ Adicionar" e o lápis de cada pergunta abrem um MODAL ("Editar Pergunta") com todas as configurações:
+// 22 tipos, opções, anexos, validação, condição, seção, ativa/inativa… Também há modal para os dados do questionário (nome, seções, modelo global).
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, Eye, Library, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, Eye, GripVertical, Library, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { apiClient } from "@/lib/api-client";
 import { BriefingQuestionField, emptyBriefingValue, isVisible, pendingMessage, type BriefingValue } from "@/components/briefing-question-field";
 import { QuestionConfigFields, cloneDraft, draftFromServer, emptyQuestion, payloadFromDraft, questionTypeLabel, type QuestionCtx, type QuestionDraft } from "./catalog2-questions-ui";
 
 export interface SectionDraft { key: string; name: string; description: string }
 export interface QuestionnaireState { name: string; description: string; sections: SectionDraft[]; questions: QuestionDraft[]; is_global_model: boolean }
+type Ctx = Omit<QuestionCtx, "otherQuestions" | "sections">;
 
 export const slugKey = (label: string, taken: Iterable<string>) => {
   const base = `p-${label.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "pergunta"}`;
@@ -98,47 +102,75 @@ function QuestionLibrary({ onPick, onClose }: { onPick: (q: any) => void; onClos
   );
 }
 
-export function QuestionnaireEditor({ initial, ctx, saving, saveLabel, onSave, onCancel, notice, usedByCount = 0, onSuggest }: {
-  initial: QuestionnaireState; ctx: Omit<QuestionCtx, "otherQuestions" | "sections">; saving?: boolean; saveLabel: string;
-  onSave: (s: QuestionnaireState) => void; onCancel?: () => void; notice?: React.ReactNode; usedByCount?: number;
-  /** IA: sugere MAIS perguntas (mesmos tipos/configurações) sem repetir as existentes. */
-  onSuggest?: (existingLabels: string[]) => Promise<QuestionDraft[]>;
+const Chip = ({ children, tone = "slate" }: { children: React.ReactNode; tone?: "green" | "red" | "slate" | "amber" | "sky" | "violet" }) => {
+  const c = { green: "bg-emerald-500 text-white", red: "bg-rose-500 text-white", slate: "bg-slate-100 text-slate-600", amber: "bg-amber-100 text-amber-800", sky: "bg-sky-100 text-sky-800", violet: "bg-violet-100 text-violet-800" }[tone];
+  return <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${c}`}>{children}</span>;
+};
+const yesNo = (v: boolean) => <Chip tone={v ? "red" : "slate"}>{v ? "SIM" : "NÃO"}</Chip>;
+
+/** Modal "Editar Pergunta" / "Nova Pergunta": toda a configuração fica aqui, fora da página. */
+export function QuestionModal({ initial, ctx, isNew, onSave, onClose }: { initial: QuestionDraft; ctx: QuestionCtx; isNew: boolean; onSave: (q: QuestionDraft) => void; onClose: () => void }) {
+  const [q, setQ] = useState<QuestionDraft>(initial);
+  const patch = (p: Partial<QuestionDraft>) => setQ((cur) => ({ ...cur, ...p }));
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent overlayClassName="!z-[1250]" className="!z-[1251] max-h-[calc(100dvh-9rem)] w-[96vw] max-w-3xl overflow-y-auto sm:max-w-3xl" data-testid="question-modal">
+        <DialogTitle>{isNew ? "Nova Pergunta" : "Editar Pergunta"}</DialogTitle>
+        <div className="space-y-3">
+          <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800">Pergunta <span className="sr-only">(obrigatório)</span>
+            <Input aria-label="Texto da pergunta" className="text-sm" value={q.label} maxLength={500} onChange={(e) => patch({ label: e.target.value })} />
+          </label>
+          <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800">Instrução de resposta
+            <textarea aria-label="Instrução de resposta" rows={2} maxLength={1000} className="w-full rounded-md border border-slate-300 bg-white p-2 text-sm font-normal dark:border-slate-600 dark:bg-slate-900" value={q.help_text} onChange={(e) => patch({ help_text: e.target.value })} />
+          </label>
+          <QuestionConfigFields q={q} ctx={{ ...ctx, otherQuestions: ctx.otherQuestions }} hideHelp onChange={patch} />
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-2">
+            <span className="rounded bg-slate-100 px-1.5 py-1 text-[10px] text-slate-600" title="Identificador permanente da pergunta" data-testid="question-id">{q.id ? `ID ${String(q.id).slice(0, 8)}` : "ID gerado ao salvar"}</span>
+            <span className="flex gap-2">
+              <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
+              <Button type="button" disabled={!q.label.trim()} onClick={() => onSave({ ...q, label: q.label.trim() })}>Salvar</Button>
+            </span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Lista de perguntas no estilo da plataforma antiga: linhas recolhíveis só de leitura; "+ Adicionar"; lápis abre o modal; lixeira exclui. */
+export function QuestionList({ questions, sections, ctx, readOnly, busy, onChange, onSuggest, steps }: {
+  questions: QuestionDraft[]; sections: SectionDraft[]; ctx: Ctx; readOnly?: boolean; busy?: boolean; onChange: (next: QuestionDraft[]) => void;
+  onSuggest?: (existingLabels: string[]) => Promise<QuestionDraft[]>; steps?: { key: string; name: string }[];
 }) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [modal, setModal] = useState<{ q: QuestionDraft; isNew: boolean } | null>(null);
+  const [toDelete, setToDelete] = useState<QuestionDraft | null>(null);
+  const [showLib, setShowLib] = useState(false);
+  const [dragKey, setDragKey] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [name, setName] = useState(initial.name);
-  const [description, setDescription] = useState(initial.description);
-  const [sections, setSections] = useState<SectionDraft[]>(initial.sections);
-  const [questions, setQuestions] = useState<QuestionDraft[]>(initial.questions);
-  const [isGlobal, setIsGlobal] = useState(initial.is_global_model);
-  const [open, setOpen] = useState<Set<string>>(new Set());
-  const [newLabel, setNewLabel] = useState("");
-  const [showLib, setShowLib] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [showSections, setShowSections] = useState(initial.sections.length > 0);
-  const state: QuestionnaireState = { name, description, sections, questions, is_global_model: isGlobal };
   const fullCtx: QuestionCtx = useMemo(() => ({ ...ctx, sections: sections.map((s) => ({ key: s.key, name: s.name || s.key })), otherQuestions: questions.map((x) => ({ key: x.key, label: x.label, question_type: x.question_type })) }), [ctx, sections, questions]);
-  const upd = (key: string, patch: Partial<QuestionDraft>) => setQuestions((qs) => qs.map((x) => (x.key === key ? { ...x, ...patch } : x)));
-  const move = (i: number, d: number) => setQuestions((qs) => { const j = i + d; if (j < 0 || j >= qs.length) return qs; const c = qs.slice(); [c[i], c[j]] = [c[j], c[i]]; return c; });
   const toggle = (key: string) => setOpen((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const add = () => {
-    if (!newLabel.trim()) return;
-    const key = slugKey(newLabel, questions.map((x) => x.key));
-    setQuestions((qs) => [...qs, { key, label: newLabel.trim(), is_required: true, ...emptyQuestion() }]);
-    setOpen((s) => new Set(s).add(key)); setNewLabel("");
+  const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= questions.length) return; const c = questions.slice(); [c[i], c[j]] = [c[j], c[i]]; onChange(c); };
+  const dropOn = (targetKey: string) => {
+    if (!dragKey || dragKey === targetKey) return;
+    const from = questions.findIndex((x) => x.key === dragKey); const to = questions.findIndex((x) => x.key === targetKey);
+    if (from < 0 || to < 0) return;
+    const c = questions.slice(); const [m] = c.splice(from, 1); c.splice(to, 0, m); onChange(c);
   };
-  const dup = (i: number) => setQuestions((qs) => { const copy = cloneDraft(qs[i], qs.map((x) => x.key)); const c = qs.slice(); c.splice(i + 1, 0, copy); return c; });
-  const remove = (key: string) => setQuestions((qs) => qs.filter((x) => x.key !== key));
+  const dup = (i: number) => { const copy = cloneDraft(questions[i], questions.map((x) => x.key)); const c = questions.slice(); c.splice(i + 1, 0, copy); onChange(c); };
+  const blank = (): QuestionDraft => ({ key: slugKey("pergunta", questions.map((x) => x.key)), label: "", is_required: true, ...emptyQuestion() });
+  const saveModal = (q: QuestionDraft) => {
+    if (!modal) return;
+    if (modal.isNew) onChange([...questions, { ...q, key: slugKey(q.label, questions.map((x) => x.key)) }]);
+    else onChange(questions.map((x) => (x.key === q.key ? q : x)));
+    setModal(null);
+  };
   const reuse = (r: any) => {
     const d = draftFromServer(r);
     const copy = cloneDraft({ ...d, section_key: "", target_step_key: "", cond_source: "", cond_ref: "" }, questions.map((x) => x.key));
-    const clean = { ...copy, key: slugKey(r.label, questions.map((x) => x.key)), label: r.label };
-    setQuestions((qs) => [...qs, clean]); setOpen((s) => new Set(s).add(clean.key)); setShowLib(false);
+    setShowLib(false); setModal({ q: { ...copy, key: slugKey(r.label, questions.map((x) => x.key)), label: r.label }, isNew: true });
   };
-  const addSection = () => setSections((ss) => [...ss, { key: `s${ss.length + 1}-${Date.now().toString(36).slice(-3)}`, name: `Seção ${ss.length + 1}`, description: "" }]);
-  const moveSection = (i: number, d: number) => setSections((ss) => { const j = i + d; if (j < 0 || j >= ss.length) return ss; const c = ss.slice(); [c[i], c[j]] = [c[j], c[i]]; return c; });
-  const removeSection = (key: string) => { setSections((ss) => ss.filter((s) => s.key !== key)); setQuestions((qs) => qs.map((x) => (x.section_key === key ? { ...x, section_key: "" } : x))); };
-  const sectionName = (key: string) => sections.find((s) => s.key === key)?.name;
   const suggestMore = async () => {
     if (!onSuggest) return;
     setAiBusy(true); setAiMsg(null);
@@ -146,95 +178,160 @@ export function QuestionnaireEditor({ initial, ctx, saving, saveLabel, onSave, o
       const novas = await onSuggest(questions.map((x) => x.label));
       const taken = new Set(questions.map((x) => x.key));
       const fixed = novas.map((d) => { let k = d.key; while (taken.has(k)) k += "x"; taken.add(k); return { ...d, key: k }; });
-      setQuestions((qs) => [...qs, ...fixed]);
+      onChange([...questions, ...fixed]);
       setAiMsg({ ok: true, text: `${fixed.length} pergunta(s) sugerida(s) adicionada(s) ao final. Revise antes de salvar.` });
     } catch (e: any) { setAiMsg({ ok: false, text: e?.message ?? "Não foi possível usar a IA agora." }); } finally { setAiBusy(false); }
   };
-  const canSave = !!name.trim() && questions.length > 0 && !saving && questions.every((x) => x.label.trim());
+  const sectionName = (key: string) => sections.find((s) => s.key === key)?.name;
+  const stepName = (key: string) => (steps ?? ctx.steps).find((s) => s.key === key)?.name ?? key;
+  const ord = (i: number) => `${i + 1}ª`;
 
   return (
-    <div className="w-full min-w-0 space-y-2 rounded-lg border border-dashed border-neutral-300 p-2 dark:border-neutral-700" data-testid="questionnaire-editor">
-      {notice}
-      <div className="grid gap-2 md:grid-cols-2">
-        <label className="flex min-w-0 flex-col gap-0.5 text-[11px] font-semibold text-slate-600">Nome do questionário<Input aria-label="Nome do questionário" className="h-8 text-sm" value={name} onChange={(e) => setName(e.target.value)} /></label>
-        <label className="flex min-w-0 flex-col gap-0.5 text-[11px] font-semibold text-slate-600">Descrição (opcional)<Input aria-label="Descrição do questionário" className="h-8 text-sm" value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+    <div className="w-full min-w-0 space-y-2" data-testid="question-list-wrap">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-base font-bold text-slate-900 dark:text-slate-100">Perguntas <span className="text-xs font-normal text-slate-500">({questions.length})</span></h4>
+        {!readOnly && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setShowLib((v) => !v)}><Library className="h-3.5 w-3.5" />Reutilizar pergunta existente</Button>
+            {onSuggest && <button type="button" data-testid="ai-questionnaire-more" disabled={aiBusy} onClick={() => void suggestMore()} title="A IA lê tudo o que está cadastrado no produto e sugere perguntas que ainda não existem. Você revisa antes de salvar." className="inline-flex h-9 items-center gap-1 rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#2563eb,#7c3aed))] px-3 text-xs font-semibold text-white disabled:opacity-60">{aiBusy ? "Pensando…" : "Sugerir mais perguntas com IA"}</button>}
+            <Button type="button" className="h-9 bg-blue-600 text-white hover:bg-blue-700" disabled={busy} onClick={() => setModal({ q: blank(), isNew: true })}><Plus className="h-4 w-4" />Adicionar</Button>
+          </div>
+        )}
       </div>
-      <div className="flex flex-wrap items-center gap-3 text-[11px]">
-        <label className="inline-flex items-center gap-1" title="Aparece na biblioteca para ser reutilizado em qualquer produto"><input type="checkbox" checked={isGlobal} onChange={(e) => setIsGlobal(e.target.checked)} aria-label="Salvar como modelo global" />Salvar como modelo global</label>
-        {usedByCount > 1 && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">Usado por {usedByCount} tarefas</span>}
-        <button type="button" className="inline-flex items-center gap-1 font-semibold text-violet-700 underline" onClick={() => setShowSections((v) => !v)}>{showSections ? "Esconder seções" : `Seções (${sections.length})`}</button>
-        <button type="button" className="inline-flex items-center gap-1 font-semibold text-violet-700 underline" onClick={() => setOpen(open.size ? new Set() : new Set(questions.map((x) => x.key)))}>{open.size ? "Recolher todas" : "Expandir todas"}</button>
-        <button type="button" className="inline-flex items-center gap-1 font-semibold text-violet-700 underline" aria-pressed={showPreview} onClick={() => setShowPreview((v) => !v)}><Eye className="h-3.5 w-3.5" />{showPreview ? "Fechar prévia" : "Visualizar como cliente"}</button>
-      </div>
-      {showSections && (
-        <div className="space-y-1 rounded-md border border-slate-200 p-2 dark:border-slate-700" data-testid="sections-editor">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Seções do questionário</p>
-          {sections.length === 0 && <p className="text-[11px] text-slate-500">Sem seções: as perguntas aparecem em sequência. Crie seções para agrupar por assunto.</p>}
-          {sections.map((s, i) => (
-            <div key={s.key} className="flex flex-wrap items-center gap-1.5" data-testid="section-row">
-              <Input className="h-8 min-w-[9rem] flex-1 text-xs" aria-label={`Nome da seção ${i + 1}`} value={s.name} onChange={(e) => setSections((ss) => ss.map((x) => (x.key === s.key ? { ...x, name: e.target.value } : x)))} />
-              <Input className="h-8 min-w-[9rem] flex-[2] text-xs" aria-label={`Descrição da seção ${i + 1}`} placeholder="Descrição (opcional)" value={s.description} onChange={(e) => setSections((ss) => ss.map((x) => (x.key === s.key ? { ...x, description: e.target.value } : x)))} />
-              <button type="button" aria-label={`Subir seção ${i + 1}`} className="rounded p-1 text-slate-500 disabled:opacity-30" disabled={i === 0} onClick={() => moveSection(i, -1)}><ArrowUp className="h-3.5 w-3.5" /></button>
-              <button type="button" aria-label={`Descer seção ${i + 1}`} className="rounded p-1 text-slate-500 disabled:opacity-30" disabled={i === sections.length - 1} onClick={() => moveSection(i, 1)}><ArrowDown className="h-3.5 w-3.5" /></button>
-              <button type="button" aria-label={`Excluir seção ${i + 1}`} className="rounded p-1 text-rose-500" onClick={() => removeSection(s.key)}><Trash2 className="h-3.5 w-3.5" /></button>
-            </div>
-          ))}
-          <Button type="button" size="sm" variant="outline" className="h-7" onClick={addSection}><Plus className="h-3 w-3" />Nova seção</Button>
-        </div>
-      )}
-      <ul className="space-y-1" data-testid="question-list">
+      {aiMsg && <p role={aiMsg.ok ? "status" : "alert"} className={`text-[11px] font-semibold ${aiMsg.ok ? "text-emerald-700" : "text-red-600"}`}>{aiMsg.text}</p>}
+      {showLib && <QuestionLibrary onPick={reuse} onClose={() => setShowLib(false)} />}
+      <ul className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60" data-testid="question-list">
         {questions.map((q, i) => {
           const isOpen = open.has(q.key);
+          const att = q.att_allowed || ["arquivo", "imagem", "video", "audio", "documento"].includes(q.question_type);
           return (
-            <li key={q.key} className="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60" data-testid="question-item" data-inactive={q.is_active ? undefined : "true"}>
-              <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5" data-testid="question-summary">
-                <button type="button" className="inline-flex min-w-0 flex-1 items-center gap-1.5 text-left" aria-expanded={isOpen} aria-label={`${isOpen ? "Recolher" : "Expandir"} pergunta ${i + 1}`} onClick={() => toggle(q.key)}>
-                  {isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" /> : <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />}
-                  <span className={`min-w-0 truncate text-sm font-medium ${q.is_active ? "text-slate-800 dark:text-slate-100" : "text-slate-400 line-through"}`}>{i + 1}. {q.label || "(sem texto)"}</span>
+            <li key={q.key} className="border-b border-slate-200 last:border-b-0 dark:border-slate-800" data-testid="question-item" data-inactive={q.is_active ? undefined : "true"}
+              draggable={!readOnly} onDragStart={() => setDragKey(q.key)} onDragOver={(e) => { if (dragKey) e.preventDefault(); }} onDrop={() => { dropOn(q.key); setDragKey(null); }} onDragEnd={() => setDragKey(null)}>
+              <div className={`flex items-center gap-2 px-2 py-2 ${isOpen ? "bg-sky-50 dark:bg-sky-950/20" : ""}`} data-testid="question-summary">
+                <span className="cursor-grab text-sky-700" title="Arraste para reordenar" aria-hidden="true"><GripVertical className="h-5 w-5" /></span>
+                <button type="button" className="inline-flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={isOpen} aria-label={`${isOpen ? "Recolher" : "Expandir"} pergunta ${i + 1}`} onClick={() => toggle(q.key)}>
+                  <span className={`min-w-0 truncate text-[15px] font-bold ${q.is_active ? "text-slate-900 dark:text-slate-100" : "text-slate-400 line-through"}`}>{ord(i)} {q.label || "(sem texto)"}</span>
+                  <span className="hidden flex-wrap items-center gap-1 sm:flex">
+                    {!q.is_active && <Chip>inativa</Chip>}
+                    {q.cond_source && <Chip tone="amber">condicional</Chip>}
+                  </span>
+                  {isOpen ? <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-sky-700" /> : <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-sky-700" />}
                 </button>
-                <span className="hidden flex-wrap items-center gap-1 sm:flex">
-                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{questionTypeLabel(q.question_type)}</span>
-                  <span className={`rounded px-1.5 py-0.5 text-[10px] ${q.is_required ? "bg-red-50 text-red-700" : "bg-slate-50 text-slate-500"}`}>{q.is_required ? "obrigatória" : "opcional"}</span>
-                  {!q.is_active && <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700">inativa</span>}
-                  {q.cond_source && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">condicional</span>}
-                  {(q.att_allowed || ["arquivo", "imagem", "video", "audio", "documento"].includes(q.question_type)) && <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] text-sky-800">anexo</span>}
-                  {q.section_key && sectionName(q.section_key) && <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] text-violet-800">{sectionName(q.section_key)}</span>}
-                </span>
-                <span className="flex items-center gap-0.5">
-                  <button type="button" aria-label={`Subir pergunta ${i + 1}`} className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-30" disabled={i === 0} onClick={() => move(i, -1)}><ArrowUp className="h-3.5 w-3.5" /></button>
-                  <button type="button" aria-label={`Descer pergunta ${i + 1}`} className="rounded p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-30" disabled={i === questions.length - 1} onClick={() => move(i, 1)}><ArrowDown className="h-3.5 w-3.5" /></button>
-                  <button type="button" aria-label={`Duplicar pergunta ${i + 1}`} className="rounded p-1 text-slate-500 hover:bg-slate-100" onClick={() => dup(i)}><Copy className="h-3.5 w-3.5" /></button>
-                  <button type="button" aria-label={`Excluir pergunta ${i + 1}`} className="rounded p-1 text-rose-500 hover:bg-rose-50" onClick={() => remove(q.key)}><Trash2 className="h-3.5 w-3.5" /></button>
-                </span>
               </div>
               {isOpen && (
-                <div className="space-y-2 border-t border-slate-100 p-2 dark:border-slate-800" data-testid="question-body">
-                  <div className="flex flex-wrap items-end gap-2">
-                    <label className="flex min-w-[14rem] flex-1 flex-col gap-0.5 text-[11px] font-semibold text-slate-600">Texto da pergunta<Input aria-label={`Texto da pergunta ${i + 1}`} className="h-8 text-sm" value={q.label} maxLength={500} onChange={(e) => upd(q.key, { label: e.target.value })} /></label>
-                    <span className="rounded bg-slate-100 px-1.5 py-1 text-[10px] text-slate-600" title="Identificador permanente da pergunta" data-testid="question-id">{q.id ? `ID ${String(q.id).slice(0, 8)}` : "ID gerado ao salvar"}</span>
+                <div className="space-y-2 px-3 py-3 text-sm" data-testid="question-body">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">Tipo da resposta: <Chip tone="green">{questionTypeLabel(q.question_type)}</Chip></span>
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">Habilitar anexo na pergunta? {yesNo(att)}</span>
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">Pergunta obrigatória? {yesNo(q.is_required)}</span>
+                    </div>
+                    {!readOnly && (
+                      <span className="flex items-center gap-1">
+                        <button type="button" aria-label={`Subir pergunta ${i + 1}`} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" disabled={i === 0 || busy} onClick={() => move(i, -1)}><ArrowUp className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label={`Descer pergunta ${i + 1}`} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" disabled={i === questions.length - 1 || busy} onClick={() => move(i, 1)}><ArrowDown className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label={`Duplicar pergunta ${i + 1}`} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" disabled={busy} onClick={() => dup(i)}><Copy className="h-3.5 w-3.5" /></button>
+                        <button type="button" aria-label={`Editar pergunta ${i + 1}`} className="rounded-md bg-sky-100 p-2 text-sky-700 hover:bg-sky-200" disabled={busy} onClick={() => setModal({ q, isNew: false })}><Pencil className="h-4 w-4" /></button>
+                        <button type="button" aria-label={`Excluir pergunta ${i + 1}`} className="rounded-md bg-rose-100 p-2 text-rose-600 hover:bg-rose-200" disabled={busy} onClick={() => setToDelete(q)}><Trash2 className="h-4 w-4" /></button>
+                      </span>
+                    )}
                   </div>
-                  <QuestionConfigFields q={q} ctx={fullCtx} onChange={(patch) => upd(q.key, patch)} />
+                  {q.help_text && <p className="text-slate-700"><span className="font-semibold">Instruções de resposta:</span> <span className="text-slate-500">{q.help_text}</span></p>}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {q.section_key && sectionName(q.section_key) && <Chip tone="violet">seção: {sectionName(q.section_key)}</Chip>}
+                    {q.target_step_key && <Chip tone="sky">etapa: {stepName(q.target_step_key)}</Chip>}
+                    {q.id && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600" title="Identificador permanente da pergunta">ID {String(q.id).slice(0, 8)}</span>}
+                  </div>
                 </div>
               )}
             </li>
           );
         })}
-        {questions.length === 0 && <li className="text-xs text-neutral-400">Nenhuma pergunta ainda. Adicione abaixo, reutilize uma existente ou gere com IA.</li>}
+        {questions.length === 0 && <li className="px-3 py-3 text-xs text-neutral-400">Nenhuma pergunta ainda{readOnly ? "." : " — clique em “Adicionar”, reutilize uma existente ou gere com IA."}</li>}
       </ul>
-      <div className="flex flex-wrap items-end gap-2">
-        <label className="flex min-w-[14rem] flex-1 flex-col gap-0.5 text-[11px] font-semibold text-slate-600">Nova pergunta<Input aria-label="nova pergunta" className="h-8 text-sm" placeholder="Escreva a pergunta e clique em Adicionar" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} /></label>
-        <Button type="button" size="sm" variant="outline" className="h-8" disabled={!newLabel.trim()} onClick={add}><Plus className="h-3.5 w-3.5" />Adicionar pergunta</Button>
-        <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setShowLib((v) => !v)}><Library className="h-3.5 w-3.5" />Reutilizar pergunta existente</Button>
-        {onSuggest && <button type="button" data-testid="ai-questionnaire-more" disabled={aiBusy} onClick={() => void suggestMore()} title="A IA lê tudo o que está cadastrado no produto e sugere perguntas que ainda não existem. Você revisa antes de salvar." className="inline-flex h-8 items-center gap-1 rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#2563eb,#7c3aed))] px-3 text-xs font-semibold text-white disabled:opacity-60">{aiBusy ? "Pensando…" : "Sugerir mais perguntas com IA"}</button>}
+      {modal && <QuestionModal key={modal.q.key + (modal.isNew ? "-new" : "")} initial={modal.q} ctx={fullCtx} isNew={modal.isNew} onSave={saveModal} onClose={() => setModal(null)} />}
+      <ConfirmationDialog
+        open={!!toDelete} onClose={() => setToDelete(null)} title="Excluir pergunta?" destructive confirmText="Excluir pergunta"
+        message={<>A pergunta “{toDelete?.label}” sai deste questionário. Contratações já feitas não mudam (o briefing delas já está guardado).</>}
+        onConfirm={() => { if (toDelete) onChange(questions.filter((x) => x.key !== toDelete.key)); setToDelete(null); }}
+      />
+    </div>
+  );
+}
+
+/** Dados do questionário (nome, descrição, modelo global e seções) — modal. */
+export function QuestionnaireDataModal({ initial, onSave, onClose, usedByCount = 0 }: { initial: Pick<QuestionnaireState, "name" | "description" | "sections" | "is_global_model">; onSave: (v: Pick<QuestionnaireState, "name" | "description" | "sections" | "is_global_model">) => void; onClose: () => void; usedByCount?: number }) {
+  const [v, setV] = useState(initial);
+  const moveSection = (i: number, d: number) => setV((c) => { const j = i + d; if (j < 0 || j >= c.sections.length) return c; const s = c.sections.slice(); [s[i], s[j]] = [s[j], s[i]]; return { ...c, sections: s }; });
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent overlayClassName="!z-[1250]" className="!z-[1251] max-h-[calc(100dvh-9rem)] w-[96vw] max-w-2xl overflow-y-auto sm:max-w-2xl" data-testid="questionnaire-data-modal">
+        <DialogTitle>Dados do questionário</DialogTitle>
+        <div className="space-y-3">
+          <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800">Nome do questionário<Input aria-label="Nome do questionário" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></label>
+          <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800">Descrição (opcional)<Input aria-label="Descrição do questionário" value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} /></label>
+          <label className="inline-flex items-center gap-2 text-sm" title="Aparece na biblioteca para ser reutilizado em qualquer produto"><input type="checkbox" checked={v.is_global_model} onChange={(e) => setV({ ...v, is_global_model: e.target.checked })} aria-label="Salvar como modelo global" />Salvar como modelo global</label>
+          {usedByCount > 1 && <p className="rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800">Usado por {usedByCount} tarefas: ao salvar, a tela pergunta se você quer editar o modelo ou criar uma cópia.</p>}
+          <div className="space-y-1.5 rounded-md border border-slate-200 p-2" data-testid="sections-editor">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Seções</p>
+            {v.sections.length === 0 && <p className="text-xs text-slate-500">Sem seções: as perguntas aparecem em sequência. Crie seções para agrupar por assunto.</p>}
+            {v.sections.map((s, i) => (
+              <div key={s.key} className="flex flex-wrap items-center gap-1.5" data-testid="section-row">
+                <Input className="h-8 min-w-[9rem] flex-1 text-xs" aria-label={`Nome da seção ${i + 1}`} value={s.name} onChange={(e) => setV({ ...v, sections: v.sections.map((x) => (x.key === s.key ? { ...x, name: e.target.value } : x)) })} />
+                <Input className="h-8 min-w-[9rem] flex-[2] text-xs" aria-label={`Descrição da seção ${i + 1}`} placeholder="Descrição (opcional)" value={s.description} onChange={(e) => setV({ ...v, sections: v.sections.map((x) => (x.key === s.key ? { ...x, description: e.target.value } : x)) })} />
+                <button type="button" aria-label={`Subir seção ${i + 1}`} className="rounded p-1 text-slate-500 disabled:opacity-30" disabled={i === 0} onClick={() => moveSection(i, -1)}><ArrowUp className="h-3.5 w-3.5" /></button>
+                <button type="button" aria-label={`Descer seção ${i + 1}`} className="rounded p-1 text-slate-500 disabled:opacity-30" disabled={i === v.sections.length - 1} onClick={() => moveSection(i, 1)}><ArrowDown className="h-3.5 w-3.5" /></button>
+                <button type="button" aria-label={`Excluir seção ${i + 1}`} className="rounded p-1 text-rose-500" onClick={() => setV({ ...v, sections: v.sections.filter((x) => x.key !== s.key) })}><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            ))}
+            <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setV({ ...v, sections: [...v.sections, { key: `s${v.sections.length + 1}-${Date.now().toString(36).slice(-3)}`, name: `Seção ${v.sections.length + 1}`, description: "" }] })}><Plus className="h-3 w-3" />Nova seção</Button>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-200 pt-2">
+            <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
+            <Button type="button" disabled={!v.name.trim()} onClick={() => onSave({ ...v, name: v.name.trim() })}>Salvar</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Criar questionário novo (dentro de um modal): dados + perguntas (cada pergunta tem seu modal) + prévia. */
+export function QuestionnaireEditor({ initial, ctx, saving, saveLabel, onSave, onCancel, notice, usedByCount = 0, onSuggest }: {
+  initial: QuestionnaireState; ctx: Ctx; saving?: boolean; saveLabel: string;
+  onSave: (s: QuestionnaireState) => void; onCancel?: () => void; notice?: React.ReactNode; usedByCount?: number;
+  onSuggest?: (existingLabels: string[]) => Promise<QuestionDraft[]>;
+}) {
+  const [data, setData] = useState({ name: initial.name, description: initial.description, sections: initial.sections, is_global_model: initial.is_global_model });
+  const [questions, setQuestions] = useState<QuestionDraft[]>(initial.questions);
+  const [showData, setShowData] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const state: QuestionnaireState = { ...data, questions };
+  const canSave = !!data.name.trim() && questions.length > 0 && !saving && questions.every((x) => x.label.trim());
+  return (
+    <div className="w-full min-w-0 space-y-3" data-testid="questionnaire-editor">
+      {notice}
+      <div className="space-y-2 rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-base font-bold text-slate-900 dark:text-slate-100">Dados do questionário</h4>
+          <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setShowData(true)}><Pencil className="h-3.5 w-3.5" />Editar dados e seções</Button>
+        </div>
+        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800">Nome do questionário *<Input aria-label="Nome do questionário" value={data.name} onChange={(e) => setData({ ...data, name: e.target.value })} /></label>
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
+          <span>Seções: <strong>{data.sections.length}</strong></span>
+          {data.is_global_model && <Chip tone="violet">modelo global</Chip>}
+          {usedByCount > 1 && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">Usado por {usedByCount} tarefas</span>}
+          <button type="button" className="inline-flex items-center gap-1 font-semibold text-violet-700 underline" aria-pressed={showPreview} onClick={() => setShowPreview((v) => !v)}><Eye className="h-3.5 w-3.5" />{showPreview ? "Fechar prévia" : "Visualizar como cliente"}</button>
+        </div>
       </div>
-      {aiMsg && <p role={aiMsg.ok ? "status" : "alert"} className={`text-[11px] font-semibold ${aiMsg.ok ? "text-emerald-700" : "text-red-600"}`}>{aiMsg.text}</p>}
-      {showLib && <QuestionLibrary onPick={reuse} onClose={() => setShowLib(false)} />}
+      <QuestionList questions={questions} sections={data.sections} ctx={ctx} onChange={setQuestions} onSuggest={onSuggest} />
       {showPreview && <QuestionnairePreview state={state} />}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" disabled={!canSave} onClick={() => onSave(state)}>{saving ? "Salvando…" : saveLabel}</Button>
-        {onCancel && <Button type="button" size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>}
-        {!canSave && !saving && <span className="text-[11px] text-neutral-400">{!name.trim() ? "Dê um nome ao questionário." : questions.length === 0 ? "Adicione ao menos uma pergunta." : "Preencha o texto de todas as perguntas."}</span>}
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-2">
+        <Button type="button" disabled={!canSave} onClick={() => onSave(state)}>{saving ? "Salvando…" : saveLabel}</Button>
+        {onCancel && <Button type="button" variant="ghost" onClick={onCancel}>Cancelar</Button>}
+        {!canSave && !saving && <span className="text-[11px] text-neutral-400">{!data.name.trim() ? "Dê um nome ao questionário." : questions.length === 0 ? "Adicione ao menos uma pergunta." : "Preencha o texto de todas as perguntas."}</span>}
       </div>
+      {showData && <QuestionnaireDataModal initial={data} usedByCount={usedByCount} onClose={() => setShowData(false)} onSave={(v) => { setData(v); setShowData(false); }} />}
     </div>
   );
 }

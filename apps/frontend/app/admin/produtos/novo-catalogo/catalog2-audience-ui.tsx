@@ -50,7 +50,7 @@ export function audienceSummary(raw: string | null | undefined): string {
   return list.map((k) => AUDIENCE_CHECKS.find((c) => c.key === k)!.label).join(" + ");
 }
 
-export function AudienceCard({ product, readOnly, onDone, registerFlush }: { product: any; readOnly?: boolean; onDone?: () => void; registerFlush?: (fn: () => Promise<void>) => () => void }) {
+export function AudienceCard({ product, readOnly, onDone, registerFlush, bare = false }: { /** Dentro de um acordeão (SectionCard): sem moldura e sem título próprios. */ bare?: boolean; product: any; readOnly?: boolean; onDone?: () => void; registerFlush?: (fn: () => Promise<void>) => () => void }) {
   const saved = parseAudienceValue(product?.visibility_mode);
   const [levelOptions, setLevelOptions] = useState<LevelOption[]>([]);
   useEffect(() => { let live = true; Promise.resolve(apiClient.getCatalog2AgencyLevels?.()).then((r: any) => { if (live && Array.isArray(r?.data)) setLevelOptions(r.data); }).catch(() => {}); return () => { live = false; }; }, []);
@@ -97,9 +97,9 @@ export function AudienceCard({ product, readOnly, onDone, registerFlush }: { pro
   }, [sel, lv, dirty, busy, readOnly]);
   const locked = !!readOnly || busy;
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60" data-testid="audience-card">
-      <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Quem pode ver este produto</h3>
-      <p className="text-[11px] text-slate-500">Marque quem enxerga e contrata. Vale na lista, no detalhe, na cotação, na cesta e nas recomendações da IA.</p>
+    <section className={bare ? "" : "rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"} data-testid="audience-card">
+      {!bare && <><h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Quem pode ver este produto</h3>
+      <p className="text-[11px] text-slate-500">Marque quem enxerga e contrata. Vale na lista, no detalhe, na cotação, na cesta e nas recomendações da IA.</p></>}
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
         <label className="flex items-center gap-1.5 font-semibold" title="Todos os clientes (empresas e agências) enxergam.">
           <input type="checkbox" aria-label="Todos" disabled={locked} checked={sel.length === 0} onChange={() => setSel(toggleAudience(sel, "all", true))} /> Todos

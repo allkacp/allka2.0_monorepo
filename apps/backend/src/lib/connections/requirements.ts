@@ -1,7 +1,7 @@
 // Exigências de conexão por VERSÃO de produto (módulo universal, opcional). Quando `requires_connections` é falso a versão
 // se comporta como se o módulo não existisse: nada aparece para o cliente, não cria pendência e não bloqueia nada.
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { ACTIVATION_MODES, replaceTriggers, validateTriggers, type TriggerInput } from "./triggers";
+import { ACTIVATION_MODES, replaceTriggers, triggerIncompleteReason, validateTriggers, type TriggerInput } from "./triggers";
 import {
   ASSET_RULES_CONN, ConnectionError, CONNECTION_METHODS, DEPENDENCY_KINDS, GRANT_SCOPES, OBLIGATIONS, PENDING_BEHAVIORS, VALIDATION_MODES, WHEN_NEEDED,
   dependencyKey, parseJsonArray, serializeConnectionType, slugKey,
@@ -25,6 +25,23 @@ export interface RequirementInput {
   /** Ativação por gatilhos (variação, opção, adicional, tarefa, etapa, resposta, produto vinculado). Sem isto: modo manual (como sempre). */
   activation_mode?: string;
   triggers?: TriggerInput[];
+  /** Exige o acesso COMPLETO (usado ao concluir a etapa): condicional sem condição vira erro em português. */
+  require_complete?: boolean;
+  /**
+   * Salvar como RASCUNHO (botão "Salvar rascunho da etapa"): aceita acesso e condição incompletos, sem erro.
+   * O acesso incompleto fica marcado (draft_incomplete), não conta como configurado, não é pedido ao cliente e bloqueia a publicação.
+   */
+  draft?: boolean;
+}
+
+/** O acesso (com o que veio no corpo) está incompleto? Mensagem em português ou nulo. Condição antiga em texto continua valendo. */
+export function requirementIncompleteReason(p: { obligation: string; when_needed?: string | null; condition_text?: string | null; activation_mode: string; triggers: TriggerInput[] }): string | null {
+  const conditional = p.obligation === "conditional" || p.when_needed === "on_condition";
+  const bad = p.triggers.map((t) => triggerIncompleteReason(t)).find((x) => !!x);
+  if (bad) return `condição incompleta: ${bad}`;
+  if (p.activation_mode !== "manual" && p.triggers.length === 0) return "escolha ao menos uma regra para a condição";
+  if (conditional && p.triggers.length === 0 && !p.condition_text?.trim()) return "defina a condição de quando este acesso passa a ser necessário";
+  return null;
 }
 
 const REQ_INCLUDE = { connection_type: true, dependencies: { orderBy: { dep_key: "asc" as const } }, triggers: { orderBy: { sort_order: "asc" as const } } } satisfies Prisma.Catalog2ConnectionRequirementInclude;
@@ -42,6 +59,7 @@ export function serializeRequirement(r: RequirementRow) {
       visible_to_client: r.visible_to_client,
     },
     shared_with_steps: r.shared_with_steps,
+    draft_incomplete: r.draft_incomplete,
     dependents: r.dependencies.map((d) => ({ id: d.id, task_key: d.task_key, step_key: d.step_key, kind: d.kind })),
     activation: { mode: r.activation_mode, triggers: (r.triggers ?? []).map((t) => ({ id: t.id, kind: t.kind, ref_key: t.ref_key, ref_value: t.ref_value, operator: t.operator })) },
     sort_order: r.sort_order,
@@ -93,7 +111,9 @@ async function normalize(db: Db, versionId: string, input: RequirementInput, cur
   }
   const obligation = pick(input.obligation ?? current?.obligation, OBLIGATIONS, "obligation", "required");
   const condition = input.condition_text !== undefined ? input.condition_text : current?.condition_text ?? null;
-  if ((obligation === "conditional" || when === "on_condition") && !condition?.trim()) throw new ConnectionError("Descreva a condição em que a conexão passa a ser necessária.", 422, "condition_missing");
+  // A condição vale se tem texto (jeito antigo) OU regras estruturadas (construtor). Rascunho e "exigir completo" têm o próprio aviso (requirementIncompleteReason).
+  const structured = input.triggers !== undefined ? input.triggers.length > 0 : (((current as { triggers?: unknown[] } | null | undefined)?.triggers?.length) ?? 0) > 0;
+  if ((obligation === "conditional" || when === "on_condition") && !condition?.trim() && !structured && input.draft !== true && input.require_complete !== true) throw new ConnectionError("Descreva a condição em que a conexão passa a ser necessária.", 422, "condition_missing");
   const assetRule = pick(input.asset_rule ?? current?.asset_rule, ASSET_RULES_CONN, "asset_rule", "first_only");
   const revalidate = input.revalidate_days !== undefined ? input.revalidate_days : current?.revalidate_days ?? null;
   if (assetRule === "every_x_days" && !(revalidate && revalidate >= 1)) throw new ConnectionError("Informe a cada quantos dias revalidar.", 422, "revalidate_days_missing");
@@ -132,9 +152,12 @@ async function uniqueKey(db: Db, versionId: string, base: string, ignoreId?: str
 export async function createRequirement(db: Db, versionId: string, input: RequirementInput) {
   const n = await normalize(db, versionId, input);
   const deps = checkDependents(n.structure, input.dependents ?? (n.whenTask ? [{ task_key: n.whenTask, step_key: n.whenStep, kind: "start" as DependencyKind }] : []));
-  const trg = input.triggers ? await validateTriggers(db, versionId, input.triggers) : [];
+  const draft = input.draft === true;
+  const trg = input.triggers ? await validateTriggers(db, versionId, input.triggers, { allowIncomplete: draft }) : [];
   const activationMode = pick(input.activation_mode ?? (trg.length ? "any_trigger" : "manual"), ACTIVATION_MODES, "activation_mode", "manual");
-  if (activationMode !== "manual" && trg.length === 0) throw new ConnectionError("Escolha ao menos um gatilho para ativar a conexão automaticamente.", 422, "trigger_missing");
+  if (!draft && activationMode !== "manual" && trg.length === 0) throw new ConnectionError("Escolha ao menos um gatilho para ativar a conexão automaticamente.", 422, "trigger_missing");
+  const incomplete = requirementIncompleteReason({ obligation: n.obligation, when_needed: n.when, condition_text: n.condition, activation_mode: activationMode, triggers: trg });
+  if (incomplete && input.require_complete === true && !draft) throw new ConnectionError(`O acesso "${input.label?.trim() || n.type.name}" está incompleto: ${incomplete}.`, 422, "requirement_incomplete");
   const count = await db.catalog2ConnectionRequirement.count({ where: { version_id: versionId } });
   const key = await uniqueKey(db, versionId, slugKey(input.key || input.label || n.type.key));
   const row = await db.catalog2ConnectionRequirement.create({
@@ -146,6 +169,7 @@ export async function createRequirement(db: Db, versionId: string, input: Requir
       asset_rule: n.assetRule, revalidate_days: n.revalidate, light_check: !!input.light_check,
       reminder_interval_hours: input.reminder_interval_hours ?? null, reminder_limit: input.reminder_limit ?? null, escalate_after_reminders: input.escalate_after_reminders ?? null,
       visible_to_client: input.visible_to_client !== false, shared_with_steps: input.shared_with_steps === true, sort_order: count + 1,
+      draft_incomplete: draft && !!incomplete,
       activation_mode: activationMode,
       triggers: { create: trg.map((t, i) => ({ kind: t.kind, ref_key: t.ref_key ?? null, ref_value: t.ref_value ?? null, operator: t.operator ?? "selected", sort_order: i })) },
       dependencies: { create: deps.map((d) => ({ task_key: d.task_key, step_key: d.step_key ?? null, kind: d.kind ?? "start", dep_key: dependencyKey(d.task_key, d.step_key) })) },
@@ -160,14 +184,19 @@ export async function updateRequirement(db: Db, id: string, input: RequirementIn
   if (!cur) throw new ConnectionError("Exigência não encontrada.", 404, "requirement_not_found");
   const n = await normalize(db, cur.version_id, input, cur);
   const deps = input.dependents ? checkDependents(n.structure, input.dependents) : null;
-  const trg = input.triggers !== undefined ? await validateTriggers(db, cur.version_id, input.triggers) : null;
+  const draft = input.draft === true;
+  const trg = input.triggers !== undefined ? await validateTriggers(db, cur.version_id, input.triggers, { allowIncomplete: draft }) : null;
   const nextMode = pick(input.activation_mode ?? (trg ? (trg.length ? (cur.activation_mode === "manual" ? "any_trigger" : cur.activation_mode) : "manual") : cur.activation_mode), ACTIVATION_MODES, "activation_mode", "manual");
   const triggerCount = trg ? trg.length : cur.triggers.length;
-  if (nextMode !== "manual" && triggerCount === 0) throw new ConnectionError("Escolha ao menos um gatilho para ativar a conexão automaticamente.", 422, "trigger_missing");
+  if (!draft && nextMode !== "manual" && triggerCount === 0) throw new ConnectionError("Escolha ao menos um gatilho para ativar a conexão automaticamente.", 422, "trigger_missing");
+  const effTriggers: TriggerInput[] = trg ?? cur.triggers.map((t) => ({ kind: t.kind, ref_key: t.ref_key, ref_value: t.ref_value, operator: t.operator }));
+  const incomplete = requirementIncompleteReason({ obligation: n.obligation, when_needed: n.when, condition_text: n.condition, activation_mode: nextMode, triggers: effTriggers });
+  if (incomplete && input.require_complete === true && !draft) throw new ConnectionError(`O acesso "${input.label?.trim() || cur.label || n.type.name}" está incompleto: ${incomplete}.`, 422, "requirement_incomplete");
   await db.catalog2ConnectionRequirement.update({
     where: { id },
     data: {
       activation_mode: nextMode,
+      draft_incomplete: draft && !!incomplete,
       connection_type_id: n.type.id, ...(input.label !== undefined ? { label: input.label?.trim() || null } : {}),
       when_needed: n.when, when_task_key: n.whenTask, when_step_key: n.whenStep, condition_text: n.condition,
       obligation: n.obligation, method: n.method, permission_level: n.permission, pending_behavior: n.pending,
@@ -230,7 +259,8 @@ export async function validateConnectionConfig(db: Db, versionId: string): Promi
     if (levels.length && !levels.includes(r.permission_level)) issues.push(`Conexões: o nível de permissão "${r.permission_level}" não existe para "${r.connection_type.name}".`);
     if ((r.when_needed === "before_task" || r.when_needed === "before_step") && (!r.when_task_key || !structure.has(r.when_task_key))) issues.push(`Conexões: "${name}" aponta para uma tarefa que não existe mais.`);
     if (r.when_needed === "before_step" && r.when_task_key && (!r.when_step_key || !structure.get(r.when_task_key)?.steps.has(r.when_step_key))) issues.push(`Conexões: "${name}" aponta para uma etapa que não existe mais.`);
-    if ((r.obligation === "conditional" || r.when_needed === "on_condition") && !r.condition_text?.trim()) issues.push(`Conexões: "${name}" é condicional e precisa descrever a condição.`);
+    if (r.draft_incomplete) issues.push(`Conexões: o acesso "${name}" está salvo como rascunho incompleto.`);
+    if ((r.obligation === "conditional" || r.when_needed === "on_condition") && !r.condition_text?.trim() && r.triggers.length === 0) issues.push(`Conexões: "${name}" é condicional e precisa descrever a condição.`);
     for (const d of r.dependencies) {
       const t = structure.get(d.task_key);
       if (!t) issues.push(`Conexões: "${name}" tem dependência de uma tarefa que não existe ("${d.task_key}").`);
@@ -253,6 +283,6 @@ export async function connectionsReadinessItem(db: Db, versionId: string): Promi
   const v = await db.catalog2ProductVersion.findUnique({ where: { id: versionId }, select: { requires_connections: true } });
   if (!v?.requires_connections) return null;
   const issues = await validateConnectionConfig(db, versionId);
-  const n = await db.catalog2ConnectionRequirement.count({ where: { version_id: versionId } });
+  const n = await db.catalog2ConnectionRequirement.count({ where: { version_id: versionId, draft_incomplete: false } });
   return { key: "conexoes", label: "Conexões e acessos necessários", status: issues.length === 0 ? "pronto" : "pendente", detail: issues.length === 0 ? `${n} exigência(s) configurada(s).` : issues.join(" ") };
 }

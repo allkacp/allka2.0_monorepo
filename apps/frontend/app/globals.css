@@ -2619,3 +2619,8 @@ a:focus-visible,
 label:has(> input.sr-only) {
   position: relative;
 }
+
+/* Bolinha numerada dos cartões do cadastro (1, 2, 3…): usa o degradê da plataforma ("Personalizar cores"), então muda junto. */
+.section-number-badge {
+  background: var(--app-brand-gradient, linear-gradient(135deg, #14245f 0%, #68236f 60%, #c51684 100%));
+}

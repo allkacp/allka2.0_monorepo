@@ -85,6 +85,8 @@ export const deliverableInputSchema = z.object({
   cycle_scope: z.enum(DELIVERABLE_CYCLE_SCOPES).default("every_cycle"),
   is_conditional: z.boolean().default(false),
   condition_json: z.string().max(4000).nullish(),
+  // Rascunho (19/10): true = aceita incompleto (nome em branco vira "Entregável sem nome") e marca; false = concluído. Sem a chave: não muda.
+  draft: z.boolean().optional(),
 });
 
 // ── Materialização (geração da tarefa contratada) ─────────────────────────

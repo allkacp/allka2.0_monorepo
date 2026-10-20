@@ -167,7 +167,7 @@ export function OptionsEditor({ opts, onChange, multiple }: { opts: OptionDraft[
   );
 }
 
-export function QuestionConfigFields({ q, onChange, ctx }: { q: QuestionDraft; onChange: (patch: Partial<QuestionDraft>) => void; ctx?: QuestionCtx }) {
+export function QuestionConfigFields({ q, onChange, ctx, hideHelp = false }: { q: QuestionDraft; onChange: (patch: Partial<QuestionDraft>) => void; ctx?: QuestionCtx; /** o modal já mostra "Instrução de resposta" */ hideHelp?: boolean }) {
   const t = q.question_type;
   const isSelect = SELECT_TYPES.includes(t);
   const isFile = FILE_TYPES.includes(t);
@@ -194,7 +194,7 @@ export function QuestionConfigFields({ q, onChange, ctx }: { q: QuestionDraft; o
         )}
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <Lbl text="Texto de ajuda / orientação (opcional)"><Input className="h-8 text-xs" maxLength={1000} aria-label="Texto de ajuda da pergunta" value={q.help_text} onChange={(e) => onChange({ help_text: e.target.value })} /></Lbl>
+        {!hideHelp && <Lbl text="Texto de ajuda / orientação (opcional)"><Input className="h-8 text-xs" maxLength={1000} aria-label="Texto de ajuda da pergunta" value={q.help_text} onChange={(e) => onChange({ help_text: e.target.value })} /></Lbl>}
         {!isFile && !["sim_nao", "aceite", "escala"].includes(t) && !isSelect && <Lbl text="Texto de exemplo (placeholder)"><Input className="h-8 text-xs" maxLength={200} aria-label="Texto de exemplo" value={q.placeholder} onChange={(e) => onChange({ placeholder: e.target.value })} /></Lbl>}
       </div>
       <div className="flex flex-wrap items-center gap-3 text-[11px]">

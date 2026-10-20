@@ -186,7 +186,7 @@ export function EmbeddedSlideScreen({
       data-state={closing ? "closed" : "open"}
       data-tela-slide=""
       style={{ zIndex }}
-      className={`absolute inset-0 flex flex-col overflow-hidden ${bare ? "rounded-2xl" : "bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.35)]"} data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-right-4 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-right-4 duration-300`}
+      className={`absolute inset-0 flex flex-col overflow-hidden ${bare ? "rounded-2xl bg-[#d6daf0] dark:bg-violet-950/40" : "bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.35)]"} data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:slide-in-from-right-4 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=closed]:slide-out-to-right-4 duration-300`}
     >
       {!hideHeader && (
         <div
