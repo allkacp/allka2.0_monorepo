@@ -2,7 +2,9 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
-## Pendente de deploy (só LOCAL — 21/10/2026)
+## deploy-2026-10-21-1 — ata de 21/10 (R21-01…28): código no ar em allka.store / api.allka.store (commit 72c9801, autorizado pelo usuário)
+Backup do banco do servidor feito antes (DB Backup run 39693472966). Deploy Backend e Deploy Frontend verdes; API health ok, site 200, login 200. CI acusou falhas ANTIGAS de testes de tela (page.test.tsx etc.), as mesmas do CI de 20/10. Migrações aplicadas pelo deploy do backend: as 3 abaixo. **Dados locais NÃO subiram** (ver espelho de dados mais abaixo, se feito).
+
 - **R21-01/04/05/06/11/14/16/17/18/19/21/22/24/28 (21/10, "faz tudo") — 3 MIGRAÇÕES NOVAS (aditivas, aplicadas só no banco local):**
   - `20261021120000_emergency_product_wide_addon_phase`: em `catalog2_product_versions` → `emergency_mode` (step|product), `emergency_product_reduction_percent`, `emergency_product_extra_percent`, `emergency_same_day_limit_time`, `emergency_min_notice_hours`, `emergency_executor_accept_required`, `emergency_executor_accept_hours`; em `catalog2_addons` → `contract_phase` (before|during|both, padrão before).
   - `20261021130000_ai_guides`: tabela nova `catalog2_ai_guides` (guias/métodos que a IA de preenchimento consulta).
@@ -19,6 +21,9 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - **Dados LOCAIS (limpeza de testes, a pedido do usuário em 21/10):** apagados os produtos de teste nº 41 a 45 (rascunhos sem projeto/cotação) com `delete-catalog2-product.ts --apply`, e o modelo global de teste Tarefa #122 + etapa-modelo #162. Backup antes: `backups/allka-local-pre-delete-testes-41-45-20261021.sql.gz`. Local volta a ter 36 produtos. O servidor NÃO foi tocado.
 - **Frontend (dev local apenas):** `apps/frontend/vite.config.ts` ganhou o plugin `localDevFastHtml` (`apply: "serve"`): fontes do Google sem bloquear e Maps só com chave. **Não altera o build de produção.** Ver `docs/RETOMAR-AQUI.md` seção "Velocidade local".
 - **Docs:** `docs/padroes-globais.md` reescrito (lista completa com exemplos e links).
+
+## Pendente de deploy (só LOCAL)
+- (nada pendente de código; só o que for feito depois deste deploy)
 
 ## deploy-2026-10-20-1 — etapas/entregáveis universais, modelos globais, Painel Moldura e novo layout do cadastro (subindo em 20/10 com autorização expressa do usuário)
 **Backup antes:** workflow "DB Backup (manual)", run 39514689409 (sucesso). Commit c4192be.
