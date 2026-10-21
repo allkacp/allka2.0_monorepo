@@ -92,3 +92,10 @@
 2. Conferir se o Docker está de pé (`docker ps`) e subir se precisar; lembrar o endereço `http://localhost:8082`.
 3. Perguntar se ele já homologou pelo roteiro e o que ainda está feio ou errado.
 4. Não commitar, não subir, não mexer em dados sem ordem dele.
+
+## Velocidade local (21/10/2026) — SÓ no computador do usuário (dev); produção NÃO muda
+- **Problema medido:** com o servidor local (`npm run dev`, porta 8082) as telas levavam ~11 s para abrir (DOMContentLoaded). A API era rápida (34–415 ms). O gargalo era o **CSS de fontes do Google** (bloqueava a página, ~9 s) e um **script do Google Maps** pedido em toda tela com a chave sem substituir (`%VITE_GOOGLE_MAPS_API_KEY%`; nenhum `.env` define a chave). Além disso o modo dev manda ~250 arquivos sem empacotar (normal).
+- **O que foi feito:** plugin `localDevFastHtml` em `apps/frontend/vite.config.ts` (`apply: "serve"` → **só no dev**): (1) o CSS de fontes passa a carregar em segundo plano (preload) e a tela usa a fonte do sistema até chegar; (2) o script do Maps só é pedido se `VITE_GOOGLE_MAPS_API_KEY` existir. **Resultado medido:** abertura de ~11 s → ~3,4 s.
+- **Produção:** o `index.html` e o build de produção continuam IGUAIS (fontes e Maps como antes). Se quiser o mesmo no site publicado (fontes próprias, Maps só nas 3 telas que usam: `configuracoes`, `address-map-picker`, `admin-dashboard-page`), isso é uma decisão à parte do usuário.
+- **Se a tela local ficar com fonte estranha:** é a fonte do sistema enquanto a Inter não chega; para voltar ao comportamento normal do dev, apague o plugin `localDevFastHtml` e reinicie o contêiner (`docker restart allka-2026-frontend-1`).
+- **Para IA (Codex/ChatGPT):** não mexa no `<link>` de fontes nem no `<script>` do Maps do `index.html` achando que isso é o fix; o ajuste está só no `vite.config.ts`. Outras causas possíveis de lentidão local que NÃO foram mexidas: `watch.usePolling` (necessário no Docker/Windows) e o `lovable-tagger` em modo development.

@@ -55,3 +55,23 @@ describe("Entrega emergencial (B3)", () => {
     assert.equal(validateEmergencyStepInput({ reduction_minutes: 30, estimated_minutes: 60, extra_kind: "percent", extra_value: 20 }), null);
   });
 });
+
+// R21-19: janela do pedido (antecedência mínima e horário-limite no mesmo dia) + R21-04 (modo produto usa os mesmos cálculos).
+import { checkEmergencyRequestWindow } from "./catalog2-emergency";
+describe("R21-19 janela do pedido de entrega rápida", () => {
+  const d = (s: string) => new Date(s);
+  it("recusa quando falta menos que a antecedência mínima; aceita com folga", () => {
+    const base = { now: d("2026-10-21T10:00:00"), createdAt: d("2026-10-10T09:00:00"), sameDayLimitTime: null };
+    assert.match(checkEmergencyRequestWindow({ ...base, dueDate: d("2026-10-21T20:00:00"), minNoticeHours: 24 }) ?? "", /24 hora/);
+    assert.equal(checkEmergencyRequestWindow({ ...base, dueDate: d("2026-10-25T10:00:00"), minNoticeHours: 24 }), null);
+  });
+  it("no mesmo dia em que a tarefa começou, só até o horário-limite", () => {
+    const base = { createdAt: d("2026-10-21T08:00:00"), dueDate: d("2026-11-21T08:00:00"), minNoticeHours: null, sameDayLimitTime: "12:00" };
+    assert.match(checkEmergencyRequestWindow({ ...base, now: d("2026-10-21T15:00:00") }) ?? "", /12:00/);
+    assert.equal(checkEmergencyRequestWindow({ ...base, now: d("2026-10-21T11:00:00") }), null);
+    assert.equal(checkEmergencyRequestWindow({ ...base, now: d("2026-10-22T15:00:00") }), null, "outro dia não tem esse limite");
+  });
+  it("sem configuração nada muda", () => {
+    assert.equal(checkEmergencyRequestWindow({ now: new Date(), dueDate: null, createdAt: null, minNoticeHours: null, sameDayLimitTime: null }), null);
+  });
+});

@@ -242,9 +242,9 @@ describe("Modal da pergunta · tipos, opções, anexos e condições sem código
 
   it("escala, placeholder, validação e visibilidade (cliente, equipe, ambos)", () => {
     edit(d({ key: "a", label: "Nome", question_type: "texto_curto" }));
-    const vis = screen.getByLabelText("Visibilidade da pergunta") as HTMLSelectElement;
-    expect(Array.from(vis.options).map((o) => o.text)).toEqual(["Cliente", "Equipe interna", "Cliente e equipe", "Só interno"]);
-    fireEvent.change(vis, { target: { value: "both" } });
+    // R21-13 (reunião 21/10): "Quem vê" virou caixas de marcar com atalho Todos; guarda nos mesmos valores (client, team, both, internal).
+    fireEvent.click(screen.getByTestId("question-audience"));
+    fireEvent.click(screen.getByLabelText("Todos")); // cliente + equipe = both
     fireEvent.change(screen.getByLabelText("Texto de exemplo"), { target: { value: "Ex.: Maria Silva" } });
     fireEvent.change(screen.getByLabelText("Mínimo de caracteres"), { target: { value: "3" } }); fireEvent.change(screen.getByLabelText("Máximo de caracteres"), { target: { value: "60" } });
     fireEvent.change(screen.getByLabelText("Valor padrão"), { target: { value: "Cliente" } });
@@ -433,7 +433,7 @@ describe("Layout e modais · questionário e etapas", () => {
     expect(block).toMatch(/flex w-full min-w-0 flex-col/);
     expect(block).not.toMatch(/lg:grid-cols-2/);
     // 20/10: entregáveis viram um botão (Painel Moldura) no resumo da tarefa; o fluxo das etapas abre por um botão no cartão das etapas
-    expect(src).toMatch(/<PanelCard icon={UploadCloud} title="Entregáveis da tarefa"/);
+    expect(src).toMatch(/<PanelCard number={nb\(i\)\.d} icon={UploadCloud} title="Entregáveis da tarefa"/);
     expect(src).toMatch(/data-testid="open-step-flow"/);
     expect(src.slice(i, i + 1200)).not.toMatch(/title="Fluxo das etapas"/);
   });
@@ -461,5 +461,36 @@ describe("Layout e modais · questionário e etapas", () => {
     for (const n of [1, 2, 3, 4, 5]) expect(form).toContain("<StepBlock n={" + n + "}");
     expect(form).toContain("Salvar rascunho da etapa");
     expect(form).toContain("Concluir e salvar etapa");
+  });
+});
+
+// R21-17: sessões do questionário em ACORDEÃO (abrir/fechar a sessão), com as perguntas agrupadas.
+describe("Questionário em sessões (acordeão)", () => {
+  const qs = [
+    d({ key: "a", label: "Qual o objetivo?", section_key: "s1" }),
+    d({ key: "b", label: "Qual o orçamento?", section_key: "s1" }),
+    d({ key: "c", label: "Nome da empresa", section_key: "s2" }),
+    d({ key: "x", label: "Observações gerais" }),
+  ];
+  const secs = [{ key: "s1", name: "Objetivos", description: "" }, { key: "s2", name: "Dados da empresa", description: "" }];
+
+  it("agrupa por sessão, mantém a numeração da lista inteira e fecha/abre a sessão", () => {
+    render(<Harness initial={qs} sections={secs} />);
+    const heads = screen.getAllByTestId("question-section");
+    expect(heads.map((h) => h.textContent)).toEqual(["Objetivos2 pergunta(s)", "Dados da empresa1 pergunta(s)", "Sem sessão1 pergunta(s)"]);
+    expect(screen.getAllByTestId("question-summary")).toHaveLength(4);
+    fireEvent.click(screen.getByLabelText("Fechar sessão Objetivos"));
+    expect(screen.getAllByTestId("question-summary")).toHaveLength(2);
+    const lista = within(screen.getByTestId("question-list"));
+    expect(lista.queryByText(/Qual o objetivo/)).toBeNull();
+    expect(lista.getByText(/3ª Nome da empresa/)).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Abrir sessão Objetivos"));
+    expect(screen.getAllByTestId("question-summary")).toHaveLength(4);
+  });
+
+  it("sem sessões cadastradas a lista continua simples, sem cabeçalhos", () => {
+    render(<Harness initial={qs} />);
+    expect(screen.queryAllByTestId("question-section")).toHaveLength(0);
+    expect(screen.getAllByTestId("question-summary")).toHaveLength(4);
   });
 });

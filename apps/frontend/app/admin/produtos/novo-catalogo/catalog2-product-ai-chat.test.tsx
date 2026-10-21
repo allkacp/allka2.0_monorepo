@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-const api = { draftCatalog2ProductWithAI: vi.fn() };
+const api = { draftCatalog2ProductWithAI: vi.fn(), listCatalog2AiGuides: vi.fn(async () => ({ guides: [] })) };
 vi.mock("@/lib/api-client", () => ({ apiClient: new Proxy({}, { get: (_t, k: string) => (api as any)[k] }) }));
 import { ProductAiChatDialog, draftToVersionPatch } from "./catalog2-product-ai-chat";
 
@@ -53,5 +53,37 @@ describe("IA que preenche o produto (P-8)", () => {
     fireEvent.click(screen.getByRole("button", { name: /Gerar/ }));
     expect((await screen.findByRole("alert")).textContent).toMatch(/não está configurada/);
     expect((screen.getByTestId("apply-draft") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  // R21-14: anexar escopo, não sobrescrever produto já preenchido.
+  it("R21-14: com 'só completar o vazio', texto e listas que já têm conteúdo são preservados", () => {
+    const cur = { title: "Meu título", summary: "", full_description: "Descrição que já existe" };
+    const p = draftToVersionPatch(DRAFT, cur, true, { included_items: ["Já tinha"], excluded_items: [] });
+    expect(p.title).toBe("Meu título");
+    expect(p.summary).toBe("Gestão completa de redes.");
+    expect(p.full_description).toBe("Descrição que já existe");
+    expect("included_items" in p).toBe(false);
+    const livre = draftToVersionPatch(DRAFT, cur, false, { included_items: ["Já tinha"] });
+    expect(livre.title).toBe("Social Media Premium");
+    expect(livre.included_items).toEqual(["Calendário editorial"]);
+  });
+
+  it("R21-14: anexar um .txt coloca o texto na conversa; Word/PDF é recusado com orientação; o aplicar leva a opção", async () => {
+    api.draftCatalog2ProductWithAI.mockResolvedValueOnce({ draft: DRAFT, reply: "ok" });
+    const onApply = vi.fn(async () => {});
+    render(<ProductAiChatDialog open onOpenChange={() => {}} productId="p1" onApply={onApply} />);
+    const txt = new File(["Escopo: 4 posts por semana"], "escopo.txt", { type: "text/plain" });
+    fireEvent.change(screen.getByTestId("ai-attach"), { target: { files: [txt] } });
+    await waitFor(() => expect((screen.getByLabelText("Mensagem para a IA") as HTMLTextAreaElement).value).toContain("[Anexo: escopo.txt]"));
+    expect((screen.getByLabelText("Mensagem para a IA") as HTMLTextAreaElement).value).toContain("4 posts por semana");
+    expect(screen.getByTestId("ai-attached").textContent).toContain("escopo.txt");
+    fireEvent.change(screen.getByTestId("ai-attach"), { target: { files: [new File(["x"], "doc.docx")] } });
+    expect((await screen.findByRole("alert")).textContent).toMatch(/não é texto/);
+    fireEvent.click(screen.getByRole("button", { name: /Gerar/ }));
+    await screen.findByText("ok");
+    expect((screen.getByTestId("ai-only-empty") as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByTestId("apply-draft"));
+    await waitFor(() => expect(onApply).toHaveBeenCalled());
+    expect((onApply.mock.calls[0] as any[])[1]).toEqual({ onlyEmpty: true });
   });
 });

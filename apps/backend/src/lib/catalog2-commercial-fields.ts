@@ -12,7 +12,45 @@ export const FULL_DESCRIPTION_MAX = 4000;
 // client = "Todos veem" (empresas, agências e equipe Allka) · company = "Cliente vê" (só empresas e a Allka; agência não)
 // · internal = "Equipe interna vê" (só a Allka) · team = valor antigo (só equipe), segue válido e oculto para o cliente.
 export const VISIBILITIES = ["internal", "team", "company", "client"] as const;
-export type Visibility = (typeof VISIBILITIES)[number];
+// R21-13 (reunião 21/10): além dos valores antigos acima, o campo aceita uma LISTA de públicos separada por vírgula (company, agency, partner).
+// "client" (Todos) continua sendo o valor guardado quando os três estão marcados; "internal" = só equipe interna.
+export const FIELD_AUDIENCES = ["company", "agency", "partner"] as const;
+export type FieldAudience = (typeof FIELD_AUDIENCES)[number];
+export type Visibility = string;
+
+/** Quem enxerga o campo: públicos de cliente marcados (a equipe interna sempre vê, exceto na lista de clientes). */
+export function parseFieldVisibility(v: string | null | undefined): { internalOnly: boolean; audiences: Set<FieldAudience> } {
+  const raw = String(v ?? "client").trim();
+  if (raw === "internal" || raw === "team") return { internalOnly: true, audiences: new Set() };
+  if (raw === "client" || raw === "") return { internalOnly: false, audiences: new Set(FIELD_AUDIENCES) };
+  if (raw === "company") return { internalOnly: false, audiences: new Set<FieldAudience>(["company"]) };
+  const tokens = raw.split(",").map((t) => t.trim()).filter((t): t is FieldAudience => (FIELD_AUDIENCES as readonly string[]).includes(t));
+  return tokens.length ? { internalOnly: false, audiences: new Set(tokens) } : { internalOnly: true, audiences: new Set() };
+}
+/** Valor aceito: um dos antigos OU uma lista não vazia de públicos válidos. */
+export function isValidFieldVisibility(v: unknown): v is string {
+  if (typeof v !== "string") return false;
+  if ((VISIBILITIES as readonly string[]).includes(v)) return true;
+  const parts = v.split(",").map((t) => t.trim());
+  return parts.length > 0 && parts.every((t) => (FIELD_AUDIENCES as readonly string[]).includes(t)) && new Set(parts).size === parts.length;
+}
+/** Normaliza para guardar: os três marcados = "client"; só company = "company"; o resto vira lista ordenada. */
+export function normalizeFieldVisibility(v: string): string {
+  if ((VISIBILITIES as readonly string[]).includes(v)) return v;
+  const set = new Set(v.split(",").map((t) => t.trim()));
+  const ordered = FIELD_AUDIENCES.filter((a) => set.has(a));
+  if (ordered.length === FIELD_AUDIENCES.length) return "client";
+  if (ordered.length === 1 && ordered[0] === "company") return "company";
+  return ordered.join(",");
+}
+/** O leitor (empresa, agência comum, agência partner ou prévia do administrador) enxerga este campo? */
+export function fieldVisibleTo(v: string | null | undefined, viewer: "company" | "agency" | "admin_preview", isPartner = false): boolean {
+  const p = parseFieldVisibility(v);
+  if (viewer === "admin_preview") return !p.internalOnly;
+  if (p.internalOnly) return false;
+  if (viewer === "company") return p.audiences.has("company");
+  return p.audiences.has(isPartner ? "partner" : "agency");
+}
 
 export const TEXT_FIELDS = {
   target_audience: { label: "Público-alvo", max: 1000, column: "target_audience", default: "client" },
@@ -53,7 +91,7 @@ export function readVisibility(json: string | null | undefined): Record<string, 
   let parsed: Record<string, unknown> = {};
   try { parsed = json ? (JSON.parse(json) as Record<string, unknown>) : {}; } catch { parsed = {}; }
   const out: Record<string, Visibility> = { ...DEFAULT_VISIBILITY };
-  for (const [k, v] of Object.entries(parsed)) if (k in DEFAULT_VISIBILITY && (VISIBILITIES as readonly string[]).includes(String(v))) out[k] = v as Visibility;
+  for (const [k, v] of Object.entries(parsed)) if (k in DEFAULT_VISIBILITY && isValidFieldVisibility(String(v))) out[k] = normalizeFieldVisibility(String(v));
   out.internal_notes = "internal";
   return out;
 }
@@ -153,9 +191,9 @@ export function buildCommercialUpdate(input: CommercialInput, before: Row): { da
     const next = readVisibility(before.field_visibility_json as string | null);
     for (const [k, v] of Object.entries(input.field_visibility)) {
       if (!(k in DEFAULT_VISIBILITY)) throw new CommercialFieldError(`Campo desconhecido na visibilidade: ${k}.`, "visibility_unknown_field");
-      if (!(VISIBILITIES as readonly string[]).includes(v)) throw new CommercialFieldError(`Visibilidade inválida para "${k}": use todos, cliente ou equipe interna.`, "visibility_invalid");
+      if (!isValidFieldVisibility(v)) throw new CommercialFieldError(`Visibilidade inválida para "${k}": use Todos, uma lista de públicos (company, agency, partner) ou equipe interna.`, "visibility_invalid");
       if (k === "internal_notes" && v !== "internal") throw new CommercialFieldError("As observações internas nunca podem ser visíveis ao cliente ou à equipe.", "internal_notes_always_internal");
-      next[k] = v as Visibility;
+      next[k] = normalizeFieldVisibility(v);
     }
     const json = JSON.stringify(next);
     if (json !== JSON.stringify(readVisibility(before.field_visibility_json as string | null))) { data.field_visibility_json = json; changed.push("Visibilidade dos campos"); }
@@ -180,10 +218,10 @@ export function serializeCommercialFields(v: Row) {
 }
 
 /** O que o cliente enxerga: só campos marcados como "cliente" — nunca observações internas. */
-export function clientCommercialView(v: Row, viewer: "company" | "agency" | "admin_preview" = "company") {
+export function clientCommercialView(v: Row, viewer: "company" | "agency" | "admin_preview" = "company", isPartner = false) {
   const vis = readVisibility(v.field_visibility_json as string | null);
-  // "Todos veem" aparece para quem contrata; "Cliente vê" só para empresa (e na pré-visualização do admin), nunca para agência.
-  const sees = (k: string) => vis[k] === "client" || (vis[k] === "company" && viewer !== "agency");
+  // Cada campo guarda quem o vê (Todos, uma lista de públicos, ou só equipe interna). Admin na pré-visualização vê tudo, menos o que é só interno.
+  const sees = (k: string) => fieldVisibleTo(vis[k], viewer, isPartner);
   const out: Record<string, unknown> = {};
   for (const [k, def] of Object.entries(TEXT_FIELDS)) if (sees(k) && k !== "internal_notes") out[k] = (v[def.column] as string | null) ?? null;
   for (const [k, def] of Object.entries(LIST_FIELDS)) if (sees(k)) out[k] = readList(v[def.column] as string | null);

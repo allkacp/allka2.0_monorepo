@@ -65,11 +65,11 @@ export function TaskSummaryCard({ task, specialties, metrics = [], children }: {
   const Item = ({ label, value, help, testId }: { label: string; value: string; help?: string; testId?: string }) => {
     const Icon = ICONS[label] ?? ListChecks;
     return (
-      <div className="flex min-w-[8.5rem] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1 shadow-sm dark:border-slate-700 dark:bg-slate-900/60" data-testid="task-summary-item">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-3.5 w-3.5" aria-hidden="true" /></span>
+      <div className="flex min-w-[11rem] flex-1 basis-[11rem] items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-900/60" data-testid="task-summary-item">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-300"><Icon className="h-4 w-4" aria-hidden="true" /></span>
         <div className="min-w-0">
-          <dt className="text-[9px] font-semibold uppercase leading-tight tracking-wide text-slate-500 dark:text-slate-400">{label}{help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}</dt>
-          <dd className="truncate text-[12px] font-bold leading-tight text-slate-900 dark:text-slate-100" data-testid={testId}>{value}</dd>
+          <dt className="text-[10px] font-semibold uppercase leading-snug tracking-wide text-slate-500 dark:text-slate-400">{label}{help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}</dt>
+          <dd className="whitespace-normal break-words text-[15px] font-bold leading-snug text-slate-900 dark:text-slate-100" data-testid={testId} title={value}>{value}</dd>
         </div>
       </div>
     );

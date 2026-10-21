@@ -246,6 +246,7 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
         base_commercial_deadline_days: last?.base_commercial_deadline_days ?? null,
         base_commercial_deadline_hours: last?.base_commercial_deadline_hours ?? null,
         emergency_enabled: last?.emergency_enabled ?? false,
+        emergency_mode: last?.emergency_mode ?? "step", emergency_product_reduction_percent: last?.emergency_product_reduction_percent ?? null, emergency_product_extra_percent: last?.emergency_product_extra_percent ?? null, emergency_same_day_limit_time: last?.emergency_same_day_limit_time ?? null, emergency_min_notice_hours: last?.emergency_min_notice_hours ?? null, emergency_executor_accept_required: last?.emergency_executor_accept_required ?? false, emergency_executor_accept_hours: last?.emergency_executor_accept_hours ?? null,
         pricing_mode: last?.pricing_mode ?? undefined,
         manual_price: last?.manual_price ?? undefined,
         manual_deadline_days: last?.manual_deadline_days ?? undefined,
@@ -444,6 +445,7 @@ async function cloneVersionStructure(db: Prisma.TransactionClient, src: FullVers
         description: ad.description,
         sort_order: ad.sort_order,
         is_default_selected: ad.is_default_selected,
+        contract_phase: ad.contract_phase,
         is_active: ad.is_active,
         base_cost: ad.base_cost,
         addon_type: ad.addon_type, qty_min: ad.qty_min, qty_max: ad.qty_max, qty_step: ad.qty_step, unit_label: ad.unit_label, unit_base_cost: ad.unit_base_cost,
@@ -605,6 +607,22 @@ export interface PublishValidation {
   has_provisional_effort: boolean;
 }
 
+/** R21-03: etapas marcadas como "dependentes de variação ou adicional" que nenhuma opção, adicional ou condição inclui (efeito "incluir etapa"). */
+export async function unlinkedDependentSteps(versionId: string): Promise<{ name: string; ref: string }[]> {
+  const steps = await prisma.catalog2TaskStep.findMany({ where: { is_conditional: true, task: { version_id: versionId } }, select: { key: true, name: true, task: { select: { key: true } } } });
+  if (steps.length === 0) return [];
+  const refs = new Set<string>();
+  const [conds, opts, adds] = await Promise.all([
+    prisma.catalog2Condition.findMany({ where: { version_id: versionId, effect_type: "add_step" }, select: { effect_value: true } }),
+    prisma.catalog2VariationOption.findMany({ where: { variation: { version_id: versionId } }, select: { effects: { where: { effect_type: "add_step" }, select: { effect_value: true } } } }),
+    prisma.catalog2Addon.findMany({ where: { version_id: versionId }, select: { effects: { where: { effect_type: "add_step" }, select: { effect_value: true } } } }),
+  ]);
+  for (const c of conds) refs.add(c.effect_value);
+  for (const o of opts) for (const e of o.effects) refs.add(e.effect_value);
+  for (const a of adds) for (const e of a.effects) refs.add(e.effect_value);
+  return steps.map((s) => ({ name: s.name, ref: `${s.task.key}:${s.key}` })).filter((s) => !refs.has(s.ref));
+}
+
 export async function validateVersionForPublish(versionId: string): Promise<PublishValidation> {
   const v = await prisma.catalog2ProductVersion.findUnique({
     where: { id: versionId },
@@ -628,7 +646,8 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
   if (v.tasks.length === 0) issues.push("O produto precisa de ao menos uma tarefa.");
   // Toda tarefa precisa de ao menos uma ETAPA: é a etapa que carrega especialidade,
   // horas e o pagamento do nômade (ou o custo interno).
-  if (v.emergency_enabled && !v.tasks.some((t) => t.steps.some((s) => (s.emergency_reduction_minutes ?? 0) > 0 || s.emergency_extra_kind != null))) issues.push("A entrega emergencial está ligada, mas nenhuma etapa define redução de prazo ou adicional. Configure as etapas ou desligue a opção.");
+  if (v.emergency_enabled && v.emergency_mode === "product" && !((v.emergency_product_reduction_percent ?? 0) > 0)) issues.push("A entrega rápida está como condição do produto, mas falta o percentual de redução do prazo.");
+  if (v.emergency_enabled && v.emergency_mode !== "product" && !v.tasks.some((t) => t.steps.some((s) => (s.emergency_reduction_minutes ?? 0) > 0 || s.emergency_extra_kind != null))) issues.push("A entrega emergencial está ligada, mas nenhuma etapa define redução de prazo ou adicional. Configure as etapas ou desligue a opção.");
   if (v.product.task_structure === "single" && v.tasks.filter((t) => !t.is_conditional).length > 1) issues.push("Produto individual precisa de uma única tarefa principal; as demais divisões devem ser etapas (ou marque o produto como composto/combo).");
   for (const t of v.tasks) {
     // IA (Pedido 3, fase 5): tarefa feita por IA (ou humano+IA) precisa de um perfil de IA ativo e autorizado.
@@ -740,6 +759,12 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
   // Modalidades de compra x entrega recorrente x períodos precisam contar a mesma história.
   for (const c of blockersOf(await loadConsistency(prisma, v.product_id, v))) issues.push(c.message);
   for (const t of v.tasks) if (t.is_conditional && !includedTaskKeys.has(t.key)) issues.push(`A tarefa condicional "${t.name}" nunca é incluída por nenhum efeito.`);
+  // R21-03 (reunião 21/10): etapa marcada como "dependente de variação ou adicional" precisa estar ligada a alguma opção de variação, adicional ou condição (efeito "incluir etapa"); senão nunca entraria no produto.
+  const includedStepRefs = new Set<string>();
+  for (const c of v.conditions) if (c.effect_type === "add_step") includedStepRefs.add(c.effect_value);
+  for (const va of v.variations) for (const o of va.options) for (const e of o.effects) if (e.effect_type === "add_step") includedStepRefs.add(e.effect_value);
+  for (const ad of v.addons) for (const e of ad.effects) if (e.effect_type === "add_step") includedStepRefs.add(e.effect_value);
+  for (const t of v.tasks) for (const s of t.steps) if (s.is_conditional && !includedStepRefs.has(`${t.key}:${s.key}`)) issues.push(`A etapa "${s.name}" foi marcada como dependente de variação ou adicional, mas nenhuma variação ou adicional está vinculada a ela.`);
 
   // Conexões e acessos necessários (módulo opcional: desativado = nenhuma pendência).
   for (const dl of await prisma.catalog2TaskDeliverable.findMany({ where: { draft_incomplete: true, task: { version_id: versionId } }, select: { name: true, task: { select: { name: true } } } })) issues.push(`O entregável "${dl.name}" da tarefa "${dl.task.name}" está salvo como rascunho incompleto — conclua o entregável antes de publicar.`);
@@ -802,6 +827,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
     if (message.includes("que está inativo")) return { message, target: "task_create" };
     if (message.startsWith("Condição")) return { message, target: "conditions" };
     if (message.startsWith("Opção") || message.startsWith("Adicional") || message.startsWith("A variação")) return { message, target: "options" };
+    if (message.includes("dependente de variação ou adicional")) return { message, target: "options" };
     return { message, target: "pricing", code: codeByMessage.get(message) ?? "pricing" };
   });
 
@@ -1371,6 +1397,7 @@ export async function getProductDetail(productId: string) {
       base_commercial_deadline_days: v.base_commercial_deadline_days ?? null,
       base_commercial_deadline_hours: v.base_commercial_deadline_hours ?? null,
       emergency_enabled: v.emergency_enabled ?? false,
+      emergency_mode: v.emergency_mode ?? "step", emergency_product_reduction_percent: v.emergency_product_reduction_percent ?? null, emergency_product_extra_percent: v.emergency_product_extra_percent ?? null, emergency_same_day_limit_time: v.emergency_same_day_limit_time ?? null, emergency_min_notice_hours: v.emergency_min_notice_hours ?? null, emergency_executor_accept_required: v.emergency_executor_accept_required ?? false, emergency_executor_accept_hours: v.emergency_executor_accept_hours ?? null,
       accepts_one_time: v.accepts_one_time,
       accepts_recurring: v.accepts_recurring,
       has_initial_implementation: v.has_initial_implementation,
@@ -1436,6 +1463,7 @@ export async function getProductDetail(productId: string) {
         description: a.description,
         sort_order: a.sort_order,
         is_default_selected: a.is_default_selected,
+        contract_phase: a.contract_phase,
         is_active: a.is_active,
         base_cost: a.base_cost,
         addon_type: a.addon_type, qty_min: a.qty_min, qty_max: a.qty_max, qty_step: a.qty_step, unit_label: a.unit_label, unit_base_cost: a.unit_base_cost,

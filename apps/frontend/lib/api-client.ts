@@ -978,6 +978,10 @@ class ApiClient {
   addCatalog2TaskFromModel(versionId: string, modelId: number) { return this.c2("POST", `/versions/${versionId}/tasks/from-model`, { model_id: modelId }); }
   addCatalog2StepFromModel(taskId: string, stepModelId: number) { return this.c2("POST", `/tasks/${taskId}/steps/from-model`, { step_model_id: stepModelId }); }
   /** Líderes e administradores que podem ser designados como qualificador de uma tarefa. */
+  listCatalog2AiGuides() { return this.c2<{ guides: { id: string; title: string; content: string; is_active: boolean }[] }>("GET", "/ai-guides"); }
+  createCatalog2AiGuide(body: { title: string; content: string; is_active?: boolean }) { return this.c2<any>("POST", "/ai-guides", body); }
+  updateCatalog2AiGuide(id: string, body: Record<string, any>) { return this.c2<any>("PUT", `/ai-guides/${id}`, body); }
+  deleteCatalog2AiGuide(id: string) { return this.c2<any>("DELETE", `/ai-guides/${id}`); }
   draftCatalog2ProductWithAI(productId: string, messages: { role: "user" | "assistant"; text: string }[], current: Record<string, any> | null) { return this.c2<{ draft: any; reply: string }>("POST", `/products/${productId}/ai-draft`, { messages, current }); }
   suggestCatalog2TaskQuestionnaire(taskId: string, existingLabels: string[] = []) { return this.c2<{ name: string; description: string | null; questions: any[] }>("POST", `/tasks/${taskId}/questionnaire/ai-suggest`, { existing_labels: existingLabels }); }
   getAiChangePricing(days = 90) { return this.get<any>(`/ai-usage/change-pricing?days=${days}`); }
@@ -1069,6 +1073,15 @@ class ApiClient {
     const a = document.createElement("a");
     a.href = url; a.download = ref.name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+  /** Abre o anexo do entregável numa nova aba (PDF/imagem abrem; outros tipos o navegador baixa). */
+  async viewCatalog2DeliverableFile(ref: { id: string; name: string }): Promise<void> {
+    const token = this.getToken();
+    const res = await fetch(`${API_BASE_URL}/catalog2/deliverable-files/${encodeURIComponent(ref.id)}?name=${encodeURIComponent(ref.name)}`, { headers: token ? { Authorization: `Bearer ${token}` } : undefined });
+    if (!res.ok) throw new Error(res.status === 404 ? "Arquivo não encontrado." : "Não foi possível abrir o arquivo.");
+    const url = URL.createObjectURL(await res.blob());
+    window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
   async downloadCatalog2DeliverableFile(ref: { id: string; name: string }): Promise<void> {
     const token = this.getToken();
@@ -1514,6 +1527,11 @@ class ApiClient {
   /** Devolve para execução com o motivo e reabre a última etapa concluída. */
   async reprovarTarefa(taskId: string, motivo: string, nivel?: "agencia" | "cliente") {
     return this.patch(`/project-tasks/${taskId}/reprovar`, { motivo, ...(nivel ? { nivel } : {}) });
+  }
+
+  /** R21-11: o profissional (ou líder/admin) aceita ou recusa a entrega rápida pedida pelo cliente. */
+  async responderEntregaEmergencial(taskId: string, aceitar: boolean) {
+    return this.post(`/project-tasks/${taskId}/emergencial/responder`, { aceitar });
   }
 
   /** Comprime o prazo e cobra +50% do valor do produto — imediato, não bloqueia. */

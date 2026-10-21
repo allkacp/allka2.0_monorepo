@@ -10,6 +10,7 @@ const api = {
   getWorkCalendar: vi.fn(async () => ({ business_hours_per_day: 8 })),
 };
 vi.mock("@/lib/api-client", () => ({ apiClient: new Proxy({}, { get: (_t, k: string) => (api as any)[k] }) }));
+vi.mock("@/hooks/useAppFrameMetrics", () => ({ useAppFrameMetrics: () => ({ sidebarWidth: 72 }) }));
 import { ContractModesSection, MONTHLY_ISSUE_RE, readinessDestination } from "./product-editor";
 
 // Correção de 16/10: o cartão de modalidades só tem Avulso e Assinatura mensal; a pergunta "gera nova entrega todo mês?" é feita no mesmo

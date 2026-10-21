@@ -44,7 +44,16 @@ export function normalizeDraft(raw: RawDraft, previous?: Partial<ProductDraft> |
   return { draft, reply: oneLine(raw.reply, 600) || "Montei uma proposta. Revise e, se quiser, peça ajustes." };
 }
 
-export type DraftGenerator = (input: { messages: DraftMessage[]; current: Partial<ProductDraft> | null; existing: { title: string; category: string | null } }) => Promise<RawDraft>;
+export type DraftGenerator = (input: { messages: DraftMessage[]; current: Partial<ProductDraft> | null; existing: { title: string; category: string | null; guides?: { title: string; content: string }[] } }) => Promise<RawDraft>;
+
+const GUIDES_BUDGET = 12000;
+/** R21-18: monta o bloco de guias/métodos ativos que a IA deve seguir (limitado para não estourar o prompt). */
+export function guidesPromptBlock(guides: { title: string; content: string }[] | undefined): string {
+  if (!guides?.length) return "";
+  let left = GUIDES_BUDGET; const parts: string[] = [];
+  for (const g of guides) { if (left <= 200) break; const body = g.content.trim().slice(0, left - g.title.length - 20); parts.push(`### ${g.title}\n${body}`); left -= body.length + g.title.length + 20; }
+  return `GUIAS E MÉTODOS DA ALLKA (siga estas instruções ao montar o cadastro; elas têm prioridade sobre suposições suas):\n${parts.join("\n\n")}\n\n`;
+}
 let generator: DraftGenerator = geminiGenerator;
 export function __setDraftGeneratorForTests(g: DraftGenerator | null) { generator = g ?? geminiGenerator; }
 
@@ -56,7 +65,7 @@ async function geminiGenerator(input: Parameters<DraftGenerator>[0]): Promise<Ra
   const convo = input.messages.map((m) => `${m.role === "user" ? "ADMINISTRADOR" : "IA"}: ${m.text}`).join("\n");
   const lastUser = [...input.messages].reverse().find((m) => m.role === "user")?.text ?? "";
   const common = `Você ajuda um administrador a cadastrar um PRODUTO de serviço (marketing digital) na plataforma Allka. Escreva em português do Brasil, comercial e objetivo, usando SOMENTE o que a explicação sustenta (não invente números, prazos nem preços). Seja conciso e nunca repita frases.`;
-  const ctx = `${input.existing.category ? `Categoria do produto no catálogo: ${input.existing.category}.\n` : ""}CONVERSA:\n${convo}`;
+  const ctx = `${guidesPromptBlock(input.existing.guides)}${input.existing.category ? `Categoria do produto no catálogo: ${input.existing.category}.\n` : ""}CONVERSA:\n${convo}`;
   // Uma chamada pequena por vez (uma única chamada grande fazia a IA entrar em repetição e estourar o limite). Cada uma tenta de novo se vier cortada.
   async function callJson(prompt: string, properties: Record<string, unknown>, maxTokens: number): Promise<RawDraft> {
     for (let attempt = 1; attempt <= 2; attempt++) {
@@ -76,7 +85,7 @@ async function geminiGenerator(input: Parameters<DraftGenerator>[0]): Promise<Ra
   const textPrompt = `${common}
 Monte o cadastro (sem tarefas): título comercial curto (até 80 caracteres), descrição curta (até ${LIMITS.summary}), descrição completa (até ${LIMITS.full}: benefícios, como funciona, diferenciais) e as listas itens incluídos, itens NÃO incluídos, requisitos do cliente e resumo dos entregáveis (itens curtos, de 3 a ${LIMITS.item} caracteres).
 ${input.current ? "Já existe um rascunho: aplique os ajustes pedidos e devolva SOMENTE os campos que mudaram (omita os demais; nós mantemos o resto)." : "Preencha TODOS esses campos."}
-Em "reply", responda em 1 ou 2 frases o que montou/alterou e o que ainda falta informar.
+Em "reply", responda em 1 ou 2 frases o que montou/alterou e o que ainda falta informar. Se o pedido ou o anexo tiver ambiguidade (ex.: o que está incluído, prazos, quantidades, quem entrega), NÃO invente: deixe o campo em branco e faça de 1 a 3 perguntas curtas no "reply" para o administrador responder.
 ${input.current ? `RASCUNHO ATUAL (JSON): ${JSON.stringify({ ...input.current, suggested_tasks: undefined }).slice(0, 6000)}\n` : ""}${ctx}`;
   const base = await callJson(textPrompt, {
     reply: { type: "string", maxLength: 400 }, title: { type: "string", maxLength: 100 }, summary: { type: "string", maxLength: 500 }, full_description: { type: "string", maxLength: 2000 },
@@ -104,8 +113,9 @@ export async function draftProductWithAI(productId: string, messagesIn: DraftMes
   if (!messages.some((m) => m.role === "user")) throw new ProductDraftError("Conte para a IA o que é o produto antes de gerar.");
   const p = await prisma.catalog2Product.findUnique({ where: { id: productId }, select: { internal_name: true, category: { select: { name: true } } } });
   if (!p) throw new ProductDraftError("Produto não encontrado.", 404);
+  const guides = await prisma.catalog2AiGuide.findMany({ where: { is_active: true }, orderBy: { created_at: "asc" }, select: { title: true, content: true } });
   let raw: RawDraft;
-  try { raw = await generator({ messages, current, existing: { title: p.internal_name, category: p.category?.name ?? null } }); }
+  try { raw = await generator({ messages, current, existing: { title: p.internal_name, category: p.category?.name ?? null, guides } }); }
   catch (e: any) { throw new ProductDraftError(e?.message ?? "Não foi possível usar a IA agora.", 502); }
   const out = normalizeDraft(raw, current);
   if (!out.draft.title && !out.draft.full_description) throw new ProductDraftError("A IA não devolveu um rascunho utilizável. Detalhe melhor o produto e tente de novo.", 502);

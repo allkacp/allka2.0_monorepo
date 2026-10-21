@@ -5,7 +5,7 @@
 // Cada campo tem contador de caracteres (mesmo limite do servidor) e visibilidade: interno · equipe · cliente.
 // As listas são ordenáveis pelas setas. Versão publicada é somente leitura.
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronUp, Plus, Trash2, Info, ListChecks, Loader2, Sparkles, Paperclip, Download, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Trash2, Info, ListChecks, Loader2, Sparkles, Paperclip, Download, X, Eye, Replace } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAccordionAll } from "./accordion-toggle-all";
+import { FieldAudienceMenu } from "./catalog2-audience-ui";
 
 export const COMMERCIAL_TEXT_FIELDS: { key: string; label: string; hint: string; rows: number; max: number }[] = [
   { key: "target_audience", label: "Público-alvo", hint: "Para quem este produto foi feito.", rows: 2, max: 1000 },
@@ -67,6 +68,42 @@ function DeliverableFileButton({ hasFile, onUploaded, onError }: { hasFile: bool
     <input ref={ref} type="file" className="sr-only" tabIndex={-1} aria-label="Escolher arquivo do modelo do entregável" onChange={(e) => void choose(e.target.files?.[0])} />
     <button type="button" disabled={busy} aria-label={hasFile ? "Trocar anexo" : "Anexar modelo do entregável"} title={hasFile ? "Trocar o anexo (modelo do entregável)" : "Anexar um modelo do entregável (opcional): PDF, planilha, ZIP, RAR…"} className={`rounded p-1 hover:text-violet-700 disabled:opacity-50 ${hasFile ? "text-violet-600" : "text-slate-400"}`} onClick={() => ref.current?.click()}>{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}</button>
   </>;
+}
+
+/** Anexo já enviado (R21-07, reunião 21/10): só um ÍCONE ROXO clicável, sem o nome do arquivo na tela. O menu oferece Ver, Baixar, Substituir e Remover (os dois últimos só em edição). */
+export function FileIconMenu({ file, readOnly, onReplaced, onRemove, onError }: { file: { id: string; name: string; size?: number }; readOnly: boolean; onReplaced?: (f: DeliverableFile) => void; onRemove?: () => void; onError: (m: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  const fail = (e: any, fallback: string) => onError(e?.message ?? fallback);
+  async function replace(f: File | undefined) {
+    if (!f) return;
+    if (f.size > MAX_FILE_MB * 1024 * 1024) { onError(`O arquivo passa de ${MAX_FILE_MB} MB.`); return; }
+    setBusy(true);
+    try { const r = await apiClient.uploadCatalog2DeliverableFile(f); onReplaced?.(r.file); setOpen(false); }
+    catch (e: any) { fail(e, "Não foi possível enviar o arquivo."); }
+    finally { setBusy(false); if (ref.current) ref.current.value = ""; }
+  }
+  const item = "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-50";
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label={`Anexo: ${file.name}`} title={file.size != null ? `${file.name} · ${fmtBytes(file.size)}` : file.name} data-testid="deliverable-file-icon" className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-violet-100 text-violet-700 hover:bg-violet-200 dark:bg-violet-900/40 dark:text-violet-200">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-1.5">
+        <p className="truncate px-2 pb-1 text-[11px] text-slate-500" title={file.name}>{file.name}{file.size != null ? ` · ${fmtBytes(file.size)}` : ""}</p>
+        <button type="button" className={item} onClick={() => { void apiClient.viewCatalog2DeliverableFile(file).catch((e: any) => fail(e, "Não foi possível abrir o arquivo.")); setOpen(false); }}><Eye className="h-3.5 w-3.5" />Ver</button>
+        <button type="button" className={item} onClick={() => { void apiClient.downloadCatalog2DeliverableFile(file).catch((e: any) => fail(e, "Não foi possível baixar o arquivo.")); setOpen(false); }}><Download className="h-3.5 w-3.5" />Baixar</button>
+        {!readOnly && onReplaced && <>
+          <input ref={ref} type="file" className="sr-only" tabIndex={-1} aria-label="Escolher o novo arquivo" onChange={(e) => void replace(e.target.files?.[0])} />
+          <button type="button" className={item} disabled={busy} onClick={() => ref.current?.click()}><Replace className="h-3.5 w-3.5" />Substituir</button>
+          {onRemove && <button type="button" className={item + " !text-rose-600 hover:!bg-rose-50"} onClick={() => { onRemove(); setOpen(false); }}><X className="h-3.5 w-3.5" />Remover anexo</button>}
+        </>}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function CommercialAiButton({ label, value, context, disabled, onResult }: { label: string; value: string; context: Record<string, any>; disabled?: boolean; onResult: (value: string) => void }) {
@@ -135,16 +172,7 @@ export function CommercialFieldsCard({ version, readOnly, onSave, registerFlush,
   const setVis = (key: string, v: string) => set({ field_visibility: { ...f.field_visibility, [key]: v } });
   const tooLong = COMMERCIAL_TEXT_FIELDS.some((x) => String(f[x.key]).length > x.max && String(f[x.key]) !== String(version?.[x.key] ?? ""));
 
-  const VisPick = ({ k, locked }: { k: string; locked?: boolean }) => (
-    <span className="inline-flex shrink-0 rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900" aria-label="Quem pode ver este campo">
-      {(locked ? VIS.filter(([v]) => v === "internal") : VIS).map(([v, l]) => {
-        // "team" (valor antigo, só equipe) é oculto para clientes: aparece marcado como "Equipe interna vê".
-        const cur = locked ? "internal" : f.field_visibility[k] ?? "client";
-        const selected = (cur === "team" ? "internal" : cur) === v;
-        return <TooltipProvider key={v} delayDuration={150}><Tooltip><TooltipTrigger asChild><button type="button" disabled={readOnly || locked} onClick={() => setVis(k, v)} className={`rounded px-1.5 py-0.5 text-[10px] font-semibold transition ${selected ? "bg-violet-600 text-white" : "text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}`}>{l}</button></TooltipTrigger><TooltipContent className="max-w-52 text-xs">{VIS_HELP[v]}</TooltipContent></Tooltip></TooltipProvider>;
-      })}
-    </span>
-  );
+  const VisPick = ({ k, locked }: { k: string; locked?: boolean }) => <FieldAudienceMenu fieldKey={k} value={f.field_visibility[k]} onChange={(v) => setVis(k, v)} readOnly={readOnly} locked={locked} />;
   const renderListFields = (fields: typeof COMMERCIAL_LIST_FIELDS) => <>{fields.map((x) => {
     const items: string[] = f[x.key] ?? [];
     // Só o "Resumo dos entregáveis" aceita anexo (modelo do entregável). `files` anda sempre alinhado com `items` (mesmo índice).
@@ -154,10 +182,10 @@ export function CommercialFieldsCard({ version, readOnly, onSave, registerFlush,
     const setFileAt = (i: number, file: DeliverableFile | null) => update(items, files.map((v, j) => (j === i ? file : v)));
     const splitAt = Math.ceil(items.length / 2);
     const columns = [items.slice(0, splitAt), items.slice(splitAt)];
-    const itemRow = (it: string, i: number) => <li key={i} className="min-w-0"><div className="relative"><Input className={`h-9 min-w-0 w-full text-xs ${withFiles ? "pr-36" : "pr-28"}`} disabled={readOnly} maxLength={300} value={it} aria-label={`${x.label} ${i + 1}`} onChange={(e) => update(items.map((v, j) => j === i ? e.target.value : v))} /><span className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5"><CommercialAiButton label={x.label} value={it} context={{ name: version?.title, other_fields: { [x.label]: it } }} disabled={readOnly} onResult={(next) => update(items.map((v, j) => j === i ? next.slice(0, 300) : v))} />{!readOnly && withFiles && <DeliverableFileButton hasFile={!!files[i]} onUploaded={(file) => setFileAt(i, file)} onError={(m) => setError(m)} />}{!readOnly && <><button type="button" aria-label="Subir" title="Subir" disabled={i === 0} className="rounded p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => { const c = [...items]; const cf = [...files]; [c[i - 1], c[i]] = [c[i], c[i - 1]]; [cf[i - 1], cf[i]] = [cf[i], cf[i - 1]]; update(c, cf); }}><ChevronUp className="h-3.5 w-3.5" /></button><button type="button" aria-label="Descer" title="Descer" disabled={i === items.length - 1} className="rounded p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => { const c = [...items]; const cf = [...files]; [c[i + 1], c[i]] = [c[i], c[i + 1]]; [cf[i + 1], cf[i]] = [cf[i], cf[i + 1]]; update(c, cf); }}><ChevronDown className="h-3.5 w-3.5" /></button><button type="button" aria-label="Remover item" title="Remover item" className="rounded p-1 text-slate-400 hover:text-red-600" onClick={() => update(items.filter((_, j) => j !== i), files.filter((_, j) => j !== i))}><Trash2 className="h-3.5 w-3.5" /></button></>}</span></div>
-      {withFiles && files[i] && <div className="mt-1 flex min-w-0 items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] text-violet-800 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-200" data-testid={`deliverable-file-${i}`}><Paperclip className="h-3 w-3 shrink-0" /><span className="min-w-0 flex-1 truncate font-medium">{files[i]!.name}</span><span className="shrink-0 text-violet-600/80">{fmtBytes(files[i]!.size)}</span><button type="button" className="shrink-0 rounded p-0.5 font-semibold underline" aria-label={`Baixar ${files[i]!.name}`} onClick={() => void apiClient.downloadCatalog2DeliverableFile(files[i]!).catch((e: any) => setError(e?.message ?? "Não foi possível baixar o arquivo."))}><Download className="h-3 w-3" /></button>{!readOnly && <button type="button" className="shrink-0 rounded p-0.5 text-slate-500 hover:text-red-600" aria-label={`Remover anexo ${files[i]!.name}`} onClick={() => setFileAt(i, null)}><X className="h-3 w-3" /></button>}</div>}</li>;
+    const itemRow = (it: string, i: number) => <li key={i} className="min-w-0"><div className="relative"><Input className={`h-9 min-w-0 w-full text-xs ${withFiles ? "pr-36" : "pr-28"}`} disabled={readOnly} maxLength={300} value={it} aria-label={`${x.label} ${i + 1}`} onChange={(e) => update(items.map((v, j) => j === i ? e.target.value : v))} /><span className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5"><CommercialAiButton label={x.label} value={it} context={{ name: version?.title, other_fields: { [x.label]: it } }} disabled={readOnly} onResult={(next) => update(items.map((v, j) => j === i ? next.slice(0, 300) : v))} />{withFiles && (files[i] ? <FileIconMenu file={files[i]!} readOnly={readOnly} onReplaced={(file) => setFileAt(i, file)} onRemove={() => setFileAt(i, null)} onError={(m) => setError(m)} /> : !readOnly && <DeliverableFileButton hasFile={false} onUploaded={(file) => setFileAt(i, file)} onError={(m) => setError(m)} />)}{!readOnly && <><button type="button" aria-label="Subir" title="Subir" disabled={i === 0} className="rounded p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => { const c = [...items]; const cf = [...files]; [c[i - 1], c[i]] = [c[i], c[i - 1]]; [cf[i - 1], cf[i]] = [cf[i], cf[i - 1]]; update(c, cf); }}><ChevronUp className="h-3.5 w-3.5" /></button><button type="button" aria-label="Descer" title="Descer" disabled={i === items.length - 1} className="rounded p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30" onClick={() => { const c = [...items]; const cf = [...files]; [c[i + 1], c[i]] = [c[i], c[i + 1]]; [cf[i + 1], cf[i]] = [cf[i], cf[i + 1]]; update(c, cf); }}><ChevronDown className="h-3.5 w-3.5" /></button><button type="button" aria-label="Remover item" title="Remover item" className="rounded p-1 text-slate-400 hover:text-red-600" onClick={() => update(items.filter((_, j) => j !== i), files.filter((_, j) => j !== i))}><Trash2 className="h-3.5 w-3.5" /></button></>}</span></div>
+</li>;
     const shortLabel = x.key === "included_items" ? "Incluídos" : x.key === "excluded_items" ? "Não incluídos" : x.label;
-    return <section key={x.key} className="rounded-xl border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-900/40"><div className="flex flex-wrap items-center gap-2"><span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">{shortLabel}</span><span className="rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">{items.length}</span><span className="ml-auto"><VisPick k={x.key} /></span></div>
+    return <section key={x.key} className="rounded-xl border border-slate-200 bg-slate-50/60 p-2.5 dark:border-slate-800 dark:bg-slate-900/40"><div className="flex flex-wrap items-center gap-2"><span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">{shortLabel}</span><span className="rounded-md bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">{items.length}</span><span className="ml-auto">{VisPick({ k: x.key })}</span></div>
       <div className="mt-2 grid max-h-[22rem] grid-cols-1 gap-x-3 gap-y-1 overflow-y-auto pr-1 lg:grid-cols-2" data-testid={`list-scroll-${x.key}`}>{columns.map((column, columnIndex) => <ul key={columnIndex} className="space-y-1">{column.map((it, index) => itemRow(it, index + (columnIndex * splitAt)))}</ul>)}</div>
       {!readOnly && items.length < 50 && <Button type="button" size="sm" variant="outline" className="mt-2 h-8 gap-1 text-xs" onClick={() => update([...items, ""])}><Plus className="h-3.5 w-3.5" /> Adicionar item</Button>}
     </section>;
@@ -165,7 +193,7 @@ export function CommercialFieldsCard({ version, readOnly, onSave, registerFlush,
   const renderTextField = (x: typeof COMMERCIAL_TEXT_FIELDS[number], collapsible = false) => {
     const value = String(f[x.key] ?? "");
     const over = value.length > x.max;
-    const visibility = <VisPick k={x.key} locked={x.key === "internal_notes"} />;
+    const visibility = VisPick({ k: x.key, locked: x.key === "internal_notes" });
     const editor = <div className="mt-2 space-y-1"><div className="relative"><Textarea id={`cf-${x.key}`} rows={x.rows} className="pr-16" disabled={readOnly} value={value} placeholder={x.hint} onChange={(e) => set({ [x.key]: e.target.value })} /><span className="absolute right-2 top-2"><CommercialAiButton label={x.label} value={value} context={{ name: version?.title, other_fields: { [x.label]: value } }} disabled={readOnly} onResult={(next) => set({ [x.key]: next.slice(0, x.max) })} /></span></div><span className={`block text-right text-xs ${over ? "text-red-600" : "text-slate-400"}`}>{value.length}/{x.max}</span></div>;
     // Ajuda só no ícone "i" (o ícone vem do cadastro em field-help.ts, pela camada de ajuda do editor).
     if (collapsible) return <div key={x.key} className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2 dark:border-slate-800 dark:bg-slate-900/40"><div className="flex items-center gap-2 text-[12px] font-semibold text-slate-700 dark:text-slate-200"><span className="flex-1">{x.label}</span>{visibility}</div>{editor}</div>;

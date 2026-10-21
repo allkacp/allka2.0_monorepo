@@ -70,6 +70,7 @@ import {
   setProductStatus,
   validateConditionShape,
   validateVersionForPublish,
+  unlinkedDependentSteps,
 } from "../lib/catalog2-service";
 import { notifyUser } from "../lib/catalog2-commercial-flow";
 import { generateContractFromRequest, ContractingError } from "../lib/catalog2-contracting";
@@ -676,6 +677,34 @@ router.post("/products/:id/ai-draft", async (req, res, next) => {
     if (e instanceof ProductDraftError) { res.status(e.httpStatus).json({ error: e.message, code: "product_ai_draft" }); return; }
     handle(e, res, next);
   }
+});
+// R21-18: guias e métodos que a IA de preenchimento consulta (lista, criar, ativar/desativar, apagar).
+const aiGuideSchema = z.object({ title: z.string().trim().min(2).max(160), content: z.string().trim().min(10).max(60000), is_active: z.boolean().optional() });
+router.get("/ai-guides", async (_req, res, next) => {
+  try { res.json({ guides: await prisma.catalog2AiGuide.findMany({ orderBy: { created_at: "asc" } }) }); } catch (e) { handle(e, res, next); }
+});
+router.post("/ai-guides", async (req, res, next) => {
+  try {
+    const d = aiGuideSchema.parse(req.body);
+    const g = await prisma.catalog2AiGuide.create({ data: { title: d.title, content: d.content, is_active: d.is_active ?? true, created_by_user_id: req.user!.id } });
+    await audit(req, "ai_guide_created", { id: g.id, title: g.title });
+    res.status(201).json(g);
+  } catch (e) { handle(e, res, next); }
+});
+router.put("/ai-guides/:id", async (req, res, next) => {
+  try {
+    const d = aiGuideSchema.partial().parse(req.body);
+    const g = await prisma.catalog2AiGuide.update({ where: { id: req.params.id as string }, data: d });
+    await audit(req, "ai_guide_updated", { id: g.id, title: g.title, is_active: g.is_active });
+    res.json(g);
+  } catch (e) { handle(e, res, next); }
+});
+router.delete("/ai-guides/:id", async (req, res, next) => {
+  try {
+    const g = await prisma.catalog2AiGuide.delete({ where: { id: req.params.id as string } });
+    await audit(req, "ai_guide_deleted", { id: g.id, title: g.title });
+    res.json({ ok: true });
+  } catch (e) { handle(e, res, next); }
 });
 // D-7: a IA lê TUDO que está cadastrado no produto/tarefa e SUGERE o questionário (não salva nada; o administrador revisa e edita antes de criar).
 router.post("/tasks/:id/questionnaire/ai-suggest", async (req, res, next) => {
@@ -1329,6 +1358,13 @@ router.put("/versions/:id", async (req, res, next) => {
       base_commercial_deadline_hours: z.number().int().min(1).max(87600).nullish(),
       // Entrega emergencial (B3): oferecer ou não prazo menor por adicional (por etapa).
       emergency_enabled: z.boolean().optional(),
+      emergency_mode: z.enum(["step", "product"]).optional(),
+      emergency_product_reduction_percent: z.number().int().min(1).max(95).nullish(),
+      emergency_product_extra_percent: z.number().min(0).max(1000).nullish(),
+      emergency_same_day_limit_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use o formato HH:MM.").nullish(),
+      emergency_min_notice_hours: z.number().int().min(0).max(8760).nullish(),
+      emergency_executor_accept_required: z.boolean().optional(),
+      emergency_executor_accept_hours: z.number().int().min(1).max(720).nullish(),
       // Modalidades de contratação (Pedido 2)
       accepts_one_time: z.boolean().optional(),
       accepts_recurring: z.boolean().optional(),
@@ -1344,7 +1380,7 @@ router.put("/versions/:id", async (req, res, next) => {
     }).parse(req.body);
     const before = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: req.params.id as string } });
     const data: Record<string, unknown> = { updated_by_user_id: req.user!.id };
-    for (const k of ["title", "summary", "full_description", "change_summary", "base_commercial_deadline_days", "emergency_enabled", "accepts_one_time", "accepts_recurring", "has_initial_implementation", "implementation_rule", "implementation_blocks_operation", "sell_mode", "show_executor_name", "pricing_mode", "manual_price", "manual_deadline_days"] as const) if (d[k] !== undefined) data[k] = d[k];
+    for (const k of ["title", "summary", "full_description", "change_summary", "base_commercial_deadline_days", "emergency_enabled", "emergency_mode", "emergency_product_reduction_percent", "emergency_product_extra_percent", "emergency_same_day_limit_time", "emergency_min_notice_hours", "emergency_executor_accept_required", "emergency_executor_accept_hours", "accepts_one_time", "accepts_recurring", "has_initial_implementation", "implementation_rule", "implementation_blocks_operation", "sell_mode", "show_executor_name", "pricing_mode", "manual_price", "manual_deadline_days"] as const) if (d[k] !== undefined) data[k] = d[k];
     // Prazo em horas úteis: guarda as horas e o reflexo em dias úteis (calendário da plataforma). Informar só dias zera as horas.
     if (d.base_commercial_deadline_hours !== undefined) {
       if (d.base_commercial_deadline_hours === null) { data.base_commercial_deadline_hours = null; data.base_commercial_deadline_days = null; }
@@ -2003,6 +2039,7 @@ async function assertAddonTargets(versionId: string, taskId: string | null | und
 const addonSchema = z.object({
   key: z.string().min(1).max(60), name: z.string().min(1).max(160), description: z.string().max(4000).nullish(),
   sort_order: z.number().int().optional(), is_default_selected: z.boolean().optional(), is_active: z.boolean().optional(),
+  contract_phase: z.enum(["before", "during", "both"]).optional(),
   base_cost: z.number().nonnegative().nullish(), target_task_id: z.string().nullish(), target_step_id: z.string().nullish(),
   media_url: z.string().max(1_500_000).nullish(), icon_key: z.string().max(60).nullish(),
   // Tipos universais de adicional (padrão "checkbox" = comportamento histórico).
@@ -2030,7 +2067,7 @@ router.post("/versions/:id/addons", async (req, res, next) => {
     await assertChargeMeta(version.id, d);
     assertAddonConfig(d);
     const created = await prisma.$transaction(async (tx) => {
-      const c = await tx.catalog2Addon.create({ data: { addon_type: d.addon_type ?? "checkbox", qty_min: d.qty_min ?? null, qty_max: d.qty_max ?? null, qty_step: d.qty_step ?? null, unit_label: d.unit_label ?? null, unit_base_cost: d.unit_base_cost ?? null, unit_minutes: d.unit_minutes ?? null, unit_deadline_days: d.unit_deadline_days ?? null, auto_quote_limit: d.auto_quote_limit ?? null, version_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, is_default_selected: d.is_default_selected ?? false, is_active: d.is_active ?? true, base_cost: d.base_cost ?? null, target_task_id: d.target_task_id ?? null, target_step_id: d.target_step_id ?? null, ...(d.charge_scope ? { charge_scope: d.charge_scope } : {}), charge_start_cycle: d.charge_start_cycle ?? 0, charge_end_cycle: d.charge_end_cycle ?? null, charge_quantity: d.charge_quantity ?? null, source_task_key: d.source_task_key ?? null, source_step_key: d.source_step_key ?? null } });
+      const c = await tx.catalog2Addon.create({ data: { addon_type: d.addon_type ?? "checkbox", qty_min: d.qty_min ?? null, qty_max: d.qty_max ?? null, qty_step: d.qty_step ?? null, unit_label: d.unit_label ?? null, unit_base_cost: d.unit_base_cost ?? null, unit_minutes: d.unit_minutes ?? null, unit_deadline_days: d.unit_deadline_days ?? null, auto_quote_limit: d.auto_quote_limit ?? null, version_id: req.params.id as string, key: d.key, name: d.name, description: d.description ?? null, sort_order: d.sort_order ?? 99, is_default_selected: d.is_default_selected ?? false, contract_phase: d.contract_phase ?? "before", is_active: d.is_active ?? true, base_cost: d.base_cost ?? null, target_task_id: d.target_task_id ?? null, target_step_id: d.target_step_id ?? null, ...(d.charge_scope ? { charge_scope: d.charge_scope } : {}), charge_start_cycle: d.charge_start_cycle ?? 0, charge_end_cycle: d.charge_end_cycle ?? null, charge_quantity: d.charge_quantity ?? null, source_task_key: d.source_task_key ?? null, source_step_key: d.source_step_key ?? null } });
       await recordCatalog2ProductHistory(tx, {
         productId: version.product_id, versionId: version.id, eventType: "addon_added",
         description: `Adicional "${c.name}" adicionado.`, after: { key: c.key, name: c.name },
@@ -4473,6 +4510,12 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
       ? { level: "pronto", note: `v${published.version_number} publicada.` }
       : { level: "bloqueador", note: "Nunca publicado — invisível para o cliente (bloco 5 não publica)." },
   };
+
+  // R21-03 (reunião 21/10): etapa marcada como dependente de variação/adicional sem vínculo aparece como pendência de VARIAÇÕES (atalho Corrigir leva para lá).
+  if (targetVersion) {
+    const unlinked = await unlinkedDependentSteps(targetVersion.id).catch(() => []);
+    if (unlinked.length > 0) items.variacoes = { level: "bloqueador", note: `A etapa "${unlinked[0].name}"${unlinked.length > 1 ? ` (e mais ${unlinked.length - 1})` : ""} foi marcada como dependente de variação ou adicional, mas nenhuma variação ou adicional está vinculada a ela. Em Variações ou Adicionais → Ver → Configurar impactos, use "Incluir etapa".` };
+  }
 
   // Tudo o que impediria a publicação (custo/preço/prazo indefinidos, modalidade sem preço, IA sem perfil, ciclo de dependência,
   // modelo inativo, referência quebrada…) aparece no checklist, na versão em edição.

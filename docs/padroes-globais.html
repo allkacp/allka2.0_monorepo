@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Padrões Globais Allka</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: lista em cartões; cada padrão tem nome, estado, explicação, exemplo e um botão que copia o texto pronto para colar no chat. */
+:root{
+  --bg:#f5f4fa; --card:#ffffff; --fg:#1d1a2b; --muted:#5f5a78; --line:#dedbec;
+  --accent:#6e2c96; --accent-fg:#ffffff; --final:#0f7a4d; --final-bg:#dff5ea; --edit:#9a5b00; --edit-bg:#fdefd2; --code:#efecf8;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#15121f; --card:#1f1b2e; --fg:#f0edfa; --muted:#aaa4c4; --line:#352f4b;
+  --accent:#b888e0; --accent-fg:#1a1030; --final:#6fdba5; --final-bg:#16372b; --edit:#f0c070; --edit-bg:#3a2c10; --code:#2a2540; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#15121f; --card:#1f1b2e; --fg:#f0edfa; --muted:#aaa4c4; --line:#352f4b;
+  --accent:#b888e0; --accent-fg:#1a1030; --final:#6fdba5; --final-bg:#16372b; --edit:#f0c070; --edit-bg:#3a2c10; --code:#2a2540; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.5;
+  padding-block:24px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-size:26px;line-height:1.2;margin:0;text-wrap:balance}
+h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:12px 0 0}
+p{margin:0}
+.lead{color:var(--muted);max-width:62ch}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button{font:inherit;cursor:pointer}
+.btn{background:var(--accent);color:var(--accent-fg);border:0;border-radius:10px;padding:10px 16px;font-weight:600}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.btn.small{padding:6px 12px;font-size:13px;border-radius:8px}
+.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn.ok{background:var(--final);color:#fff;border-color:var(--final)}
+.list{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.name{font-size:18px;font-weight:700;margin-right:8px}
+.tag{font-size:12px;font-weight:700;border-radius:999px;padding:2px 10px}
+.tag.final{background:var(--final-bg);color:var(--final)}
+.tag.edit{background:var(--edit-bg);color:var(--edit)}
+.ex{color:var(--muted);font-size:14px}
+ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:2px;font-size:14px}
+code{background:var(--code);border-radius:5px;padding:1px 5px;font-family:var(--mono);font-size:12.5px;overflow-wrap:anywhere}
+.fallback{width:100%;min-height:200px;font-family:var(--mono);font-size:12px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px}
+</style>
+</head>
+<body>
+<main>
+  <header style="display:flex;flex-direction:column;gap:8px">
+    <h1>Padrões globais da plataforma</h1>
+    <p class="lead">Atualizado em 21/10/2026. Use o nome exato ao pedir uma tela nova, por exemplo: “transforme isso numa Janela Moldura”. Os links de exemplo são do ambiente local (localhost:8082).</p>
+    <div class="bar">
+      <button class="btn" id="copyAll">Copiar a lista completa</button>
+      <button class="btn ghost" id="copyFinal">Copiar só os fechados</button>
+      <span id="status" role="status" class="ex"></span>
+    </div>
+  </header>
+  <section class="list" aria-labelledby="h-final"><h2 id="h-final">Fechados (valem para todas as telas)</h2><div class="list" id="finals"></div></section>
+  <section class="list" aria-labelledby="h-edit"><h2 id="h-edit">Ainda podem mudar</h2><div class="list" id="edits"></div></section>
+  <section id="fbBox" hidden class="list"><h2>Seu navegador não deixou copiar sozinho: selecione o texto abaixo e copie</h2><textarea class="fallback" id="fb" readonly></textarea></section>
+</main>
+<script>
+var BASE = "http://localhost:8082";
+var P = [
+ {n:"Painel Moldura", f:true, o:"Container grande que abre por cima da página, com contorno violeta.",
+  ex:"Cadastro de Produtos → ícone ▶ de um produto ("+BASE+"/admin/cadastro-produtos)",
+  r:["30 px de margem nos 4 lados e 10 px de margem interna; acompanha a barra lateral (se ela recolhe, o painel cresce)","Cabeçalho e rodapé a 12 px das bordas; não fecha ao clicar fora","Código: FramedPanel (components/framed-panel.tsx)"]},
+ {n:"Janela Moldura", f:true, o:"Janela menor que abre por cima de um Painel Moldura, com véu branco claro.",
+  ex:"Produto 1 → Classificação e opções → Variações → Ver → Configurar impactos ("+BASE+"/admin/cadastro-produtos/1)",
+  r:["O véu cobre tudo menos a barra lateral e acompanha a sidebar","Centralizada, até cerca de 990 px de largura, com rolagem por dentro","Código: FramedModal (components/framed-panel.tsx)"]},
+ {n:"Bolinha numerada em degradê", f:true, o:"Os números 1, 2, 3 dos blocos usam o degradê da plataforma (muda junto com “Personalizar cores”).",
+  ex:"Produto 1 → aba “Informações do produto” e “Variação 1” ("+BASE+"/admin/cadastro-produtos/1)",
+  r:["Classe .section-number-badge (app/globals.css)","“Resumo da mudança” usa fundo cinza bem claro (tone=soft)"]},
+ {n:"Abrir todos / Fechar todos", f:true, o:"Botão duplo que abre ou fecha todos os blocos (acordeões) da tela. Vai em toda tela que tiver acordeões.",
+  ex:"Produto 1 → aba “Informações do produto” ("+BASE+"/admin/cadastro-produtos/1)",
+  r:["Peça: AccordionToggleAll + useAccordionAll (novo-catalogo/accordion-toggle-all.tsx)"]},
+ {n:"Fundo escurecido padrão", f:true, o:"O fundo atrás de qualquer janela: um pouco mais escuro e levemente desfocado, nunca 100% escuro.",
+  ex:"Qualquer janela ou alerta",
+  r:["bg-slate-950/60 + blur de 2 px","A barra lateral sempre aparece: o fundo começa depois dela"]},
+ {n:"Barra lateral recolhida", f:true, o:"Com a sidebar recolhida, os botões Expandir e Personalizar cores ficam dentro da barra, abaixo do logo.",
+  ex:"Qualquer tela → botão ☰ da sidebar ("+BASE+"/admin/dashboard)",
+  r:["Nada aparece fora da barra ao passar o mouse"]},
+ {n:"Tela Moldura Clara", f:false, o:"O painel branco que envolve toda tela do sistema (cantos arredondados, borda e sombra suave). Nome provisório.",
+  ex:"Dashboard ("+BASE+"/admin/dashboard) e Empresas ("+BASE+"/admin/empresas)",
+  r:["Código: STANDARD_SHELL_PANEL_CLASS (components/standard-page-shell.tsx)","Dashboard usa DashboardShellFrame com margem menor"]},
+ {n:"Tela Moldura Escura", f:false, o:"O mesmo painel com fundo e borda mais escuros (#d6daf0), usado nas telas de cadastro. Nome provisório.",
+  ex:"Cadastro de Produtos ("+BASE+"/admin/cadastro-produtos)",
+  r:["Hoje só existe como sobreposição de classes em produtos/page.tsx e embedded-slide-screen.tsx; falta virar constante compartilhada"]},
+ {n:"Linha + Ver", f:false, o:"Item recolhido numa linha (nome, resumo, etiquetas) com botão Ver que abre Painel Moldura. Com o produto em leitura aparece Editar dentro do painel; configurar algo dentro abre Janela Moldura.",
+  ex:"Produto 1 → Entrega (Questionário, Entregáveis), Variações, Adicionais, Prazos e condições ("+BASE+"/admin/cadastro-produtos/1)",
+  r:["Peças: PanelCard, VariationRow, AddonRow (product-editor.tsx)"]},
+ {n:"Lista pronta + modal", f:false, o:"A página mostra só o item pronto; adicionar ou editar abre um modal, como na plataforma antiga.", ex:"Questionário, etapas, entregáveis", r:[]},
+ {n:"Acordeão de blocos", f:false, o:"Blocos independentes, fechados por padrão, com resumo quando fechados e status real (Completo, Incompleto, Com erro).", ex:"Editar etapa", r:[]},
+ {n:"Rascunho da tela", f:false, o:"Adicionar, alterar e remover só mexe numa lista local; o servidor só é tocado ao salvar.", ex:"Acessos e entregáveis da etapa", r:[]},
+ {n:"Salvar rascunho × Concluir", f:false, o:"Rascunho aceita incompleto; Concluir valida; erro nunca fecha a tela nem apaga nada; fechar com alteração pergunta o que fazer.", ex:"Editar etapa", r:[]},
+ {n:"Campo dependente", f:false, o:"Quando uma escolha revela outros campos: o bloco aparece, a tela rola e destaca por instantes.", ex:"Aprovação do cliente na etapa", r:[]},
+ {n:"Modal de 8 blocos (entregável)", f:false, o:"Modal largo, cabeçalho fixo, rodapé sempre à vista e blocos recolhíveis.", ex:"Novo entregável", r:[]},
+ {n:"Resumo em linguagem simples", f:false, o:"Texto que explica em português o que vai acontecer com a configuração escolhida.", ex:"Aprovação do cliente", r:[]},
+ {n:"Escolha de escopo do modelo", f:false, o:"Ao salvar um modelo global usado: Criar novo modelo × Editar globalmente, com o impacto.", ex:"Modelos globais", r:[]},
+ {n:"Fechamento de tarefa técnica", f:false, o:"Resumo em linguagem simples e tabela de farol (🟢 pronto · 🟡 aguardando teste · 🔴 não deu certo · ⏸ adiado).", ex:"Fim de cada entrega no chat", r:[]}
+];
+function txt(p){
+  var s = p.n + (p.f ? " [FECHADO]" : " [PODE MUDAR]") + "\n" + p.o + "\nExemplo: " + p.ex;
+  if (p.r.length) s += "\nRegras:\n" + p.r.map(function(x){return "- " + x;}).join("\n");
+  return s;
+}
+function all(list){ return "PADRÕES GLOBAIS DA PLATAFORMA ALLKA (21/10/2026)\n\n" + list.map(txt).join("\n\n"); }
+var status = document.getElementById("status");
+function flash(msg){ status.textContent = msg; setTimeout(function(){ status.textContent = ""; }, 2500); }
+function copy(text, btn){
+  function done(){ if(btn){ var old = btn.textContent; btn.textContent = "Copiado ✓"; btn.classList.add("ok"); setTimeout(function(){ btn.textContent = old; btn.classList.remove("ok"); }, 1800); } flash("Copiado. É só colar no chat."); }
+  function fallback(){ var b = document.getElementById("fbBox"); var t = document.getElementById("fb"); t.value = text; b.hidden = false; t.focus(); t.select(); b.scrollIntoView({block:"center"}); }
+  try { navigator.clipboard.writeText(text).then(done, fallback); } catch(e){ fallback(); }
+}
+function card(p){
+  var d = document.createElement("article"); d.className = "card";
+  var h = document.createElement("div"); h.className = "head";
+  var l = document.createElement("div");
+  var nm = document.createElement("span"); nm.className = "name"; nm.textContent = p.n;
+  var tg = document.createElement("span"); tg.className = "tag " + (p.f ? "final" : "edit"); tg.textContent = p.f ? "Fechado" : "Pode mudar";
+  l.appendChild(nm); l.appendChild(tg);
+  var b = document.createElement("button"); b.className = "btn small"; b.type = "button"; b.textContent = "Copiar este";
+  b.addEventListener("click", function(){ copy(txt(p), b); });
+  h.appendChild(l); h.appendChild(b); d.appendChild(h);
+  var o = document.createElement("p"); o.textContent = p.o; d.appendChild(o);
+  var e = document.createElement("p"); e.className = "ex"; e.textContent = "Exemplo: " + p.ex; d.appendChild(e);
+  if (p.r.length){ var u = document.createElement("ul"); p.r.forEach(function(x){ var li = document.createElement("li"); li.textContent = x; u.appendChild(li); }); d.appendChild(u); }
+  return d;
+}
+var finals = P.filter(function(p){return p.f;}), edits = P.filter(function(p){return !p.f;});
+finals.forEach(function(p){ document.getElementById("finals").appendChild(card(p)); });
+edits.forEach(function(p){ document.getElementById("edits").appendChild(card(p)); });
+document.getElementById("copyAll").addEventListener("click", function(){ copy(all(P), this); });
+document.getElementById("copyFinal").addEventListener("click", function(){ copy(all(finals), this); });
+</script>
+</body>
+</html>

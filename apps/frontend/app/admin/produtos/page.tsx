@@ -54,6 +54,8 @@ import {
   STANDARD_SHELL_PANEL_CLASS,
   STANDARD_SHELL_TABLE_CARD_CLASS,
   StandardPageBanner,
+  STANDARD_SHELL_PANEL_DARK_CLASS,
+  STANDARD_SHELL_DARK_BG_CLASS,
 } from "@/components/standard-page-shell";
 import {
   usePersistedViewMode,
@@ -789,10 +791,10 @@ export default function AdminProdutosPage() {
 
   return (
     <div
-      className={`${STANDARD_SHELL_PANEL_CLASS} !border-[#c3c8e6] !bg-[#d6daf0] dark:!border-violet-900/60 dark:!bg-violet-950/40`}
+      className={STANDARD_SHELL_PANEL_DARK_CLASS}
     >
       <div className="relative flex h-full min-h-[70vh] flex-col">
-        <div className="shrink-0 -mb-[11px] bg-[#d6daf0] dark:bg-violet-950/40">
+        <div className={`shrink-0 -mb-[11px] ${STANDARD_SHELL_DARK_BG_CLASS}`}>
           <StandardPageBanner
             icon={Package}
             title="Cadastro de Produtos"

@@ -1084,7 +1084,10 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     const ref = `${t.key}:${st.key}`;
     const minutes = humanBreakdown.filter((b) => b.task_key === ref).reduce((a, b) => a + b.minutes, 0) || (st.estimated_minutes ?? 0);
     const exact = humanExact.filter((b) => b.task_key === ref).reduce((a, b) => a + b.cost, 0);
-    return { task_key: t.key, step_key: st.key, name: st.name, sort_order: st.sort_order, depends_on_json: st.depends_on_json ?? null, minutes, reduction_minutes: st.emergency_reduction_minutes ?? null, extra_kind: st.emergency_extra_kind ?? null, extra_value: st.emergency_extra_value ?? null, exact_cost: exact > 0 ? exact : null };
+    return { task_key: t.key, step_key: st.key, name: st.name, sort_order: st.sort_order, depends_on_json: st.depends_on_json ?? null, minutes, ...(version.emergency_mode === "product"
+      ? { reduction_minutes: Math.floor(minutes * ((version.emergency_product_reduction_percent ?? 0) / 100)) || null, extra_kind: version.emergency_product_extra_percent != null ? "percent" : null, extra_value: version.emergency_product_extra_percent ?? null }
+      : { reduction_minutes: st.emergency_reduction_minutes ?? null, extra_kind: st.emergency_extra_kind ?? null, extra_value: st.emergency_extra_value ?? null }),
+      exact_cost: exact > 0 ? exact : null };
   }));
   const emergencyInfo = computeEmergency({
     enabled: !!version.emergency_enabled, selected: !!selection.emergency, steps: emergencySteps,

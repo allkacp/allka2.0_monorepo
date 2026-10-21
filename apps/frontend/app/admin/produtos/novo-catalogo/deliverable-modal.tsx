@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { apiClient } from "@/lib/api-client";
-import { VISIBILITY_OPTIONS, type Visibility } from "./catalog2-ops-ui";
+import { VisibilitySelect, visibilitySummary } from "./catalog2-ops-ui";
 import {
   DELIVERABLE_CYCLE_SCOPES, DELIVERABLE_MOMENTS, DELIVERABLE_RESPONSIBLES, DELIVERABLE_TYPES, FILE_PREFIX, deliverableIssues, type DeliverableIssue, type Fields,
 } from "./catalog2-deliverable-fields";
@@ -93,7 +93,7 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
       case 5: return [v.is_required ? "obrigatório" : "opcional", v.evidence_required ? "exige evidência" : null, v.requires_qualification ? "qualificação interna" : null, v.requires_approval ? "aprovação do cliente" : "sem aprovação"].filter(Boolean).join(" · ");
       case 6: return v.is_conditional ? (v.condition_text.trim() ? `Condicional: ${v.condition_text.trim()}` : "Condicional — falta a condição") : "Vale sempre";
       case 7: return v.template_name || "nenhum arquivo";
-      case 8: return VISIBILITY_OPTIONS.find(([k]) => k === v.visibility)?.[1] ?? v.visibility;
+      case 8: return visibilitySummary(v.visibility);
     }
   };
 
@@ -229,7 +229,7 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
                   {sec.id === 8 && (
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className={LBL}>Quem pode ver este campo
-                        <select className={CTL} value={v.visibility} aria-label="Quem pode ver este campo" onChange={(e) => set({ visibility: e.target.value as Visibility })}>{VISIBILITY_OPTIONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+                        <VisibilitySelect large value={v.visibility} onChange={(x) => set({ visibility: x })} />
                       </label>
                       <div className={LBL}>Identificador permanente<span className="rounded bg-slate-100 px-2 py-2 text-xs font-normal text-slate-600" data-testid="deliverable-modal-id">{keyLabel ? `ID ${keyLabel}` : "gerado ao salvar"}</span></div>
                     </div>

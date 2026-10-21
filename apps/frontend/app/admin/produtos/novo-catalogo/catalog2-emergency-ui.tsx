@@ -58,13 +58,29 @@ function StepLine({ task, step, readOnly, act, enabled }: any) {
   );
 }
 
+/** Campo simples que guarda ao sair (blur) — vazio limpa o valor. */
+function SaveField({ label, hint, value, readOnly, placeholder, testId, inputMode = "numeric", onSave }: { label: string; hint?: string; value: string; readOnly: boolean; placeholder?: string; testId: string; inputMode?: "numeric" | "decimal" | "text"; onSave: (raw: string) => void }) {
+  const [v, setV] = useState(value);
+  useEffect(() => { setV(value); }, [value]);
+  return (
+    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+      {label}
+      <Input aria-label={label} data-testid={testId} className="mt-0.5 h-8 text-xs" inputMode={inputMode} placeholder={placeholder} value={v} disabled={readOnly} onChange={(e) => setV(e.target.value)} onBlur={() => { if (v.trim() !== value.trim()) onSave(v.trim()); }} />
+      {hint && <span className="mt-0.5 block text-[10px] font-normal text-slate-500">{hint}</span>}
+    </label>
+  );
+}
+
 export function EmergencyCard({ version, readOnly, act }: { version: any; readOnly: boolean; act: any }) {
   const enabled = !!version.emergency_enabled;
   const [sim, setSim] = useState<any>(null);
   const [simErr, setSimErr] = useState<string | null>(null);
   const tasks: any[] = version.tasks ?? [];
-  const configured = tasks.flatMap((t) => t.steps ?? []).filter((s: any) => (s.emergency_reduction_minutes ?? 0) > 0 || s.emergency_extra_kind).length;
-  const stepsSig = JSON.stringify(tasks.flatMap((t) => (t.steps ?? []).map((s: any) => [s.id, s.estimated_minutes, s.emergency_reduction_minutes, s.emergency_extra_kind, s.emergency_extra_value])));
+  const productWide = version.emergency_mode === "product";
+  const configured = productWide ? ((version.emergency_product_reduction_percent ?? 0) > 0 ? 1 : 0) : tasks.flatMap((t) => t.steps ?? []).filter((s: any) => (s.emergency_reduction_minutes ?? 0) > 0 || s.emergency_extra_kind).length;
+  const save = (patch: Record<string, unknown>, ok: string) => void act(() => apiClient.updateCatalog2VersionInfo(version.id, patch), ok);
+  const toInt = (raw: string) => (raw === "" ? null : Math.round(num(raw)));
+  const stepsSig = JSON.stringify(tasks.flatMap((t) => (t.steps ?? []).map((s: any) => [s.id, s.estimated_minutes, s.emergency_reduction_minutes, s.emergency_extra_kind, s.emergency_extra_value])).concat([[version.emergency_mode, version.emergency_product_reduction_percent, version.emergency_product_extra_percent]]));
   useEffect(() => {
     if (!enabled || configured === 0) { setSim(null); return; }
     let live = true;
@@ -89,11 +105,27 @@ export function EmergencyCard({ version, readOnly, act }: { version: any; readOn
       </div>
       {enabled && (
         <div className="mt-2">
-          <div className="grid grid-cols-[minmax(0,1.6fr)_90px_120px_100px_auto] gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            <span>Etapa</span><span>Horas a reduzir</span><span>Adicional</span><span>Valor</span><span />
+          <div className="mb-2 flex flex-wrap items-center gap-3 text-xs" role="radiogroup" aria-label="Como a entrega emergencial é definida" data-testid="emergency-mode">
+            <label className="flex items-center gap-1.5"><input type="radio" name={`emergency-mode-${version.id}`} checked={!productWide} disabled={readOnly} onChange={() => save({ emergency_mode: "step" }, "Entrega emergencial definida por etapa.")} /> Por etapa (cada etapa diz quanto encurta e quanto cobra)</label>
+            <label className="flex items-center gap-1.5"><input type="radio" name={`emergency-mode-${version.id}`} checked={productWide} disabled={readOnly} onChange={() => save({ emergency_mode: "product" }, "Entrega emergencial definida para o produto inteiro.")} /> Condição do produto inteiro (um % vale para todas as etapas)</label>
           </div>
-          {tasks.flatMap((t) => (t.steps ?? []).map((s: any) => <StepLine key={s.id} task={t} step={s} readOnly={readOnly} act={act} enabled={enabled} />))}
-          {configured === 0 && <p className="mt-2 text-[11px] text-amber-700">Nenhuma etapa configurada ainda — sem isso a opção não aparece para o cliente e a versão não publica.</p>}
+          {productWide && (
+            <div className="mb-2 grid gap-2 rounded-lg border border-violet-200 bg-violet-50/60 p-2 sm:grid-cols-2 dark:border-violet-900 dark:bg-violet-950/20" data-testid="emergency-product-fields">
+              <SaveField label="Redução do prazo de TODAS as etapas (%)" hint="Ex.: 30 = cada etapa leva 30% menos tempo." value={version.emergency_product_reduction_percent != null ? String(version.emergency_product_reduction_percent) : ""} readOnly={readOnly} testId="emergency-product-reduction" placeholder="ex.: 30" onSave={(raw) => save({ emergency_product_reduction_percent: toInt(raw) }, "Redução do prazo guardada.")} />
+              <SaveField label="Adicional de preço em TODAS as etapas (%)" hint="Ex.: 20 = cada etapa custa 20% a mais. Vazio = sem adicional." inputMode="decimal" value={version.emergency_product_extra_percent != null ? String(version.emergency_product_extra_percent) : ""} readOnly={readOnly} testId="emergency-product-extra" placeholder="ex.: 20" onSave={(raw) => save({ emergency_product_extra_percent: raw === "" ? null : num(raw) }, "Adicional de preço guardado.")} />
+            </div>
+          )}
+          <div className="mb-2 grid gap-2 rounded-lg border border-slate-200 p-2 sm:grid-cols-2 dark:border-slate-800" data-testid="emergency-limits">
+            <SaveField label="Horário-limite no mesmo dia em que a tarefa começa" hint="Formato HH:MM (ex.: 12:00). Depois desse horário não dá para pedir no dia de início. Vazio = sem limite." inputMode="text" value={version.emergency_same_day_limit_time ?? ""} readOnly={readOnly} testId="emergency-same-day" placeholder="12:00" onSave={(raw) => save({ emergency_same_day_limit_time: raw === "" ? null : raw }, "Horário-limite guardado.")} />
+            <SaveField label="Antecedência mínima antes do fim da tarefa (horas)" hint="Faltando menos que isso para o prazo final, o pedido é recusado. Vazio = sem mínimo." value={version.emergency_min_notice_hours != null ? String(version.emergency_min_notice_hours) : ""} readOnly={readOnly} testId="emergency-min-notice" placeholder="ex.: 24" onSave={(raw) => save({ emergency_min_notice_hours: toInt(raw) }, "Antecedência mínima guardada.")} />
+            <label className="flex items-center gap-2 text-xs font-semibold sm:col-span-2"><input type="checkbox" data-testid="emergency-accept-required" checked={!!version.emergency_executor_accept_required} disabled={readOnly} onChange={(e) => save({ emergency_executor_accept_required: e.target.checked }, e.target.checked ? "O profissional precisará aceitar a entrega rápida." : "A entrega rápida não depende de aceite.")} /> O profissional precisa aceitar ou recusar a entrega rápida (recusou → o valor adicional é estornado)</label>
+            {version.emergency_executor_accept_required && <SaveField label="Prazo para o profissional responder (horas)" value={version.emergency_executor_accept_hours != null ? String(version.emergency_executor_accept_hours) : ""} readOnly={readOnly} testId="emergency-accept-hours" placeholder="ex.: 4" onSave={(raw) => save({ emergency_executor_accept_hours: toInt(raw) }, "Prazo de resposta guardado.")} />}
+          </div>
+          {!productWide && <div className="grid grid-cols-[minmax(0,1.6fr)_90px_120px_100px_auto] gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <span>Etapa</span><span>Horas a reduzir</span><span>Adicional</span><span>Valor</span><span />
+          </div>}
+          {!productWide && tasks.flatMap((t) => (t.steps ?? []).map((s: any) => <StepLine key={s.id} task={t} step={s} readOnly={readOnly} act={act} enabled={enabled} />))}
+          {configured === 0 && <p className="mt-2 text-[11px] text-amber-700">{productWide ? "Informe o % de redução do prazo — sem isso a opção não aparece para o cliente e a versão não publica." : "Nenhuma etapa configurada ainda — sem isso a opção não aparece para o cliente e a versão não publica."}</p>}
           {em?.available && (
             <p className="mt-2 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-900 dark:bg-violet-950/30 dark:text-violet-100" data-testid="emergency-summary">
               Com entrega emergencial: prazo das etapas de <strong>{(em.minutes_before / 60).toLocaleString("pt-BR")} h</strong> para <strong>{(em.minutes_after / 60).toLocaleString("pt-BR")} h</strong>

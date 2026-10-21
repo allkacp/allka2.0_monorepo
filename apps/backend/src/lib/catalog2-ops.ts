@@ -32,8 +32,35 @@ export function audienceOf(user?: { role?: string | null; account_type?: string 
   if (user.account_type === "agencias") return "agency";
   return "client"; // empresas e qualquer outro perfil: o mais restrito
 }
-export function canSee(viewer: Visibility, fieldVisibility: Visibility): boolean {
-  return RANK[viewer] <= RANK[fieldVisibility];
+// R21-13 (reunião 21/10): além do nível antigo (hierárquico), o campo aceita uma LISTA de perfis marcados (internal,leader,executor,agency,client).
+// Administração sempre enxerga. Nível antigo continua valendo: "agency" = administração + líder + quem executa + agência.
+export type VisibilityValue = string;
+const levelsUpTo = (v: Visibility): Visibility[] => VISIBILITY_LEVELS.filter((l) => RANK[l] <= RANK[v]);
+export function expandVisibility(v: string | null | undefined): Set<Visibility> {
+  const raw = String(v ?? "client").trim();
+  if ((VISIBILITY_LEVELS as readonly string[]).includes(raw)) return new Set(levelsUpTo(raw as Visibility));
+  const tokens = raw.split(",").map((t) => t.trim()).filter((t): t is Visibility => (VISIBILITY_LEVELS as readonly string[]).includes(t));
+  return new Set<Visibility>(["internal", ...tokens]);
+}
+export function isValidVisibilityValue(v: unknown): v is string {
+  if (typeof v !== "string") return false;
+  if ((VISIBILITY_LEVELS as readonly string[]).includes(v)) return true;
+  const parts = v.split(",").map((t) => t.trim());
+  return parts.length > 0 && parts.every((t) => (VISIBILITY_LEVELS as readonly string[]).includes(t)) && new Set(parts).size === parts.length;
+}
+/** Guarda do jeito mais simples: nível antigo quando a lista é exatamente "até um nível"; senão a lista ordenada (com administração). */
+export function normalizeVisibilityValue(v: string): string {
+  if ((VISIBILITY_LEVELS as readonly string[]).includes(v)) return v;
+  const set = expandVisibility(v);
+  for (const level of VISIBILITY_LEVELS) {
+    const upTo = levelsUpTo(level);
+    if (upTo.length === set.size && upTo.every((l) => set.has(l))) return level;
+  }
+  return VISIBILITY_LEVELS.filter((l) => set.has(l)).join(",");
+}
+export const visibilityValueSchema = z.string().refine(isValidVisibilityValue, "Visibilidade inválida: use um nível ou uma lista de perfis.").transform(normalizeVisibilityValue);
+export function canSee(viewer: Visibility, fieldVisibility: string): boolean {
+  return expandVisibility(fieldVisibility).has(viewer);
 }
 
 // ── Tarefa ────────────────────────────────────────────────────────────────
@@ -64,7 +91,7 @@ export interface TaskOps {
   expected_output?: string;
   acceptance_criteria?: string;
   risks_notes?: string;
-  visibility?: Partial<Record<TaskOpsTextField, Visibility>>;
+  visibility?: Partial<Record<TaskOpsTextField, string>>;
 }
 
 // ── Etapa ─────────────────────────────────────────────────────────────────
@@ -138,11 +165,11 @@ export interface StepOps {
    * ao ligar de novo) e as chaves dos acessos de outras etapas que ela usava. Nada disso vale em execução enquanto guardado.
    */
   access_parked?: { reqs: Record<string, unknown>[]; keys: string[] };
-  visibility?: Partial<Record<StepOpsTextField | "completion_criteria", Visibility>>;
+  visibility?: Partial<Record<StepOpsTextField | "completion_criteria", string>>;
 }
 
 // ── Validação (API) ───────────────────────────────────────────────────────
-const visibilityEnum = z.enum(VISIBILITY_LEVELS);
+const visibilityEnum = visibilityValueSchema;
 const text = (max: number) => z.string().max(max).nullish();
 export const taskOpsSchema = z
   .object({
@@ -177,12 +204,12 @@ export const stepOpsSchema = z
   .strict()
   .nullish();
 
-function cleanVisibility<K extends string>(raw: unknown, allowed: readonly K[]): Partial<Record<K, Visibility>> | undefined {
+function cleanVisibility<K extends string>(raw: unknown, allowed: readonly K[]): Partial<Record<K, string>> | undefined {
   if (!raw || typeof raw !== "object") return undefined;
-  const out: Partial<Record<K, Visibility>> = {};
+  const out: Partial<Record<K, string>> = {};
   for (const k of allowed) {
     const v = (raw as Record<string, unknown>)[k];
-    if (typeof v === "string" && (VISIBILITY_LEVELS as readonly string[]).includes(v)) out[k] = v as Visibility;
+    if (isValidVisibilityValue(v)) out[k] = normalizeVisibilityValue(v);
   }
   return Object.keys(out).length ? out : undefined;
 }
@@ -274,7 +301,7 @@ export interface VisibleGuideItem {
   key: string;
   label: string;
   value: string;
-  visibility: Visibility;
+  visibility: string;
 }
 export function visibleTaskGuide(ops: TaskOps | null | undefined, viewer: Visibility, extra?: { description?: string | null }): VisibleGuideItem[] {
   const items: VisibleGuideItem[] = [];

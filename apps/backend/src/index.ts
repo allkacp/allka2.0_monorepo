@@ -12,6 +12,7 @@ import { ensureDefaultAlertStandardsAndRules, runAlertEngineOnceGuarded } from "
 import { sweepPlacOverdue } from "./lib/plac";
 import { sweepInternalTaskOverdue } from "./lib/internal-tasks";
 import { sweepBrowserSessions } from "./lib/secure-browser";
+import { sweepEmergencyOffers } from "./lib/catalog2-emergency-offer";
 import { runTaskRotationOnceGuarded } from "./lib/task-rotation-engine";
 import { runTaskReleaseSchedulerOnceGuarded } from "./lib/task-release-scheduler";
 import { runCommsSchedulerOnceGuarded } from "./lib/comms";
@@ -135,6 +136,11 @@ async function main() {
     sweepPlacOverdue(prisma).catch((err) => console.error("❌ Falha na varredura de passos PLAC atrasados:", err));
     sweepInternalTaskOverdue(prisma).catch((err) => console.error("❌ Falha na varredura de tarefas internas atrasadas:", err));
   }, 15 * 60 * 1000).unref();
+
+  // R21-11: pedido de entrega rápida sem resposta do profissional no prazo vira recusa (valor cancelado).
+  setInterval(() => {
+    sweepEmergencyOffers(prisma).catch((err) => console.error("❌ Falha na varredura de pedidos de entrega rápida:", err));
+  }, 5 * 60 * 1000).unref();
 
   // Navegador seguro: encerra sessões vencidas/ociosas (a cada minuto; o prazo também é conferido ao abrir/consultar sessões).
   setInterval(() => {

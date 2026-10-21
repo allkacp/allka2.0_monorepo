@@ -198,3 +198,32 @@ describe("Entregáveis da tarefa · resumo derivado das etapas", () => {
     expect(api.createCatalog2Deliverable.mock.calls[0]).toMatchObject(["t1", { name: "Relatório mensal" }]);
   });
 });
+
+// R21-09 (reunião 21/10): o resumo de entregáveis da tarefa é só consulta; editar = ir para a etapa de origem.
+describe("Entregáveis da tarefa · modo só resumo (summaryOnly)", () => {
+  it("não mostra criar, reutilizar, editar, excluir, duplicar nem reordenar", () => {
+    render(<TaskDeliverablesEditor summaryOnly task={task([full, other])} act={act} />);
+    expect(screen.queryByRole("button", { name: /Adicionar|Reutilizar existente/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("deliverable-actions")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Editar entregável|Excluir entregável|Duplicar entregável|Subir entregável|Descer entregável/ })).not.toBeInTheDocument();
+    expect(screen.getByTestId("deliverables-hint").textContent).toContain("Ir para a etapa");
+  });
+
+  it("cada entregável tem 'Ir para a etapa' que abre a etapa de origem; sem etapa aparece o aviso", () => {
+    const got: string[] = [];
+    const on = (e: Event) => got.push((e as CustomEvent).detail.stepId);
+    window.addEventListener(OPEN_STEP_EVENT, on);
+    render(<TaskDeliverablesEditor summaryOnly task={task([full, orphan])} act={act} />);
+    fireEvent.click(screen.getByTestId("deliverable-go-step"));
+    window.removeEventListener(OPEN_STEP_EVENT, on);
+    expect(got).toEqual(["s2"]);
+    expect(screen.getByTestId("deliverable-no-step").textContent).toContain("sem etapa");
+  });
+
+  it("R21-06: a linha recolhida mostra 'arquivo anexado' só nos entregáveis que têm arquivo", () => {
+    render(<TaskDeliverablesEditor task={task([full, other])} readOnly summaryOnly act={act as any} />);
+    const marks = screen.getAllByTestId("deliverable-has-file");
+    expect(marks).toHaveLength(1);
+    expect(marks[0].getAttribute("title")).toContain("Modelo.pdf");
+  });
+});

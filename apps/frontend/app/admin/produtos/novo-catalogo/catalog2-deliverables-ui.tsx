@@ -4,12 +4,13 @@
 // etapa responsável, o que já foi configurado. Editar por aqui altera o MESMO registro (nada é copiado nem duplicado) e abre o editor com o
 // contexto da tarefa/etapa e a ação "Ir para a etapa". Entregável sem etapa aparece num grupo de pendências.
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, CopyPlus, Download, Paperclip, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { FileIconMenu } from "./catalog2-commercial-ui";
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronRight, Copy, CopyPlus, Download, Paperclip, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { apiClient } from "@/lib/api-client";
-import { VISIBILITY_OPTIONS } from "./catalog2-ops-ui";
+import { visibilitySummary } from "./catalog2-ops-ui";
 import {
   DELIVERABLE_CYCLE_SCOPES, DELIVERABLE_MOMENTS, DELIVERABLE_RESPONSIBLES, DELIVERABLE_TYPES, FILE_PREFIX, deliverableSituation, fieldsOf, labelOf, payloadOf, shortType, type Fields,
 } from "./catalog2-deliverable-fields";
@@ -65,7 +66,9 @@ export { LibraryPicker };
 
 const norm = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-export function TaskDeliverablesEditor({ task, act, readOnly = false }: { task: any; act: any; readOnly?: boolean; version?: any }) {
+/** `summaryOnly` (R21-09, reunião 21/10): só resumo — sem criar/editar/excluir/reordenar aqui; cada item leva para a etapa de origem. */
+export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnly = false }: { task: any; act: any; readOnly?: boolean; version?: any; summaryOnly?: boolean }) {
+  const canEdit = !readOnly && !summaryOnly;
   const list: any[] = task.deliverables ?? [];
   const steps: any[] = useMemo(() => [...(task.steps ?? [])].sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)), [task.steps]);
   const stepInfo = (id: string | null | undefined) => { const i = steps.findIndex((s) => s.id === id); return i < 0 ? null : { id: steps[i].id as string, name: steps[i].name as string, index: i + 1 }; };
@@ -109,14 +112,14 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false }: { task: 
             <button type="button" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200" disabled={allOpen} onClick={() => setOpen(new Set(filtered.map((d) => d.id)))}>Expandir todos</button>
             <button type="button" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200" disabled={open.size === 0} onClick={() => setOpen(new Set())}>Recolher todos</button>
           </>}
-          {!readOnly && <>
+          {canEdit && <>
             <Button type="button" size="sm" variant="outline" className="h-9" title="Reutilizar um entregável já cadastrado em outro produto" onClick={() => setLib((v) => !v)}><Copy className="h-3.5 w-3.5" />Reutilizar existente</Button>
             <Button type="button" className="h-9 bg-blue-600 text-white hover:bg-blue-700" title="Adicionar entregável (o ideal é adicionar dentro da etapa)" onClick={() => setModal({ d: null })}><Plus className="h-4 w-4" />Adicionar</Button>
           </>}
         </div>
       </div>
-      <p className="text-[11px] text-slate-500" data-testid="deliverables-hint">Cadastre cada entregável dentro da própria etapa (“Entregáveis desta etapa”). Esta lista só reúne o que já foi configurado; editar aqui altera o mesmo registro.</p>
-      {orphanCount > 0 && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900" data-testid="deliverables-orphans">{orphanCount === 1 ? "1 entregável sem etapa responsável" : `${orphanCount} entregáveis sem etapa responsável`} — {orphanCount === 1 ? "vincule-o" : "vincule-os"} a uma etapa (editar → “Etapa responsável”, ou abra a etapa e use “Vincular da tarefa”).</p>}
+      {summaryOnly ? <p className="text-[11px] text-slate-500" data-testid="deliverables-hint">Resumo só para consulta: mostra o que foi configurado em cada etapa. Para criar ou editar um entregável, abra a etapa de origem pelo botão “Ir para a etapa”.</p> : <p className="text-[11px] text-slate-500" data-testid="deliverables-hint">Cadastre cada entregável dentro da própria etapa (“Entregáveis desta etapa”). Esta lista só reúne o que já foi configurado; editar aqui altera o mesmo registro.</p>}
+      {orphanCount > 0 && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900" data-testid="deliverables-orphans">{orphanCount === 1 ? "1 entregável sem etapa responsável" : `${orphanCount} entregáveis sem etapa responsável`} — {orphanCount === 1 ? "vincule-o" : "vincule-os"} a uma etapa ({summaryOnly ? "abra a etapa de origem e use “Vincular da tarefa”" : "editar → “Etapa responsável”, ou abra a etapa e use “Vincular da tarefa”"}).</p>}
       {list.length > 3 && (
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
@@ -124,13 +127,13 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false }: { task: 
           {q && <button type="button" aria-label="Limpar busca de entregáveis" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-700" onClick={() => setQ("")}><X className="h-4 w-4" /></button>}
         </div>
       )}
-      {lib && !readOnly && <LibraryPicker task={task} act={act} onDone={() => setLib(false)} />}
+      {lib && canEdit && <LibraryPicker task={task} act={act} onDone={() => setLib(false)} />}
       <div className="space-y-2" data-testid="deliverable-list">
         {groups.map((g) => (
           <section key={g.key} className={`overflow-hidden rounded-lg border bg-white dark:bg-slate-900/60 ${g.key === "__none" ? "border-amber-300" : "border-slate-200 dark:border-slate-800"}`} data-testid="deliverable-group" data-group={g.key}>
             <h5 className={`flex flex-wrap items-center gap-2 px-3 py-1.5 text-xs font-bold ${g.key === "__none" ? "bg-amber-50 text-amber-900" : "bg-slate-50 text-slate-700 dark:bg-slate-800/40 dark:text-slate-200"}`} data-testid="deliverable-group-title">
               <span>{g.title}</span><span className="font-normal opacity-70">({g.items.length})</span>
-              {g.stepId && <button type="button" className="ml-auto text-[11px] font-semibold text-violet-700 underline" onClick={() => openStepEditor(g.stepId!)}>Ir para a etapa</button>}
+              {g.stepId && !summaryOnly && <button type="button" className="ml-auto text-[11px] font-semibold text-violet-700 underline" onClick={() => openStepEditor(g.stepId!)}>Ir para a etapa</button>}
             </h5>
             <ul>
               {g.items.map((d, i) => {
@@ -154,12 +157,16 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false }: { task: 
                           {f.delivery_moment && <Chip tone="slate">{labelOf(DELIVERABLE_MOMENTS, f.delivery_moment)}</Chip>}
                           <Chip tone={f.is_required ? "slate" : "amber"}>{f.is_required ? "obrigatório" : "opcional"}</Chip>
                           <Chip tone={f.requires_approval ? "violet" : "slate"}>{f.requires_approval ? "aprovação do cliente" : "sem aprovação"}</Chip>
-                          <Chip tone="slate">{VISIBILITY_OPTIONS.find(([k]) => k === f.visibility)?.[1] ?? f.visibility}</Chip>
+                          <Chip tone="slate">{visibilitySummary(f.visibility)}</Chip>
                           {f.is_conditional && <Chip tone="amber">condicional</Chip>}
+                          {(hasFile || f.template_name) && <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800" data-testid="deliverable-has-file" title={`Arquivo anexado: ${f.template_name || "modelo"} (abra o item para ver, baixar ou substituir)`}><Paperclip className="h-3 w-3" />arquivo anexado</span>}
                           <span title={sit.draft ? "Salvo como rascunho incompleto" : sit.complete ? "Nome e descrição preenchidos." : `Falta: ${sit.missing.join(", ")}`}><Chip tone={sit.complete ? "green" : "amber"}>{sit.draft ? "rascunho" : sit.complete ? "completo" : "incompleto"}</Chip></span>
                         </span>
                       </button>
-                      {!readOnly && (
+                      {summaryOnly && (st
+                        ? <button type="button" className="inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50" data-testid="deliverable-go-step" onClick={() => openStepEditor(st.id)}><ArrowRight className="h-3.5 w-3.5" />Ir para a etapa</button>
+                        : <span className="self-center rounded-md bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900" data-testid="deliverable-no-step">sem etapa responsável</span>)}
+                      {canEdit && (
                         <span className="flex shrink-0 items-center" data-testid="deliverable-actions">
                           <button type="button" aria-label={`Subir entregável ${f.name}`} className={iconBtn} disabled={i === 0} onClick={() => move(d, g.items, -1)}><ArrowUp className="h-3.5 w-3.5" /></button>
                           <button type="button" aria-label={`Descer entregável ${f.name}`} className={iconBtn} disabled={i === g.items.length - 1} onClick={() => move(d, g.items, 1)}><ArrowDown className="h-3.5 w-3.5" /></button>
@@ -188,8 +195,9 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false }: { task: 
                           {f.is_conditional && <p className="sm:col-span-2"><span className="font-semibold">Condição (orientação):</span> {f.condition_text || "—"}</p>}
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {f.template_name && <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700"><Paperclip className="h-3 w-3" />{f.template_name}</span>}
-                          {hasFile && <button type="button" className="inline-flex items-center gap-1 text-[11px] font-semibold text-violet-700 underline" onClick={() => void apiClient.downloadCatalog2DeliverableFile({ id: f.template_url.slice(FILE_PREFIX.length), name: f.template_name })}><Download className="h-3 w-3" />Baixar modelo</button>}
+                          {hasFile
+                            ? <FileIconMenu file={{ id: f.template_url.slice(FILE_PREFIX.length), name: f.template_name || "modelo" }} readOnly onError={() => {}} />
+                            : f.template_name && <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700"><Paperclip className="h-3 w-3" />{f.template_name}</span>}
                           <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600" title="Identificador permanente deste entregável" data-testid="deliverable-id">ID {d.key}</span>
                         </div>
                       </div>

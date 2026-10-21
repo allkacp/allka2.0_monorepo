@@ -107,3 +107,22 @@ function prefixKeys(steps: FlowStep[]): FlowStep[] {
     return { ...s, depends_on_json: deps == null ? null : JSON.stringify(deps) };
   });
 }
+
+/**
+ * R21-19: regras de janela do pedido de entrega rápida cadastradas no produto.
+ * - antecedência mínima: faltando menos que N horas para o fim da tarefa, não aceita;
+ * - mesmo dia: se a tarefa começou HOJE, o pedido só vale até o horário-limite (HH:MM, horário do servidor).
+ * Devolve a mensagem de recusa, ou null quando pode pedir.
+ */
+export function checkEmergencyRequestWindow(a: { now: Date; dueDate: Date | null; createdAt: Date | null; minNoticeHours: number | null; sameDayLimitTime: string | null }): string | null {
+  if (a.minNoticeHours != null && a.minNoticeHours > 0 && a.dueDate) {
+    const left = (a.dueDate.getTime() - a.now.getTime()) / 3_600_000;
+    if (left < a.minNoticeHours) return `A entrega rápida precisa ser pedida com pelo menos ${a.minNoticeHours} hora(s) de antecedência do fim da tarefa.`;
+  }
+  if (a.sameDayLimitTime && a.createdAt) {
+    const sameDay = a.createdAt.toDateString() === a.now.toDateString();
+    const [h, m] = a.sameDayLimitTime.split(":").map(Number);
+    if (sameDay && (a.now.getHours() * 60 + a.now.getMinutes()) > h * 60 + m) return `No dia em que a tarefa começa, a entrega rápida só pode ser pedida até as ${a.sameDayLimitTime}.`;
+  }
+  return null;
+}

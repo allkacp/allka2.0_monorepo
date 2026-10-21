@@ -650,7 +650,7 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
     description: version.full_description ?? version.summary ?? null,
     short_description: version.summary ?? null,
     // Só o que está marcado como visível ao cliente (observações internas NUNCA saem daqui).
-    commercial: clientCommercialView(version as unknown as Record<string, unknown>, ctx.account_kind),
+    commercial: clientCommercialView(version as unknown as Record<string, unknown>, ctx.account_kind, !!ctx.agency_is_partner),
     pillar: product.pillar ? { key: product.pillar.key, name: product.pillar.name } : null,
     category: product.category ? { key: product.category.key, name: product.category.name } : null,
     four_f: product.four_f.map((l) => ({ key: l.four_f.key, name: l.four_f.name })).sort((a, b) => a.key.localeCompare(b.key)),
@@ -686,14 +686,18 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
         help_text: va.notes,
         options: va.options.filter((o) => o.is_active).map((o) => ({ key: o.key, label: o.label, is_default: o.is_default, short_description: o.short_description ?? null, example_links: parseOptionExamples(o.example_links_json), example_file: parseOptionExampleFile(o.example_file_json), availability: o.availability, availability_note: o.availability_note, selectable: o.availability !== "unavailable", requires_commercial_request: ["custom_quote", "commercial_review", "assisted_only"].includes(o.availability) })),
       })),
+    // R21-05: adicional "só depois da execução começar" não aparece na compra; os de fase "depois" ou "ambas" saem em `after_purchase_addons`.
     addons: version.addons
-      .filter((a) => a.is_active)
+      .filter((a) => a.is_active && (a.contract_phase ?? "before") !== "during")
       .map((a) => ({
-        key: a.key, name: a.name, description: a.description, help_text: a.description, is_default_selected: a.is_default_selected,
+        key: a.key, contract_phase: a.contract_phase ?? "before", name: a.name, description: a.description, help_text: a.description, is_default_selected: a.is_default_selected,
         addon_type: a.addon_type, unit_label: a.unit_label, qty_min: a.qty_min, qty_max: a.qty_max, qty_step: a.qty_step, auto_quote_limit: a.auto_quote_limit,
         recurrence: a.charge_scope,
         choices: a.choices.map((c) => ({ key: c.key, label: c.label, is_default: c.is_default, qty_from: c.qty_from, qty_to: c.qty_to, requires_quote: c.requires_quote })),
       })),
+    after_purchase_addons: version.addons
+      .filter((a) => a.is_active && (a.contract_phase === "during" || a.contract_phase === "both"))
+      .map((a) => ({ key: a.key, name: a.name, description: a.description, contract_phase: a.contract_phase })),
     // Dado real (nunca provisório) — usado pela aba "Detalhes"/"Nômades" do
     // cliente, espelhando o "Detalhe comercial" do admin.
     included_items: version.tasks.map((t) => ({ title: t.name, description: t.description })),

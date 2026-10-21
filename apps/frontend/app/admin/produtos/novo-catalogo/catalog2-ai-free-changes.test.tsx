@@ -37,4 +37,12 @@ describe("alterações por IA grátis: soma e detalhamento por etapa (P-11)", ()
     expect(screen.getByTestId("ai-free-total").textContent).toBe("—");
     expect(screen.getByText(/regra global/)).toBeTruthy();
   });
+  it("R21-01: alerta vermelho lista as etapas sem o campo; some quando todas têm", () => {
+    render(<AiFreeChangesCard version={version} />);
+    expect(screen.getByTestId("ai-free-missing").textContent).toContain("Aprovação (Briefing)");
+  });
+  it("R21-01: sem alerta quando todas as etapas têm cota (inclusive 0)", () => {
+    render(<AiFreeChangesCard version={{ tasks: [{ id: "t", name: "T", steps: [{ id: "a", name: "A", ai_free_changes: 0 }] }] }} />);
+    expect(screen.queryByTestId("ai-free-missing")).toBeNull();
+  });
 });

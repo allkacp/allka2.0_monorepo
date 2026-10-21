@@ -2,8 +2,10 @@
 
 // Construtor universal de perguntas (17/10): 22 tipos de resposta, opções editáveis/ordenáveis, anexos, validação, placeholder,
 // ativar/desativar, visibilidade, seção, etapa de destino e lógica condicional sem código. Cada pergunta tem ID próprio e permanente (gerado ao salvar).
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ArrowDown, ArrowUp, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 export const QUESTION_TYPES: [string, string][] = [
   ["texto_curto", "Texto curto"], ["texto_longo", "Texto longo"], ["numero", "Número"], ["moeda", "Moeda (valor em reais)"], ["data", "Data"], ["hora", "Hora"], ["data_hora", "Data e hora"],
@@ -16,6 +18,28 @@ export const questionTypeLabel = (t?: string | null) => QUESTION_TYPES.find(([k]
 export const SELECT_TYPES = ["selecao_unica", "selecao_multipla", "lista_suspensa"];
 export const FILE_TYPES = ["arquivo", "imagem", "video", "audio", "documento"];
 const VISIBILITY: [string, string][] = [["client", "Cliente"], ["team", "Equipe interna"], ["both", "Cliente e equipe"], ["internal", "Só interno"]];
+/** "Quem vê" da pergunta (R21-13, reunião 21/10): caixas de marcar com atalho Todos. Guarda nos mesmos 4 valores de sempre (nenhum marcado = só interno). */
+export const questionAudienceOf = (v: string): { client: boolean; team: boolean } => ({ client: v === "client" || v === "both", team: v === "team" || v === "both" });
+export const questionVisibilityOf = (a: { client: boolean; team: boolean }): string => (a.client && a.team ? "both" : a.client ? "client" : a.team ? "team" : "internal");
+export function QuestionAudienceMenu({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const a = questionAudienceOf(value);
+  const label = value === "both" ? "Todos (cliente e equipe)" : VISIBILITY.find(([k]) => k === value)?.[1] ?? value;
+  const set = (next: { client: boolean; team: boolean }) => onChange(questionVisibilityOf(next));
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label={`Quem vê a pergunta: ${label}`} data-testid="question-audience" className="inline-flex h-9 w-full items-center justify-between gap-1 truncate rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 hover:bg-violet-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"><span className="truncate">{label}</span><ChevronDown className="h-3.5 w-3.5 shrink-0" /></button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 space-y-1.5 p-3 text-xs">
+        <label className="flex items-center gap-1.5 font-semibold"><input type="checkbox" aria-label="Todos" checked={a.client && a.team} onChange={() => set(a.client && a.team ? { client: false, team: false } : { client: true, team: true })} /> Todos</label>
+        <label className="flex items-center gap-1.5"><input type="checkbox" aria-label="Cliente" checked={a.client} onChange={(e) => set({ ...a, client: e.target.checked })} /> Cliente</label>
+        <label className="flex items-center gap-1.5"><input type="checkbox" aria-label="Equipe interna" checked={a.team} onChange={(e) => set({ ...a, team: e.target.checked })} /> Equipe interna</label>
+        <p className="pt-1 text-[10px] text-slate-500">Nenhum marcado = só interno (administração).</p>
+      </PopoverContent>
+    </Popover>
+  );
+}
 const USAGE: [string, string][] = [["both", "Pessoa e IA leem"], ["human", "Só pessoa"], ["ai", "Só IA"]];
 export const DEFAULT_ACCEPT_HINT: Record<string, string> = { imagem: ".jpg, .png, .webp, .gif", video: ".mp4, .mov, .webm", audio: ".mp3, .wav, .m4a", documento: ".pdf, .docx, .xlsx, .pptx, .txt, .csv", arquivo: "qualquer tipo seguro (sem executáveis)" };
 
@@ -182,7 +206,7 @@ export function QuestionConfigFields({ q, onChange, ctx, hideHelp = false }: { q
           <select aria-label="Tipo da pergunta" className={sel} value={t} onChange={(e) => onChange({ question_type: e.target.value })}>{QUESTION_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
         </Lbl>
         <Lbl text="Quem vê">
-          <select aria-label="Visibilidade da pergunta" className={sel} value={q.visibility} onChange={(e) => onChange({ visibility: e.target.value })}>{VISIBILITY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          <QuestionAudienceMenu value={q.visibility} onChange={(v) => onChange({ visibility: v })} />
         </Lbl>
         <Lbl text="Resposta usada por">
           <select aria-label="Uso da resposta" className={sel} value={q.answer_usage} onChange={(e) => onChange({ answer_usage: e.target.value })}>{USAGE.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>

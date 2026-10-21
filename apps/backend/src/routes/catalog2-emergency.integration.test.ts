@@ -71,4 +71,45 @@ describe("Entrega emergencial (B3)", () => {
     assert.notEqual(a.json.config_checksum ?? a.json.id, b.json.config_checksum ?? b.json.id);
     assert.equal(Math.round((Number(b.json.commercial_price) - Number(a.json.commercial_price)) * 100) / 100, 200);
   });
+
+  it("EM05. R21-04: como condição do PRODUTO, o % vale para todas as etapas (prazo e adicional); sem o % não publica", async () => {
+    const p = await produto();
+    await adm(`/versions/${p.versionId}`, "PUT", { emergency_enabled: true, emergency_mode: "product" });
+    assert.match(JSON.stringify((await adm(`/versions/${p.versionId}/validate`)).json), /percentual de redução/i);
+    const ok = await adm(`/versions/${p.versionId}`, "PUT", { emergency_product_reduction_percent: 50, emergency_product_extra_percent: 10 });
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    const base = await sim(p.versionId, false);
+    const em = await sim(p.versionId, true);
+    assert.equal(em.json.pricing.emergency.available, true);
+    assert.equal(em.json.pricing.emergency.items.length, 2, "todas as etapas entram");
+    assert.equal(em.json.pricing.emergency.reduction_minutes, 480, "50% de 2 etapas de 480 min em sequência = 480 min a menos");
+    assert.ok(em.json.pricing.simulation.total > base.json.pricing.simulation.total, "o adicional de % sobe o preço");
+  });
+
+  it("EM06. R21-19: limites do pedido são guardados e validados (HH:MM)", async () => {
+    const p = await produto();
+    assert.equal((await adm(`/versions/${p.versionId}`, "PUT", { emergency_same_day_limit_time: "25:99" })).status, 400);
+    const ok = await adm(`/versions/${p.versionId}`, "PUT", { emergency_same_day_limit_time: "12:00", emergency_min_notice_hours: 24, emergency_executor_accept_required: true, emergency_executor_accept_hours: 4 });
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    const v = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: p.versionId } });
+    assert.equal(v.emergency_same_day_limit_time, "12:00");
+    assert.equal(v.emergency_min_notice_hours, 24);
+    assert.equal(v.emergency_executor_accept_required, true);
+  });
+
+  it("EM07. R21-05: adicional \"só depois da execução\" não aparece na compra; \"antes\" e \"ambos\" aparecem; os de depois/ambos saem em after_purchase_addons", async () => {
+    const p = await mkProduct({
+      name: "Fase do adicional", tasks: [{ key: "t", steps: [{ key: "s1", minutes: 480 }] }],
+      addons: [{ key: "a-antes", name: "Antes", base_cost: 10 }, { key: "a-depois", name: "Depois", base_cost: 10, contract_phase: "during" }, { key: "a-ambos", name: "Ambos", base_cost: 10, contract_phase: "both" }],
+    } as any);
+    const upd = await adm(`/addons/${(await prisma.catalog2Addon.findFirstOrThrow({ where: { version_id: p.versionId, key: "a-antes" } })).id}`, "PUT", { contract_phase: "tudo" });
+    assert.equal(upd.status, 400, "valor inválido é recusado");
+    const pub = await adm(`/versions/${p.versionId}/publish`, "POST", { activate: true, confirm_activation: true, client_action_id: crypto.randomUUID() });
+    assert.equal(pub.status, 200, JSON.stringify(pub.json));
+    const det = await api(`/api/catalog2/products/${p.product.id}`, { token: CO.token });
+    assert.equal(det.status, 200, JSON.stringify(det.json));
+    const keys = (det.json.addons as { key: string }[]).map((a) => a.key).sort();
+    assert.deepEqual(keys, ["a-ambos", "a-antes"]);
+    assert.deepEqual((det.json.after_purchase_addons as { key: string }[]).map((a) => a.key).sort(), ["a-ambos", "a-depois"]);
+  });
 });

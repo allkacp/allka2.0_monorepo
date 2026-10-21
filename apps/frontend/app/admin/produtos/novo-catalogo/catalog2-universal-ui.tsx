@@ -46,7 +46,7 @@ export function AvailabilityFields({ o, readOnly, act }: { o: any; readOnly: boo
 export const EFFORT_TYPES: [string, string][] = [
   ["add_effort_minutes", "Somar minutos de esforço"],
   ["add_effort_hours", "Somar horas de esforço"],
-  ["replace_effort_minutes", "Substituir minutos da etapa/tarefa"],
+  ["replace_effort_minutes", "Substituir minutos da etapa"],
 ];
 export const isEffortType = (t: string) => EFFORT_TYPES.some(([v]) => v === t);
 const EFFORT_SCOPES: [string, string][] = [

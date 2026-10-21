@@ -57,6 +57,7 @@ describe("Editor de modelo global = o MESMO editor do produto, embutido", () => 
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();           // sem as abas do produto
     expect(screen.queryByText("Publicar")).not.toBeInTheDocument();
     // as etapas vêm do próprio editor de tarefa do produto (com Editar liberado)
+    fireEvent.click(await screen.findByTestId("steps-open")); // 20/10: as etapas abrem no Painel Moldura ("Ver etapas")
     expect(await screen.findByTestId("step-card-1")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("step-edit-btn")).toBeInTheDocument());
   });

@@ -8,7 +8,7 @@
 //   • mostrar a cada perfil só o que ele pode ver (mesma visibilidade dos campos operacionais).
 import { z } from "zod";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { audienceOf, canSee, VISIBILITY_LEVELS, type Visibility } from "./catalog2-ops";
+import { audienceOf, canSee, visibilityValueSchema, type Visibility } from "./catalog2-ops";
 import { rejectSecrets, AssetError } from "./client-assets";
 import { parseQuestionCondition, questionConditionMet } from "./catalog2-question-types";
 
@@ -72,7 +72,7 @@ export const deliverableInputSchema = z.object({
   responsible: z.enum(DELIVERABLE_RESPONSIBLES).default("executor"),
   is_required: z.boolean().default(true),
   requires_approval: z.boolean().default(true),
-  visibility: z.enum(VISIBILITY_LEVELS).default("client"),
+  visibility: visibilityValueSchema.default("client"),
   step_id: z.string().nullish(),
   sort_order: z.number().int().optional(),
   // Cadastro completo (16/10): formato, momento, arquivo-modelo, prova, qualificação interna, recorrência e condição.

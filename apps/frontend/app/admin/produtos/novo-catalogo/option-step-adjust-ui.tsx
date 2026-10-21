@@ -4,7 +4,7 @@ import { Trash2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 
 // Horas extras de uma OPÇÃO de variação (ex.: "4 campanhas" soma horas em "Criar campanhas").
-// Só aparece o que foi ADICIONADO: quem cadastra escolhe a etapa (ou a tarefa inteira), informa as horas e, se quiser, uma
+// Só aparece o que foi ADICIONADO: quem cadastra escolhe a etapa (ou o item “Geral”, sem etapa específica), informa as horas e, se quiser, uma
 // ESPECIALIDADE PRÓPRIA (ex.: uma variação nova que o produto original não tem). Sem especialidade própria, o custo usa a
 // especialidade da etapa. O preço e o prazo adicionais são calculados no servidor. A opção PADRÃO (o que o produto original
 // já inclui) não soma horas: nada disso aparece nela.
@@ -32,7 +32,7 @@ export function targetRefsOf(version: any, specialties: any[]): StepRef[] {
   const out: StepRef[] = [];
   for (const t of version?.tasks ?? []) {
     const sp = specialties.find((x) => x.id === (t.specialty?.id ?? t.specialty_id));
-    out.push({ taskKey: t.key, taskName: t.name, stepKey: "", stepName: "Tarefa inteira", rate: sp?.max_hourly_rate != null ? Number(sp.max_hourly_rate) : null, specialtyName: sp?.name ?? null });
+    out.push({ taskKey: t.key, taskName: t.name, stepKey: "", stepName: "Geral, sem etapa específica", rate: sp?.max_hourly_rate != null ? Number(sp.max_hourly_rate) : null, specialtyName: sp?.name ?? null });
     out.push(...stepRefsOf({ tasks: [t] }, specialties));
   }
   return out;
@@ -59,9 +59,10 @@ export function OptionStepAdjustments({ option, version, specialties, readOnly, 
   const [specId, setSpecId] = useState("");
   const [err, setErr] = useState("");
   // Opção padrão = produto original: não soma horas, então a área some.
-  if (option.is_default) return null;
+  // Opção padrão = o produto original já a inclui: não soma horas. Em vez de ficar uma área vazia, explica o porquê.
+  if (option.is_default) return <p className="mt-2 rounded-md border border-dashed border-slate-300 px-2 py-1.5 text-[11px] text-slate-500 dark:border-slate-700" data-testid="option-default-note">Esta é a opção <strong>padrão</strong> (já faz parte do produto original), então ela não soma horas extras. Use as horas extras nas outras opções desta variação.</p>;
   if (refs.length <= (version?.tasks ?? []).length) {
-    return <p className="mt-2 rounded-md border border-dashed border-slate-300 px-2 py-1.5 text-[11px] text-slate-500 dark:border-slate-700" data-testid="no-steps-adjust">Cadastre as etapas da tarefa para poder somar horas extras por etapa nesta opção.</p>;
+    return <p className="mt-2 rounded-md border border-dashed border-slate-300 px-2 py-1.5 text-[11px] text-slate-500 dark:border-slate-700" data-testid="no-steps-adjust">Cadastre as etapas do produto para poder somar horas extras por etapa nesta opção.</p>;
   }
   const withHours = refs.filter((r) => extraHoursFor(effects, r.taskKey, r.stepKey).hours > 0);
   const available = refs.filter((r) => !withHours.includes(r));
@@ -83,10 +84,10 @@ export function OptionStepAdjustments({ option, version, specialties, readOnly, 
         : <ul className="mt-1.5 space-y-1">{withHours.map((r) => <StepAdjustRow key={`${r.taskKey}-${r.stepKey}`} r={r} effects={effects} option={option} specialties={specialties} readOnly={readOnly} act={act} />)}</ul>}
       {!readOnly && available.length > 0 && (
         <div className="mt-2 flex flex-wrap items-end gap-2 border-t border-violet-200 pt-2 dark:border-violet-900" data-testid="adjust-add">
-          <label className="min-w-[14rem] flex-1 text-[11px] font-medium text-slate-600 dark:text-slate-300">Etapa (ou tarefa inteira) que recebe as horas extras
+          <label className="min-w-[14rem] flex-1 text-[11px] font-medium text-slate-600 dark:text-slate-300">Etapa que recebe as horas extras (ou “Geral”, sem etapa específica)
             <select aria-label="Etapa que recebe horas extras" className="mt-0.5 h-8 w-full rounded-md border border-slate-200 bg-white px-1.5 text-xs dark:border-slate-700 dark:bg-slate-900" value={pick} onChange={(e) => { setPick(e.target.value); setErr(""); }}>
               <option value="">Escolha…</option>
-              {available.map((r) => <option key={`${r.taskKey}::${r.stepKey}`} value={`${r.taskKey}::${r.stepKey}`}>{r.stepKey ? `${r.stepName} (${r.taskName})` : `Tarefa inteira: ${r.taskName}`} · {r.specialtyName ?? "sem especialidade"}</option>)}
+              {available.map((r) => <option key={`${r.taskKey}::${r.stepKey}`} value={`${r.taskKey}::${r.stepKey}`}>{r.stepKey ? `${r.stepName} (${r.taskName})` : `Geral, sem etapa específica (${r.taskName})`} · {r.specialtyName ?? "sem especialidade"}</option>)}
             </select>
           </label>
           <label className="min-w-[12rem] text-[11px] font-medium text-slate-600 dark:text-slate-300">Especialidade das horas extras
@@ -123,10 +124,10 @@ function StepAdjustRow({ r, effects, option, specialties, readOnly, act }: { r: 
   };
   const save = () => { if (valid) apply(v.trim() === "" ? 0 : hours); };
   const cost = rate != null && hours > 0 ? hours * rate : null;
-  const label = r.stepKey ? r.stepName : `Tarefa inteira: ${r.taskName}`;
+  const label = r.stepKey ? r.stepName : "Geral, sem etapa específica";
   return (
     <li className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="min-w-[10rem] flex-1"><span className="font-semibold">{label}</span> {r.stepKey && <span className="text-slate-400">({r.taskName})</span>} <span className="text-slate-500">· especialidade{own ? " própria" : ""}: {specName ?? "não definida"}</span></span>
+      <span className="min-w-[10rem] flex-1"><span className="font-semibold">{label}</span> <span className="text-slate-400">({r.taskName})</span> <span className="text-slate-500">· especialidade{own ? " própria" : ""}: {specName ?? "não definida"}</span></span>
       <label className="inline-flex items-center gap-1">+
         <input type="number" min={0} step="0.25" disabled={readOnly} aria-label={`Horas extras na etapa ${label}`} className={`h-7 w-20 rounded-md border bg-white px-1.5 text-xs dark:bg-slate-900 ${valid ? "border-slate-200 dark:border-slate-700" : "border-red-400"}`} value={v} placeholder="0" onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === "Enter") save(); }} /> h
       </label>

@@ -19,6 +19,8 @@ import { writeAccessAudit } from "../lib/product-feedback-service";
 import { recordApprovedTask } from "../lib/memory-service";
 import { assertTaskStatusTransitionAllowed, TaskStatusGuardError } from "../lib/task-release-guard";
 import { decideContinuity, ContinuityError, CONTINUITY_CHOICES, requireDispensedStage } from "../lib/catalog2-continuity";
+import { checkEmergencyRequestWindow } from "../lib/catalog2-emergency";
+import { respondEmergencyOffer, EmergencyOfferError, compressedDate, EMERGENCY_DEFAULT_ACCEPT_HOURS } from "../lib/catalog2-emergency-offer";
 import { audienceOf, canSee, type Visibility } from "../lib/catalog2-ops";
 import { listDeliverablesFor, submitDeliverable, reviewDeliverable, type DeliverableActor } from "../lib/task-deliverables";
 import { concluirAprovacaoPorEntregaveisSePronto } from "../lib/stage-engine";
@@ -2885,6 +2887,7 @@ router.post(
             select: {
               preco_final_cliente_snapshot: true,
               taxa_emergencial_reducao_percentual_snapshot: true,
+              catalog2_version_id: true,
             },
           },
           project: {
@@ -2910,11 +2913,43 @@ router.post(
         return;
       }
 
+      const agora = new Date();
+      // R21-19: limites cadastrados no produto (antecedência mínima antes do fim da tarefa e horário-limite no mesmo dia em que ela começou).
+      let aceiteCfg: { required: boolean; hours: number } = { required: false, hours: EMERGENCY_DEFAULT_ACCEPT_HOURS };
+      if (task.project_product.catalog2_version_id) {
+        const cfg = await prisma.catalog2ProductVersion.findUnique({
+          where: { id: task.project_product.catalog2_version_id },
+          select: { emergency_min_notice_hours: true, emergency_same_day_limit_time: true, emergency_executor_accept_required: true, emergency_executor_accept_hours: true },
+        });
+        if (cfg?.emergency_executor_accept_required) aceiteCfg = { required: true, hours: cfg.emergency_executor_accept_hours ?? EMERGENCY_DEFAULT_ACCEPT_HOURS };
+        const regra = cfg ? checkEmergencyRequestWindow({ now: agora, dueDate: task.due_date, createdAt: task.created_at, minNoticeHours: cfg.emergency_min_notice_hours, sameDayLimitTime: cfg.emergency_same_day_limit_time }) : null;
+        if (regra) { res.status(422).json({ error: regra }); return; }
+      }
       const reducao = task.project_product.taxa_emergencial_reducao_percentual_snapshot;
       const valor = 0.5 * task.project_product.preco_final_cliente_snapshot;
-      const agora = new Date();
       const comprimir = (data: Date) =>
         new Date(agora.getTime() + (data.getTime() - agora.getTime()) * (1 - reducao / 100));
+
+      // R21-11: com "o profissional precisa aceitar" (e já há profissional na tarefa), o prazo NÃO muda agora: fica aguardando a resposta.
+      if (aceiteCfg.required && task.nomade_responsavel_id) {
+        const respostaAte = new Date(agora.getTime() + aceiteCfg.hours * 3_600_000);
+        const novoPrazo = task.due_date && task.due_date > agora ? compressedDate(agora, task.due_date, reducao) : task.due_date;
+        const companyId = task.project.company_id ?? task.project.client_id ?? null;
+        const pend = await prisma.$transaction(async (tx) => {
+          const invoice = await tx.invoice.create({ data: { project_id: task.project_id, company_id: companyId, amount: valor, status: "pending", description: `Taxa de entrega emergencial — tarefa ${task.task_code ?? task.title} (aguardando aceite do profissional)` } });
+          const updated = await tx.projectTask.update({
+            where: { id: task.id },
+            data: { emergencial_solicitada_em: agora, emergencial_solicitada_por: req.user!.id, emergencial_reducao_percentual: reducao, emergencial_invoice_id: invoice.id, emergencial_status: "aguardando_aceite", emergencial_resposta_ate: respostaAte, emergencial_novo_prazo: novoPrazo, emergencial_valor: valor },
+          });
+          return { invoice, updated };
+        });
+        const nomade = await prisma.nomade.findUnique({ where: { id: task.nomade_responsavel_id }, select: { user_id: true } });
+        if (nomade?.user_id) {
+          await prisma.systemAlert.create({ data: { type: "entrega_emergencial_aceite", title: `Aceitar entrega rápida? ${task.title}`, message: `O cliente pediu entrega rápida de "${task.title}": novo prazo ${novoPrazo ? novoPrazo.toLocaleString("pt-BR") : "—"} e valor adicional de ${valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. Responda até ${respostaAte.toLocaleString("pt-BR")}; sem resposta, vale como recusa.`, severity: "warning", category: "alerta", entity_type: "project_task", entity_id: task.id, user_id: nomade.user_id } }).catch(() => {});
+        }
+        res.json({ aguardando_aceite: true, responder_ate: respostaAte, novo_due_date_previsto: novoPrazo, valor_adicional: valor, invoice: pend.invoice });
+        return;
+      }
 
       const resultado = await prisma.$transaction(async (tx) => {
         const novoDueDate =
@@ -3016,6 +3051,28 @@ router.post(
     }
   },
 );
+
+// ── POST /api/project-tasks/:id/emergencial/responder ────────────────────────
+// R21-11: o profissional da tarefa (ou o administrador/líder) aceita ou recusa a entrega rápida pedida pelo cliente.
+router.post("/:id/emergencial/responder", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const body = z.object({ aceitar: z.boolean() }).parse(req.body);
+    const task = await prisma.projectTask.findUnique({ where: { id: req.params.id as string }, select: { id: true, nomade_responsavel_id: true, lider_responsavel_id: true } });
+    if (!task) { res.status(404).json({ error: "Tarefa não encontrada" }); return; }
+    const staff = isAdminUser(req.user) || task.lider_responsavel_id === req.user!.id;
+    let isExecutor = false;
+    if (task.nomade_responsavel_id) {
+      const n = await prisma.nomade.findUnique({ where: { id: task.nomade_responsavel_id }, select: { user_id: true } });
+      isExecutor = n?.user_id === req.user!.id;
+    }
+    if (!staff && !isExecutor) { res.status(403).json({ error: "Só o profissional da tarefa, o líder ou o administrador respondem a este pedido." }); return; }
+    const r = await respondEmergencyOffer(prisma, task.id, body.aceitar, isExecutor ? "executor" : "admin");
+    res.json(r);
+  } catch (err) {
+    if (err instanceof EmergencyOfferError) { res.status(err.httpStatus).json({ error: err.message }); return; }
+    next(err);
+  }
+});
 
 // ── PATCH /api/project-tasks/:id/stages/:stageId ─────────────────────────────
 

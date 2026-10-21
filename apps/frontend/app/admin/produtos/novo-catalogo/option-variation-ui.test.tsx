@@ -68,6 +68,7 @@ describe("variação: horas extras por etapa", () => {
     render(<OptionStepAdjustments option={{ id: "o1", is_default: true, effects: [] }} version={version} specialties={specialties} readOnly={false} act={act} />);
     expect(screen.queryByTestId("option-step-adjust")).toBeNull();
     expect(screen.queryByText("Adicionar horas extras")).toBeNull();
+    expect(screen.getByTestId("option-default-note").textContent).toContain("opção padrão"); // explica por que está vazio (não deixa a área em branco)
   });
 });
 

@@ -71,3 +71,38 @@ describe("quem vê cada campo: Todos veem / Cliente vê / Equipe interna vê", (
     assert.equal(JSON.parse(r.data.field_visibility_json as string).scope, "company");
   });
 });
+
+// R21-13 (reunião 21/10): cada campo pode ter uma LISTA de públicos (company, agency, partner); "Todos" = os três.
+describe("quem vê cada campo: lista de públicos", () => {
+  const base = { target_audience: "Para PMEs", scope: "Escopo X" };
+  const vis = (v: Record<string, string>) => ({ ...base, field_visibility_json: JSON.stringify(v) });
+  it("só Company: empresa vê, agência comum e partner não", () => {
+    const row = vis({ target_audience: "company" });
+    assert.equal((clientCommercialView(row, "company") as Record<string, unknown>).target_audience, "Para PMEs");
+    assert.equal("target_audience" in clientCommercialView(row, "agency"), false);
+    assert.equal("target_audience" in clientCommercialView(row, "agency", true), false);
+  });
+  it("Agency (sem partner) vê só a agência comum; Agency Partner vê só a partner", () => {
+    const comum = vis({ target_audience: "agency" });
+    assert.equal((clientCommercialView(comum, "agency", false) as Record<string, unknown>).target_audience, "Para PMEs");
+    assert.equal("target_audience" in clientCommercialView(comum, "agency", true), false);
+    assert.equal("target_audience" in clientCommercialView(comum, "company"), false);
+    const partner = vis({ target_audience: "partner" });
+    assert.equal((clientCommercialView(partner, "agency", true) as Record<string, unknown>).target_audience, "Para PMEs");
+    assert.equal("target_audience" in clientCommercialView(partner, "agency", false), false);
+  });
+  it("combinação company + partner", () => {
+    const row = vis({ target_audience: "company,partner" });
+    assert.equal((clientCommercialView(row, "company") as Record<string, unknown>).target_audience, "Para PMEs");
+    assert.equal((clientCommercialView(row, "agency", true) as Record<string, unknown>).target_audience, "Para PMEs");
+    assert.equal("target_audience" in clientCommercialView(row, "agency", false), false);
+  });
+  it("na gravação: os três marcados viram 'client' (Todos); lista inválida ou vazia é recusada", () => {
+    const todos = buildCommercialUpdate({ field_visibility: { scope: "company,agency,partner" } }, { field_visibility_json: JSON.stringify({ scope: "company" }) });
+    assert.equal(JSON.parse(todos.data.field_visibility_json as string).scope, "client");
+    const dois = buildCommercialUpdate({ field_visibility: { scope: "partner,company" } }, {});
+    assert.equal(JSON.parse(dois.data.field_visibility_json as string).scope, "company,partner");
+    assert.throws(() => buildCommercialUpdate({ field_visibility: { scope: "company,ninguem" } }, {}), CommercialFieldError);
+    assert.throws(() => buildCommercialUpdate({ field_visibility: { scope: "" } }, {}), CommercialFieldError);
+  });
+});

@@ -26,9 +26,20 @@ export function collectAiFreeStages(version: { tasks?: any[] } | null | undefine
   return rows;
 }
 
+/** R21-01: etapas que ainda não têm o campo "Alterações por IA grátis" preenchido (a cota é POR ETAPA). */
+export function collectStagesWithoutAiFree(version: { tasks?: any[] } | null | undefined): { id: string; task: string; step: string }[] {
+  const out: { id: string; task: string; step: string }[] = [];
+  const tasks = [...(version?.tasks ?? [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  for (const t of tasks) for (const s of [...(t.steps ?? [])].sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
+    if (s.ai_free_changes == null) out.push({ id: String(s.id), task: String(t.name ?? "Tarefa"), step: String(s.name ?? "Etapa") });
+  }
+  return out;
+}
+
 export function AiFreeChangesCard({ version, bare = false }: { version: { tasks?: any[] } | null | undefined; /** Dentro de um acordeão: sem moldura própria. */ bare?: boolean }) {
   const rows = collectAiFreeStages(version);
   const total = rows.reduce((n, r) => n + r.value, 0);
+  const missing = collectStagesWithoutAiFree(version);
   return (
     <div className={bare ? "text-sm" : "rounded-md border bg-card p-3 text-sm"} data-testid="ai-free-changes">
       <p className="font-medium" title="Soma das alterações por IA grátis definidas em cada etapa. Para mudar, edite o campo na própria etapa (Tarefas e etapas). Depois das grátis, cada alteração é cobrada do saldo da carteira.">
@@ -42,6 +53,11 @@ export function AiFreeChangesCard({ version, bare = false }: { version: { tasks?
             <li key={r.id}><span className="font-medium text-foreground">{r.step}</span> <span>({r.task})</span>: {r.value} alteraç{r.value === 1 ? "ão" : "ões"} por IA</li>
           ))}
         </ul>
+      )}
+      {missing.length > 0 && (
+        <div role="alert" data-testid="ai-free-missing" className="mt-2 rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100">
+          <strong>{missing.length === 1 ? "1 etapa está sem" : `${missing.length} etapas estão sem`} “Alterações por IA grátis”:</strong> {missing.map((m) => `${m.step} (${m.task})`).join(", ")}. Preencha em Entrega → Ver etapas → Editar (use 0 se não houver alteração grátis).
+        </div>
       )}
       <p className="mt-1 text-[11px] text-muted-foreground">Definido em cada etapa — aqui é só a soma e o detalhamento.</p>
     </div>

@@ -1574,6 +1574,11 @@ model ProjectTask {
   emergencial_reducao_percentual Int?
   emergencial_invoice_id         String?
   emergencial_invoice            Invoice?  @relation("TaskEmergencialInvoice", fields: [emergencial_invoice_id], references: [id], onDelete: SetNull)
+  // R21-11: quando o produto exige o aceite do profissional — "aguardando_aceite" | "aceita" | "recusada" | "expirada" (nulo = fluxo imediato antigo).
+  emergencial_status             String?   @db.VarChar(20)
+  emergencial_resposta_ate       DateTime?
+  emergencial_novo_prazo         DateTime?
+  emergencial_valor              Float?
 
   sort_order Int     @default(0)
   fase       String?
@@ -5655,6 +5660,15 @@ model Catalog2ProductVersion {
   base_commercial_deadline_hours Int?
   // Entrega emergencial (reunião 2026-10-05): o produto oferece prazo menor por um adicional, definido por etapa.
   emergency_enabled Boolean @default(false)
+  // R21-04/19/11 (reunião 21/10): "step" = cada etapa define sua redução/adicional (padrão); "product" = condição do produto inteiro
+  // (um % de redução do prazo e um % de adicional aplicados a TODAS as etapas). Limites do pedido e aceite do profissional.
+  emergency_mode                      String  @default("step") @db.VarChar(10)
+  emergency_product_reduction_percent Int?
+  emergency_product_extra_percent     Float?
+  emergency_same_day_limit_time       String? @db.VarChar(5)
+  emergency_min_notice_hours          Int?
+  emergency_executor_accept_required  Boolean @default(false)
+  emergency_executor_accept_hours     Int?
 
   // ── Modalidades de contratação e ciclos (Pedido 2, 2026-09-29) ─────────────
   // Avulso / recorrente mensal / recorrente com implementação inicial / pacote.
@@ -5856,6 +5870,8 @@ model Catalog2Addon {
   sort_order          Int     @default(0)
   is_default_selected Boolean @default(false)
   is_active           Boolean @default(true)
+  // R21-05: quando o cliente pode contratar: "before" (antes da execução) | "during" (depois que começou) | "both".
+  contract_phase      String  @default("before") @db.VarChar(10)
   // Custo direto do adicional (opcional). Nulo = sem custo direto (o impacto
   // vem so pelos efeitos). Nunca inventa valor.
   base_cost           Float?
@@ -8003,4 +8019,17 @@ model WalletTopupIntent {
   @@index([owner_type, owner_id, status])
   @@index([gateway, external_id])
   @@map("wallet_topup_intents")
+}
+
+// R21-18 (reunião 21/10): guias e métodos (ex.: método PLA) que a IA de preenchimento do produto consulta. Texto colado ou anexado (.txt/.md).
+model Catalog2AiGuide {
+  id                 String   @id @default(cuid())
+  title              String   @db.VarChar(160)
+  content            String   @db.LongText
+  is_active          Boolean  @default(true)
+  created_by_user_id String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@map("catalog2_ai_guides")
 }

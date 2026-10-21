@@ -149,6 +149,12 @@ export function isStandardShellRoute(_pathname: string): boolean {
 export const STANDARD_SHELL_PANEL_CLASS =
   "admin-empresas-panel w-full h-full rounded-2xl lg:rounded-[1.5rem] border border-slate-200/70 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-[0_20px_50px_-12px_rgba(15,23,42,0.18),0_4px_16px_-4px_rgba(15,23,42,0.10)] p-1.5 sm:p-2 lg:p-2 overflow-hidden";
 
+// R21-28: Tela Moldura ESCURA (nome provisório) — mesmo painel, com fundo/borda mais escuros (#d6daf0) para as telas de cadastro/edição.
+// Some-se à classe branca: `${STANDARD_SHELL_PANEL_CLASS} ${STANDARD_SHELL_PANEL_DARK_OVERRIDE}`. Os fundos soltos usam STANDARD_SHELL_DARK_BG_CLASS.
+export const STANDARD_SHELL_PANEL_DARK_OVERRIDE = "!border-[#c3c8e6] !bg-[#d6daf0] dark:!border-violet-900/60 dark:!bg-violet-950/40";
+export const STANDARD_SHELL_PANEL_DARK_CLASS = `${STANDARD_SHELL_PANEL_CLASS} ${STANDARD_SHELL_PANEL_DARK_OVERRIDE}`;
+export const STANDARD_SHELL_DARK_BG_CLASS = "bg-[#d6daf0] dark:bg-violet-950/40";
+
 // Cartão principal da tabela (usar como className do <Card>).
 export const STANDARD_SHELL_TABLE_CARD_CLASS =
   "rounded-[20px] border border-[#e6ebf3] dark:border-slate-700/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)] overflow-hidden mx-0";

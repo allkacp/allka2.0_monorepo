@@ -622,6 +622,21 @@ export function TarefaDetailDrawer({
   const [emergencialAviso, setEmergencialAviso] = useState<string | null>(null);
   const [emergencialSolicitadaLocal, setEmergencialSolicitadaLocal] = useState(false);
 
+  // R21-11: resposta do profissional ao pedido de entrega rápida (quando o produto exige o aceite).
+  const [emergencialRespondendo, setEmergencialRespondendo] = useState(false);
+  const [emergencialResposta, setEmergencialResposta] = useState<string | null>(null);
+  const responderEmergencial = async (aceitar: boolean) => {
+    setEmergencialRespondendo(true);
+    setEmergencialResposta(null);
+    try {
+      await apiClient.responderEntregaEmergencial(tarefa.id, aceitar);
+      setEmergencialResposta(aceitar ? "Aceito. O novo prazo já vale." : "Recusado. O prazo continua o mesmo e o valor adicional foi cancelado.");
+    } catch (e: any) {
+      setEmergencialResposta(e?.message ?? "Não foi possível responder. Tente novamente.");
+    } finally {
+      setEmergencialRespondendo(false);
+    }
+  };
   const solicitarEmergencial = async () => {
     setEmergencialSalvando(true);
     setEmergencialAviso(null);
@@ -1995,7 +2010,21 @@ export function TarefaDetailDrawer({
                       {!["CONCLUIDA", "CANCELADA"].includes(tarefa.status) && (
                         <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
                           <SectionTitle>Entrega emergencial</SectionTitle>
-                          {t.emergencial_solicitada_em || emergencialSolicitadaLocal ? (
+                          {t.emergencial_status === "aguardando_aceite" ? (
+                            <div className="mt-2 space-y-2 text-sm text-slate-600 dark:text-slate-300" data-testid="emergencial-aguardando-aceite">
+                              <p>
+                                <strong>Entrega rápida aguardando o aceite do profissional.</strong>{" "}
+                                {t.emergencial_novo_prazo ? `Novo prazo previsto: ${new Date(t.emergencial_novo_prazo).toLocaleString("pt-BR")}. ` : ""}
+                                {t.emergencial_valor != null ? `Valor adicional: ${Number(t.emergencial_valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}. ` : ""}
+                                {t.emergencial_resposta_ate ? `Resposta até ${new Date(t.emergencial_resposta_ate).toLocaleString("pt-BR")}; sem resposta, vale como recusa e o valor é cancelado.` : ""}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                <button type="button" disabled={emergencialRespondendo} onClick={() => void responderEmergencial(true)} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60" data-testid="emergencial-aceitar">Aceitar</button>
+                                <button type="button" disabled={emergencialRespondendo} onClick={() => void responderEmergencial(false)} className="rounded-lg border border-rose-300 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-60" data-testid="emergencial-recusar">Recusar</button>
+                              </div>
+                              {emergencialResposta && <p role="status" className="text-xs font-medium">{emergencialResposta}</p>}
+                            </div>
+                          ) : t.emergencial_solicitada_em || emergencialSolicitadaLocal ? (
                             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
                               Entrega emergencial solicitada
                               {t.emergencial_solicitada_em
