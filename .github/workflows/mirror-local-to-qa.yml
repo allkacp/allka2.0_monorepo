@@ -24,9 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     env:
-      RELEASE_TAG: local-mirror-2026-10-15
-      ASSET_NAME: local-mirror-20261015.enc
-      MIRROR_SHA256: 0a066c89cbf1134451ef29044ff0c7f9951f494a810a93abeb465e4425b60158
+      RELEASE_TAG: local-mirror-2026-10-21
+      ASSET_NAME: local-mirror-20261021.enc
+      MIRROR_SHA256: 7df8ed71905766db4dc0ca056a26cee69838069f1453fc894729c4e79eeb11e9
     steps:
       - name: Validate inputs and secrets
         shell: bash
