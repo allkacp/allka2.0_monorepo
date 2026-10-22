@@ -22,6 +22,9 @@ Backup do banco do servidor feito antes (DB Backup run 39693472966). Deploy Back
 - **Frontend (dev local apenas):** `apps/frontend/vite.config.ts` ganhou o plugin `localDevFastHtml` (`apply: "serve"`): fontes do Google sem bloquear e Maps só com chave. **Não altera o build de produção.** Ver `docs/RETOMAR-AQUI.md` seção "Velocidade local".
 - **Docs:** `docs/padroes-globais.md` reescrito (lista completa com exemplos e links).
 
+## Espelho do banco local no QA 2026-10-21 (run 39697347128, autorizado pelo usuário)
+O banco do servidor passou a ser cópia do banco LOCAL (depois do deploy-2026-10-21-1). Conferido no servidor após o espelho: 27 usuários, 5 empresas, 40 projetos, 37 produtos, 14 movimentos de carteira (igual ao local). **Backup antes:** allka-before-mirror-20261022T000354Z.sql.gz (no servidor). API e site responderam 200. O estado cifrado do 1 perfil do navegador seguro foi zerado no pacote (chave local ≠ servidor). Release temporário e secret MIRROR_BUNDLE_KEY apagados; cópia local apagada. A permissão para isso foi dada pelo usuário em `.claude/settings.local.json`. **Não incluído:** arquivos em disco (anexos/entregas). Aberto: o release antigo `catalog2-transfer-2026-09-17` ainda está público.
+
 ## Pendente de deploy (só LOCAL)
 - (nada pendente de código; só o que for feito depois deste deploy)
 
