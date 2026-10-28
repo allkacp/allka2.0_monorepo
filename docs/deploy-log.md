@@ -27,6 +27,8 @@ O banco do servidor passou a ser cópia do banco LOCAL (depois do deploy-2026-10
 
 ## Deploy de 28/10/2026 — em andamento, autorizado pelo usuário
 
+- Primeira tentativa 5f731e9: backend 40704944964 recusado no build, antes de tocar VPS, porque testes vitest eram compilados na imagem isolada do backend (a dependência só existe no frontend). Ajuste: tsconfig do backend exclui arquivos .test/.spec do artefato de produção; testes continuam executados por seus runners. Frontend aguardou backend e não publicou nessa tentativa.
+
 - Pedido: espelhar no GitHub e deploy completo do local. Repositório público allkacp/allka2.0_monorepo, remote allka2. Apenas código/docs; dumps, senhas e uploads não entram no Git.
 - Validações: builds backend/frontend concluídos, TypeScript passou nos dois; 35 testes frontend selecionados verdes. Prisma migrate diff migrations→schema em banco descartável: No difference detected. Quatro migrações novas desde o deploy anterior.
 - Backup QA antes: workflow DB Backup run 40704269666 aprovado, arquivo allka-backup-20261028T141620Z.sql.gz, 234506 bytes, SHA256 9def3b4d0c90c27c661c781990987de8f2adae1c59c50e67ecf60857cd721ee5. Backup local preparado em backups/espelho-local-qa-20261028/ (fora do Git).
