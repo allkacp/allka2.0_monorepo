@@ -38,7 +38,7 @@ Backup do banco do servidor feito antes (DB Backup run 39693472966). Deploy Back
 ## Espelho do banco local no QA 2026-10-21 (run 39697347128, autorizado pelo usuário)
 O banco do servidor passou a ser cópia do banco LOCAL (depois do deploy-2026-10-21-1). Conferido no servidor após o espelho: 27 usuários, 5 empresas, 40 projetos, 37 produtos, 14 movimentos de carteira (igual ao local). **Backup antes:** allka-before-mirror-20261022T000354Z.sql.gz (no servidor). API e site responderam 200. O estado cifrado do 1 perfil do navegador seguro foi zerado no pacote (chave local ≠ servidor). Release temporário e secret MIRROR_BUNDLE_KEY apagados; cópia local apagada. A permissão para isso foi dada pelo usuário em `.claude/settings.local.json`. **Não incluído:** arquivos em disco (anexos/entregas). Aberto: o release antigo `catalog2-transfer-2026-09-17` ainda está público.
 
-## Deploy de 28/10/2026 — em andamento, autorizado pelo usuário
+## Preparação do deploy de 28/10/2026 — histórico (conclusão no topo)
 
 - Primeira tentativa 5f731e9: backend 40704944964 recusado no build, antes de tocar VPS, porque testes vitest eram compilados na imagem isolada do backend (a dependência só existe no frontend). Ajuste: tsconfig do backend exclui arquivos .test/.spec do artefato de produção; testes continuam executados por seus runners. Frontend aguardou backend e não publicou nessa tentativa.
 
@@ -46,7 +46,7 @@ O banco do servidor passou a ser cópia do banco LOCAL (depois do deploy-2026-10
 - Validações: builds backend/frontend concluídos, TypeScript passou nos dois; 35 testes frontend selecionados verdes. Prisma migrate diff migrations→schema em banco descartável: No difference detected. Quatro migrações novas desde o deploy anterior.
 - Backup QA antes: workflow DB Backup run 40704269666 aprovado, arquivo allka-backup-20261028T141620Z.sql.gz, 234506 bytes, SHA256 9def3b4d0c90c27c661c781990987de8f2adae1c59c50e67ecf60857cd721ee5. Backup local preparado em backups/espelho-local-qa-20261028/ (fora do Git).
 - Código pendente abaixo pertence a esta entrega; só marcar concluído após workflows e conferência online.
-- Espelho destrutivo dos dados ainda NÃO aplicado: requer ensaio e confirmação depois das contagens. QA lido: users27/companies5/agencies8/clients0/projects40/catalog2_products37; local no preparo: users8/companies1/agencies1/clients2/projects3/catalog2_products37. Não copiar dumps em releases públicos.
+- Na preparação, espelho ainda NÃO aplicado: exigia ensaio e confirmação depois das contagens (ambos concluídos posteriormente, ver topo). QA lido: users27/companies5/agencies8/clients0/projects40/catalog2_products37; local no preparo: users8/companies1/agencies1/clients2/projects3/catalog2_products37. Dumps não foram publicados em releases.
 
 ## Escopo acumulado incluído no deploy de 28/10 (antes pendente só LOCAL)
 - **28/10 — Distinguir cadastro dos contatos de salvar projeto:** rodapé projectOnly explicita Projeto ainda não salvo e que criar consultor/cliente não salva projeto; validação lista motivos exatos junto ao botão. Leitura real confirmou consultor Teste e cliente Teste cliente já cadastrados/vinculados à Lamego; não duplicar. Testes do formulário e contatos; nenhuma gravação no banco real, deploy ou nova contratação.
