@@ -129,7 +129,10 @@ export async function simulate(token: string, versionId: string, selection: Reco
   return r.json as { pricing: any; price_summary: any; selection_issues: any[]; quote_requirements: any[] };
 }
 export async function checkoutAndPay(token: string, quoteIds: string[]) {
-  const checkout = await api("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: quoteIds, checkout_client_action_id: crypto.randomUUID() } });
+  const created = await api("/api/projects", { method: "POST", token, body: { title: `[TESTE] Contratação ${crypto.randomUUID()}`, status: "draft" } });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  projects.push(created.json.id);
+  const checkout = await api("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: quoteIds, checkout_client_action_id: crypto.randomUUID(), project_id: created.json.id } });
   assert.equal(checkout.status, 201, JSON.stringify(checkout.json));
   const projectId = checkout.json.project.id as string;
   projects.push(projectId);

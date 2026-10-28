@@ -21,13 +21,37 @@ let server: import("node:http").Server;
 const users: string[] = [];
 const adminProfiles: string[] = [];
 const companies: string[] = [];
+const agencies: string[] = [];
 const catProducts: string[] = [];
 const projects: string[] = [];
 
 function tokenFor(u: { id: string; email: string; role: string; account_type: string }) {
   return jwt.sign({ id: u.id, email: u.email, role: u.role, account_type: u.account_type }, config.JWT_SECRET, { expiresIn: "1h" });
 }
-async function api(path: string, opts: { method?: string; token?: string; body?: unknown } = {}) {
+const checkoutProjects = new Map<string, string>();
+async function api(path: string, opts: { method?: string; token?: string; body?: unknown; withoutProject?: boolean } = {}) {
+  // Os cenários antigos criavam projeto implicitamente no checkout. A regra
+  // nova exige projeto prévio: preparar a fixture explicitamente, preservando
+  // o MESMO projeto nos retries. withoutProject cobre a rejeição do payload vazio.
+  const body = opts.body as Record<string, any> | undefined;
+  if (path === "/api/catalog2/checkout" && opts.method === "POST" && body && !body.project_id && !opts.withoutProject) {
+    const actor = jwt.decode(opts.token!) as { id: string; role: string };
+    if (actor.role !== "admin") {
+      const key = `${actor.id}:${body.checkout_client_action_id}`;
+      let id = checkoutProjects.get(key);
+      if (!id) {
+        const user = await prisma.user.findUniqueOrThrow({ where: { id: actor.id } });
+        const project = await prisma.project.create({ data: {
+          title: `[TESTE] Checkout ${crypto.randomUUID()}`, project_code: `qa-${crypto.randomUUID()}`, status: "draft",
+          company_id: user.company_id, agency_id: user.agency_id, created_by_user_id: actor.id,
+        } });
+        id = project.id;
+        checkoutProjects.set(key, id);
+        projects.push(id);
+      }
+      opts = { ...opts, body: { ...body, project_id: id } };
+    }
+  }
   const res = await fetch(`${baseUrl}${path}`, {
     method: opts.method ?? "GET",
     headers: { "content-type": "application/json", ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}) },
@@ -212,8 +236,10 @@ describe("Checkout, pedido, financeiro, tarefas e aditivos do catalog2 (bloco 6/
 
   after(async () => {
     await new Promise<void>((res, rej) => server.close((e) => (e ? rej(e) : res())));
-    for (const id of projects.splice(0)) await purgeProject(id);
+    for (const id of new Set(projects.splice(0))) await purgeProject(id);
     for (const id of catProducts.splice(0)) await purgeProduct(id);
+    await prisma.user.updateMany({ where: { id: { in: users } }, data: { agency_id: null } });
+    await prisma.agency.deleteMany({ where: { id: { in: agencies } } });
     await prisma.company.deleteMany({ where: { id: { in: companies } } }).catch(() => {});
     await prisma.user.deleteMany({ where: { id: { in: users } } }).catch(() => {});
     await prisma.adminProfile.deleteMany({ where: { id: { in: adminProfiles } } }).catch(() => {});
@@ -233,6 +259,176 @@ describe("Checkout, pedido, financeiro, tarefas e aditivos do catalog2 (bloco 6/
     assert.equal(r.json.project_products.length, 1);
     assert.equal(r.json.project_products[0].origin, "CATALOG2");
     assert.equal(r.json.project_products[0].preco_final_cliente_snapshot, quote.commercial_price);
+  });
+
+  it("exige projeto prévio sem criar pedido, item ou pagamento", async () => {
+    const before = await prisma.project.count();
+    const r = await api("/api/catalog2/checkout", { method: "POST", token: CO_A.token, withoutProject: true,
+      body: { quote_ids: ["nao-usada"], checkout_client_action_id: crypto.randomUUID() } });
+    assert.equal(r.status, 422);
+    assert.equal(r.json.code, "project_required");
+    assert.equal(await prisma.project.count(), before);
+  });
+
+  it("agência: cliente paga pelo link, split é atômico/idempotente e tarefas NÃO são lançadas", async () => {
+    const actor = await mkCompanyUser("Agência");
+    const agency = await prisma.agency.create({ data: { name: "[TESTE] Agência contratação", owner_user_id: actor.user.id, status: "ativo" } });
+    agencies.push(agency.id);
+    const user = await prisma.user.update({ where: { id: actor.user.id }, data: { agency_id: agency.id, company_id: null, role: "agency_admin", account_type: "agencias" } });
+    const token = tokenFor(user);
+    const invalid = await api("/api/catalog2/checkout", { method: "POST", token, withoutProject: true,
+      body: { quote_ids: ["unused"], checkout_client_action_id: crypto.randomUUID(), payer: "client", commission_percent: -1 } });
+    assert.equal(invalid.status, 400);
+    const { product } = await mkPublishedProduct(`t6-agency-${crypto.randomBytes(4).toString("hex")}`);
+    const quote = await createQuoteViaApi(token, product.id);
+    const project = await api("/api/projects", { method: "POST", token, body: { title: `[TESTE] Agência ${crypto.randomUUID()}`, status: "draft" } });
+    assert.equal(project.status, 201, JSON.stringify(project.json));
+    projects.push(project.json.id);
+    const checkout = await api("/api/catalog2/checkout", { method: "POST", token, body: {
+      quote_ids: [quote.id], checkout_client_action_id: crypto.randomUUID(), project_id: project.json.id, payer: "client", commission_percent: 20,
+    } });
+    assert.equal(checkout.status, 201, JSON.stringify(checkout.json));
+    assert.equal(await prisma.projectTask.count({ where: { project_id: project.json.id } }), 0);
+    const linkToken = checkout.json.payment_link_path.split("/").pop();
+    const view = await api(`/api/public/agency-payment/${linkToken}`);
+    assert.equal(view.status, 200);
+    const expectedCommission = Math.round(quote.commercial_price * 20) / 100;
+    assert.equal(view.json.total, Math.round((quote.commercial_price + expectedCommission) * 100) / 100);
+    assert.equal(view.json.commission, undefined);
+    assert.equal(view.json.project, undefined);
+    const tampered = await api(`/api/public/agency-payment/${linkToken}bad`);
+    assert.equal(tampered.status, 404);
+    const [originalPayload] = linkToken.split(".");
+    const original = JSON.parse(Buffer.from(originalPayload, "base64url").toString());
+    const expiredPayload = Buffer.from(JSON.stringify({ ...original, expires: Date.now() - 1000 })).toString("base64url");
+    const expiredSignature = crypto.createHmac("sha256", config.JWT_SECRET).update(`allka:agency-payment:v1:${expiredPayload}`).digest("base64url");
+    const expired = await api(`/api/public/agency-payment/${expiredPayload}.${expiredSignature}`);
+    assert.equal(expired.status, 410);
+    const direct = await api("/api/payments/fake-checkout", { method: "POST", token, body: { project_id: project.json.id } });
+    assert.equal(direct.status, 409, "a agência não pode simular que o cliente pagou fora do link");
+    const declined = await api(`/api/public/agency-payment/${linkToken}/pay-sandbox`, { method: "POST", body: { card_last_digits: "0002" } });
+    assert.equal(declined.status, 402);
+    assert.equal(await prisma.projectTask.count({ where: { project_id: project.json.id } }), 0);
+    assert.equal(await prisma.walletLedger.count({ where: { type: "commission", wallet: { owner_id: agency.id } } }), 0);
+    for (let retry = 0; retry < 2; retry++) {
+      const paid = await api(`/api/public/agency-payment/${linkToken}/pay-sandbox`, { method: "POST", body: { card_last_digits: "4242" } });
+      assert.equal(paid.status, 200, JSON.stringify(paid.json));
+    }
+    const tasks = await prisma.projectTask.findMany({ where: { project_id: project.json.id }, include: { stages: true } });
+    assert.equal(tasks.length, 1);
+    assert.equal(tasks[0].status, "PARA_LANCAMENTO");
+    const agencyTasks = await api(`/api/projects/${project.json.id}/tasks`, { token });
+    assert.equal(agencyTasks.status, 200);
+    assert.equal((agencyTasks.json.data ?? agencyTasks.json).length, 1);
+    assert.ok(tasks[0].stages.every((s) => ["PENDENTE", "BLOQUEADA"].includes(s.status)));
+    const ledger = await prisma.walletLedger.findMany({ where: { type: "commission", wallet: { owner_id: agency.id } } });
+    assert.equal(ledger.length, 1);
+    assert.equal(ledger[0].amount, expectedCommission);
+    const payment = await prisma.payment.findFirstOrThrow({ where: { project_id: project.json.id, status: "PAGO" } });
+    const platform = await prisma.walletLedger.findUniqueOrThrow({ where: { idempotency_key: `agency_checkout_platform_${payment.id}` } });
+    assert.equal(platform.amount, quote.commercial_price);
+    const admin = await api(`/api/projects/${project.json.id}`, { token: MASTER });
+    assert.equal(admin.status, 200);
+    const hidden = await api(`/api/projects/${project.json.id}`, { token: CO_B.token });
+    assert.equal(hidden.status, 403);
+
+    // Mesmo usuário pode escolher pagar como agência, sem comissão/link.
+    const agencyQuote = await createQuoteViaApi(token, product.id, 2);
+    const second = await api("/api/projects", { method: "POST", token, body: { title: `[TESTE] Pagamento agência ${crypto.randomUUID()}`, status: "draft" } });
+    projects.push(second.json.id);
+    const ownOrder = await api("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: [agencyQuote.id], checkout_client_action_id: crypto.randomUUID(), project_id: second.json.id, payer: "agency", commission_percent: 0 } });
+    assert.equal(ownOrder.status, 201, JSON.stringify(ownOrder.json));
+    assert.equal(ownOrder.json.payment_link_path, null);
+    const ownPaid = await api("/api/payments/fake-checkout", { method: "POST", token, body: { project_id: second.json.id } });
+    assert.equal(ownPaid.status, 201, JSON.stringify(ownPaid.json));
+    assert.equal(await prisma.walletLedger.count({ where: { type: "commission", wallet: { owner_id: agency.id } } }), 1);
+  });
+
+  it("comissão por produto: quantidades, rejeição de mapa inválido, link e split preservam percentuais distintos", async () => {
+    const actor = await mkCompanyUser("Comissões por item");
+    const agency = await prisma.agency.create({ data: { name: "[TESTE] Agência comissões por item", owner_user_id: actor.user.id, status: "ativo" } });
+    agencies.push(agency.id);
+    const user = await prisma.user.update({ where: { id: actor.user.id }, data: { agency_id: agency.id, company_id: null, role: "agency_admin", account_type: "agencias" } });
+    const token = tokenFor(user);
+    const first = await mkPublishedProduct(`t6-item-a-${crypto.randomBytes(4).toString("hex")}`);
+    const second = await mkPublishedProduct(`t6-item-b-${crypto.randomBytes(4).toString("hex")}`);
+    const a = await createQuoteViaApi(token, first.product.id, 10);
+    const b = await createQuoteViaApi(token, second.product.id, 2);
+    const single = await createQuoteViaApi(token, first.product.id, 1);
+    // O motor calcula quantidade antes dos arredondamentos de taxas/margem:
+    // não multiplicar o preço unitário já arredondado por dez.
+    assert.equal((await prisma.catalog2Quote.findUniqueOrThrow({ where: { id: a.id } })).quantity, 10);
+    assert.ok(a.commercial_price > single.commercial_price);
+    const quoteIds = [a.id, b.id], action = crypto.randomUUID();
+    const project = await api("/api/projects", { method: "POST", token, body: { title: `[TESTE] Comissão por produto ${crypto.randomUUID()}`, status: "draft" } });
+    projects.push(project.json.id);
+    const payload = { quote_ids: quoteIds, checkout_client_action_id: action, project_id: project.json.id, payer: "client", commission_mode: "per_product", item_commissions: [{ quote_id: a.id, percent: 10 }, { quote_id: b.id, percent: 6 }] };
+    for (const items of [
+      [{ quote_id: a.id, percent: 10 }],
+      [{ quote_id: a.id, percent: 10 }, { quote_id: a.id, percent: 6 }],
+      [{ quote_id: a.id, percent: 10 }, { quote_id: "outra-cotacao", percent: 6 }],
+    ]) {
+      const invalid = await api("/api/catalog2/checkout", { method: "POST", token, body: { ...payload, item_commissions: items } });
+      assert.equal(invalid.status, 422, JSON.stringify(invalid.json));
+      assert.equal(await prisma.projectProduct.count({ where: { project_id: project.json.id } }), 0);
+    }
+    const invalidRate = await api("/api/catalog2/checkout", { method: "POST", token, body: { ...payload, item_commissions: [{ quote_id: a.id, percent: 101 }, { quote_id: b.id, percent: 6 }] } });
+    assert.equal(invalidRate.status, 400);
+    const agencyPayer = await api("/api/catalog2/checkout", { method: "POST", token, body: { ...payload, payer: "agency" } });
+    assert.equal(agencyPayer.status, 422);
+    const company = await api("/api/catalog2/checkout", { method: "POST", token: CO_A.token, withoutProject: true, body: payload });
+    assert.equal(company.status, 403);
+    const checkout = await api("/api/catalog2/checkout", { method: "POST", token, body: payload });
+    assert.equal(checkout.status, 201, JSON.stringify(checkout.json));
+    const products = checkout.json.project_products;
+    assert.equal(products.find((p: any) => p.origin_catalog2_quote_id === a.id).comissao_snapshot, 10);
+    assert.equal(products.find((p: any) => p.origin_catalog2_quote_id === b.id).comissao_snapshot, 6);
+    const expectedCommission = Math.round((Math.round(a.commercial_price * 10) / 100 + Math.round(b.commercial_price * 6) / 100) * 100) / 100;
+    const base = Math.round((a.commercial_price + b.commercial_price) * 100) / 100;
+    const link = checkout.json.payment_link_path.split("/").pop();
+    const view = await api(`/api/public/agency-payment/${link}`);
+    assert.equal(view.json.total, Math.round((base + expectedCommission) * 100) / 100);
+    assert.equal(view.json.items.length, 2);
+    assert.equal(view.json.items[0].commission, undefined);
+    const retry = await api("/api/catalog2/checkout", { method: "POST", token, body: { ...payload, item_commissions: [{ quote_id: a.id, percent: 50 }, { quote_id: b.id, percent: 50 }] } });
+    assert.equal(retry.status, 200);
+    assert.deepEqual(retry.json.project_products.map((p: any) => p.comissao_snapshot).sort(), [10, 6].sort());
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const paid = await api(`/api/public/agency-payment/${link}/pay-sandbox`, { method: "POST", body: { card_last_digits: "4242" } });
+      assert.equal(paid.status, 200, JSON.stringify(paid.json));
+    }
+    const ledger = await prisma.walletLedger.findMany({ where: { type: "commission", wallet: { owner_id: agency.id } } });
+    assert.equal(ledger.length, 1);
+    assert.equal(ledger[0].amount, expectedCommission);
+    const payment = await prisma.payment.findFirstOrThrow({ where: { project_id: project.json.id, status: "PAGO" } });
+    const platform = await prisma.walletLedger.findUniqueOrThrow({ where: { idempotency_key: `agency_checkout_platform_${payment.id}` } });
+    assert.equal(platform.amount, base);
+    const tasks = await prisma.projectTask.findMany({ where: { project_id: project.json.id } });
+    assert.ok(tasks.length > 0 && tasks.every(t => t.status === "PARA_LANCAMENTO"));
+  });
+
+  it("retry de outra conta não revela um pedido existente", async () => {
+    const { product } = await mkPublishedProduct(`t6-retry-${crypto.randomBytes(4).toString("hex")}`);
+    const quote = await createQuoteViaApi(CO_A.token, product.id);
+    const action = crypto.randomUUID();
+    const first = await api("/api/catalog2/checkout", { method: "POST", token: CO_A.token,
+      body: { quote_ids: [quote.id], checkout_client_action_id: action } });
+    assert.equal(first.status, 201);
+    const other = await api("/api/catalog2/checkout", { method: "POST", token: CO_B.token, withoutProject: true,
+      body: { quote_ids: [quote.id], checkout_client_action_id: action } });
+    assert.equal(other.status, 404);
+    assert.equal(other.json.project, undefined);
+  });
+
+  it("projeto de outra conta não pode receber o pedido", async () => {
+    const { product } = await mkPublishedProduct(`t6-owner-${crypto.randomBytes(4).toString("hex")}`);
+    const quote = await createQuoteViaApi(CO_A.token, product.id);
+    const other = await prisma.project.create({ data: { title: "[TESTE] Outro titular", project_code: `qa-${crypto.randomUUID()}`, company_id: CO_B.companyId } });
+    projects.push(other.id);
+    const r = await api("/api/catalog2/checkout", { method: "POST", token: CO_A.token,
+      body: { quote_ids: [quote.id], checkout_client_action_id: crypto.randomUUID(), project_id: other.id } });
+    assert.equal(r.status, 422);
+    assert.equal(r.json.code, "project_not_eligible");
   });
 
   // Item 2 (reunião 2026-09-14), LIMITE COMERCIAL: inativar (arquivar) um

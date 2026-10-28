@@ -9,6 +9,7 @@ import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
 import { withProjectCode } from "../lib/create-project";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { validateAdminResponsibleUserId } from "../lib/admin-responsible";
+import { contactOwnerForUser, consultantWhere, clientWhere, registeredProjectContacts, ProjectContactError } from "../lib/project-registered-contacts";
 import { ensureUploadDir, generateStoredFileName, uploadedFilePath, deleteUploadedFile } from "../lib/file-storage";
 import {
   getProjectScope,
@@ -60,6 +61,9 @@ const createSchema = z.object({
   company_type: z.enum(["company", "agency", "nomad"]).optional(),
   consultant: z.string().optional(),
   consultant_email: z.string().optional(),
+  consultant_user_id: z.string().nullable().optional(),
+  client_record_id: z.string().nullable().optional(),
+  registered_contacts_required: z.boolean().optional(),
   team_size: z.number().min(0).default(0),
   nomades: z.string().optional(),
   bitrix_sync: z.boolean().default(false),
@@ -97,6 +101,24 @@ router.get("/admin-responsible-options", verifyToken, async (req, res, next) => 
     res.json({ data: users });
   } catch (err) {
     next(err);
+  }
+});
+
+// Busca incremental dos cadastros REAIS da própria organização.
+router.get("/contact-options", verifyToken, async (req, res, next) => {
+  try {
+    const owner = await contactOwnerForUser(prisma, req.user!, { agency_id: req.query.agency_id as string, company_id: req.query.company_id as string });
+    const kind = req.query.kind === "client" ? "client" : "consultant";
+    const query = String(req.query.search ?? "").trim().slice(0, 150);
+    const selectedId = String(req.query.selected_id ?? "");
+    const search = query ? { OR: [{ name: { contains: query } }, { email: { contains: query } }, ...(selectedId ? [{ id: selectedId }] : [])] } : {};
+    const data = kind === "consultant"
+      ? await prisma.user.findMany({ where: { ...consultantWhere(owner), ...search }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" }, take: 100 })
+      : await prisma.client.findMany({ where: { ...clientWhere(owner), ...search }, select: { id: true, name: true, email: true, document: true }, orderBy: { name: "asc" }, take: 100 });
+    res.json({ data, owner });
+  } catch (error) {
+    if (error instanceof ProjectContactError) { res.status(error.status).json({ error: error.message }); return; }
+    next(error);
   }
 });
 
@@ -174,6 +196,7 @@ router.get("/", verifyToken, async (req, res, next) => {
       prisma.project.findMany({
         where,
         include: {
+          client_record: { select: { id: true, name: true, email: true, document: true } },
           client: {
             select: {
               id: true,
@@ -302,6 +325,8 @@ router.get("/:id", verifyToken, async (req, res, next) => {
         : { id: idParam },
       include: {
         client: true,
+        client_record: { select: { id: true, name: true, email: true, document: true } },
+        consultant_user: { select: { id: true, name: true, email: true } },
         agency_owner: { select: { id: true, name: true } },
         company_owner: { select: { id: true, name: true } },
         archived_by: { select: { id: true, name: true } },
@@ -1353,7 +1378,7 @@ router.post(
       if (rest.client_id) nameWhere.client_id = rest.client_id;
       const duplicate = await prisma.project.findFirst({ where: nameWhere, select: { id: true } });
       if (duplicate) {
-        res.status(409).json({ error: "Já existe um projeto com esse nome" });
+        res.status(409).json({ error: "Já existe um projeto com esse nome", code: "duplicate_project_name" });
         return;
       }
 
@@ -1416,13 +1441,17 @@ router.post(
       // Autoria + código sequencial persistente na mesma transação da
       // criação — se qualquer um falhar, nenhum dos dois fica parcialmente
       // aplicado.
-      const project = await withProjectCode(prisma, (tx, projectCode) =>
-        tx.project.create({
+      const project = await withProjectCode(prisma, async (tx, projectCode) => {
+        const contacts = rest.registered_contacts_required || rest.consultant_user_id || rest.client_record_id
+          ? await registeredProjectContacts(tx, await contactOwnerForUser(tx, req.user!, newScopeData), rest.consultant_user_id, rest.client_record_id)
+          : {};
+        return tx.project.create({
           data: {
             ...rest,
             agency: agencyName || rest.agency,
             ...newScopeData,
             ...adminResponsibleData,
+            ...contacts,
             start_date: toDate(start_date),
             end_date: toDate(end_date),
             created_by_user_id: req.user!.id,
@@ -1434,10 +1463,11 @@ router.post(
             // já resolvidos, sem exigir um segundo fetch no frontend.
             admin_responsible: { select: { id: true, name: true, email: true, admin_profile: { select: { is_master: true } } } },
           },
-        }),
-      );
+        });
+      });
       res.status(201).json(project);
     } catch (err) {
+      if (err instanceof ProjectContactError) { res.status(err.status).json({ error: err.message }); return; }
       next(err);
     }
   },
@@ -1476,7 +1506,7 @@ router.put(
       // Capture previous status and validate scope before update
       const before = await prisma.project.findUnique({
         where: { id },
-        select: { status: true, agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true, admin_responsible_user_id: true },
+        select: { status: true, agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true, admin_responsible_user_id: true, consultant_user_id: true, client_record_id: true, registered_contacts_required: true },
       });
 
       if (!before) {
@@ -1529,6 +1559,12 @@ router.put(
         }
       }
 
+      if (before.registered_contacts_required || rest.registered_contacts_required || rest.consultant_user_id !== undefined || rest.client_record_id !== undefined) {
+        Object.assign(rest, await registeredProjectContacts(prisma,
+          await contactOwnerForUser(prisma, req.user!, { agency_id: before.agency_id ?? undefined, company_id: before.company_id ?? before.client_id ?? undefined }),
+          rest.consultant_user_id !== undefined ? rest.consultant_user_id : before.consultant_user_id,
+          rest.client_record_id !== undefined ? rest.client_record_id : before.client_record_id));
+      }
       const project = await prisma.project.update({
         where: { id },
         data: {
@@ -1558,6 +1594,7 @@ router.put(
 
       res.json(project);
     } catch (err) {
+      if (err instanceof ProjectContactError) { res.status(err.status).json({ error: err.message }); return; }
       next(err);
     }
   },

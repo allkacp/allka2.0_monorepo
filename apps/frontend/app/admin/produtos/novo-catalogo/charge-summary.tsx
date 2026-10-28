@@ -8,7 +8,7 @@ import { apiClient } from "@/lib/api-client";
 const money = (n: number | null | undefined, cur = "R$") => (n == null ? "A definir" : `${cur} ${Number(n).toFixed(2).replace(".", ",")}`);
 export const NO_FIRST_EXECUTION = "Este produto não possui atividades exclusivas da primeira execução.";
 
-type Step = { ref: string; name: string; price: number; dispensable?: boolean };
+type Step = { ref: string; name: string; price: number; dispensable?: boolean; task_key?: string; step_key?: string };
 
 /** Lê o que importa do resultado da simulação (PricingResult do servidor). */
 export function chargeSummaryOf(pricing: any) {
@@ -32,22 +32,23 @@ const KIND_CLS: Record<Kind, string> = {
 function Tile({ label, value, hint, testId, kind, tone = "neutral" }: { label: string; value: string; hint?: string; testId: string; kind?: Kind; tone?: "neutral" | "violet" | "emerald" }) {
   const toneCls = tone === "violet" ? "border-violet-200 bg-violet-50/70 dark:border-violet-900/60 dark:bg-violet-950/30" : tone === "emerald" ? "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900/60 dark:bg-emerald-950/20" : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60";
   return (
-    <div className={`min-w-0 rounded-xl border px-3 py-2 ${toneCls}`} data-testid={testId}>
-      <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</span>
-      {kind && <span className={`mt-0.5 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-bold ${KIND_CLS[kind]}`} data-testid={`${testId}-kind`}>{KIND_LABEL[kind]}</span>}
-      <strong className="block text-base text-slate-900 dark:text-slate-100">{value}</strong>
-      {hint && <span className="block text-[11px] leading-snug text-slate-500">{hint}</span>}
+    // Uma linha só: rótulo + tipo + ⓘ (a explicação vai no info) + valor à direita.
+    <div className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-xl border px-3 py-2 ${toneCls}`} data-testid={testId}>
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500" data-no-info="">{label}{hint && <span className="field-info" data-help={hint} aria-hidden="true">i</span>}</span>
+      {kind && <span className={`inline-block rounded-full px-1.5 py-0.5 text-[10px] font-bold ${KIND_CLS[kind]}`} data-testid={`${testId}-kind`}>{KIND_LABEL[kind]}</span>}
+      {hint && <span className="sr-only">{hint}</span>}
+      <strong className="ml-auto text-base text-slate-900 dark:text-slate-100">{value}</strong>
     </div>
   );
 }
 
-function StepList({ title, steps, empty, testId, cur }: { title: string; steps: Step[]; empty: string; testId: string; cur: string }) {
+function StepList({ title, steps, empty, testId, cur, onAdjust }: { title: string; steps: Step[]; empty: string; testId: string; cur: string; /** leva até o campo que forma este valor (horas e valor/hora da etapa) */ onAdjust?: (s: Step) => void }) {
   return (
     <div className="min-w-0" data-testid={testId}>
       <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{title}</p>
       {steps.length === 0 ? <p className="mt-0.5 text-xs text-slate-500">{empty}</p> : (
         <ul className="mt-0.5 space-y-0.5 text-xs text-slate-700 dark:text-slate-200">
-          {steps.map((s) => <li key={s.ref} className="flex justify-between gap-2"><span className="min-w-0 truncate">{s.name}{s.dispensable ? <span className="ml-1 rounded bg-sky-100 px-1 text-[10px] font-semibold text-sky-800" title="Dispensável quando o mesmo executor continua">dispensável</span> : null}</span><span className="shrink-0 text-slate-500">{money(s.price, cur)}</span></li>)}
+          {steps.map((s) => <li key={s.ref} className="flex justify-between gap-2"><span className="min-w-0 truncate">{s.name}{s.dispensable ? <span className="ml-1 rounded bg-sky-100 px-1 text-[10px] font-semibold text-sky-800" title="Dispensável quando o mesmo executor continua">dispensável</span> : null}</span><span className="flex shrink-0 items-center gap-1.5 text-slate-500">{money(s.price, cur)}{onAdjust && s.step_key && <button type="button" onClick={() => onAdjust(s)} data-testid="charge-step-adjust" title="Ir até esta etapa para ver e ajustar as horas e o valor/hora; ao salvar você volta aqui." className="rounded border border-violet-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 hover:bg-violet-50">Ajustar</button>}</span></li>)}
         </ul>
       )}
     </div>
@@ -55,7 +56,7 @@ function StepList({ title, steps, empty, testId, cur }: { title: string; steps: 
 }
 
 /** Cartões: implantação, ciclo recorrente, primeira cobrança, renovação e compra avulsa + as etapas que formam cada valor. */
-export function ChargeSummary({ pricing, loading, error, acceptsOneTime = true }: { pricing: any; loading?: boolean; error?: string | null; /** versão vendida avulsa? (só esconde o cartão de compra avulsa; não muda nenhum valor) */ acceptsOneTime?: boolean }) {
+export function ChargeSummary({ pricing, loading, error, acceptsOneTime = true, onAdjustStep }: { /** leva até a etapa que forma o valor (e volta ao salvar) */ onAdjustStep?: (s: { task_key?: string; step_key?: string; name: string }) => void; pricing: any; loading?: boolean; error?: string | null; /** versão vendida avulsa? (só esconde o cartão de compra avulsa; não muda nenhum valor) */ acceptsOneTime?: boolean }) {
   if (error) return <p role="alert" className="text-xs text-red-600" data-testid="charge-summary-error">Não foi possível calcular a cobrança agora: {error}</p>;
   if (!pricing) return <p className="text-xs text-slate-500" data-testid="charge-summary-loading">{loading ? "Calculando a cobrança…" : "Cadastre as etapas para ver a cobrança estimada."}</p>;
   const { cs, fe, disp, hasImplementation, pending, currency } = chargeSummaryOf(pricing);
@@ -65,7 +66,7 @@ export function ChargeSummary({ pricing, loading, error, acceptsOneTime = true }
     <section className="space-y-2" data-testid="charge-summary" aria-label="Cobrança estimada">
       {undefinedPrice && <p className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" data-testid="charge-summary-pending">Preço ainda a definir{pending.length ? `: falta ${pending.join("; ")}` : ""}. Os valores abaixo aparecem quando o preço fecha.</p>}
       <p className="text-[11px] leading-snug text-slate-600 dark:text-slate-300" data-testid="charge-estimate-note">Valores <strong>estimados</strong>: são recalculados automaticamente conforme tarefas, etapas, tempo, especialidades, execução humana ou por IA, qualificação, adicionais e demais regras de preço.</p>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-2 sm:grid-cols-2">
         {hasImplementation
           ? <Tile testId="charge-implementation" kind="once" label="Implementação" value={money(cs.implementation_price, currency)} hint="Cobrança única referente às etapas executadas somente na primeira entrega (“Só na primeira execução”)." tone="violet" />
           : <Tile testId="charge-implementation" label="Implementação" value="—" hint={NO_FIRST_EXECUTION} />}
@@ -77,8 +78,8 @@ export function ChargeSummary({ pricing, loading, error, acceptsOneTime = true }
       <details className="rounded-lg border border-slate-200 bg-white/70 px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-900/40" data-testid="charge-steps-details">
         <summary className="cursor-pointer text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Quais etapas compõem cada valor</summary>
         <div className="mt-2 grid gap-3 md:grid-cols-2">
-          <StepList testId="charge-steps-implementation" title="Implementação · pagamento único (só na 1ª execução)" steps={cs.implementation_steps ?? []} empty={NO_FIRST_EXECUTION} cur={currency} />
-          <StepList testId="charge-steps-recurring" title="Recorrente · por ciclo" steps={cs.recurring_steps ?? []} empty="Nenhuma etapa recorrente com horas." cur={currency} />
+          <StepList testId="charge-steps-implementation" title="Implementação · pagamento único (só na 1ª execução)" steps={cs.implementation_steps ?? []} empty={NO_FIRST_EXECUTION} cur={currency} onAdjust={onAdjustStep} />
+          <StepList testId="charge-steps-recurring" title="Recorrente · por ciclo" steps={cs.recurring_steps ?? []} empty="Nenhuma etapa recorrente com horas." cur={currency} onAdjust={onAdjustStep} />
         </div>
       </details>
       {fe.has_steps && !fe.applies && <p className="text-[11px] text-slate-600" data-testid="charge-first-off">{fe.reason}</p>}

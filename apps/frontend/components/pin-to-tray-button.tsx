@@ -26,13 +26,15 @@ export function PinToTrayButton({
   label,
   icon,
   path,
+  activateKey,
 }: {
   id: string;
   label: string;
   icon: React.ElementType;
   path: string;
+  activateKey?: string;
 }) {
-  const { pinned, toggle } = usePinnedPage({ id, label, icon, path });
+  const { pinned, toggle } = usePinnedPage({ id, label, icon, path, activateKey });
 
   return (
     <TooltipProvider delayDuration={400}>
@@ -42,6 +44,7 @@ export function PinToTrayButton({
             type="button"
             onClick={toggle}
             aria-pressed={pinned}
+            aria-label={pinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"}
             className={`flex items-center justify-center h-8 w-8 rounded-lg border transition-colors ${
               pinned
                 ? "border-white bg-white/25 text-white"

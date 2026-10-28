@@ -1,4 +1,5 @@
 import { PageLoader } from "@/components/ui/loading";
+import { TaskLaunchConnections } from "@/components/connections/task-launch-connections";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { Button } from "@/components/ui/button";
@@ -1324,6 +1325,8 @@ export function TaskLaunchDrawer({
 
             {/* ════════════════ BODY ════════════════ */}
             <div className="flex-1 overflow-y-auto bg-slate-50/60">
+              {/* Conexões que a tarefa precisa: uma linha por conexão; some quando a tarefa não exige nenhuma. Nunca trava o lançamento. */}
+              <TaskLaunchConnections projectId={effectiveProjectId} taskId={currentTask.id} />
               {fillMode === null ? renderModeSelection() : renderFillingContent()}
             </div>
 

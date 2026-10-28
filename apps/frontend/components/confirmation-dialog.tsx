@@ -62,6 +62,8 @@ interface ConfirmationDialogProps {
    * Aditivo: omitido, o comportamento de sempre (só desabilita durante o
    * submit) continua igual. */
   confirmDisabled?: boolean
+  /** Abre POR CIMA de Painel/Janela Moldura (z 1200+). Use quando a confirmação nasce dentro de uma tela moldura. */
+  elevated?: boolean
 }
 
 /**
@@ -111,6 +113,7 @@ export function ConfirmationDialog({
   continueText = "Continuar para confirmação",
   finalConfirmText,
   confirmDisabled = false,
+  elevated = true,
 }: ConfirmationDialogProps) {
   const [step, setStep] = useState<1 | 2>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -269,6 +272,8 @@ export function ConfirmationDialog({
       title={showingFinalStep && twoStep ? `${title} — confirmação final` : title}
       size="compact"
       footer={footer}
+      overlayClassName={elevated ? "!z-[1399]" : undefined}
+      contentClassName={elevated ? "!z-[1400]" : undefined}
     >
       <div className="px-6 py-5 flex-1 overflow-y-auto">
         <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl mb-5 ${badgeClass}`}>

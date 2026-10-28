@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { CheckCircle2, Clock, GitBranch, Loader2, PauseCircle, PlayCircle, ShieldCheck, RotateCcw } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
+import { StageCyclesList } from "./stage-cycles-list"
 
 export const STAGE_STATUS_LABEL: Record<string, { label: string; tone: string }> = {
   BLOQUEADA: { label: "Aguardando a etapa anterior", tone: "bg-slate-100 text-slate-700" },
@@ -45,7 +46,8 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
   const clocks: any[] = flow.sla ?? []
   const inputs: any[] = flow.inputs ?? []
   const stageMode = flow.task?.stage_execution === "stage"
-  if (!stageMode && gates.length === 0 && clocks.length === 0 && inputs.length === 0) return null
+  const anyCycles = stages.some((e) => e.em_ciclos)
+  if (!stageMode && !anyCycles && gates.length === 0 && clocks.length === 0 && inputs.length === 0) return null
 
   async function run(key: string, fn: () => Promise<any>, ok: string) {
     setBusy(key); setNotice(null)
@@ -82,7 +84,7 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
         </section>
       )}
 
-      {stageMode && stages.length > 0 && (
+      {(stageMode || anyCycles) && stages.length > 0 && (
         <ol className="space-y-2">
           {stages.map((e) => {
             const st = STAGE_STATUS_LABEL[e.status] ?? { label: e.status, tone: "bg-slate-100 text-slate-700" }
@@ -98,6 +100,7 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
                   {e.rodada_ajuste > 0 && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-800">{e.rodada_ajuste} ajuste{e.rodada_ajuste > 1 ? "s" : ""}</span>}
                   {e.prazo_execucao && e.status !== "CONCLUIDA" && <span className="ml-auto flex items-center gap-1 text-[11px] text-slate-500"><Clock className="h-3 w-3" />prazo {fmtDate(e.prazo_execucao)}</span>}
                 </div>
+                {e.em_ciclos && <StageCyclesList taskId={taskId} stageId={e.id} onChanged={() => { load(); onChanged?.() }} />}
                 {acts && (
                   <div className="mt-2 space-y-2">
                     {(e.can_qualify || e.can_qualify_specialist || e.can_approve) && (
@@ -110,6 +113,10 @@ export function TaskStagesPanel({ taskId, status, onChanged }: { taskId: string;
                           </button>
                           <button type="button" disabled={busy === e.id || comment(e.id).length < 3} title={comment(e.id).length < 3 ? "Escreva o motivo para pedir ajuste" : ""} className={`${BTN} border-red-300 bg-red-50 text-red-800 hover:bg-red-100`}
                             onClick={() => run(e.id, () => apiClient.decideStage(taskId, e.id, tipoOf(e), "reprovar", comment(e.id)).then(() => clear(e.id)), "Ajuste solicitado: a etapa voltou para o mesmo executor, com o mesmo prazo.")}>Pedir ajuste</button>
+                          {e.can_qualify && (
+                            <button type="button" data-testid="devolver-ao-cliente" disabled={busy === e.id || comment(e.id).length < 3} title={comment(e.id).length < 3 ? "Escreva o que o cliente precisa resolver" : "Faltou algo que só o cliente resolve: a etapa volta para ele ver e aprovar"} className={`${BTN} border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100`}
+                              onClick={() => run(e.id, () => apiClient.decideStage(taskId, e.id, "qualificacao", "encaminhar", comment(e.id)).then(() => clear(e.id)), "Devolvido ao cliente: ele passa a ver a etapa e precisa resolver.")}>Faltou algo: devolver ao cliente</button>
+                          )}
                           <button type="button" disabled={busy === e.id || !comment(e.id)} className={`${BTN} border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}
                             onClick={() => run(e.id, () => apiClient.decideStage(taskId, e.id, tipoOf(e), "comentar", comment(e.id)).then(() => clear(e.id)), "Comentário registrado.")}>Só comentar</button>
                         </div>

@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { useLocation } from "react-router-dom"
+import { partnerAgencyExtraItems } from "@/lib/partner-menu"
 import { cn } from "@/lib/utils"
 import { useAccountType } from "@/contexts/account-type-context"
 import { useSidebar } from "@/contexts/sidebar-context"
@@ -256,10 +257,8 @@ export function AppMenuDrawer({ open, onClose }: AppMenuDrawerProps) {
       // não um account_type separado — anexa os itens exclusivos de
       // Partner ao menu normal da Agency quando ativo.
       if (!isPartnerActive) return navigationConfig.agencias
-      const partnerOnlyItems = navigationConfig.parceiro.filter(
-        (item) => item.href !== "/partner/dashboard",
-      )
-      return [...navigationConfig.agencias, ...partnerOnlyItems]
+      // 2026-10-26: a agência Partner vê só Comissões e Saques do Partner (Agências não) — ver lib/partner-menu.ts.
+      return [...navigationConfig.agencias, ...partnerAgencyExtraItems(navigationConfig.parceiro)]
     }
     if (accountType === "lider") return navigationConfig.lider
     return (navigationConfig as any)[accountType] || []

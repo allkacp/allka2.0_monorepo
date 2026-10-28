@@ -29,6 +29,19 @@ describe("ajuda por campo (ícone i)", () => {
     await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
   });
 
+  it("não põe o ícone no meio de uma frase: “3 de 4 classificações” não ganha o “i” do campo “De”, mas o rótulo “De” sozinho ganha", async () => {
+    const n = 3;
+    const { container } = render(
+      <FieldHelpLayer>
+        <span data-testid="frase">{n} de {4} classificações selecionadas</span>
+        <label><span>De</span><input aria-label="início" /></label>
+      </FieldHelpLayer>,
+    );
+    await waitFor(() => expect(container.querySelectorAll(".field-info").length).toBe(1));
+    expect(container.querySelector("[data-testid=frase] .field-info")).toBeNull();
+    expect(container.querySelector("label .field-info")).not.toBeNull();
+  });
+
   it("só o ícone mostra ajuda: o title nativo some do rótulo/campo (sem tooltip duplicado) e vira o texto do ícone", async () => {
     const { container } = render(
       <FieldHelpLayer>

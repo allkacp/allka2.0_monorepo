@@ -18,6 +18,7 @@ const api = {
 vi.mock("@/components/confirmation-dialog", () => ({
   ConfirmationDialog: ({ open, title, message, confirmText, cancelText, onConfirm, onClose }: any) => open ? (<div role="alertdialog" aria-label={title}><h2>{title}</h2><div>{message}</div><button onClick={onClose}>{cancelText ?? "Cancelar"}</button><button onClick={() => void onConfirm()}>{confirmText ?? "Confirmar"}</button></div>) : null,
 }));
+vi.mock("@/hooks/useAppFrameMetrics", () => ({ useAppFrameMetrics: () => ({ top: 0, left: 0, width: 1000, height: 800, sidebarWidth: 72 }) }));
 vi.mock("@/lib/api-client", () => ({ apiClient: new Proxy({}, { get: (_t, k: string) => (api as any)[k] }) }));
 import { QuestionList, QuestionnaireEditor, QuestionnairePreview, questionnaireBody, type QuestionnaireState } from "./catalog2-questionnaire-builder";
 import { QuestionnaireSection } from "./product-editor";
@@ -53,23 +54,31 @@ describe("Questionário · estilo da plataforma antiga (lista pronta + modal)", 
     expect(screen.getByRole("button", { name: /Adicionar/ })).toBeInTheDocument();
   });
 
-  it("ao abrir uma pergunta mostra só leitura: tipo, anexo?, obrigatória? e instruções; lápis e lixeira ficam ali", () => {
+  it("sem abrir/fechar: o ícone de info mostra tipo, anexo?, obrigatória? e instruções; editar/excluir/duplicar/setas ficam na própria linha", () => {
     render(<Harness initial={three} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
-    const body = within(screen.getByTestId("question-body"));
-    expect(body.getByText("Tipo da resposta:")).toBeInTheDocument();
-    expect(body.getByText("Texto longo")).toBeInTheDocument();
-    expect(body.getByText(/Habilitar anexo na pergunta\?/)).toBeInTheDocument();
-    expect(body.getByText("NÃO")).toBeInTheDocument();
-    expect(body.getByText(/Pergunta obrigatória\?/)).toBeInTheDocument();
-    expect(body.getByText("SIM")).toBeInTheDocument();
-    expect(body.getByText(/Instruções de resposta:/)).toBeInTheDocument();
-    expect(body.getByText(/qual o tema que deverá ser desenvolvido/)).toBeInTheDocument();
-    expect(body.getByLabelText("Editar pergunta 1")).toBeInTheDocument();
-    expect(body.getByLabelText("Excluir pergunta 1")).toBeInTheDocument();
-    expect(screen.getByTestId("question-body").querySelectorAll("input, textarea, select").length).toBe(0);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 3"));
-    expect(screen.getAllByText("SIM").length).toBeGreaterThan(1); // imagem = anexo habilitado
+    expect(screen.queryByLabelText("Expandir pergunta 1")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Editar pergunta 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Excluir pergunta 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Duplicar pergunta 1")).toBeInTheDocument();
+    expect(screen.getByLabelText("Descer pergunta 1")).toBeInTheDocument();
+    fireEvent.focus(screen.getByLabelText("Informações da pergunta 1"));
+    const info = within(screen.getAllByTestId("question-info")[0]);
+    expect(info.getAllByText("Tipo da resposta").length).toBeGreaterThan(0);
+    expect(info.getAllByText("Texto longo").length).toBeGreaterThan(0);
+    expect(info.getAllByText(/Anexo na pergunta?/).length).toBeGreaterThan(0);
+    expect(info.getAllByText("NÃO").length).toBeGreaterThan(0);
+    expect(info.getAllByText(/Pergunta obrigatória?/).length).toBeGreaterThan(0);
+    expect(info.getAllByText("SIM").length).toBeGreaterThan(0);
+    expect(info.getAllByText(/qual o tema que deverá ser desenvolvido/).length).toBeGreaterThan(0);
+  });
+
+  it("excluir e duplicar pedem confirmação antes de agir", () => {
+    render(<Harness initial={three} />);
+    fireEvent.click(screen.getByLabelText("Duplicar pergunta 1"));
+    expect(screen.getByText("Duplicar pergunta?")).toBeInTheDocument();
+    expect(stateOut()).toHaveLength(3); // nada mudou ainda
+    fireEvent.click(screen.getByRole("button", { name: "Duplicar pergunta" }));
+    expect(stateOut()).toHaveLength(4);
   });
 
   it("“+ Adicionar” abre o modal “Nova Pergunta”; salvar acrescenta a pergunta na lista (chave única); cancelar não muda nada", () => {
@@ -105,11 +114,11 @@ describe("Questionário · estilo da plataforma antiga (lista pronta + modal)", 
 
   it("reordenar (setas), duplicar (ID novo gerado ao salvar), excluir com confirmação e ativar/desativar sem apagar", async () => {
     render(<Harness initial={three} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
     fireEvent.click(screen.getByLabelText("Descer pergunta 1"));
     expect(stateOut().map((x) => x.key)).toEqual(["b", "a", "c"]);
     // a pergunta "a" agora é a 2ª (continua aberta): duplica
     fireEvent.click(screen.getByLabelText("Duplicar pergunta 2"));
+    fireEvent.click(screen.getByRole("button", { name: "Duplicar pergunta" }));
     const dup = stateOut();
     expect(dup).toHaveLength(4);
     expect(dup[2].label).toMatch(/(cópia)/);
@@ -224,7 +233,6 @@ describe("Modal da pergunta · tipos, opções, anexos e condições sem código
 
   it("condição por resposta anterior vai no corpo salvo (igual, contém, maior que, anexado…)", () => {
     render(<Harness initial={[d({ key: "a", label: "Usa Meta?", question_type: "sim_nao" }), d({ key: "b", label: "Qual a verba?", question_type: "numero" })]} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 2"));
     fireEvent.click(screen.getByLabelText("Editar pergunta 2"));
     fireEvent.change(screen.getByLabelText("Quando a pergunta aparece"), { target: { value: "answer" } });
     const op = screen.getByLabelText("Operador da condição") as HTMLSelectElement;
@@ -363,7 +371,6 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
     expect(screen.getByTestId("questionnaire-id").textContent).toBe("ID qn-aaaaa");
     expect(screen.getByTestId("question-list")).toBeInTheDocument();
     expect(document.querySelectorAll("input[type=text], textarea, select").length).toBe(0);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
     fireEvent.click(screen.getByLabelText("Editar pergunta 1"));
     fireEvent.change(screen.getByLabelText("Texto da pergunta"), { target: { value: "Pergunta A alterada" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -376,7 +383,6 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
   it("modelo usado por 2+ tarefas: avisa e, ao salvar uma pergunta, pede a escolha (cópia ou editar o modelo com confirmação)", async () => {
     render(<QuestionnaireSection task={task(q)} refs={refs(3)} act={act} version={{}} readOnly={false} />);
     expect(screen.getByText(/usado por 3 tarefas/)).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
     fireEvent.click(screen.getByLabelText("Editar pergunta 1"));
     fireEvent.change(screen.getByLabelText("Texto da pergunta"), { target: { value: "Pergunta A alterada" } });
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -395,7 +401,6 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
 
   it("criar cópia independente: manda shared_mode=copy", async () => {
     render(<QuestionnaireSection task={task(q)} refs={refs(2)} act={act} version={{}} readOnly={false} />);
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
     fireEvent.click(screen.getByLabelText("Editar pergunta 1"));
     fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
     fireEvent.click(await screen.findByRole("button", { name: /Criar uma cópia independente/ }));
@@ -405,7 +410,7 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
 
   it("duplicar, visualizar como cliente e “Dados e seções” (modal) estão disponíveis", async () => {
     render(<QuestionnaireSection task={task(q)} refs={refs(1)} act={act} version={{}} readOnly={false} />);
-    fireEvent.click(screen.getByRole("button", { name: /Duplicar/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Duplicar" }));
     await waitFor(() => expect(api.setCatalog2TaskQuestionnaire).toHaveBeenCalledWith("t1", "qn-aaaaaaaa11", "copy"));
     fireEvent.click(screen.getByRole("button", { name: /Visualizar como cliente/ }));
     expect(screen.getByTestId("questionnaire-preview")).toBeInTheDocument();
@@ -419,7 +424,6 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
   it("somente leitura: lista pronta sem botões de editar/adicionar", () => {
     render(<QuestionnaireSection task={task(q)} refs={refs(1)} act={act} version={{}} readOnly />);
     expect(screen.queryByRole("button", { name: /Adicionar/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Expandir pergunta 1"));
     expect(screen.queryByLabelText("Editar pergunta 1")).not.toBeInTheDocument();
   });
 });
@@ -443,20 +447,21 @@ describe("Layout e modais · questionário e etapas", () => {
     expect(src).toMatch(/<DialogTitle>Nova etapa<\/DialogTitle>/);
     expect(src).toMatch(/data-testid="step-create-modal"/);
   });
-  it("etapas: vêm FECHADAS (acordeão) e o botão Editar fica no cabeçalho, aberta ou fechada", () => {
-    expect(src).toMatch(/usePersistedFlag\(`step-open:\$\{step\.id\}`, false\)/);
+  it("etapas: sem acordeão — o cabeçalho tem Ver e Editar lado a lado e o Ver abre a Janela Moldura da etapa", () => {
     const header = src.indexOf('data-testid="step-header"');
-    const toggle = src.indexOf('data-testid="step-toggle"');
+    const viewBtn = src.indexOf('data-testid="step-view-btn"');
     const editBtn = src.indexOf('data-testid="step-edit-btn"');
-    const body = src.indexOf("{open && (", header);
+    const modal = src.indexOf('testId="step-view-modal"', header);
     expect(header).toBeGreaterThan(0);
-    expect(toggle).toBeGreaterThan(header);
-    expect(editBtn).toBeGreaterThan(toggle);
-    expect(editBtn).toBeLessThan(body); // fora do trecho que só aparece com a etapa aberta
+    expect(viewBtn).toBeGreaterThan(header);
+    expect(editBtn).toBeGreaterThan(viewBtn);
+    expect(modal).toBeGreaterThan(editBtn);
+    expect(src.slice(modal - 200, modal)).toMatch(/<FramedModal open onOpenChange=\{setOpen\}/);
+    expect(src).toMatch(/section-number-badge[^"]*"[^>]*data-testid="step-number"|data-testid="step-number"/);
   });
   it("modal da etapa: os 5 blocos são acordeões (StepBlock) e o rodapé tem Cancelar, Salvar rascunho da etapa e Concluir e salvar etapa", () => {
     const edit = src.indexOf('data-testid="step-edit-form"');
-    const form = src.slice(edit, edit + 40000);
+    const form = src.slice(edit, edit + 60000);
     for (const t of ["O que é esta etapa", "Quem faz e quanto tempo leva", "Quando a etapa termina", "Checklist, orientações e evidência", "Conexões e acessos desta etapa"]) expect(form).toContain(t);
     for (const n of [1, 2, 3, 4, 5]) expect(form).toContain("<StepBlock n={" + n + "}");
     expect(form).toContain("Salvar rascunho da etapa");
@@ -474,7 +479,32 @@ describe("Questionário em sessões (acordeão)", () => {
   ];
   const secs = [{ key: "s1", name: "Objetivos", description: "" }, { key: "s2", name: "Dados da empresa", description: "" }];
 
-  it("agrupa por sessão, mantém a numeração da lista inteira e fecha/abre a sessão", () => {
+  it("arrastar uma pergunta para outra sessão muda a sessão dela e a numeração recomeça em cada sessão", () => {
+    render(<Harness initial={qs} sections={secs} />);
+    const itens = () => screen.getAllByTestId("question-item");
+    // "Qual o objetivo?" (1ª da sessão Objetivos) vai para a sessão "Dados da empresa", sobre "Nome da empresa".
+    fireEvent.dragStart(itens()[0]);
+    fireEvent.dragOver(itens()[2]);
+    fireEvent.drop(itens()[2]);
+    const heads = screen.getAllByTestId("question-section");
+    expect(heads.map((h) => h.textContent)).toEqual(["Objetivos1 pergunta(s)", "Dados da empresa2 pergunta(s)", "Sem sessão1 pergunta(s)"]);
+    const lista = within(screen.getByTestId("question-list"));
+    expect(lista.getByText(/1ª Qual o orçamento/)).toBeInTheDocument();
+    expect(lista.getByText(/1ª Nome da empresa/)).toBeInTheDocument();
+    expect(lista.getByText(/2ª Qual o objetivo/)).toBeInTheDocument();
+    expect(lista.getByText(/1ª Observações gerais/)).toBeInTheDocument();
+  });
+
+  it("soltar uma pergunta sobre o título de uma sessão vazia a coloca nela", () => {
+    render(<Harness initial={[d({ key: "a", label: "Primeira", section_key: "s1" })]} sections={secs} />);
+    fireEvent.dragStart(screen.getAllByTestId("question-item")[0]);
+    const heads = screen.getAllByTestId("question-section");
+    fireEvent.dragOver(heads[1]);
+    fireEvent.drop(heads[1]);
+    expect(screen.getAllByTestId("question-section").map((h) => h.textContent)).toEqual(["Objetivos0 pergunta(s)", "Dados da empresa1 pergunta(s)"]);
+  });
+
+  it("agrupa por sessão, numera dentro de cada sessão e fecha/abre a sessão", () => {
     render(<Harness initial={qs} sections={secs} />);
     const heads = screen.getAllByTestId("question-section");
     expect(heads.map((h) => h.textContent)).toEqual(["Objetivos2 pergunta(s)", "Dados da empresa1 pergunta(s)", "Sem sessão1 pergunta(s)"]);
@@ -483,7 +513,7 @@ describe("Questionário em sessões (acordeão)", () => {
     expect(screen.getAllByTestId("question-summary")).toHaveLength(2);
     const lista = within(screen.getByTestId("question-list"));
     expect(lista.queryByText(/Qual o objetivo/)).toBeNull();
-    expect(lista.getByText(/3ª Nome da empresa/)).toBeInTheDocument();
+    expect(lista.getByText(/1ª Nome da empresa/)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Abrir sessão Objetivos"));
     expect(screen.getAllByTestId("question-summary")).toHaveLength(4);
   });

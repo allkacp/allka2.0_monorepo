@@ -6,6 +6,7 @@
  * própria tela) — nada se adiciona sozinho, e nada some sozinho: só clicando
  * em remover aqui ou de novo no pin de origem (ver open-screens-context.tsx).
  */
+import { FloatingToolSlot } from "@/components/floating-tools-rail";
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useNavigate } from "@/hooks/use-navigate";
@@ -34,7 +35,7 @@ export function OpenScreensTray() {
     // cai por cima do banner da pagina — o selo com a contagem aparecia
     // cortado atravessando o gradiente. As telas fixadas seguem acessiveis
     // pelo menu.
-    <div className="hidden xl:block fixed top-[125px] right-[8px] z-65">
+    <FloatingToolSlot className="hidden xl:block" order={0} fallbackTop={125}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
@@ -112,6 +113,6 @@ export function OpenScreensTray() {
           )}
         </PopoverContent>
       </Popover>
-    </div>
+    </FloatingToolSlot>
   );
 }

@@ -37,6 +37,8 @@ export interface ConfirmPaymentParams {
   // Master (achado do usuário 2026-09-23: "posso descontar da carteira da
   // própria agência"). Nunca a carteira do admin que está operando.
   walletDebit?: { ownerType: "company" | "agency"; ownerId: string };
+  /** Só o handler do link assinado pode autorizar o pagamento do cliente final. */
+  agencyClientLink?: boolean;
 }
 
 export interface ConfirmPaymentResult {
@@ -105,6 +107,11 @@ export async function confirmPaymentAndGenerateProjectTasks(
       "O projeto precisa possuir pelo menos um produto antes do pagamento.",
       400,
     );
+  }
+
+  const clientAgencyProducts = project.agency_id ? validProducts.filter((p) => p.origin === "CATALOG2" && p.pagador_snapshot === "CLIENTE") : [];
+  if (clientAgencyProducts.length && !params.agencyClientLink) {
+    throw new PaymentValidationError("Este pedido deve ser pago pelo link do cliente final.", 409);
   }
 
   // ── Resolve QUAL Payment está sendo confirmado ──────────────────────────
@@ -318,6 +325,24 @@ export async function confirmPaymentAndGenerateProjectTasks(
   }
 
   const confirmedPayment = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
+
+  if (clientAgencyProducts.length && project.agency_id) {
+    const commission = Math.round(clientAgencyProducts.reduce((s, p) => s + p.preco_final_cliente_snapshot - p.product_price_snapshot, 0) * 100) / 100;
+    const base = Math.round((amount - commission) * 100) / 100;
+    if (commission < 0 || base < 0) throw new PaymentValidationError("Valores do pedido inválidos.", 409);
+    if (commission > 0) {
+      const wallet = await findOrCreateWalletTx(tx, "agency", project.agency_id);
+      await tx.$queryRaw`SELECT id FROM wallets WHERE id = ${wallet.id} FOR UPDATE`;
+      await createLedgerEntryTx(tx, { walletId: wallet.id, type: "commission", direction: "credit", amount: commission,
+        description: `Comissão da contratação ${project.project_code}`, idempotencyKey: `agency_checkout_commission_${payment.id}`,
+        referenceType: "payment", referenceId: payment.id, createdBy: params.requesterUser.id });
+    }
+    const platform = await findOrCreateWalletTx(tx, "platform", "allka");
+    await tx.$queryRaw`SELECT id FROM wallets WHERE id = ${platform.id} FOR UPDATE`;
+    await createLedgerEntryTx(tx, { walletId: platform.id, type: "payment", direction: "credit", amount: base,
+      description: `Valor da plataforma na contratação ${project.project_code}`, idempotencyKey: `agency_checkout_platform_${payment.id}`,
+      referenceType: "payment", referenceId: payment.id, createdBy: params.requesterUser.id });
+  }
 
   // ── Fatura automática — antes disto, Payment e Invoice eram modelos
   // desconectados: nenhuma fatura nascia sozinha de um pagamento confirmado

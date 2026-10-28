@@ -9,7 +9,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { apiClient } from "@/lib/api-client";
 import { DELIVERABLE_RESPONSIBLES, deliverableIssues, fieldsOf, labelOf, shortType, type Fields } from "./catalog2-deliverable-fields";
 import { DeliverableEditorModal } from "./deliverable-modal";
-import { activeDeliv, hasDelivPending, linkItem, newItem, syncDelivStates, unlinkedOf, type DelivItem } from "./step-deliverables";
+import { activeDeliv, hasDelivPending, isStaleDraft, linkItem, newItem, syncDelivStates, unlinkedOf, type DelivItem } from "./step-deliverables";
 
 type SetItems = (u: DelivItem[] | ((cur: DelivItem[]) => DelivItem[])) => void;
 const BADGE: Record<string, { text: string; cls: string }> = {
@@ -87,7 +87,8 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
               const f = i.fields;
               const iss = deliverableIssues(f);
               const rowIssues = showErrors ? issues.filter((x) => x.field === `deliverable:${i.uid}`) : [];
-              const badge = i.state === "saved" && i.draft ? { text: "Rascunho incompleto", cls: "bg-amber-100 text-amber-800" } : BADGE[i.state];
+              const stale = isStaleDraft(i); // marcado como rascunho antes, mas hoje não falta nada
+              const badge = i.state === "saved" && i.draft ? (stale ? { text: "Pronto — falta só concluir a etapa", cls: "bg-emerald-100 text-emerald-800" } : { text: "Rascunho incompleto", cls: "bg-amber-100 text-amber-800" }) : BADGE[i.state];
               const idx = act.findIndex((x) => x.uid === i.uid);
               return (
                 <li key={i.uid} data-testid="step-deliverable-item" data-state={i.state} data-field={`deliverable:${i.uid}`} data-invalid={rowIssues.length ? "true" : undefined}
@@ -97,12 +98,21 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
                       <p className="flex flex-wrap items-center gap-1.5">
                         <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{f.name.trim() || "(sem nome)"}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`} data-testid="deliverable-state">{badge.text}</span>
-                        {!gone && (iss.length > 0 || i.draft) && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">incompleto</span>}
+                        {!gone && (iss.length > 0 || (i.draft && !stale)) && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">incompleto</span>}
                       </p>
                       <p className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
                         <span>{shortType(f.type)}</span><span>· {f.cycle_scope === "first_execution" ? "só 1ª execução" : "todo ciclo"}</span><span>· {labelOf(DELIVERABLE_RESPONSIBLES, f.responsible)}</span>
                         <span>· {f.requires_approval ? "aprovação do cliente" : "sem aprovação"}</span><span>· Etapa {stepIndex} — {step.name}</span>
                       </p>
+                      {!gone && (iss.length > 0 || (i.draft && !stale)) && (
+                        <div className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-900" data-testid="deliverable-missing">
+                          <p className="font-semibold">Por que está incompleto:</p>
+                          {iss.length > 0
+                            ? <ul className="list-disc pl-4">{iss.map((x) => <li key={x.message}>{x.message}</li>)}</ul>
+                            : <p>Foi salvo como rascunho, mas nenhum campo obrigatório falta. Ao clicar em “Concluir e salvar etapa” ele deixa de ser rascunho.</p>}
+                          {!readOnly && iss.length > 0 && <button type="button" className="mt-0.5 font-semibold text-violet-700 underline" onClick={() => setModal({ item: i })}>Completar agora</button>}
+                        </div>
+                      )}
                     </div>
                     {gone ? (
                       <button type="button" className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50" onClick={() => undo(i.uid)}><Undo2 className="h-3 w-3" />Desfazer</button>

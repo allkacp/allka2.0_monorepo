@@ -93,10 +93,18 @@ export function stepModelSignature(f: StepModelFields): string {
   ]);
 }
 
+/** Próximo número de tarefa: o maior já usado + 1 (a primeira é 1). */
+export async function nextTaskModelNumber(db: Db): Promise<number> {
+  const r = await db.catalog2TaskModel.aggregate({ _max: { number: true } });
+  return (r._max.number ?? 0) + 1;
+}
+
 /** Cria SEMPRE um modelo novo de tarefa (ID novo). */
 export async function createTaskModel(db: Db, f: TaskModelFields, userId?: string | null) {
+  const number = await nextTaskModelNumber(db);
   return db.catalog2TaskModel.create({
     data: {
+      number,
       name: f.name,
       description: f.description ?? null,
       execution_mode: f.execution_mode ?? "humano",
@@ -450,6 +458,7 @@ export async function ensureTaskModelFromPackage(
   }
   const created = await tx.catalog2TaskModel.create({
     data: {
+      number: await nextTaskModelNumber(tx),
       id: m.id, name: m.name, description: m.description, execution_mode: m.execution_mode, specialty_id: spec?.id ?? null,
       estimated_minutes: m.estimated_minutes, questionnaire_id: questionnaireId, is_conditional: m.is_conditional,
       requires_client_approval: m.requires_client_approval, requires_qualification: !!m.requires_qualification,

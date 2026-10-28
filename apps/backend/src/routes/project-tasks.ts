@@ -1,3 +1,4 @@
+import { CycleError, avancarCiclosGuarded, cyclesOfSnapshot, decidirCiclo, entregarCiclo, listarCiclos } from "../lib/stage-cycles";
 import { Router } from "express";
 import fs from "fs";
 import multer from "multer";
@@ -2705,7 +2706,7 @@ router.post(
 // ── Execução por ETAPA (A8b fase 2): qualificação do líder e aprovação de quem contratou, etapa por etapa ──────────────────
 const decisaoEtapaSchema = z.object({
   tipo: z.enum(["qualificacao", "especialista", "aprovacao"]),
-  decisao: z.enum(["aprovar", "reprovar", "comentar"]),
+  decisao: z.enum(["aprovar", "reprovar", "comentar", "encaminhar"]),
   comentario: z.string().max(4000).optional(),
 });
 const LADO_CONTRATANTE = new Set(["agencias", "empresas", "admin"]);
@@ -2713,7 +2714,7 @@ const LADO_CONTRATANTE = new Set(["agencias", "empresas", "admin"]);
 async function etapaDaTarefa(taskId: string, stageId: string) {
   return prisma.projectTaskStage.findFirst({
     where: { id: stageId, project_task_id: taskId },
-    select: { id: true, titulo: true, status: true, lider_id: true, especialista_id: true, visivel_ao_cliente: true, project_task: { select: { id: true, project_id: true, task_code: true, stage_execution: true, lider_responsavel_id: true, nomade_responsavel_id: true } } },
+    select: { id: true, titulo: true, status: true, lider_id: true, nomade_id: true, config_snapshot: true, especialista_id: true, visivel_ao_cliente: true, project_task: { select: { id: true, project_id: true, task_code: true, stage_execution: true, lider_responsavel_id: true, nomade_responsavel_id: true } } },
   });
 }
 
@@ -2722,7 +2723,7 @@ export async function aplicarDecisaoEtapa(args: {
   etapa: { id: string };
   task: { id: string; project_id: string; nomade_responsavel_id: string | null; task_code: string | null };
   tipo: "qualificacao" | "especialista" | "aprovacao";
-  decisao: "aprovar" | "reprovar" | "comentar";
+  decisao: "aprovar" | "reprovar" | "comentar" | "encaminhar";
   comentario?: string;
   userId: string;
 }) {
@@ -2813,6 +2814,69 @@ router.post("/:id/etapas/:stageId/exigir", verifyToken, validate(z.object({ just
     res.json({ ok: true });
   } catch (err) {
     if (err instanceof ContinuityError) { res.status(err.httpStatus).json({ error: err.message }); return; }
+    next(err);
+  }
+});
+
+// ── Etapas em ciclos (23/10): lista, entrega do executor e aprovação do cliente por ciclo. Regras em src/lib/stage-cycles.ts. ──
+async function etapaVisivelParaCiclos(req: Request, res: Response) {
+  const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+  if (scopeWhere === null) { res.status(404).json({ error: "Etapa não encontrada" }); return null; }
+  const visivel = await prisma.projectTask.findFirst({ where: applyScope({ id: req.params.id as string }, scopeWhere), select: { id: true } });
+  const etapa = visivel ? await etapaDaTarefa(visivel.id, req.params.stageId as string) : null;
+  if (!etapa) { res.status(404).json({ error: "Etapa não encontrada" }); return null; }
+  const externo = !isAdminUser(req.user) && ["agencias", "empresas"].includes(req.user!.account_type);
+  if (externo && !etapa.visivel_ao_cliente) { res.status(404).json({ error: "Etapa não encontrada" }); return null; }
+  return etapa;
+}
+
+router.get("/:id/etapas/:stageId/ciclos", verifyToken, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const etapa = await etapaVisivelParaCiclos(req, res);
+    if (!etapa) return;
+    const cfg = cyclesOfSnapshot(etapa.config_snapshot);
+    const data = await listarCiclos(prisma, etapa.id);
+    const admin = isAdminUser(req.user);
+    res.json({
+      em_ciclos: !!cfg || data.length > 0, data,
+      viewer: {
+        can_deliver: admin || etapa.nomade_id === req.user!.id || etapa.lider_id === req.user!.id || etapa.project_task.lider_responsavel_id === req.user!.id,
+        can_decide: admin || LADO_CONTRATANTE.has(req.user!.account_type) || req.user!.role === "lider",
+      },
+    });
+  } catch (err) { next(err); }
+});
+
+router.post("/:id/etapas/:stageId/ciclos/:cycleId/entregar", verifyToken, validate(z.object({ nota: z.string().max(2000).nullish() })), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const etapa = await etapaVisivelParaCiclos(req, res);
+    if (!etapa) return;
+    const pode = isAdminUser(req.user) || etapa.nomade_id === req.user!.id || etapa.lider_id === req.user!.id || etapa.project_task.lider_responsavel_id === req.user!.id;
+    if (!pode) { res.status(403).json({ error: "Somente quem executa a etapa (ou o líder/administrador) entrega o ciclo." }); return; }
+    const ciclo = await prisma.projectTaskStageCycle.findFirst({ where: { id: req.params.cycleId as string, stage_id: etapa.id }, select: { id: true } });
+    if (!ciclo) { res.status(404).json({ error: "Ciclo não encontrado" }); return; }
+    res.json(await entregarCiclo(prisma, ciclo.id, { userId: req.user!.id, nota: req.body.nota }));
+  } catch (err) {
+    if (err instanceof CycleError) { res.status(err.httpStatus).json({ error: err.message }); return; }
+    next(err);
+  }
+});
+
+router.post("/:id/etapas/:stageId/ciclos/:cycleId/decisao", verifyToken, validate(z.object({ decisao: z.enum(["aprovar", "reprovar"]), comentario: z.string().max(4000).nullish() })), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const etapa = await etapaVisivelParaCiclos(req, res);
+    if (!etapa) return;
+    const admin = isAdminUser(req.user);
+    const ladoOk = admin || LADO_CONTRATANTE.has(req.user!.account_type) || req.user!.role === "lider";
+    if (!ladoOk) { res.status(403).json({ error: "Somente quem contratou (agência ou empresa) aprova o ciclo." }); return; }
+    const ciclo = await prisma.projectTaskStageCycle.findFirst({ where: { id: req.params.cycleId as string, stage_id: etapa.id }, select: { id: true } });
+    if (!ciclo) { res.status(404).json({ error: "Ciclo não encontrado" }); return; }
+    const r = await decidirCiclo(prisma, ciclo.id, { decisao: req.body.decisao, comentario: req.body.comentario, userId: req.user!.id });
+    // Se este era o último ciclo e o período dele já acabou, o worker fecha a etapa no próximo passo; aqui só adiantamos um passo.
+    avancarCiclosGuarded().catch((e) => console.error("[stage-cycles]", e));
+    res.json(r);
+  } catch (err) {
+    if (err instanceof CycleError) { res.status(err.httpStatus).json({ error: err.message }); return; }
     next(err);
   }
 });

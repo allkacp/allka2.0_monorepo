@@ -11,6 +11,7 @@
  * Usa a Aura e o símbolo oficial aprovados pelo responsável em 12/09/2026 —
  * nunca um ícone genérico igual ao de Chat/Alertas/Ajuda/Sugestões.
  */
+import { FloatingToolSlot } from "@/components/floating-tools-rail";
 import { useEffect, useState } from "react";
 import { useOnboarding } from "@/contexts/onboarding-context";
 import { IallkaAssistantPanel } from "@/components/iallka-assistant-panel";
@@ -65,7 +66,7 @@ export function IallkaFloatingIcon() {
   return (
     <>
       {/* Desktop — barra vertical direita, próximo slot livre da coluna. */}
-      <div className="hidden lg:block fixed top-[365px] right-[8px] z-65 group">
+      <FloatingToolSlot className="hidden lg:block group" order={6} fallbackTop={365}>
         <button
           type="button"
           data-tour-id="iallka-icon-button"
@@ -82,7 +83,7 @@ export function IallkaFloatingIcon() {
         <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
           Falar com a Aura
         </span>
-      </div>
+      </FloatingToolSlot>
 
       {/* Mobile/tablet — botão redondo, próximo degrau empilhado (nunca
           depende de hover, sempre clicável/focável direto). */}

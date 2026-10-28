@@ -32,3 +32,14 @@ describe("ficha compacta da etapa (somente leitura)", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 });
+
+describe("última etapa = etapa final", () => {
+  it("a última etapa não mostra 'Libera a próxima etapa': mostra 'Etapa final' e explica que a tarefa termina", () => {
+    const rows = stepSummaryRows({ name: "X", release_next_auto: true }, { isLast: true });
+    expect(rows.find((r) => r.label === "Libera a próxima etapa")).toBeUndefined();
+    expect(rows.find((r) => r.label === "Etapa final")?.value).toMatch(/Não há próxima etapa.*a tarefa termina/);
+    const mid = stepSummaryRows({ name: "X", release_next_auto: true });
+    expect(mid.find((r) => r.label === "Libera a próxima etapa")?.value).toBe("Automaticamente");
+    expect(mid.find((r) => r.label === "Etapa final")).toBeUndefined();
+  });
+});

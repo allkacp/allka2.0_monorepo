@@ -3,15 +3,21 @@
 // Questionário de contratação — estilo da plataforma antiga (17/10): na PÁGINA só aparece o questionário pronto (lista de perguntas
 // recolhíveis, só leitura). "+ Adicionar" e o lápis de cada pergunta abrem um MODAL ("Editar Pergunta") com todas as configurações:
 // 22 tipos, opções, anexos, validação, condição, seção, ativa/inativa… Também há modal para os dados do questionário (nome, seções, modelo global).
-import { useMemo, useState, Fragment } from "react";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, Eye, GripVertical, Library, Pencil, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, Eye, GripVertical, Info, Library, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { FramedModal, FRAMED_HEADER_CLASS } from "@/components/framed-panel";
 import { apiClient } from "@/lib/api-client";
 import { BriefingQuestionField, emptyBriefingValue, isVisible, pendingMessage, type BriefingValue } from "@/components/briefing-question-field";
 import { QuestionConfigFields, cloneDraft, draftFromServer, emptyQuestion, payloadFromDraft, questionTypeLabel, type QuestionCtx, type QuestionDraft } from "./catalog2-questions-ui";
+
+/** Degradê oficial dos botões principais (mesmo do Publicar) e o botão de contorno roxo (mesmo dos "Ver"). */
+export const BRAND_GRADIENT_STYLE = { background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" } as const;
+export const BRAND_OUTLINE_CLASS = "border-violet-200 bg-white text-violet-700 hover:bg-violet-50 hover:text-violet-800";
 
 export interface SectionDraft { key: string; name: string; description: string }
 export interface QuestionnaireState { name: string; description: string; sections: SectionDraft[]; questions: QuestionDraft[]; is_global_model: boolean }
@@ -113,9 +119,13 @@ export function QuestionModal({ initial, ctx, isNew, onSave, onClose }: { initia
   const [q, setQ] = useState<QuestionDraft>(initial);
   const patch = (p: Partial<QuestionDraft>) => setQ((cur) => ({ ...cur, ...p }));
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent overlayClassName="!z-[1250]" className="!z-[1251] max-h-[calc(100dvh-9rem)] w-[96vw] max-w-3xl overflow-y-auto sm:max-w-3xl" data-testid="question-modal">
-        <DialogTitle>{isNew ? "Nova Pergunta" : "Editar Pergunta"}</DialogTitle>
+    // Janela Moldura (padrão global): véu claro que cobre tudo menos a sidebar, janela centralizada com rolagem por dentro.
+    <FramedModal open onOpenChange={(o) => { if (!o) onClose(); }} testId="question-modal" title={isNew ? "Nova Pergunta" : "Editar Pergunta"}>
+      <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+        <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">{isNew ? "Adicionar pergunta" : "Editar pergunta"}</p><p className="truncate text-xs text-slate-500">Tipo de resposta, opções, anexos, condição e seção desta pergunta.</p></div>
+        <Button type="button" size="sm" variant="outline" className={BRAND_OUTLINE_CLASS} onClick={onClose}>Fechar</Button>
+      </div>
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">
         <div className="space-y-3">
           <label className="flex flex-col gap-1 text-sm font-semibold text-slate-800">Pergunta <span className="sr-only">(obrigatório)</span>
             <Input aria-label="Texto da pergunta" className="text-sm" value={q.label} maxLength={500} onChange={(e) => patch({ label: e.target.value })} />
@@ -124,16 +134,16 @@ export function QuestionModal({ initial, ctx, isNew, onSave, onClose }: { initia
             <textarea aria-label="Instrução de resposta" rows={2} maxLength={1000} className="w-full rounded-md border border-slate-300 bg-white p-2 text-sm font-normal dark:border-slate-600 dark:bg-slate-900" value={q.help_text} onChange={(e) => patch({ help_text: e.target.value })} />
           </label>
           <QuestionConfigFields q={q} ctx={{ ...ctx, otherQuestions: ctx.otherQuestions }} hideHelp onChange={patch} />
-          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-2">
+          <div className="sticky bottom-[-1rem] z-10 -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
             <span className="rounded bg-slate-100 px-1.5 py-1 text-[10px] text-slate-600" title="Identificador permanente da pergunta" data-testid="question-id">{q.id ? `ID ${String(q.id).slice(0, 8)}` : "ID gerado ao salvar"}</span>
             <span className="flex gap-2">
               <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
-              <Button type="button" disabled={!q.label.trim()} onClick={() => onSave({ ...q, label: q.label.trim() })}>Salvar</Button>
+              <Button type="button" style={BRAND_GRADIENT_STYLE} className="text-white shadow-md hover:brightness-110 disabled:opacity-55" disabled={!q.label.trim()} onClick={() => onSave({ ...q, label: q.label.trim() })}>Salvar</Button>
             </span>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </FramedModal>
   );
 }
 
@@ -145,19 +155,33 @@ export function QuestionList({ questions, sections, ctx, readOnly, busy, onChang
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<{ q: QuestionDraft; isNew: boolean } | null>(null);
   const [toDelete, setToDelete] = useState<QuestionDraft | null>(null);
+  const [toDup, setToDup] = useState<QuestionDraft | null>(null);
   const [showLib, setShowLib] = useState(false);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const fullCtx: QuestionCtx = useMemo(() => ({ ...ctx, sections: sections.map((s) => ({ key: s.key, name: s.name || s.key })), otherQuestions: questions.map((x) => ({ key: x.key, label: x.label, question_type: x.question_type })) }), [ctx, sections, questions]);
   const toggle = (key: string) => setOpen((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; });
-  const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= questions.length) return; const c = questions.slice(); [c[i], c[j]] = [c[j], c[i]]; onChange(c); };
+  // Subir/descer anda DENTRO da sessão (o vizinho é o da mesma sessão, não o da lista toda).
+  const move = (i: number, d: number, neighbors: number[]) => { const at = neighbors.indexOf(i); const j = neighbors[at + d]; if (at < 0 || j === undefined) return; const c = questions.slice(); [c[i], c[j]] = [c[j], c[i]]; onChange(c); };
   const dropOn = (targetKey: string) => {
     if (!dragKey || dragKey === targetKey) return;
     const from = questions.findIndex((x) => x.key === dragKey); const to = questions.findIndex((x) => x.key === targetKey);
     if (from < 0 || to < 0) return;
-    const c = questions.slice(); const [m] = c.splice(from, 1); c.splice(to, 0, m); onChange(c);
+    // Soltar sobre uma pergunta de OUTRA sessão leva a pergunta para aquela sessão.
+    const target = questions[to];
+    const c = questions.slice(); const [m] = c.splice(from, 1); c.splice(to, 0, { ...m, section_key: target.section_key });
+    onChange(c);
   };
+  // Soltar sobre o título de uma sessão (mesmo vazia) põe a pergunta no fim dela.
+  const dropOnSection = (groupKey: string) => {
+    if (!dragKey) return;
+    const from = questions.findIndex((x) => x.key === dragKey); if (from < 0) return;
+    const c = questions.slice(); const [m] = c.splice(from, 1);
+    c.push({ ...m, section_key: groupKey === "__none" ? "" : groupKey });
+    onChange(c);
+  };
+  const [overSection, setOverSection] = useState<string | null>(null);
   const dup = (i: number) => { const copy = cloneDraft(questions[i], questions.map((x) => x.key)); const c = questions.slice(); c.splice(i + 1, 0, copy); onChange(c); };
   const blank = (): QuestionDraft => ({ key: slugKey("pergunta", questions.map((x) => x.key)), label: "", is_required: true, ...emptyQuestion() });
   const saveModal = (q: QuestionDraft) => {
@@ -184,7 +208,8 @@ export function QuestionList({ questions, sections, ctx, readOnly, busy, onChang
   };
   const sectionName = (key: string) => sections.find((s) => s.key === key)?.name;
   const stepName = (key: string) => (steps ?? ctx.steps).find((s) => s.key === key)?.name ?? key;
-  const ord = (i: number) => `${i + 1}ª`;
+  // Com sessões, a numeração recomeça em cada sessão (1ª, 2ª, 3ª…); sem sessões, é a lista toda.
+  const ord = (pos: number) => `${pos + 1}ª`;
   // R21-17: com sessões cadastradas, as perguntas aparecem agrupadas em ACORDEÃO por sessão (a ordem de arrastar continua valendo na lista toda).
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const toggleSection = (key: string) => setCollapsed((c) => { const n = new Set(c); n.has(key) ? n.delete(key) : n.add(key); return n; });
@@ -197,51 +222,48 @@ export function QuestionList({ questions, sections, ctx, readOnly, busy, onChang
     if (loose.length > 0) out.push({ key: "__none", name: "Sem sessão", showHeader: true, items: loose });
     return out;
   }, [questions, sections]);
-  const renderItem = (q: QuestionDraft, i: number) => {
-        const isOpen = open.has(q.key);
-        const att = q.att_allowed || ["arquivo", "imagem", "video", "audio", "documento"].includes(q.question_type);
-        return (
-          <li key={q.key} className="border-b border-slate-200 last:border-b-0 dark:border-slate-800" data-testid="question-item" data-inactive={q.is_active ? undefined : "true"}
-            draggable={!readOnly} onDragStart={() => setDragKey(q.key)} onDragOver={(e) => { if (dragKey) e.preventDefault(); }} onDrop={() => { dropOn(q.key); setDragKey(null); }} onDragEnd={() => setDragKey(null)}>
-            <div className={`flex items-center gap-2 px-2 py-2 ${isOpen ? "bg-sky-50 dark:bg-sky-950/20" : ""}`} data-testid="question-summary">
-              <span className="cursor-grab text-sky-700" title="Arraste para reordenar" aria-hidden="true"><GripVertical className="h-5 w-5" /></span>
-              <button type="button" className="inline-flex min-w-0 flex-1 items-center gap-2 text-left" aria-expanded={isOpen} aria-label={`${isOpen ? "Recolher" : "Expandir"} pergunta ${i + 1}`} onClick={() => toggle(q.key)}>
-                <span className={`min-w-0 truncate text-[15px] font-bold ${q.is_active ? "text-slate-900 dark:text-slate-100" : "text-slate-400 line-through"}`}>{ord(i)} {q.label || "(sem texto)"}</span>
-                <span className="hidden flex-wrap items-center gap-1 sm:flex">
-                  {!q.is_active && <Chip>inativa</Chip>}
-                  {q.cond_source && <Chip tone="amber">condicional</Chip>}
-                </span>
-                {isOpen ? <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-sky-700" /> : <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-sky-700" />}
-              </button>
-            </div>
-            {isOpen && (
-              <div className="space-y-2 px-3 py-3 text-sm" data-testid="question-body">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                    <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">Tipo da resposta: <Chip tone="green">{questionTypeLabel(q.question_type)}</Chip></span>
-                    <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">Habilitar anexo na pergunta? {yesNo(att)}</span>
-                    <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">Pergunta obrigatória? {yesNo(q.is_required)}</span>
-                  </div>
-                  {!readOnly && (
-                    <span className="flex items-center gap-1">
-                      <button type="button" aria-label={`Subir pergunta ${i + 1}`} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" disabled={i === 0 || busy} onClick={() => move(i, -1)}><ArrowUp className="h-3.5 w-3.5" /></button>
-                      <button type="button" aria-label={`Descer pergunta ${i + 1}`} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30" disabled={i === questions.length - 1 || busy} onClick={() => move(i, 1)}><ArrowDown className="h-3.5 w-3.5" /></button>
-                      <button type="button" aria-label={`Duplicar pergunta ${i + 1}`} className="rounded p-1.5 text-slate-500 hover:bg-slate-100" disabled={busy} onClick={() => dup(i)}><Copy className="h-3.5 w-3.5" /></button>
-                      <button type="button" aria-label={`Editar pergunta ${i + 1}`} className="rounded-md bg-sky-100 p-2 text-sky-700 hover:bg-sky-200" disabled={busy} onClick={() => setModal({ q, isNew: false })}><Pencil className="h-4 w-4" /></button>
-                      <button type="button" aria-label={`Excluir pergunta ${i + 1}`} className="rounded-md bg-rose-100 p-2 text-rose-600 hover:bg-rose-200" disabled={busy} onClick={() => setToDelete(q)}><Trash2 className="h-4 w-4" /></button>
-                    </span>
-                  )}
-                </div>
-                {q.help_text && <p className="text-slate-700"><span className="font-semibold">Instruções de resposta:</span> <span className="text-slate-500">{q.help_text}</span></p>}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {q.section_key && sectionName(q.section_key) && <Chip tone="violet">seção: {sectionName(q.section_key)}</Chip>}
-                  {q.target_step_key && <Chip tone="sky">etapa: {stepName(q.target_step_key)}</Chip>}
-                  {q.id && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600" title="Identificador permanente da pergunta">ID {String(q.id).slice(0, 8)}</span>}
-                </div>
-              </div>
-            )}
-          </li>
-        );
+  const renderItem = (q: QuestionDraft, i: number, pos: number, neighbors: number[]) => {
+    const att = q.att_allowed || ["arquivo", "imagem", "video", "audio", "documento"].includes(q.question_type);
+    const iconBtn = "rounded-md p-1.5 text-slate-500 transition hover:bg-violet-50 hover:text-violet-700 disabled:opacity-30 disabled:hover:bg-transparent";
+    return (
+      <li key={q.key} className="border-b border-slate-200 last:border-b-0 dark:border-slate-800" data-testid="question-item" data-inactive={q.is_active ? undefined : "true"}
+        draggable={!readOnly} onDragStart={() => setDragKey(q.key)} onDragOver={(e) => { if (dragKey) e.preventDefault(); }} onDrop={() => { dropOn(q.key); setDragKey(null); }} onDragEnd={() => setDragKey(null)}>
+        <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-violet-50/40" data-testid="question-summary">
+          <span className="cursor-grab text-violet-400" title="Arraste para reordenar ou mover de sessão" aria-hidden="true"><GripVertical className="h-5 w-5" /></span>
+          <span className={`min-w-0 flex-1 truncate text-[15px] font-bold ${q.is_active ? "text-slate-900 dark:text-slate-100" : "text-slate-400 line-through"}`}>{ord(pos)} {q.label || "(sem texto)"}</span>
+          <span className="hidden flex-wrap items-center gap-1 sm:flex">
+            {!q.is_active && <Chip>inativa</Chip>}
+            {q.cond_source && <Chip tone="amber">condicional</Chip>}
+          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button" aria-label={`Informações da pergunta ${pos + 1}`} className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-violet-200 bg-white text-violet-700 transition hover:bg-violet-50"><Info className="h-3.5 w-3.5" /></button>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="max-w-sm p-3 text-xs" data-testid="question-info">
+              <p className="text-sm font-bold">{ord(pos)} pergunta</p>
+              <dl className="mt-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-4"><dt className="font-semibold opacity-90">Tipo da resposta</dt><dd><Chip tone="green">{questionTypeLabel(q.question_type)}</Chip></dd></div>
+                <div className="flex items-center justify-between gap-4"><dt className="font-semibold opacity-90">Anexo na pergunta?</dt><dd>{yesNo(att)}</dd></div>
+                <div className="flex items-center justify-between gap-4"><dt className="font-semibold opacity-90">Pergunta obrigatória?</dt><dd>{yesNo(q.is_required)}</dd></div>
+                {q.section_key && sectionName(q.section_key) && <div className="flex items-center justify-between gap-4"><dt className="font-semibold opacity-90">Seção</dt><dd><Chip tone="violet">{sectionName(q.section_key)}</Chip></dd></div>}
+                {q.target_step_key && <div className="flex items-center justify-between gap-4"><dt className="font-semibold opacity-90">Etapa</dt><dd><Chip tone="sky">{stepName(q.target_step_key)}</Chip></dd></div>}
+              </dl>
+              {q.help_text && <p className="mt-2.5 border-t border-white/20 pt-2"><span className="font-semibold">Instruções de resposta:</span> <span className="opacity-90">{q.help_text}</span></p>}
+              {q.id && <p className="mt-2 text-[10px] opacity-70" title="Identificador permanente da pergunta">ID {String(q.id).slice(0, 8)}</p>}
+            </TooltipContent>
+          </Tooltip>
+          {!readOnly && (
+            <span className="flex items-center gap-0.5">
+              <button type="button" aria-label={`Subir pergunta ${pos + 1}`} title="Subir" className={iconBtn} disabled={pos === 0 || busy} onClick={() => move(i, -1, neighbors)}><ArrowUp className="h-4 w-4" /></button>
+              <button type="button" aria-label={`Descer pergunta ${pos + 1}`} title="Descer" className={iconBtn} disabled={pos === neighbors.length - 1 || busy} onClick={() => move(i, 1, neighbors)}><ArrowDown className="h-4 w-4" /></button>
+              <button type="button" aria-label={`Duplicar pergunta ${pos + 1}`} title="Duplicar" className={iconBtn} disabled={busy} onClick={() => setToDup(q)}><Copy className="h-4 w-4" /></button>
+              <button type="button" aria-label={`Editar pergunta ${pos + 1}`} title="Editar" className="rounded-md bg-violet-100 p-2 text-violet-700 transition hover:bg-violet-200" disabled={busy} onClick={() => setModal({ q, isNew: false })}><Pencil className="h-4 w-4" /></button>
+              <button type="button" aria-label={`Excluir pergunta ${pos + 1}`} title="Excluir" className="rounded-md bg-rose-100 p-2 text-rose-600 transition hover:bg-rose-200" disabled={busy} onClick={() => setToDelete(q)}><Trash2 className="h-4 w-4" /></button>
+            </span>
+          )}
+        </div>
+      </li>
+    );
   };
 
   return (
@@ -250,36 +272,41 @@ export function QuestionList({ questions, sections, ctx, readOnly, busy, onChang
         <h4 className="text-base font-bold text-slate-900 dark:text-slate-100">Perguntas <span className="text-xs font-normal text-slate-500">({questions.length})</span></h4>
         {!readOnly && (
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" variant="outline" className="h-9" onClick={() => setShowLib((v) => !v)}><Library className="h-3.5 w-3.5" />Reutilizar pergunta existente</Button>
-            {onSuggest && <button type="button" data-testid="ai-questionnaire-more" disabled={aiBusy} onClick={() => void suggestMore()} title="A IA lê tudo o que está cadastrado no produto e sugere perguntas que ainda não existem. Você revisa antes de salvar." className="inline-flex h-9 items-center gap-1 rounded-md bg-[image:var(--app-brand-button,linear-gradient(to_right,#2563eb,#7c3aed))] px-3 text-xs font-semibold text-white disabled:opacity-60">{aiBusy ? "Pensando…" : "Sugerir mais perguntas com IA"}</button>}
-            <Button type="button" className="h-9 bg-blue-600 text-white hover:bg-blue-700" disabled={busy} onClick={() => setModal({ q: blank(), isNew: true })}><Plus className="h-4 w-4" />Adicionar</Button>
+            <Button type="button" size="sm" variant="outline" className={`h-9 ${BRAND_OUTLINE_CLASS}`} onClick={() => setShowLib((v) => !v)}><Library className="h-3.5 w-3.5" />Reutilizar pergunta existente</Button>
+            {onSuggest && <button type="button" data-testid="ai-questionnaire-more" disabled={aiBusy} onClick={() => void suggestMore()} title="A IA lê tudo o que está cadastrado no produto e sugere perguntas que ainda não existem. Você revisa antes de salvar." style={BRAND_GRADIENT_STYLE} className="inline-flex h-9 items-center gap-1 rounded-md px-3 text-xs font-semibold text-white shadow-md hover:brightness-110 disabled:opacity-60">{aiBusy ? "Pensando…" : "Sugerir mais perguntas com IA"}</button>}
+            <Button type="button" style={BRAND_GRADIENT_STYLE} className="h-9 gap-1.5 px-4 text-white shadow-md hover:brightness-110" disabled={busy} onClick={() => setModal({ q: blank(), isNew: true })}><Plus className="h-4 w-4" />Adicionar</Button>
           </div>
         )}
       </div>
       {aiMsg && <p role={aiMsg.ok ? "status" : "alert"} className={`text-[11px] font-semibold ${aiMsg.ok ? "text-emerald-700" : "text-red-600"}`}>{aiMsg.text}</p>}
       {showLib && <QuestionLibrary onPick={reuse} onClose={() => setShowLib(false)} />}
-      <ul className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60" data-testid="question-list">
+      <div className="space-y-4" data-testid="question-list">
         {groups.map((g) => (
-          <Fragment key={g.key}>
+          <ul key={g.key} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60">
             {g.showHeader && (
-              <li className="border-b border-slate-200 bg-violet-50/70 dark:border-slate-800 dark:bg-violet-950/20" data-testid="question-section">
-                <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left" aria-expanded={!collapsed.has(g.key)} aria-label={`${collapsed.has(g.key) ? "Abrir" : "Fechar"} sessão ${g.name}`} onClick={() => toggleSection(g.key)}>
+              <li className={`border-b border-violet-100 bg-violet-50/80 dark:border-slate-800 dark:bg-violet-950/20 ${overSection === g.key ? "ring-2 ring-inset ring-violet-400" : ""}`} data-testid="question-section" onDragOver={(e) => { if (dragKey) { e.preventDefault(); setOverSection(g.key); } }} onDragLeave={() => setOverSection(null)} onDrop={() => { dropOnSection(g.key); setDragKey(null); setOverSection(null); }}>
+                <button type="button" className="flex w-full items-center gap-2 px-3 py-2.5 text-left" aria-expanded={!collapsed.has(g.key)} aria-label={`${collapsed.has(g.key) ? "Abrir" : "Fechar"} sessão ${g.name}`} onClick={() => toggleSection(g.key)}>
                   {collapsed.has(g.key) ? <ChevronRight className="h-4 w-4 text-violet-700" /> : <ChevronDown className="h-4 w-4 text-violet-700" />}
                   <span className="text-sm font-bold text-violet-900 dark:text-violet-100">{g.name}</span>
                   <span className="text-[11px] text-slate-500">{g.items.length} pergunta(s)</span>
                 </button>
               </li>
             )}
-            {!collapsed.has(g.key) && g.items.map(({ q, i }) => renderItem(q, i))}
-          </Fragment>
+            {!collapsed.has(g.key) && g.items.map(({ q, i }, pos) => renderItem(q, i, pos, g.items.map((x) => x.i)))}
+          </ul>
         ))}
-        {questions.length === 0 && <li className="px-3 py-3 text-xs text-neutral-400">Nenhuma pergunta ainda{readOnly ? "." : " — clique em “Adicionar”, reutilize uma existente ou gere com IA."}</li>}
-      </ul>
+        {questions.length === 0 && <p className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs text-neutral-400">Nenhuma pergunta ainda{readOnly ? "." : " — clique em “Adicionar”, reutilize uma existente ou gere com IA."}</p>}
+      </div>
       {modal && <QuestionModal key={modal.q.key + (modal.isNew ? "-new" : "")} initial={modal.q} ctx={fullCtx} isNew={modal.isNew} onSave={saveModal} onClose={() => setModal(null)} />}
       <ConfirmationDialog
-        open={!!toDelete} onClose={() => setToDelete(null)} title="Excluir pergunta?" destructive confirmText="Excluir pergunta"
+        elevated open={!!toDelete} onClose={() => setToDelete(null)} title="Excluir pergunta?" destructive confirmText="Excluir pergunta"
         message={<>A pergunta “{toDelete?.label}” sai deste questionário. Contratações já feitas não mudam (o briefing delas já está guardado).</>}
         onConfirm={() => { if (toDelete) onChange(questions.filter((x) => x.key !== toDelete.key)); setToDelete(null); }}
+      />
+      <ConfirmationDialog
+        elevated open={!!toDup} onClose={() => setToDup(null)} title="Duplicar pergunta?" destructive={false} confirmText="Duplicar pergunta"
+        message={<>Será criada uma cópia da pergunta “{toDup?.label}” logo abaixo dela, com ID novo gerado ao salvar.</>}
+        onConfirm={() => { if (toDup) { const at = questions.findIndex((x) => x.key === toDup.key); if (at >= 0) dup(at); } setToDup(null); }}
       />
     </div>
   );

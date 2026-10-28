@@ -1,0 +1,40 @@
+.companies-responsive { container-type: inline-size; container-name: companies; }
+.company-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); min-height: 65px; }
+.company-stat { gap: clamp(5px, .8cqw, 12px); padding: 8px clamp(6px, 1cqw, 20px); }
+.company-stat + .company-stat { border-left: 1px solid #e2e8f0; }
+.company-stat-icon { width: clamp(28px, 3.5cqw, 48px); height: clamp(28px, 3.5cqw, 48px); }
+.company-stat-icon svg { width: 50%; height: 50%; }
+.company-stat-label { font-size: clamp(9px, .9cqw, 11px); line-height: 1.25; }
+.company-stat-number { font-size: clamp(20px, 2.3cqw, 28px); }
+.company-stat-trend { font-size: clamp(8px, .75cqw, 10px); white-space: nowrap; }
+.companies-reference-table { table-layout: fixed; min-width: 0; }
+.companies-reference-table th, .companies-reference-table td { min-width: 0; padding-inline: clamp(4px, .75cqw, 16px); }
+.companies-reference-table th > span, .companies-reference-table th > span > span { min-width: 0; max-width: 100%; }
+.companies-reference-table th button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.companies-reference-table td > div { min-width: 0; max-width: 100%; }
+.companies-reference-table td.hidden { display: none !important; }
+.companies-reference-table td[data-rotulo="Contato"] > div { flex-wrap: wrap; gap: 0; }
+.companies-reference-table td[data-rotulo="Contato"] a, .companies-reference-table td[data-rotulo="Contato"] button { width: 24px; height: 26px; }
+.companies-reference-table td[data-rotulo="Empresa"] > div { gap: clamp(4px, .7cqw, 12px); }
+.companies-reference-table td[data-rotulo="Empresa"] > div > :first-child { width: 2.25rem; height: 2.25rem; flex-shrink: 0; }
+.companies-reference-table td[data-rotulo="Empresa"] p { font-size: clamp(10px, 1cqw, 14px); }
+.companies-reference-table td[data-rotulo="Empresa"] .font-bold { font-size: clamp(10px, 1cqw, 14px); }
+.companies-reference-table td[data-rotulo="Status"] > span { padding-inline: 5px; font-size: 10px; gap: 3px; max-width: 100%; }
+.companies-reference-table thead th:last-child, .companies-reference-table .company-reference-actions { position: sticky; right: 0; z-index: 4; background: var(--table-head, #f8fafc); padding-inline: 3px; }
+.companies-reference-table .company-reference-actions { background: inherit; box-shadow: -1px 0 0 #e2e8f0; }
+.company-reference-action { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px; border: 1px solid #e8edf5; background: white; color: #2558ff; box-shadow: 0 4px 10px rgba(15,23,42,.06); transition: all 150ms; }
+.company-reference-action:hover { transform: translateY(-1px); border-color: transparent; color: white; background: linear-gradient(to bottom right,#2558ff,#6e2c96,#d92293); }
+.company-reference-action:focus-visible { outline: 2px solid #8238e9; outline-offset: 2px; }
+.dark .company-reference-action { background-color: #1e293b; border-color: #334155; }
+@container companies (max-width: 950px) {
+  .company-stat-trend .font-normal, .company-stat-trend svg { display: none; }
+  .companies-reference-table td[data-rotulo="Empresa"] > div > :first-child { width: 28px; height: 28px; }
+  .companies-reference-table th button { font-size: 9px !important; }
+  .companies-reference-table td[data-rotulo="Cadastro"] { font-size: 10px; }
+}
+@container companies (max-width: 620px) {
+  .company-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .company-stat { min-height: 58px; }
+}
+@container companies (max-width: 400px) { .company-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767px) { .companies-reference-table .company-reference-actions { position: static; } }

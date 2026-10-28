@@ -350,15 +350,15 @@ describe("Decisões de produto — padrões configuráveis", () => {
     assert.equal(await prisma.projectTaskDeliverable.count({ where: { project_task_id: tr.id, source: "ia" } }), 0);
   });
 
-  it("E. trimestral/semestral/anual seguem inativos; regras novas não mudam contrato existente", async () => {
+  it("E. períodos longos autorizados no produto são vendidos (venda liberada em 25/10); só o que o admin autorizou aparece; regras novas não mudam contrato existente", async () => {
     const { product } = await mkProduct("Períodos", { tasks: [{ key: "t" }], recurring: true });
     for (const per of ["mensal", "trimestral", "semestral", "anual"]) await configurePeriod(ADMIN.token, product.id, per, 5);
     for (const per of ["trimestral", "semestral", "anual"]) {
       const r = await api("/api/catalog2/quotes", { method: "POST", token: CO_A.token, body: { product: product.id, selection: SEL, period: per } });
-      assert.ok(r.status >= 400 && r.status < 500, `${per} deveria estar travado (status ${r.status})`);
+      assert.ok(r.status >= 200 && r.status < 300, `${per} autorizado deveria ser cotável (status ${r.status})`);
     }
     const view = await api(`/api/catalog2/products/${product.id}`, { token: CO_A.token });
-    assert.deepEqual(view.json.available_periods.map((p: any) => p.period), ["mensal"]);
+    assert.deepEqual(view.json.available_periods.map((p: any) => p.period), ["mensal", "trimestral", "semestral", "anual"]);
     // contrato já existente guarda sua própria fotografia: mudar a versão depois não muda o que foi vendido
     const { pps } = await checkoutAndPay(CO_A.token, [(await quote(CO_A.token, product.id, { period: "mensal" })).id]);
     const before = await prisma.projectProduct.findUniqueOrThrow({ where: { id: pps[0].id } });

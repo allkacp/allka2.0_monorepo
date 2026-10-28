@@ -29,7 +29,6 @@ export const RESOLUTION_EFFECTS: Record<ResolutionAction, { label: string; effec
   manual_review: { label: "Revisar manualmente", effects: ["Nada é alterado"] },
 };
 
-const LONG_PERIODS = ["trimestral", "semestral", "anual"];
 
 export function commercialConsistency(i: CommercialInput): CommercialIssue[] {
   const out: CommercialIssue[] = [];
@@ -42,24 +41,17 @@ export function commercialConsistency(i: CommercialInput): CommercialIssue[] {
   if (recDelivery && !rec) {
     out.push({
       code: "recurring_delivery_without_subscription", severity: "blocker",
-      message: "O produto tem entrega mensal recorrente (novo lote de tarefas todo mês), mas a assinatura mensal NÃO está habilitada nas modalidades de compra. Habilite a assinatura ou desmarque a entrega mensal recorrente.",
+      message: "A entrega mensal está ligada, mas a Assinatura não está marcada em Modalidade. Marque a Assinatura ou desligue a entrega mensal.",
     });
   }
   if (rec && !recDelivery) {
     out.push({
       code: "subscription_without_recurring_delivery", severity: "blocker",
-      message: "A assinatura mensal está habilitada, mas o produto não tem entrega mensal recorrente: o cliente pagaria todo mês sem receber um novo lote de tarefas. Marque a entrega mensal recorrente ou desabilite a assinatura.",
+      message: "A Assinatura está marcada, mas o produto não entrega todo mês. Marque a entrega mensal ou desmarque a Assinatura.",
     });
   }
-  if (monthly?.is_active && !rec) {
-    out.push({ code: "monthly_period_without_subscription", severity: "warning", message: "O período Mensal está cadastrado/ativo, mas a assinatura mensal não está habilitada nesta versão — ele não é oferecido ao cliente." });
-  }
   if (rec && recDelivery && !monthly?.is_active) {
-    out.push({ code: "subscription_without_monthly_period", severity: "warning", message: "A assinatura mensal está habilitada, mas o período Mensal não está configurado/ativo em Custos e preço — enquanto isso, o cliente não consegue assinar." });
-  }
-  const longActive = i.periods.filter((p) => LONG_PERIODS.includes(p.period) && p.is_active).map((p) => p.period);
-  if (longActive.length > 0) {
-    out.push({ code: "long_periods_reserved", severity: "warning", message: `Períodos ${longActive.join(", ")}: reservados para ativação futura — ficam cadastrados com desconto, mas não são contratáveis.` });
+    out.push({ code: "subscription_without_monthly_period", severity: "warning", message: "A Assinatura está marcada, mas o período Mensal não está autorizado: o cliente ainda não consegue assinar." });
   }
   return out;
 }

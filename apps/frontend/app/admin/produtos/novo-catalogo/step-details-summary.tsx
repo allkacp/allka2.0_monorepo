@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { BookOpen, CalendarDays, CheckCircle2, Flag, Info, KeyRound, ListChecks, Paperclip, Play, ShieldCheck, Sparkles, Target, User } from "lucide-react";
+import { cyclesSummary } from "./step-cycles";
+import { BookOpen, CalendarDays, CalendarRange, CheckCircle2, Flag, Info, KeyRound, ListChecks, Paperclip, Play, ShieldCheck, Sparkles, Target, User } from "lucide-react";
 
 // Ficha compacta e SOMENTE LEITURA do que está configurado numa etapa aberta (sem aparência de formulário).
 // Para alterar, só pelo botão Editar da etapa.
@@ -33,13 +34,15 @@ export const SUMMARY_HELP: Record<string, string> = {
   "Acessos": "Quantos acessos (contas, ferramentas, senhas) esta etapa precisa para ser executada. Os detalhes ficam em 'Acessos necessários'.",
   "Só na 1ª execução": "A etapa acontece apenas na primeira vez que o produto é contratado pelo cliente (ex.: configuração inicial); nas renovações ela é pulada.",
   "Dispensável com o mesmo executor": "Se o mesmo profissional da execução anterior assumir de novo, esta etapa pode ser dispensada, porque ele já fez o levantamento.",
+  "Ciclos": "Etapa em ciclos: a etapa dura vários períodos seguidos. Cada ciclo termina com uma entrega que o cliente aprova em prazo curto; o ciclo seguinte começa na data certa com ou sem aprovação, e reprovação vira orientação do ciclo seguinte.",
+  "Etapa final": "Esta é a última etapa do fluxo: não há etapa seguinte para liberar. Quando ela for concluída (e aprovada, se exigir), a tarefa termina.",
   "Libera a próxima etapa": "Como a etapa seguinte começa quando esta termina: Automaticamente (assim que for qualificada/aprovada) ou Manualmente (alguém libera).",
 };
 
 export interface StepSummaryRow { label: string; value: string }
 
 /** Linhas "o que está configurado" (só as que têm valor). Pura para ser testável. */
-export function stepSummaryRows(step: any): StepSummaryRow[] {
+export function stepSummaryRows(step: any, opts: { isLast?: boolean } = {}): StepSummaryRow[] {
   const ops = (step?.ops ?? {}) as Record<string, any>;
   const rows: StepSummaryRow[] = [];
   const add = (label: string, value: unknown) => { const v = value == null ? "" : String(value).trim(); if (v) rows.push({ label, value: v }); };
@@ -69,23 +72,28 @@ export function stepSummaryRows(step: any): StepSummaryRow[] {
   if (acc.length) add("Acessos", `${acc.length} ${acc.length === 1 ? "acesso" : "acessos"} necessários`);
   add("Só na 1ª execução", step?.first_execution_only ? "Sim" : "");
   add("Dispensável com o mesmo executor", step?.skip_when_same_executor ? "Sim" : "");
-  add("Libera a próxima etapa", step?.release_next_auto === false ? "Manualmente" : "Automaticamente");
+  add("Ciclos", cyclesSummary(ops.cycles));
+  // A última etapa é a FINAL: não existe próxima etapa para liberar, então a regra de liberação não se aplica.
+  if (opts.isLast) add("Etapa final", "Não há próxima etapa: ao concluir (e ser aprovada), a tarefa termina.");
+  else add("Libera a próxima etapa", step?.release_next_auto === false ? "Manualmente" : "Automaticamente");
   return rows;
 }
 
 // Ordem de leitura no desenho: 3 colunas, cada item com ícone em círculo, rótulo pequeno cinza e valor logo abaixo.
-const ORDER = ["Descrição", "Aprovação do cliente", "Quem executa", "Prazo de refação", "Libera a próxima etapa", "Qualificação", "Qualificação (se humano executar)", "Qualificação (se a IA executar)", "Critério de conclusão", "Acessos"];
+const ORDER = ["Descrição", "Aprovação do cliente", "Quem executa", "Prazo de refação", "Libera a próxima etapa", "Etapa final", "Qualificação", "Qualificação (se humano executar)", "Qualificação (se a IA executar)", "Critério de conclusão", "Ciclos", "Acessos"];
 const ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   "Descrição": Target,
   "Aprovação do cliente": CheckCircle2,
   "Quem executa": User,
   "Prazo de refação": CalendarDays,
   "Libera a próxima etapa": Play,
+  "Etapa final": Flag,
   "Qualificação": ShieldCheck,
   "Qualificação (se humano executar)": ShieldCheck,
   "Qualificação (se a IA executar)": ShieldCheck,
   "Critério de conclusão": Flag,
   "Acessos": KeyRound,
+  "Ciclos": CalendarRange,
   "Checklist": ListChecks,
   "Evidências": Paperclip,
   "Obrigatório comprovar": Paperclip,
@@ -116,8 +124,8 @@ function DetailItem({ row }: { row: StepSummaryRow }) {
   );
 }
 
-export function StepDetailsSummary({ step }: { step: any }) {
-  const raw = stepSummaryRows(step);
+export function StepDetailsSummary({ step, isLast = false }: { step: any; isLast?: boolean }) {
+  const raw = stepSummaryRows(step, { isLast });
   if (raw.length === 0) return null;
   const rank = (l: string) => { const i = ORDER.indexOf(l); return i < 0 ? 100 : i; };
   const rows = [...raw].sort((a, b) => rank(a.label) - rank(b.label));

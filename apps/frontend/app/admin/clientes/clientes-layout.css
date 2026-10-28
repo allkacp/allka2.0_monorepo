@@ -1,0 +1,46 @@
+/* Local à lista de clientes. Adapta pela largura útil, inclusive com sidebar aberta. */
+.clients-responsive { container-type: inline-size; container-name: clients; }
+.client-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); min-height: 65px; }
+.client-stat { padding: 8px clamp(6px, 1cqw, 20px); gap: clamp(5px, .8cqw, 12px); }
+.client-stat + .client-stat { border-left: 1px solid var(--color-slate-200, #e2e8f0); }
+.client-stat-icon { width: clamp(28px, 3.5cqw, 48px); height: clamp(28px, 3.5cqw, 48px); }
+.client-stat-icon svg { width: 50%; height: 50%; }
+.client-stat-label { font-size: clamp(9px, .9cqw, 11px); line-height: 1.25; }
+.client-stat-number { font-size: clamp(20px, 2.3cqw, 28px); }
+.client-stat-trend { font-size: clamp(8px, .75cqw, 10px); white-space: nowrap; }
+.clients-table { table-layout: fixed; min-width: 0; }
+.clients-table th, .clients-table td { min-width: 0; padding-inline: clamp(4px, .75cqw, 16px); }
+.clients-table th > div:first-child { display: flex; min-width: 0; max-width: 100%; }
+.clients-table th button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clients-table td > div { min-width: 0; max-width: 100%; }
+.clients-table td.hidden, .clients-table th.hidden { display: none !important; }
+.clients-table td:not(.client-actions) { overflow: hidden; }
+.clients-table td[data-rotulo="Contato"] > div { flex-wrap: wrap; gap: 0; }
+.clients-table td[data-rotulo="Contato"] a { flex-shrink: 0; width: 24px; height: 26px; }
+.clients-table td[data-rotulo="Vínculo"] span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.clients-table td[data-rotulo="Status"] > span { padding-inline: 5px; font-size: 10px; gap: 3px; max-width: 100%; }
+.clients-table td[data-rotulo="Cliente"] > div { gap: clamp(4px, .7cqw, 12px); }
+.clients-table td[data-rotulo="Cliente"] p { font-size: clamp(10px, 1cqw, 14px); }
+.clients-table .client-actions { position: sticky; right: 0; z-index: 4; background: var(--table-head, #f8fafc); padding-inline: 3px; }
+.clients-table tbody .client-actions { background: inherit; box-shadow: -1px 0 0 #e2e8f0; }
+@container clients (max-width: 950px) {
+  .client-stat-trend .font-normal { display: none; }
+  .client-stat-trend svg { display: none; }
+  .clients-table td[data-rotulo="Cliente"] > div > :first-child { width: 28px; height: 28px; }
+  .clients-table th { font-size: 9px; }
+  .clients-table th button { font-size: 9px !important; }
+  .clients-table td[data-rotulo="Cadastro"] { font-size: 10px; }
+}
+/* Só quebra quando os cinco indicadores já não cabem com texto legível. */
+@container clients (max-width: 620px) {
+  .client-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .client-stat { min-height: 58px; }
+  .client-stat-label { font-size: 10px; }
+}
+@container clients (max-width: 400px) {
+  .client-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .clients-table .client-actions { position: static; }
+  .clients-table td[data-rotulo="Cliente"] p { font-size: 12px; }
+}

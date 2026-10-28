@@ -54,7 +54,8 @@ describe("Etapa · acordeão fechado e botão Editar sempre à vista", () => {
   it("vem fechada, com o Editar no cabeçalho; marca 'Rascunho incompleto' quando for o caso", () => {
     mount({ draft_incomplete: true });
     expect(screen.getByTestId("step-edit-btn")).toBeInTheDocument();
-    expect(screen.getAllByLabelText("Abrir a etapa 1")[0]).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByLabelText("Ver a etapa 1")).toBeInTheDocument();
+    expect(screen.queryByTestId("step-view-modal")).not.toBeInTheDocument();
     expect(screen.queryByTestId("step-actions")).not.toBeInTheDocument();
     expect(screen.getByTestId("step-draft-chip").textContent).toBe("Rascunho incompleto");
   });
@@ -124,12 +125,12 @@ describe("Painel da etapa · Salvar rascunho x Concluir", () => {
     expect(summary.textContent).toContain("Informe as horas estimadas");
     expect(summary.textContent).toContain("Informe o critério de conclusão");
     expect(screen.getByTestId("step-edit-form")).toBeInTheDocument();
-    expect((modal().getByLabelText("Nome da etapa") as HTMLInputElement).value).toBe("Etapa que eu digitei"); // nada apagado
-    // os blocos com erro abrem sozinhos e mostram "Com erro"
+    expect((screen.getByLabelText("Nome da etapa") as HTMLInputElement).value).toBe("Etapa que eu digitei"); // nada apagado
+    // o primeiro bloco com erro abre sozinho (numa janela); todos os blocos com erro mostram "Com erro" no cartão
     expect(screen.getByTestId("step-block-1-status").textContent).toBe("Com erro · 1 pendência");
-    expect(screen.getByTestId("step-block-3")).toHaveAttribute("data-open", "true");
+    expect(screen.getByTestId("step-block-1")).toHaveAttribute("data-open", "true");
     expect(screen.getByTestId("step-block-3-status").textContent).toBe("Com erro · 1 pendência");
-    expect(screen.getByTestId("step-block-2")).toHaveAttribute("data-open", "true");
+    expect(screen.getByTestId("step-block-2-status").textContent).toMatch(/Com erro/);
     // o campo é destacado e a mensagem aparece junto dele
     const field = descField().closest("label")!;
     expect(field).toHaveAttribute("data-invalid", "true");
@@ -148,6 +149,11 @@ describe("Painel da etapa · Salvar rascunho x Concluir", () => {
     expect(lastPut()).toMatchObject({ draft: false, name: "Configurar a conta", description: "Cria a conta e liga o pixel", completion_criteria: "Conta ativa" });
     expect(lastPut().scope).toBeUndefined();
     await waitFor(() => expect(screen.queryByTestId("step-edit-form")).not.toBeInTheDocument());
+    // depois de concluir, a janela de leitura abre como confirmação: banner verde e um botão "Concluir" que volta para a lista
+    expect(await screen.findByTestId("step-saved-banner")).toBeInTheDocument();
+    expect(screen.queryByTestId("step-view-close")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("step-view-done"));
+    await waitFor(() => expect(screen.queryByTestId("step-view-modal")).not.toBeInTheDocument());
   });
 
   it("erro do servidor ao salvar: a tela NÃO fecha e o preenchimento fica", async () => {

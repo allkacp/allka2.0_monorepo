@@ -186,13 +186,14 @@ describe("Modalidades de contratação por período (Item 6, reunião 2026-09-14
     const { product } = await mkPublishedProduct(`t10-${crypto.randomBytes(4).toString("hex")}`);
     await setDeliveryRecurrence(MASTER, product.id, "mensal");
     await configurePeriod(MASTER, product.id, "mensal", 5);
+    await configurePeriod(MASTER, product.id, "bimestral", 7);
     await configurePeriod(MASTER, product.id, "trimestral", 10);
     await configurePeriod(MASTER, product.id, "semestral", 15);
     await configurePeriod(MASTER, product.id, "anual", 20);
 
     const adminList = await api(`/api/admin/catalog2/products/${product.id}/periods`, { token: MASTER });
     assert.equal(adminList.status, 200);
-    assert.equal(adminList.json.data.length, 4);
+    assert.equal(adminList.json.data.length, 5);
     for (const row of adminList.json.data) {
       assert.equal(row.configured, true);
       assert.equal(row.is_active, true);
@@ -200,12 +201,12 @@ describe("Modalidades de contratação por período (Item 6, reunião 2026-09-14
 
     const detail = await api(`/api/catalog2/products/${product.slug}`, { token: CO_A.token });
     assert.equal(detail.status, 200);
-    assert.equal(detail.json.available_periods.length, 4);
+    assert.equal(detail.json.available_periods.length, 5);
     const referenceMonthly = detail.json.pricing.commercial_price;
     assert.ok(referenceMonthly > 0);
 
-    const expectedMonths: Record<string, number> = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 };
-    const expectedDiscount: Record<string, number> = { mensal: 5, trimestral: 10, semestral: 15, anual: 20 };
+    const expectedMonths: Record<string, number> = { mensal: 1, bimestral: 2, trimestral: 3, semestral: 6, anual: 12 };
+    const expectedDiscount: Record<string, number> = { mensal: 5, bimestral: 7, trimestral: 10, semestral: 15, anual: 20 };
     for (const pp of detail.json.available_periods) {
       assert.equal(pp.available, true);
       assert.equal(pp.months, expectedMonths[pp.period]);

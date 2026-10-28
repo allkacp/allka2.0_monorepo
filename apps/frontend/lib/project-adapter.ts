@@ -123,7 +123,8 @@ export function adaptApiProject(api: any): FrontendProject {
 
   return {
     id: api.id,
-    seq: api._seq ?? null,
+    // A tela de detalhe do projeto não recebe _seq: o número vem do código "proj_N".
+    seq: api._seq ?? seqFromProjectCode(api.project_code),
     // Número deste projeto na plataforma antiga, quando veio da importação —
     // só referência de consulta, o identificador é o seq (proj_N).
     legacy_id: api.legacy_id ?? null,
@@ -134,8 +135,8 @@ export function adaptApiProject(api: any): FrontendProject {
     ownerId,
     name: api.title || "",
     description: api.description || "",
-    client: api.client?.name || "",
-    clientCNPJ: api.client?.cnpj || "",
+    client: api.client_record?.name || api.client?.name || "",
+    clientCNPJ: api.client_record?.document || api.client?.cnpj || "",
     agency: api.agency || "",
     companyType: api.company_type || "company",
     consultant: api.consultant || "",
@@ -219,4 +220,10 @@ export function adaptProjectToApi(
     data.client_id = String(project.companyId);
 
   return data;
+}
+
+/** "proj_949" → 949 (o número do projeto que aparece no endereço). Devolve null quando o código não segue esse formato. */
+export function seqFromProjectCode(code: unknown): number | null {
+  const m = /^proj_(\d+)$/.exec(String(code ?? ""));
+  return m ? Number(m[1]) : null;
 }

@@ -28,7 +28,10 @@ function PopoverContent({
         data-slot="popover-content"
         align={align}
         sideOffset={sideOffset}
+        // Nunca maior que o espaço livre da tela: se não couber, rola por dentro (assim dá para alcançar e clicar em tudo em qualquer tamanho de tela).
+        collisionPadding={12}
         className={cn(
+          'max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain',
           'bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-[1400] w-72 origin-(--radix-popover-content-transform-origin) rounded-md border p-4 shadow-md outline-hidden',
           className,
         )}

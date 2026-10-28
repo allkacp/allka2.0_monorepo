@@ -53,6 +53,8 @@ interface StandardModalDialogProps {
    * z acima do z-50 padrão do overlay (ex.: AlertDetailDrawer dentro da
    * Central de Alertas, HeaderSlideScreen z-60). */
   overlayClassName?: string;
+  /** Classes extras do popup (ex.: "!z-[1400]" para abrir POR CIMA de Painel/Janela Moldura, que ficam em z 1200+). */
+  contentClassName?: string;
   /** Ref pro container com rolagem interna (`overflow-y-auto`) — permite
    * ao chamador resetar a posição de rolagem pra 0 numa abertura nova
    * (ver AlertDetailDrawer: sem isso, o mesmo nó DOM persiste entre
@@ -73,6 +75,7 @@ export function StandardModalDialog({
   maxWidthPx,
   size = "large",
   overlayClassName,
+  contentClassName,
   scrollRef,
   headerClassName,
 }: StandardModalDialogProps) {
@@ -101,7 +104,7 @@ export function StandardModalDialog({
         // Afeta qualquer StandardModalDialog aberto de dentro de um painel
         // slide — ex.: "Novo Grupo" dentro do painel de Notificações, que
         // tinha o mesmo problema latente.
-        className="p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl flex flex-col w-[calc(100%-64px)] z-70"
+        className={`p-0 gap-0 overflow-hidden rounded-2xl border-0 shadow-2xl flex flex-col w-[calc(100%-64px)] z-70 ${contentClassName ?? ""}`}
         style={
           celular
             ? size === "large"

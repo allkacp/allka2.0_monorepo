@@ -13,6 +13,8 @@
     "test:universal-v2-unit": "tsx --test src/lib/sla.test.ts src/lib/catalog2-universal-v2.test.ts",
     "test:universal-v2": "npm run test:universal-v2-unit && tsx scripts/run-db-tests.ts src/routes/catalog2-universal-v2-pricing.integration.test.ts && tsx scripts/run-db-tests.ts src/routes/connections-triggers.integration.test.ts && tsx scripts/run-db-tests.ts src/routes/catalog2-approval-gates-sla.integration.test.ts && tsx scripts/run-db-tests.ts src/routes/catalog2-linked-products.integration.test.ts",
     "test:catalog2-subscriptions": "tsx scripts/run-db-tests.ts src/routes/catalog2-subscriptions.integration.test.ts",
+    "test:stage-cycles": "tsx scripts/run-db-tests.ts src/routes/stage-cycles.integration.test.ts",
+    "test:period-renewal": "tsx scripts/run-db-tests.ts src/routes/catalog2-period-renewal.integration.test.ts",
     "test:task-ai": "tsx scripts/run-db-tests.ts src/routes/task-ai.integration.test.ts",
     "test:task-visibility": "tsx scripts/run-db-tests.ts src/routes/task-visibility.integration.test.ts",
     "test:catalog2-costs": "tsx scripts/run-db-tests.ts src/routes/catalog2-costs.integration.test.ts",

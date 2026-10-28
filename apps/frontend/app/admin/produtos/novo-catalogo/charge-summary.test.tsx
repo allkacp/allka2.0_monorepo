@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 vi.mock("@/lib/api-client", () => ({ apiClient: {} }));
 import { ChargeMemory, ChargeSummary, NO_FIRST_EXECUTION, chargeSummaryOf } from "./charge-summary";
@@ -126,5 +126,19 @@ describe("Cobrança estimada · implantação × recorrente", () => {
     const r = chargeSummaryOf({ currency: "R$" });
     expect(r.cs).toBeNull();
     expect(r.hasImplementation).toBe(false);
+  });
+});
+
+describe("Composição do preço · Ajustar leva até a etapa", () => {
+  it("cada etapa que forma o valor tem o botão Ajustar (só quando há como achar a etapa) e ele devolve qual etapa é", () => {
+    const onAdjust = vi.fn();
+    const pricing = { currency: "BRL", split: { commercial_summary: { first_charge: 100, renewal: 100, first_cycle_recurring_price: 100, avulso: 100, implementation_price: 0, implementation_steps: [], recurring_steps: [
+      { ref: "t:a", task_key: "t", step_key: "a", name: "Análise", price: 40 }, { ref: "t:b", name: "Sem chave", price: 60 },
+    ] } } };
+    render(<ChargeSummary pricing={pricing} onAdjustStep={onAdjust} />);
+    const buttons = screen.getAllByTestId("charge-step-adjust");
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect(onAdjust).toHaveBeenCalledWith(expect.objectContaining({ task_key: "t", step_key: "a", name: "Análise" }));
   });
 });

@@ -17,6 +17,7 @@ import { Prisma } from "@prisma/client";
 import { copyTaskDeliverables } from "./task-deliverables";
 import { aiCopyData, AI_EXECUTION_MODES } from "./catalog2-ai";
 import { blockersOf, commercialConsistency, loadConsistency, saleLabel, RESOLUTION_EFFECTS } from "./catalog2-commercial";
+import { unavailableSpecificAssignments } from "./specific-assignee-impact";
 import { prisma } from "./prisma";
 import { taskDivergesFromModel, stepDivergesFromModel } from "./catalog2-models";
 import { CATALOG2_STATUSES, CATALOG2_CLIENT_VISIBLE_STATUSES, type Catalog2Status } from "./catalog2-foundation";
@@ -667,10 +668,6 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
     for (const s of t.steps) {
       const e = validateStepExecutor(s);
       if (e) issues.push(`Tarefa "${t.name}": ${e}`);
-      else if (s.executor_kind === "leader" && s.leader_mode === "specific" && s.leader_user_id) {
-        const u = await prisma.user.findUnique({ where: { id: s.leader_user_id }, select: { is_active: true, role: true } });
-        if (!u || !u.is_active || !["lider", "admin"].includes(u.role)) issues.push(`Tarefa "${t.name}": o líder escolhido para a etapa "${s.name}" não existe, está inativo ou não é líder.`);
-      }
     }
     for (const s of t.steps) if (s.requires_specialist_qualification && !s.specialist_user_id) issues.push(`Tarefa "${t.name}": a etapa "${s.name}" exige qualificação do especialista, mas nenhum especialista foi escolhido.`);
     if (t.steps.length === 0) issues.push(`A tarefa "${t.name}" precisa de ao menos uma etapa (as etapas formam o checklist da tarefa).`);
@@ -751,6 +748,8 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
     for (const r of chargeRefs) if (r.key && !taskKeys.has(r.key)) issues.push(`${r.label}: a cobrança aponta para a tarefa "${r.key}", que não existe nesta versão.`);
   }
 
+  for (const issue of await unavailableSpecificAssignments(prisma, v.tasks)) issues.push(issue.message);
+
   // Referências quebradas: tarefa condicional nunca incluída por nenhum efeito.
   const includedTaskKeys = new Set<string>();
   for (const c of v.conditions) if (c.effect_type === "add_task") includedTaskKeys.add(c.effect_value);
@@ -809,6 +808,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
   const codeByMessage = new Map(pricingIssues.map((p) => [p.message, p.code]));
 
   const issue_details = issues.map((message) => {
+    if (message.includes("indisponível") && message.includes("responsável desta configuração")) return { message, target: "task_create", code: "specific_assignee_unavailable" };
     if (message.startsWith("Conexões:")) return { message, target: "connections" };
     if (message.includes("título comercial")) return { message, target: "title" };
     if (message.includes("descrição completa")) return { message, target: "full_description" };
@@ -1365,9 +1365,11 @@ export async function getProductDetail(productId: string) {
   if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
   const publishedVersion = product.versions.find((v) => v.id === product.published_version_id) ?? null;
   const periodRows = await prisma.catalog2ProductPeriod.findMany({ where: { product_id: product.id }, select: { period: true, is_active: true } });
+  const assignmentIssues = await unavailableSpecificAssignments(prisma, product.versions.flatMap(v => v.tasks));
 
   return {
     id: product.id,
+    assignment_issues: assignmentIssues,
     delivery_recurrence: product.delivery_recurrence,
     task_structure: product.task_structure,
     slug: product.slug,
@@ -1524,7 +1526,7 @@ export async function getProductDetail(productId: string) {
         // "Modelo global" x "Configuração específica deste produto" (+ modelo mudou depois?)
         model: t.task_model
           ? {
-              id: t.task_model.id, revision: t.task_model.revision, is_active: t.task_model.is_active,
+              id: t.task_model.id, number: t.task_model.number ?? null, revision: t.task_model.revision, is_active: t.task_model.is_active,
               customized: taskDivergesFromModel(t, t.task_model),
               outdated: t.task_model.revision > (t.task_model_revision ?? 0),
             }

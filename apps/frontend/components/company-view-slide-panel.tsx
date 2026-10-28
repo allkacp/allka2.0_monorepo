@@ -1,3 +1,5 @@
+import { AkBoth } from "@/components/price-with-allkoins";
+import { fmtAllkoinsBoth } from "@/lib/allkoins";
 import {
   X,
   Building2,
@@ -51,7 +53,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { CompanyReferenceFrame } from "@/components/company-reference-frame";
 import {
   Dialog,
   DialogContent,
@@ -75,6 +77,7 @@ import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { NeonBadge } from "@/components/neon-badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiClient } from "@/lib/api-client";
+
 import { usePlatformUsers } from "@/contexts/platform-users-context";
 import { CompanyUsersTab } from "@/components/company-users-tab";
 import { TermsManagementTab } from "@/components/terms-management-tab";
@@ -103,6 +106,8 @@ interface CompanyViewSlidePanelProps {
   onClose: () => void;
   company: Company | null;
   onCompanyUpdate?: (updatedCompany: Company) => void;
+  referenceFrame?: boolean;
+  onEditRequest?: (company: Company) => void;
 }
 
 const SOCIAL_PLATFORM_META: Record<
@@ -210,6 +215,8 @@ export function CompanyViewSlidePanel({
   onClose,
   company,
   onCompanyUpdate,
+  referenceFrame = false,
+  onEditRequest,
 }: CompanyViewSlidePanelProps) {
   // Guard: Return null if company is not provided
   if (!company) return null;
@@ -611,7 +618,7 @@ export function CompanyViewSlidePanel({
 
     toast({
       title: "Sucesso!",
-      description: `Saldo atualizado para R$ ${newBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+      description: `Saldo atualizado para ${fmtAllkoinsBoth(newBalance)}`,
     });
 
     setShowCompanyWalletModal(false);
@@ -1211,7 +1218,10 @@ export function CompanyViewSlidePanel({
 
   return (
     <>
-      <EmbeddedSlideScreen
+      <CompanyReferenceFrame
+        enabled={referenceFrame}
+        company={referenceFrame ? company : undefined}
+        title={company.name}
         open={open && !showMigrateModal}
         onClose={() => {
           if (!showSaveConfirm && !showCancelConfirm) onClose();
@@ -1234,7 +1244,7 @@ export function CompanyViewSlidePanel({
               className="hidden"
               onChange={handleFileChange}
             />
-            <div
+            {!referenceFrame && <div
               className="flex items-center justify-between px-5 py-3 flex-shrink-0"
               style={{ background: "var(--brand-gradient, linear-gradient(to right, #0a1628, #1e3a8a, #0a1628))" }}
             >
@@ -1252,6 +1262,7 @@ export function CompanyViewSlidePanel({
               </button>
             </div>
 
+            }
             {/* Company identity — moved from header per the global modal standard (plain text-only header) */}
             <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 flex-shrink-0 flex-wrap">
               <div className="flex items-center gap-4 min-w-0">
@@ -1959,12 +1970,12 @@ export function CompanyViewSlidePanel({
                       </button>
                       {!isDadosEditMode ? (
                         <Button
-                          onClick={handleDadosEditMode}
+                          onClick={() => onEditRequest ? onEditRequest(company) : handleDadosEditMode()}
                           size="sm"
                           className="btn-brand"
                         >
                           <Edit2 className="h-4 w-4 mr-2" />
-                          Editar
+                          {onEditRequest ? "Editar dados" : "Editar"}
                         </Button>
                       ) : (
                         <div className="flex gap-2">
@@ -4319,7 +4330,7 @@ export function CompanyViewSlidePanel({
                             <div className="bg-white/20 rounded-md p-1"><Wallet className="h-3 w-3 text-white" /></div>
                           </div>
                           <p className="text-2xl font-bold text-white leading-none">
-                            R$ {companyWalletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                            <AkBoth value={companyWalletBalance} />
                           </p>
                           <p className="text-[10px] text-white/60 mt-1">Carteira da empresa</p>
                         </div>
@@ -4369,7 +4380,7 @@ export function CompanyViewSlidePanel({
                             <div className="flex-1">
                               <p className="text-[10px] font-semibold uppercase tracking-wide opacity-80">Saldo Disponível</p>
                               <p className="text-xl font-bold leading-tight">
-                                R$ {companyWalletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                <AkBoth value={companyWalletBalance} />
                               </p>
                             </div>
                             <div className="flex flex-col gap-1">
@@ -4408,10 +4419,10 @@ export function CompanyViewSlidePanel({
                                   </div>
                                   <div className="text-right">
                                     <div className={`text-[11px] font-bold ${stmt.type === "credit" ? "text-emerald-600" : "text-red-500"}`}>
-                                      {stmt.type === "credit" ? "+" : "−"} R$ {stmt.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                      {stmt.type === "credit" ? "+" : "−"} <AkBoth value={stmt.amount} />
                                     </div>
                                     <div className="text-[10px] text-slate-400">
-                                      R$ {stmt.balanceAfter.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                      <AkBoth value={stmt.balanceAfter} />
                                     </div>
                                   </div>
                                 </div>
@@ -4648,7 +4659,7 @@ export function CompanyViewSlidePanel({
                           </div>
                           <div className="flex items-baseline gap-2">
                             <span className="text-xs opacity-75">Saldo atual:</span>
-                            <span className="text-xl font-bold">R$ {companyWalletBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
+                            <span className="text-xl font-bold"><AkBoth value={companyWalletBalance} /></span>
                           </div>
                           <button onClick={() => setShowWalletHistoryPanel(false)} className="absolute top-5 right-5 rounded-lg transition-all hover:bg-white/20 p-1.5">
                             <X className="size-6 text-white drop-shadow-md" />
@@ -4714,9 +4725,9 @@ export function CompanyViewSlidePanel({
                                     </div>
                                     <div className="text-right flex-shrink-0">
                                       <div className={`text-xs font-bold ${stmt.type === "credit" ? "text-emerald-600" : "text-red-500"}`}>
-                                        {stmt.type === "credit" ? "+" : "−"} R$ {stmt.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                                        {stmt.type === "credit" ? "+" : "−"} <AkBoth value={stmt.amount} />
                                       </div>
-                                      <div className="text-[10px] text-slate-400">Saldo: R$ {stmt.balanceAfter.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
+                                      <div className="text-[10px] text-slate-400">Saldo: <AkBoth value={stmt.balanceAfter} /></div>
                                     </div>
                                   </div>
                                 ))}
@@ -4917,7 +4928,7 @@ export function CompanyViewSlidePanel({
             }))}
             companyName={company.name || "empresa"}
           />
-      </EmbeddedSlideScreen>
+      </CompanyReferenceFrame>
 
       {/* Partner Migration Modal - Step 1: Confirm Migration */}
       {showMigrateModal && migrationStep === "confirm" && (

@@ -43,7 +43,7 @@ import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
-import { fitColumnWidths, useTableScrollSync } from "@/hooks/useTableScrollSync";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import {
   exportToCSV,
   exportToExcel,
@@ -101,6 +101,8 @@ import {
   Link2,
 } from "lucide-react";
 import { ProjectManagementModal } from "@/components/project-management-modal";
+import { ProjectReferenceStats, ProjectReferenceActions } from "@/components/project-reference-parts";
+import "./projetos-layout.css";
 import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
@@ -387,7 +389,7 @@ export default function AdminProjetosPage({
     "created",
   ];
   const COL_LABELS: Record<string, string> = {
-    id: "#",
+    id: "ID",
     name: "Projeto",
     client: "Cliente",
     owner: "Conta responsável",
@@ -421,7 +423,6 @@ export default function AdminProjetosPage({
     handleTableScroll,
     handleBottomBarScroll,
     hasHorizontalOverflow,
-    tableBoxWidth,
   } = useTableScrollSync([projectsLoading, visibleCols.length]);
 
   // column widths (resizable)
@@ -440,19 +441,7 @@ export default function AdminProjetosPage({
   };
   const [colWidths, setColWidths] =
     useState<Record<string, number>>(DEFAULT_COL_WIDTHS);
-  const FIT_MIN_COL_WIDTHS: Record<string, number> = {
-    name: 130,
-    created: 100,
-    status: 96,
-    budget: 84,
-  };
-  // Larguras que cabem na área visível (104px = coluna de ações).
-  const fittedColWidths = fitColumnWidths(
-    visibleCols.map((col) => colWidths[col] ?? DEFAULT_COL_WIDTHS[col] ?? 120),
-    tableBoxWidth > 0 ? tableBoxWidth - 104 : 0,
-    60,
-    visibleCols.map((col) => FIT_MIN_COL_WIDTHS[col]),
-  );
+  const columnWeightTotal = visibleCols.reduce((sum, col) => sum + (colWidths[col] ?? DEFAULT_COL_WIDTHS[col] ?? 120), 0);
   const dragState = useRef<{
     col: string;
     startX: number;
@@ -1294,6 +1283,10 @@ export default function AdminProjetosPage({
           setSelectedProject(full);
           setModalMode("view");
           setModalOpen(true);
+          // O endereço mostra o NÚMERO do projeto (ex.: /admin/projetos/10), nunca o código longo do banco. Links antigos com o código são reescritos.
+          if (full.seq != null && String(full.seq) !== urlProjectId) {
+            navigate(`${projectRouteBase}/${full.seq}${tab !== "dashboard" ? `?tab=${tab}` : ""}`, { replace: true });
+          }
         })
         .catch(() => {
           setSelectedProject({
@@ -2209,7 +2202,7 @@ export default function AdminProjetosPage({
                               }}
                             >
                               <span className="font-mono text-xs text-slate-400">
-                                proj_{(p as any).seq ?? "?"}
+                                {(p as any).seq != null ? String((p as any).seq).padStart(3, "0") : "—"}
                               </span>
                             </td>
                             <td
@@ -2320,64 +2313,10 @@ export default function AdminProjetosPage({
             className={
               showPartnerReferrals && projectsTab === "indicados"
                 ? "hidden"
-                : "space-y-0"
+                : "projects-reference space-y-0"
             }
           >
-            {/* Stats Cards */}
-            <div className="mt-[5px] mb-[5px] grid grid-cols-2 gap-3 lg:h-[65px] lg:grid-cols-4">
-              <div className="relative h-full rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-blue-500 to-blue-700 dark:from-blue-800 dark:to-blue-950 border-2 border-blue-300/70 dark:border-blue-800/70 px-3 pt-2 pb-1.5">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-medium text-white/70 leading-tight">
-                    Total de Projetos
-                  </p>
-                  <div className="bg-white/20 rounded-md p-1">
-                    <FolderOpen className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold text-white leading-none">
-                  {stats.totalProjects}
-                </p>
-              </div>
-              <div className="relative h-full rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-emerald-500 to-teal-600 dark:from-emerald-800 dark:to-teal-900 border-2 border-emerald-300/70 dark:border-emerald-800/70 px-3 pt-2 pb-1.5">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-medium text-white/70 leading-tight">
-                    Em Andamento
-                  </p>
-                  <div className="bg-white/20 rounded-md p-1">
-                    <Zap className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold text-white leading-none">
-                  {stats.activeProjects}
-                </p>
-              </div>
-              <div className="relative h-full rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-violet-500 to-purple-700 dark:from-violet-800 dark:to-purple-950 border-2 border-violet-300/70 dark:border-violet-800/70 px-3 pt-2 pb-1.5">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-medium text-white/70 leading-tight">
-                    Concluídos
-                  </p>
-                  <div className="bg-white/20 rounded-md p-1">
-                    <TrendingUp className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold text-white leading-none">
-                  {stats.completedProjects}
-                </p>
-              </div>
-              <div className="relative h-full rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-200 bg-gradient-to-br from-orange-500 to-rose-600 dark:from-orange-800 dark:to-rose-900 border-2 border-orange-300/70 dark:border-orange-800/70 px-3 pt-2 pb-1.5">
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-medium text-white/70 leading-tight">
-                    MRR
-                  </p>
-                  <div className="bg-white/20 rounded-md p-1">
-                    <DollarSign className="h-4 w-4 text-white" />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold text-white leading-none">
-                  R$ {(stats.mrr / 1000).toFixed(0)}k
-                </p>
-              </div>
-            </div>
+            <ProjectReferenceStats total={stats.totalProjects} active={stats.activeProjects} completed={stats.completedProjects} mrr={stats.mrr} />
 
             <div className="space-y-3">
               <Accordion type="single" collapsible className="mb-1">
@@ -2385,7 +2324,7 @@ export default function AdminProjetosPage({
                   value="stats"
                   className="border rounded-lg bg-blue-50 border-blue-200"
                 >
-                  <AccordionTrigger className="text-sm font-semibold hover:no-underline px-4 py-3 hover:bg-slate-50 rounded-t-lg transition-colors">
+                  <AccordionTrigger className="text-sm font-semibold hover:no-underline px-3 py-2 hover:bg-slate-50 rounded-t-lg transition-colors">
                     <div className="flex items-center gap-2">
                       <BarChart3 className="h-5 w-5 text-blue-600" />
                       <span className="text-blue-900">
@@ -2863,7 +2802,7 @@ export default function AdminProjetosPage({
                 return (
                   <>
                     {/* ── Compact banner ── */}
-                    <div className="rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 to-white px-4 py-3 shadow-sm">
+                    <div className="rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50/90 to-white px-3 py-2 shadow-sm">
                       {/* Header row */}
                       <div className="flex items-center gap-2.5 mb-2.5">
                         <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-sm">
@@ -2901,7 +2840,7 @@ export default function AdminProjetosPage({
                         {previewItems.map((project) => (
                           <div
                             key={project.id}
-                            className="flex flex-col gap-2 bg-white rounded-lg border border-slate-100 px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] min-w-0"
+                            className="flex items-center gap-2 bg-white rounded-lg border border-slate-100 px-3 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] min-w-0"
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <div
@@ -3302,36 +3241,20 @@ export default function AdminProjetosPage({
                       {/* As colunas encolhem na proporção até caber na
                           largura visível: sem barra de rolagem horizontal. */}
                       <table
-                        className="tabela-cartao allka-fit-table w-full text-xs"
+                        className="projects-reference-table tabela-cartao w-full text-xs"
                         style={{ tableLayout: "fixed" }}
                       >
                         <colgroup>
-                          {/* actions col — pinned left */}
-                          <col style={{ width: 104 }} />
-                          {visibleCols.map((col, i) => (
+                          {visibleCols.map((col) => (
                             <col
                               key={col}
-                              style={{ width: fittedColWidths[i] }}
+                              style={{ width: `calc((100% - 96px) * ${(colWidths[col] ?? DEFAULT_COL_WIDTHS[col] ?? 120) / columnWeightTotal})` }}
                             />
                           ))}
+                          <col style={{ width: 96 }} />
                         </colgroup>
                         <thead>
                           <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
-                            <th
-                              className="py-3.5 px-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em] text-center"
-                              style={{
-                                position: "sticky",
-                                left: 0,
-                                top: 0,
-                                zIndex: 3,
-                                minWidth: 104,
-                                background: "var(--table-head)",
-                                boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
-                                borderRight: "1px solid rgba(100,116,139,0.18)",
-                              }}
-                            >
-                              Ações
-                            </th>
                             {visibleCols.map((col) => {
                               const headerConfig = SORTABLE_COLUMN_CONFIG[col];
 
@@ -3408,6 +3331,7 @@ export default function AdminProjetosPage({
                                 </th>
                               );
                             })}
+                            <th className="project-actions text-center uppercase text-[11px] font-bold">Ações</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3440,281 +3364,15 @@ export default function AdminProjetosPage({
                                 <tr
                                   className={`group transition-colors cursor-pointer ${
                                     rowIdx % 2 === 0
-                                      ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                                      : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                      ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#f3f7ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                      : "bg-[#f5f8fc] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#eaf2ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
                                   }`}
                                   onClick={() => handleViewProject(project)}
                                 >
-                                  {/* Actions — pinned left, matching admin/empresas */}
-                                  <td
-                                    className={`px-2 py-2 transition-colors ${
-                                      rowIdx % 2 === 0
-                                        ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                                        : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                                    }`}
-                                    style={{
-                                      position: "sticky",
-                                      left: 0,
-                                      zIndex: 1,
-                                      minWidth: 104,
-                                      borderRight:
-                                        "1px solid rgba(100,116,139,0.18)",
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <div className="flex flex-wrap items-center justify-center gap-1">
-                                      {project.isArchived ? (
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() =>
-                                                handleViewProject(project)
-                                              }
-                                              className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                            >
-                                              <Eye className="h-3.5 w-3.5" />
-                                            </Button>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="text-xs">
-                                            Visualizar (arquivado)
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      ) : project.status === "draft" ? (
-                                        <>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleContinueDraft(project)
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <ArrowRight className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Continuar rascunho
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleStartCancelProject(
-                                                    project,
-                                                  )
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Descartar
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </>
-                                      ) : project.status ===
-                                        "awaiting-payment" ? (
-                                        <>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleGoToPayment(project)
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-amber-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <CreditCard className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Ir para Pagamento
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleViewProject(project)
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Eye className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Visualizar
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleEditProject(project)
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Editar projeto
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleStartCancelProject(
-                                                    project,
-                                                  )
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Cancelar
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleStartArchiveProject(
-                                                    project,
-                                                  )
-                                                }
-                                                aria-label={`Arquivar projeto — ${project.name}`}
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-slate-700 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Archive className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Arquivar projeto
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleViewProject(project)
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-blue-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Eye className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Visualizar
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleEditProject(project)
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-violet-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Editar projeto
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleCloneProject(project)
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-emerald-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Copy className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Duplicar
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleStartCancelProject(
-                                                    project,
-                                                  )
-                                                }
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-red-500 dark:text-red-400 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-red-600 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(220,38,38,0.25)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Cancelar
-                                            </TooltipContent>
-                                          </Tooltip>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() =>
-                                                  handleStartArchiveProject(
-                                                    project,
-                                                  )
-                                                }
-                                                aria-label={`Arquivar projeto — ${project.name}`}
-                                                className="h-[26px] w-[26px] rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-500 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-slate-700 hover:text-white hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150"
-                                              >
-                                                <Archive className="h-3.5 w-3.5" />
-                                              </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent className="text-xs">
-                                              Arquivar projeto
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </>
-                                      )}
-                                    </div>
-                                  </td>
-
                                   {/* ID */}
                                   {visibleCols.includes("id") && (
                                     <td
-                                      data-rotulo="#"
+                                      data-rotulo="ID"
                                       className="px-3 py-3.5"
                                       style={{
                                         borderRight:
@@ -3724,7 +3382,7 @@ export default function AdminProjetosPage({
                                     >
                                       <div className="flex flex-col gap-0.5">
                                         <span className="font-mono text-[11px] text-slate-400 tracking-wide">
-                                          proj_{project.seq ?? "?"}
+                                          {project.seq != null ? String(project.seq).padStart(3, "0") : "—"}
                                         </span>
                                         <LegacyIdBadge
                                           legacyId={(project as any).legacy_id}
@@ -4074,6 +3732,7 @@ export default function AdminProjetosPage({
                                       </Tooltip>
                                     </td>
                                   )}
+                                  <td data-rotulo="Ações" className="project-actions"><ProjectReferenceActions name={project.name} archived={project.isArchived} status={project.status} onView={() => handleViewProject(project)} onEdit={() => handleEditProject(project)} onClone={() => handleCloneProject(project)} onCancel={() => handleStartCancelProject(project)} onArchive={() => handleStartArchiveProject(project)} onContinue={() => handleContinueDraft(project)} onPayment={() => handleGoToPayment(project)} /></td>
                                 </tr>
                               </TooltipProvider>
                             ))

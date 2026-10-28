@@ -1,4 +1,5 @@
 import { PageLoader } from "@/components/ui/loading";
+import { TaskLaunchConnections } from "@/components/connections/task-launch-connections";
 // Lançamento em lote — para produtos "pacote" (2+ ProjectTask do mesmo
 // ProjectProduct). Mesma ideia do TaskLaunchDrawer (apps/frontend/components/
 // task-launch-drawer.tsx), mas operando sobre VÁRIAS tarefas de uma vez: um
@@ -686,6 +687,10 @@ export function BulkTaskLaunchDrawer({
             </div>
 
             <div className="flex-1 overflow-y-auto bg-slate-50/60">
+              {/* Conexões das tarefas do lote, compactas, uma vez por projeto. Nunca trava o lançamento. */}
+              {Array.from(new Set(tasks.map((t: any) => t.project_id).filter(Boolean))).map((pid: any) => (
+                <TaskLaunchConnections key={pid} projectId={pid} taskId={tasks.filter((t: any) => t.project_id === pid).map((t: any) => t.id)} />
+              ))}
               {fillMode === null ? renderModeSelection() : renderFillingContent()}
             </div>
 

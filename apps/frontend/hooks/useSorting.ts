@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react"
 import React from "react"
 
@@ -86,10 +86,33 @@ function compareValues(aVal: any, bVal: any, dir: SortDirection): number {
   return dir === "asc" ? cmp : -cmp
 }
 
-export function useSorting<T extends Record<string, any>>() {
-  const [sortKey, setSortKey] = useState<keyof T | null>(null)
-  const [sortDir, setSortDir] = useState<SortDirection>("asc")
+interface SortingOptions {
+  /** Opt-in: sem chave, as outras telas continuam com estado só em memória. */
+  storageKey?: string
+  allowedKeys?: readonly string[]
+}
+
+function readStoredSort(options?: SortingOptions): { key: string | null; dir: SortDirection } {
+  const fallback = { key: null, dir: "asc" as const }
+  if (!options?.storageKey || typeof window === "undefined") return fallback
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(options.storageKey) ?? "null")
+    if (!stored || typeof stored.key !== "string" || !["asc", "desc"].includes(stored.dir)) return fallback
+    if (options.allowedKeys && !options.allowedKeys.includes(stored.key)) return fallback
+    return { key: stored.key, dir: stored.dir }
+  } catch { return fallback }
+}
+
+export function useSorting<T extends Record<string, any>>(options?: SortingOptions) {
+  const [initialSort] = useState(() => readStoredSort(options))
+  const [sortKey, setSortKey] = useState<keyof T | null>(initialSort.key as keyof T | null)
+  const [sortDir, setSortDir] = useState<SortDirection>(initialSort.dir)
   const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({})
+
+  useEffect(() => {
+    if (!options?.storageKey) return
+    try { window.localStorage.setItem(options.storageKey, JSON.stringify({ key: sortKey, dir: sortDir })) } catch { /* armazenamento bloqueado/cheio: ordenação continua em memória */ }
+  }, [options?.storageKey, sortKey, sortDir])
 
   /** Toggle or explicitly set the sort for a column. */
   const handleSort = useCallback((key: keyof T, dir?: SortDirection) => {

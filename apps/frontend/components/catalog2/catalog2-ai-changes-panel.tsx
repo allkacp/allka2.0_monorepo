@@ -4,6 +4,8 @@
 // (configuradas no produto); acabando, ele "contrata mais": cada alteração extra é debitada do saldo da carteira. Preço e saldo vêm
 // sempre do backend (/api/ai-changes/quote), nunca calculados aqui.
 
+import { AkBoth } from "@/components/price-with-allkoins";
+import { fmtAllkoinsBoth } from "@/lib/allkoins";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, AlertCircle, CheckCircle2, Sparkles, Wallet } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
@@ -27,7 +29,7 @@ export function brl(n: number) {
 export function aiChangeSummary(q: AiChangeQuote): string {
   const where = q.step_key ? " nesta etapa" : "";
   if (q.is_free) return `Alterações grátis restantes${where}: ${q.free_left} de ${q.free_total}.`;
-  return `As ${q.free_total} alterações grátis${where} acabaram. Cada alteração extra custa ${brl(q.price_brl)}, debitado do seu saldo.`;
+  return `As ${q.free_total} alterações grátis${where} acabaram. Cada alteração extra custa ${fmtAllkoinsBoth(q.price_brl)}, debitado do seu saldo.`;
 }
 
 export function Catalog2AiChangesPanel({ projectId }: { projectId: string }) {
@@ -69,7 +71,7 @@ export function Catalog2AiChangesPanel({ projectId }: { projectId: string }) {
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-violet-600" />
         <h3 className="text-sm font-semibold text-neutral-800">Alterações por IA</h3>
-        <Button size="sm" variant="outline" className="ml-auto" onClick={() => setTopupTop(true)}><Wallet className="h-3.5 w-3.5" /> Adicionar crédito</Button>
+        <Button size="sm" variant="outline" className="ml-auto" onClick={() => setTopupTop(true)}><Wallet className="h-3.5 w-3.5" /> Adicionar Allkoins</Button>
       </div>
       <WalletTopupModal open={topupTop} onOpenChange={setTopupTop} onDone={reload} />
       {error && <p className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"><AlertCircle className="h-3.5 w-3.5 shrink-0" /> {error}</p>}
@@ -103,7 +105,7 @@ function AiChangeRow({ id, name, quote: baseQuote, onDone }: { id: string; name:
     setMsg(null);
     try {
       const res = await apiClient.chargeAiChange({ project_product_id: id, step_key: stepKey || null, note: note.trim() || null });
-      setMsg({ ok: true, text: res?.charge?.is_free ? "Alteração registrada (grátis)." : `Alteração contratada: ${brl(quote.price_brl)} debitado do saldo.` });
+      setMsg({ ok: true, text: res?.charge?.is_free ? "Alteração registrada (grátis)." : `Alteração contratada: ${fmtAllkoinsBoth(quote.price_brl)} debitado do saldo.` });
       setNote("");
       onDone();
     } catch (e: any) {
@@ -132,12 +134,12 @@ function AiChangeRow({ id, name, quote: baseQuote, onDone }: { id: string; name:
       )}
       {!needStep && <p className="text-xs text-neutral-600">{aiChangeSummary(quote)}</p>}
       {!quote.is_free && (
-        <p className="flex items-center gap-1.5 text-xs text-neutral-600"><Wallet className="h-3.5 w-3.5" /> Saldo disponível: {brl(quote.balance_brl)}</p>
+        <p className="flex items-center gap-1.5 text-xs text-neutral-600"><Wallet className="h-3.5 w-3.5" /> Saldo disponível: <AkBoth value={quote.balance_brl} /></p>
       )}
       {blocked && (
         <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
-          Faltam {brl(quote.missing_brl)} na carteira. Adicione crédito (cartão ou Pix) para contratar mais alterações.{" "}
-          <button type="button" className="font-semibold underline" onClick={() => setTopup(true)}>Adicionar crédito</button>
+          Faltam <AkBoth value={quote.missing_brl} /> na carteira. Adicione Allkoins (cartão ou Pix) para contratar mais alterações.{" "}
+          <button type="button" className="font-semibold underline" onClick={() => setTopup(true)}>Adicionar Allkoins</button>
         </p>
       )}
       <WalletTopupModal open={topup} onOpenChange={setTopup} onDone={onDone} />

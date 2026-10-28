@@ -126,6 +126,27 @@ describe("Execução por etapa · qualificação e aprovação (A8b fase 2)", ()
     assert.equal((await api(`/api/project-tasks/${p.taskId}/etapas/${stageId}/historico`, { token: CO.token })).status, 200);
   });
 
+  it("EX04b. dois caminhos do líder: 'tudo certo' segue direto; 'faltou algo' devolve ao cliente, que passa a ver a etapa e decide", async () => {
+    const p = await projeto({ s1: { internal_step: true }, s2: { internal_step: true } });
+    await entregar(p.taskId, p.idOf.s1);
+    assert.equal(await status(p.taskId, p.idOf.s1), "EM_QUALIFICACAO");
+    // sem comentário não devolve; o cliente nunca usa este caminho
+    assert.equal((await decidir(LEADER.token, p.taskId, p.idOf.s1, "qualificacao", "encaminhar")).status, 422);
+    const proibido = await decidir(CO.token, p.taskId, p.idOf.s1, "qualificacao", "encaminhar", "x acesso errado");
+    assert.ok([403, 404].includes(proibido.status), "cliente não qualifica");
+    const dev = await decidir(LEADER.token, p.taskId, p.idOf.s1, "qualificacao", "encaminhar", "O acesso enviado está errado");
+    assert.equal(dev.status, 200, JSON.stringify(dev.json));
+    const st = await stageOf(p.taskId, p.idOf.s1);
+    assert.equal(st.status, "EM_APROVACAO_CLIENTE");
+    assert.equal(st.visivel_ao_cliente, true, "a etapa interna passa a ser vista pelo cliente");
+    const rev = await prisma.projectTaskStageReview.findFirst({ where: { stage_id: st.id, decision: "encaminhada" } });
+    assert.equal(rev?.comment, "O acesso enviado está errado");
+    // o cliente corrige e aprova: a etapa conclui e o fluxo segue
+    const ok = await decidir(CO.token, p.taskId, p.idOf.s1, "aprovacao", "aprovar");
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    assert.equal(await status(p.taskId, p.idOf.s1), "CONCLUIDA");
+  });
+
   it("EX05. tarefa no modo padrão (sem execução por etapa) segue como sempre: etapa conclui direto e as rotas novas recusam", async () => {
     const p = await projeto({ s1: {}, s2: {} }, false);
     assert.equal((await stageOf(p.taskId, p.idOf.s1)).exige_qualificacao, false);

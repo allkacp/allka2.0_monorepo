@@ -20,6 +20,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { catalog2CategoryTone, catalog2EditorialImage } from "@/lib/catalog2-editorial";
+import { PriceWithAllkoins } from "@/components/price-with-allkoins";
 
 export interface Catalog2ProductCardProps {
   name: string;
@@ -123,9 +124,7 @@ export function Catalog2ProductCard({
             </>
           )}
           {price != null && (
-            <span className="truncate text-lg font-extrabold tracking-tight text-violet-700">
-              R$ {price.toFixed(2)}
-            </span>
+            <PriceWithAllkoins value={price} className="truncate text-lg font-extrabold tracking-tight text-violet-700" />
           )}
           {priceExtra}
         </div>

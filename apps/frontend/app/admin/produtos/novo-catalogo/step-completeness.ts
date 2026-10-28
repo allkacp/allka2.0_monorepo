@@ -60,7 +60,9 @@ export function stepIssues(f: StepFormLike, ctx: StepIssueCtx = {}): StepIssue[]
     if (!f.ai_specialty_id) push(2, "ai_specialty", "Escolha a especialidade da opção IA.");
     if (!positive(f.ai_estimated_hours)) push(2, "ai_hours", "Informe as horas estimadas da opção IA.");
   } else {
-    if (!(f.specialty_id || ctx.taskSpecialtyId)) push(2, "specialty", "Escolha a especialidade da etapa.");
+    // Etapa de líder ou equipe interna não tem especialidade (não entra no custo): só as horas, como prazo.
+    const receivedInternally = f.executor_kind === "leader" || f.executor_kind === "internal";
+    if (!receivedInternally && !(f.specialty_id || ctx.taskSpecialtyId)) push(2, "specialty", "Escolha a especialidade da etapa.");
     if (!positive(f.estimated_hours)) push(2, "hours", "Informe as horas estimadas (maior que zero).");
   }
   if (f.executor_kind === "leader" && f.leader_mode === "specific" && !f.leader_user_id) push(2, "leader", "Escolha qual líder recebe a etapa (ou deixe “Qualquer líder da área”).");

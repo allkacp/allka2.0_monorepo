@@ -84,6 +84,8 @@ export interface AgenciaProfile {
   plan: string;
   planDiscount: number;
   partnerName?: string;
+  /** Número da agência na plataforma (1 = a primeira). Mostrado como "ID 01". */
+  sequenceNumber?: number;
   status: "active" | "suspended";
   createdAt: string;
   currentMrr: number;
@@ -165,6 +167,7 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
             plan: own.plan || own.planType || "",
             planDiscount: own.planDiscount || 0,
             partnerName: own.partnerName || "",
+            sequenceNumber: own.sequence_number ?? undefined,
             status: own.status || "active",
             createdAt: own.created_at || own.createdAt || "",
             currentMrr: own.currentMrr || 0,
@@ -197,6 +200,7 @@ export function AgenciaProvider({ children }: { children: React.ReactNode }) {
               plan: source.plan || source.planType || "",
               planDiscount: source.planDiscount || 0,
               partnerName: source.partnerName || "",
+              sequenceNumber: source.sequence_number ?? undefined,
               status: source.status || "active",
               createdAt: source.created_at || source.createdAt || "",
               currentMrr: source.currentMrr || 0,

@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api-client";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { fmtBRL, Section, PortfolioGallery } from "@/components/product-detail-shared";
+import { Money, PriceWithAllkoins, fmtPriceBRL } from "@/components/price-with-allkoins";
 import { Catalog2DetailHeader } from "@/components/catalog2-detail-header";
 import { ProvisionalBadge } from "@/components/provisional-badge";
 import { useIallkaContext } from "@/contexts/iallka-context";
@@ -60,15 +61,15 @@ const DETAIL_PANEL_STORAGE_KEY = "allka:catalog2-detail-right-fraction-v1";
 const DEFAULT_RIGHT_FRACTION = 0.58;
 const MIN_RIGHT_FRACTION = 0.42;
 const MAX_RIGHT_FRACTION = 0.68;
-const PERIOD_LABEL: Record<string, string> = { mensal: "Mensal", trimestral: "Trimestral", semestral: "Semestral", anual: "Anual" };
+const PERIOD_LABEL: Record<string, string> = { mensal: "Mensal", bimestral: "Bimestral", trimestral: "Trimestral", semestral: "Semestral", anual: "Anual" };
 
 function clampRightFraction(value: number) {
   return Math.min(MAX_RIGHT_FRACTION, Math.max(MIN_RIGHT_FRACTION, value));
 }
 
-function money(v: number | null | undefined, currency = "BRL") {
+function money(v: number | null | undefined, _currency = "BRL") {
   if (v == null) return "A definir";
-  return `${currency} ${Number(v).toFixed(2)}`;
+  return fmtPriceBRL(v);
 }
 
 /** Controle único para adicionais por quantidade. A regra real (mínimo,
@@ -654,7 +655,7 @@ export function Catalog2ProductDetail({
             {shareProductUrl && <CopyLinkButton url={shareProductUrl} />}
             <span className="hidden sm:block h-7 w-px bg-white/20" />
             <div className="hidden sm:block text-right">
-              <p className="text-lg font-extrabold leading-none text-white" title={!isClient && priceSummary ? priceSummary.explanation : undefined}>{displayPrice != null ? fmtBRL(displayPrice) : "A definir"}{!isClient && priceSummary && priceSummary.source !== "comercial" && <span className="ml-1 text-[9px] font-medium opacity-80">({priceSummary.source === "simulacao" ? "simulação" : "calculado, com pendência"})</span>}</p>
+              <p className="text-lg font-extrabold leading-none text-white" title={!isClient && priceSummary ? priceSummary.explanation : undefined}>{displayPrice != null ? (isClient ? <PriceWithAllkoins value={displayPrice} /> : fmtBRL(displayPrice)) : "A definir"}{!isClient && priceSummary && priceSummary.source !== "comercial" && <span className="ml-1 text-[9px] font-medium opacity-80">({priceSummary.source === "simulacao" ? "simulação" : "calculado, com pendência"})</span>}</p>
               {displayDeadline != null && <p className="mt-1 text-[10px] font-medium text-white/70">Prazo de entrega: {displayDeadline} dias</p>}
             </div>
             <div className="flex flex-col items-stretch gap-1.5">
@@ -892,7 +893,7 @@ export function Catalog2ProductDetail({
                             <p className="text-xs font-bold leading-tight truncate">{o.name}</p>
                           </div>
                           <span className={cn("text-sm font-extrabold shrink-0 leading-tight", isSel ? "text-emerald-600" : "text-foreground")}>
-                            {o.price != null ? fmtBRL(o.price) : "—"}
+                            {o.price != null ? <PriceWithAllkoins value={o.price} /> : "—"}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1 mt-1">
@@ -1004,7 +1005,7 @@ export function Catalog2ProductDetail({
                           {addon.description && <span className="mt-0.5 block text-[11px] text-muted-foreground">{addon.description}</span>}
                           {checked && addon.addon_type === "quantity" && <AddonQuantityControl addon={addon} quantity={selectedAddonSelections[addon.key]?.quantity ?? addon.qty_min ?? 1} onChange={(next) => setAdminAddonQuantity(addon.key, next)} />}
                         </span>
-                        {addon.base_cost != null && <span className="text-xs font-semibold">+ {fmtBRL(addon.base_cost)}</span>}
+                        {addon.base_cost != null && <span className="text-xs font-semibold">+ <PriceWithAllkoins value={addon.base_cost} /></span>}
                       </label>
                     );
                   })}
@@ -1129,12 +1130,12 @@ export function Catalog2ProductDetail({
                       <>
                         <div className="flex items-center justify-between">
                           <span className="text-muted-foreground">Prazo · Preço comercial</span>
-                          <span className="font-bold text-sm">{clientPricing?.pricing_mode === "on_request" ? "Sob consulta" : <>{displayDeadline != null ? `${displayDeadline}d` : "a definir"} · {money(clientPricing?.commercial_price, clientPricing?.currency)}</>}</span>
+                          <span className="font-bold text-sm">{clientPricing?.pricing_mode === "on_request" ? "Sob consulta" : <>{displayDeadline != null ? `${displayDeadline}d` : "a definir"} · <Money value={clientPricing?.commercial_price} /></>}</span>
                         </div>
                         {clientPricing?.charges?.implementation?.applicable && (
                           <div data-testid="avulso-breakdown" className="space-y-0.5 text-muted-foreground">
-                            <div className="flex items-center justify-between"><span>· implantação inicial (uma vez)</span><span>{money(clientPricing.charges.implementation.price, clientPricing.currency)}</span></div>
-                            <div className="flex items-center justify-between"><span>· trabalho do ciclo contratado</span><span>{money((clientPricing.charges.avulso_total ?? 0) - clientPricing.charges.implementation.price, clientPricing.currency)}</span></div>
+                            <div className="flex items-center justify-between"><span>· implantação inicial (uma vez)</span><span><Money value={clientPricing.charges.implementation.price} /></span></div>
+                            <div className="flex items-center justify-between"><span>· trabalho do ciclo contratado</span><span><Money value={(clientPricing.charges.avulso_total ?? 0) - clientPricing.charges.implementation.price} /></span></div>
                             <p className="text-[11px]">Compra avulsa: paga uma vez, não renova.</p>
                           </div>
                         )}
@@ -1143,9 +1144,9 @@ export function Catalog2ProductDetail({
                       <p className="text-amber-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{(clientPeriodPricing?.quote_blockers ?? ["carregando…"]).join("; ")}</p>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between"><span className="text-muted-foreground">{clientPeriodPricing.months > 1 ? "Total a pagar (antecipado)" : "Primeira cobrança"}</span><span className="font-bold text-sm">{money(clientPeriodPricing.total_price, clientPeriodPricing.currency)}</span></div>
-                        {(clientPeriodPricing.implementation_price ?? 0) > 0 && <div data-testid="first-charge-implementation" className="flex items-center justify-between text-muted-foreground"><span>· inclui a implantação inicial (só agora)</span><span>{money(clientPeriodPricing.implementation_price, clientPeriodPricing.currency)}</span></div>}
-                        {clientPeriodPricing.renewal_price != null && clientPeriodPricing.months === 1 && <div data-testid="renewal-price" className="flex items-center justify-between text-muted-foreground"><span>Renovações (todo mês, sem implantação)</span><span>{money(clientPeriodPricing.renewal_price, clientPeriodPricing.currency)}</span></div>}
+                        <div className="flex items-center justify-between"><span className="text-muted-foreground">{clientPeriodPricing.months > 1 ? "Total a pagar (antecipado)" : "Primeira cobrança"}</span><span className="font-bold text-sm"><Money value={clientPeriodPricing.total_price} /></span></div>
+                        {(clientPeriodPricing.implementation_price ?? 0) > 0 && <div data-testid="first-charge-implementation" className="flex items-center justify-between text-muted-foreground"><span>· inclui a implantação inicial (só agora)</span><span><Money value={clientPeriodPricing.implementation_price} /></span></div>}
+                        {clientPeriodPricing.renewal_price != null && clientPeriodPricing.months === 1 && <div data-testid="renewal-price" className="flex items-center justify-between text-muted-foreground"><span>Renovações (todo mês, sem implantação)</span><span><Money value={clientPeriodPricing.renewal_price} /></span></div>}
                         <div className="flex items-center justify-between text-muted-foreground"><span>Desconto do período</span><span>{clientPeriodPricing.discount_percent}%</span></div>
                       </>
                     )}

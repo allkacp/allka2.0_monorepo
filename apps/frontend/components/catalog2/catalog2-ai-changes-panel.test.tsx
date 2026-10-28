@@ -8,7 +8,8 @@ describe("P-11 painel de alterações por IA", () => {
   it("acabou o grátis: informa preço extra", () => {
     const t = aiChangeSummary({ ...base, used: 3, free_left: 0, is_free: false, price_brl: 12.5 });
     expect(t).toContain("acabaram");
-    expect(t).toContain("R$ 12,50");
+    // Valor debitado da carteira aparece em Allkoins (a moeda da plataforma) com o real entre parênteses: "AK$ 12,50 (R$ 12,50)".
+    expect(t).toContain("AK$ 12,50 (R$ 12,50)");
   });
   it("formata reais", () => expect(brl(7)).toBe("R$ 7,00"));
 });

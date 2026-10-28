@@ -4,6 +4,7 @@
  * alertas: ícone puro, sem fundo, tooltip no hover). Antes viviam como chips
  * dentro do cabeçalho — movidos pra cá a pedido do usuário (2026-07-18).
  */
+import { FloatingToolSlot } from "@/components/floating-tools-rail";
 import { useState } from "react";
 import { Moon, Sun, Type, Minus, Plus, RotateCcw } from "lucide-react";
 import { useSettings } from "@/contexts/settings-context";
@@ -32,7 +33,7 @@ export function HeaderFloatingTools() {
   return (
     <>
       {/* Modo escuro/claro */}
-      <div className="hidden xl:block fixed top-[165px] right-[8px] z-65 group">
+      <FloatingToolSlot className="hidden xl:block group" order={1} fallbackTop={165}>
         <button
           type="button"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -48,10 +49,10 @@ export function HeaderFloatingTools() {
         <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
           {theme === "dark" ? "Modo claro" : "Modo escuro"}
         </span>
-      </div>
+      </FloatingToolSlot>
 
       {/* Tamanho da fonte — clique abre popover com diminuir/padrão/aumentar */}
-      <div className="hidden xl:block fixed top-[205px] right-[8px] z-65">
+      <FloatingToolSlot className="hidden xl:block" order={2} fallbackTop={205}>
         <Popover open={fontOpen} onOpenChange={setFontOpen}>
           <PopoverTrigger asChild>
             <button
@@ -123,7 +124,7 @@ export function HeaderFloatingTools() {
             </div>
           </PopoverContent>
         </Popover>
-      </div>
+      </FloatingToolSlot>
     </>
   );
 }

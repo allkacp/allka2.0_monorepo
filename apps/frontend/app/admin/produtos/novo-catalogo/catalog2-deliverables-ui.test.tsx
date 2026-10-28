@@ -32,9 +32,11 @@ describe("Entregáveis da tarefa · resumo derivado das etapas", () => {
     const titles = screen.getAllByTestId("deliverable-group-title").map((t) => t.textContent);
     expect(titles[0]).toContain("Etapa 1 — Configurar a conta");
     expect(titles[1]).toContain("Etapa 2 — Otimizar campanhas");
-    const chips = within(screen.getAllByTestId("deliverable-row")[1]).getByTestId("deliverable-chips").textContent!;
+    // uma linha só por entregável: os detalhes vão no tooltip do ícone de info
+    fireEvent.focus(within(screen.getAllByTestId("deliverable-row")[1]).getByLabelText("Informações do entregável Relatório mensal"));
+    const chips = screen.getAllByTestId("deliverable-chips")[0].textContent!;
     for (const t of ["Arquivo", "só 1ª execução", "Executor", "No fim do ciclo", "obrigatório", "aprovação do cliente"]) expect(chips).toContain(t);
-    expect(screen.queryByTestId("deliverable-body")).not.toBeInTheDocument(); // recolhidos por padrão
+    expect(screen.queryByTestId("deliverable-body")).not.toBeInTheDocument();
   });
 
   it("entregável sem etapa vai para o grupo 'Entregáveis sem etapa responsável' com aviso de pendência", () => {
@@ -45,18 +47,18 @@ describe("Entregáveis da tarefa · resumo derivado das etapas", () => {
     expect(screen.getByTestId("deliverables-orphans").textContent).toContain("1 entregável sem etapa responsável");
   });
 
-  it("expandir mostra os detalhes (ID permanente, etapa, momento, recorrência, evidência, aprovação, modelo); recolher esconde", () => {
+  it("sem abrir/fechar: o ícone de info mostra os detalhes (ID permanente, etapa, momento, recorrência, evidência, modelo)", () => {
     render(<TaskDeliverablesEditor task={task([full, other])} act={act} />);
-    fireEvent.click(screen.getByLabelText("Expandir entregável Relatório mensal"));
-    const body = screen.getByTestId("deliverable-body");
-    expect(within(body).getByTestId("deliverable-id").textContent).toBe("ID relatorio-mensal");
-    expect(body.textContent).toContain("Etapa 2 — Otimizar campanhas");
-    expect(body.textContent).toContain("No fim do ciclo");
-    expect(body.textContent).toContain("Só na primeira execução");
-    expect(within(body).getByText("Modelo.pdf")).toBeInTheDocument();
-    expect(within(body).getByText(/Exige evidência\?/).textContent).toContain("SIM");
-    fireEvent.click(screen.getByLabelText("Recolher entregável Relatório mensal"));
-    expect(screen.queryByTestId("deliverable-body")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Expandir entregável Relatório mensal")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Expandir todos" })).not.toBeInTheDocument();
+    fireEvent.focus(screen.getByLabelText("Informações do entregável Relatório mensal"));
+    const info = screen.getAllByTestId("deliverable-info")[0];
+    expect(within(info).getAllByTestId("deliverable-id")[0].textContent).toBe("ID relatorio-mensal");
+    expect(info.textContent).toContain("Etapa 2 — Otimizar campanhas");
+    expect(info.textContent).toContain("No fim do ciclo");
+    expect(info.textContent).toContain("Só na primeira execução");
+    expect(info.textContent).toContain("Modelo.pdf");
+    expect(info.textContent).toMatch(/Exige evidência\?\s*SIM/);
   });
 
   it("busca só aparece com mais de 3 entregáveis e filtra por nome sem acento", () => {
@@ -168,6 +170,8 @@ describe("Entregáveis da tarefa · resumo derivado das etapas", () => {
   it("duplicar cria um novo registro com '(cópia)' no nome e os mesmos campos", async () => {
     render(<TaskDeliverablesEditor task={task([full])} act={act} />);
     fireEvent.click(screen.getByLabelText("Duplicar entregável Relatório mensal"));
+    expect(api.createCatalog2Deliverable).not.toHaveBeenCalled(); // pede confirmação antes
+    fireEvent.click(screen.getByRole("button", { name: "Duplicar entregável" }));
     await waitFor(() => expect(api.createCatalog2Deliverable).toHaveBeenCalledTimes(1));
     expect(api.createCatalog2Deliverable.mock.calls[0]).toMatchObject(["t1", { name: "Relatório mensal (cópia)", format: "PDF", cycle_scope: "first_execution", step_id: "s2" }]);
   });

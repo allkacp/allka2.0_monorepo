@@ -12,19 +12,19 @@
 import { prisma } from "./prisma";
 import { computePricing, type PricingOptions, type PricingResult, type PricingSelection } from "./catalog2-pricing";
 
-export const CATALOG2_PERIODS = ["mensal", "trimestral", "semestral", "anual"] as const;
+export const CATALOG2_PERIODS = ["mensal", "bimestral", "trimestral", "semestral", "anual"] as const;
 export type Catalog2Period = (typeof CATALOG2_PERIODS)[number];
 
 // Decisão da reunião de 18/09/2026: nesta primeira etapa comercial só a
 // contratação mensal pode ser oferecida. As demais modalidades permanecem
 // cadastráveis como configuração futura, mas nunca entram no catálogo,
 // cotação ou checkout até uma decisão posterior de liberação.
-export const CURRENTLY_CONTRACTABLE_PERIODS: readonly Catalog2Period[] = ["mensal"];
+// 25/10: a venda dos períodos longos (bimestral, trimestral, semestral e anual) foi LIBERADA por decisão do dono do produto.
+// Continua valendo a regra de sempre: só vende o período que o admin AUTORIZOU (ativo) e configurou o desconto no produto.
+export const CURRENTLY_CONTRACTABLE_PERIODS: readonly Catalog2Period[] = CATALOG2_PERIODS;
 
 export function isCurrentlyContractablePeriod(period: Catalog2Period): boolean {
-  // A chave existe apenas para a futura liberação técnica, que exige
-  // configuração explícita do ambiente e uma interface própria. Ausente
-  // (inclusive em produção) significa sempre "somente mensal".
+  // Venda dos períodos longos liberada em 25/10 (ver CURRENTLY_CONTRACTABLE_PERIODS). A chave de ambiente continua aceita, sem efeito prático.
   return CURRENTLY_CONTRACTABLE_PERIODS.includes(period) || process.env.CATALOG2_ENABLE_MULTI_PERIOD_CONTRACTS === "true";
 }
 
@@ -34,6 +34,7 @@ function contractablePeriodsNow(): Catalog2Period[] {
 
 export const CATALOG2_PERIOD_MONTHS: Record<Catalog2Period, number> = {
   mensal: 1,
+  bimestral: 2,
   trimestral: 3,
   semestral: 6,
   anual: 12,
@@ -41,6 +42,7 @@ export const CATALOG2_PERIOD_MONTHS: Record<Catalog2Period, number> = {
 
 export const CATALOG2_PERIOD_LABEL: Record<Catalog2Period, string> = {
   mensal: "Mensal",
+  bimestral: "Bimestral",
   trimestral: "Trimestral",
   semestral: "Semestral",
   anual: "Anual",
@@ -207,8 +209,10 @@ export async function listPeriodsForAdmin(productId: string) {
       months: CATALOG2_PERIOD_MONTHS[period],
       configured: !!row,
       is_active: row?.is_active ?? false,
-      contractable_now: period === "mensal" && (row?.is_active ?? false),
-      reserved_for_future: period !== "mensal",
+      contractable_now: isCurrentlyContractablePeriod(period) && (row?.is_active ?? false),
+      // Período AUTORIZADO no cadastro, mas a venda dele ainda não foi liberada na plataforma (decisão de 18/09): o admin já configura, o cliente ainda não vê.
+      reserved_for_future: !isCurrentlyContractablePeriod(period),
+      sale_open: isCurrentlyContractablePeriod(period),
       discount_percent: row?.discount_percent ?? null,
       updated_at: row?.updated_at ?? null,
     };

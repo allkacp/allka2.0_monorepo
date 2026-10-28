@@ -54,7 +54,8 @@ export default function SelfProfilePage() {
   const empresa = useEmpresa();
   const agencia = useAgencia();
 
-  const needsSessionFetch = accountType === "admin" || accountType === "nomades";
+  // Agência também busca a sessão: "Meu Perfil" é da PESSOA logada (nome, e-mail de login, telefone), não da agência.
+  const needsSessionFetch = accountType === "admin" || accountType === "nomades" || accountType === "agencias";
   const [selfUser, setSelfUser] = useState<any | null>(null);
   const [loading, setLoading] = useState(needsSessionFetch);
   const [error, setError] = useState<string | null>(null);
@@ -122,19 +123,28 @@ export default function SelfProfilePage() {
     user = {
       id: p.id, name: p.name, email: p.email,
       role: "company_admin", account_type: "company",
-      cnpj: p.cnpj, phone: p.phone,
+      cnpj: p.cnpj, phone: p.phone, company_id: p.id,
       is_active: p.status === "active", is_admin: false, permissions: [],
       created_at: p.createdAt ?? "", updated_at: p.createdAt ?? "",
     };
   } else if (accountType === "agencias" && agencia.profile) {
     viewerRole = "agency";
     const p = agencia.profile;
+    // Os dados pessoais vêm da sessão (a pessoa logada); os da agência (MRR, projetos, nível) vêm do contexto da agência.
+    // Se a sessão não carregar, cai nos dados da agência para a tela não ficar vazia.
+    const me = selfUser;
     user = {
-      id: p.id, name: p.name, email: p.email,
+      ...(me ?? {}),
+      id: me?.id ?? p.id, name: me?.name || p.name, email: me?.email || p.email,
       role: "agency_admin", account_type: "agency",
-      phone: p.phone ?? "", is_active: true, is_admin: false, permissions: [],
-      created_at: p.createdAt ?? "", updated_at: p.createdAt ?? "",
+      // Telefone da PESSOA (a da agência fica nos dados da agência); só cai no da agência se a sessão não carregou.
+      phone: me ? me.phone ?? "" : p.phone ?? "", is_active: true, is_admin: false, permissions: [],
+      created_at: me?.created_at ?? p.createdAt ?? "", updated_at: me?.updated_at ?? p.createdAt ?? "",
       currentMrr: p.currentMrr, totalProjects: p.totalProjects, partnerLevel: p.partnerLevel,
+      // "ID 01" = a primeira agência da plataforma. Aparece no lugar do código técnico do usuário ("User_11").
+      agency_id: p.id,
+      agency_id_label: p.sequenceNumber != null ? `ID ${String(p.sequenceNumber).padStart(2, "0")}` : undefined,
+      agency_name: p.name,
     };
     agencyFinancial = {
       invoices: agencia.invoices,

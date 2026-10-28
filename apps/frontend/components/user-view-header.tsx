@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AllkoinsAmount } from "@/components/price-with-allkoins";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -268,7 +269,7 @@ export function UserViewHeader({
               </p>
               <p className="text-white font-bold text-sm">
                 {showBalance
-                  ? `R$ ${(user.wallet_balance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                  ? <AllkoinsAmount value={user.wallet_balance || 0} />
                   : "••••••"}
               </p>
             </div>

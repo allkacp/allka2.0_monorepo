@@ -5,6 +5,7 @@
 // PLAC (ver ai-knowledge-base.ts) — mesma fundamentação, chamada pelo backend.
 import { GoogleGenAI } from "@google/genai";
 import { getCategoryKnowledgeText, getProjectDocumentsText } from "./ai-knowledge-base";
+import { completeWithoutCutting, fitToLimits, limitsText, type GenResult, type TextLimits } from "./ai-text-completion";
 import { recordAIUsage, usageFromGeminiResponse } from "./ai-usage-tracker";
 
 const MODEL = "gemini-2.5-flash";
@@ -205,8 +206,8 @@ Nunca invente números, prazos, garantias ou funcionalidades que não estejam no
 O campo é exibido como texto puro (sem renderização de markdown) — não use "**negrito**", "# títulos" nem outra sintaxe markdown.
 `.trim();
 
-async function buildProductSystemInstruction(): Promise<string> {
-  const kb = await getCategoryKnowledgeText("produtos");
+async function buildProductSystemInstruction(useInternalBank = true): Promise<string> {
+  const kb = useInternalBank ? await getCategoryKnowledgeText("produtos") : "";
   if (!kb) return PRODUCT_COPYWRITER_PERSONA;
   return `${PRODUCT_COPYWRITER_PERSONA}
 
@@ -266,17 +267,44 @@ function lengthInstruction(
  * `mode: "text"` (padrão) pede um texto corrido pro campo.
  * `length`/`approach` são preferências que o usuário escolhe antes de gerar
  * (ver popover do botão "Melhorar com IA" no frontend). */
-export async function improveProductField(
+export interface ImproveProductFieldOptions {
+  research?: boolean;
+  limits?: { maxWords?: number | null; maxChars?: number | null; minWords?: number | null; minChars?: number | null };
+  /** Limite do PRÓPRIO campo no cadastro (ex.: descrição completa = 4000 caracteres). Vale quando o usuário não definiu máximo. */
+  fieldMaxChars?: number | null;
+  fieldMaxWords?: number | null;
+  /** Usar o banco interno de IA (documentos da Allka). Padrão: sim. */
+  useInternalBank?: boolean;
+}
+export interface ImproveProductFieldResult { text: string; notes: string[] }
+
+/** Teto de palavras quando nem o usuário nem o campo definem um máximo. */
+export const DEFAULT_MAX_WORDS = 4000;
+
+/** "Melhorar com IA" nos campos do cadastro de produto (admin/produtos).
+ * `mode: "list"` pede itens curtos, um por linha (ex: itens inclusos);
+ * `mode: "text"` (padrão) pede um texto corrido pro campo.
+ * Regras (24/10): o texto NUNCA sai cortado (continua se a resposta foi interrompida e condensa se passar do limite);
+ * instruções escritas pelo autor dentro do texto são CUMPRIDAS e não copiadas; as fontes (banco interno / internet) são escolhidas pelo usuário. */
+export async function improveProductFieldDetailed(
   fieldLabel: string,
   currentValue: string,
   context: ProductFieldContext = {},
   mode: "text" | "list" = "text",
   length: ProductFieldLength = "manter",
   approach: ProductFieldApproach = "melhorar",
-  research = false,
-  limits: { maxWords?: number | null; maxChars?: number | null; minWords?: number | null; minChars?: number | null } = {},
-): Promise<string> {
-  const limitsLine = [limits.minWords ? `no mínimo ${limits.minWords} palavras` : null, limits.maxWords ? `no máximo ${limits.maxWords} palavras` : null, limits.minChars ? `no mínimo ${limits.minChars} caracteres` : null, limits.maxChars ? `no máximo ${limits.maxChars} caracteres` : null].filter(Boolean).join(", ");
+  opts: ImproveProductFieldOptions = {},
+): Promise<ImproveProductFieldResult> {
+  const research = !!opts.research;
+  const user = opts.limits ?? {};
+  // Limite efetivo: o que o usuário escolheu; senão o do próprio campo; senão o teto padrão de palavras.
+  const lim: TextLimits = {
+    minWords: user.minWords ?? null,
+    minChars: user.minChars ?? null,
+    maxWords: user.maxWords ?? (user.maxChars || opts.fieldMaxChars ? null : opts.fieldMaxWords ?? DEFAULT_MAX_WORDS),
+    maxChars: user.maxChars ?? (user.maxWords ? null : opts.fieldMaxChars ?? null),
+  };
+  const limitsLine = limitsText(lim);
   const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
   const otherFieldsText = context.otherFields
     ? Object.entries(context.otherFields)
@@ -284,6 +312,7 @@ export async function improveProductField(
         .map(([k, v]) => `- ${k}: ${v.length > 300 ? v.slice(0, 300) + "…" : v}`)
         .join("\n")
     : "";
+  const useInternal = opts.useInternalBank !== false;
 
   const prompt = `Produto: ${context.name || "(sem nome ainda)"}
 Categoria: ${context.category || "não definida"}
@@ -301,35 +330,63 @@ Outros campos já preenchidos do produto (contexto — não repita o conteúdo d
 ${otherFieldsText || "(nenhum outro campo preenchido ainda)"}
 
 Instruções:
+- O conteúdo atual pode trazer INSTRUÇÕES escritas pelo autor misturadas ao texto (ex.: "manter isso", "fazer aquilo", "incluir X", "não falar de Y", "citar Z"). Identifique todas, CUMPRA cada uma e NÃO copie esses pedidos para o texto final: eles são recados para você, não conteúdo do produto. Informações factuais que o autor escreveu devem ser mantidas.
 - ${
     approach === "recriar"
-      ? "RECRIE o campo do zero — pode usar o conteúdo atual como referência de tom/assunto, mas não precisa preservar a redação existente."
-      : "MELHORE o conteúdo atual — preserve as informações verdadeiras já escritas, ajustando clareza, estrutura e poder de venda."
+      ? "RECRIE o campo do zero — use o conteúdo atual (e as instruções do autor) como base de assunto, fatos e tom, mas não precisa preservar a redação existente."
+      : "MELHORE o conteúdo atual: corrija o português, retire repetições, organize e, só se for preciso, resuma. Preserve TODAS as informações e a ordem de ideias do autor; não troque o assunto nem invente conteúdo novo."
   }
 - ${lengthInstruction(length, currentValue, mode)}
-${limitsLine ? `- LIMITE OBRIGATÓRIO: o resultado deve ter ${limitsLine}.\n` : ""}- Se o campo estiver vazio, escreva conteúdo novo e coerente com nome/categoria/preço e os demais campos.
+- As instruções escritas pelo autor têm PRIORIDADE sobre a preferência de tamanho acima: se ele pede uma lista, mais detalhes ou uma seção, escreva (o tamanho pode crescer), sempre respeitando o LIMITE OBRIGATÓRIO quando houver.
+${limitsLine ? `- LIMITE OBRIGATÓRIO: o resultado deve ter ${limitsLine}. Planeje o tamanho ANTES de escrever (mire em cerca de 90% do máximo) para o texto terminar por inteiro dentro do limite.\n` : ""}- O texto precisa ficar COMPLETO: nunca termine no meio de uma frase nem corte o fim. Se o conteúdo for maior que o limite, condense e resuma; não pare de repente.
+- Se o campo estiver vazio, escreva conteúdo novo e coerente com nome/categoria/preço e os demais campos.
 - Não invente números, prazos ou garantias que não constem no contexto.
-${research ? `- HOJE é ${today}. Pesquise na internet como esse produto/serviço é conhecido e descrito ATUALMENTE no mercado (nome mais usado, termos, benefícios e diferenciais de hoje) e use isso para deixar o campo atual e competitivo. Não cite fontes nem links no texto.` : ""}
-${
+${research ? `- HOJE é ${today}. Pesquise na internet como esse produto/serviço é conhecido e descrito ATUALMENTE no mercado (nome mais usado, termos, benefícios e diferenciais de hoje) e use isso para deixar o campo atual e competitivo. Não cite fontes nem links no texto.` : "- NÃO pesquise na internet: use só o conteúdo do campo, os dados do produto" + (useInternal ? " e o material de referência interno." : ".")}
+${useInternal ? "" : "- NÃO use o banco interno de documentos: ele foi desligado para este pedido.\n"}${
   mode === "list"
     ? "- Devolva só os itens, um por linha, sem marcadores como '-' ou '•', sem numeração, sem linhas em branco."
-    : "- Devolva só o texto final do campo, sem aspas, sem preâmbulo, sem explicações extras."
+    : "- Devolva só o texto final do campo, sem aspas, sem preâmbulo, sem explicações extras. Se houver listas, use o marcador • no começo de cada linha (nunca * nem -, pois o campo é texto puro)."
 }`;
 
   const ai = getClient();
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: {
-      systemInstruction: await buildProductSystemInstruction(),
-      temperature: 0.6,
-      ...(research ? { tools: [{ googleSearch: {} }] } : {}),
-    },
-  });
+  const systemInstruction = await buildProductSystemInstruction(useInternal);
+  const gen = async (contents: string): Promise<GenResult> => {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents,
+      config: {
+        systemInstruction,
+        temperature: 0.5,
+        // Sem teto baixo de saída (o corte na descrição vinha daqui) e com o "pensamento" limitado para sobrar espaço ao texto.
+        maxOutputTokens: 60000,
+        thinkingConfig: { thinkingBudget: 1024 },
+        ...(research ? { tools: [{ googleSearch: {} }] } : {}),
+      },
+    });
+    await recordAIUsage({ model: MODEL, feature: research ? "improve-product-field-research" : "improve-product-field", ...usageFromGeminiResponse(response) });
+    return { text: response.text ?? "", finishReason: String(response.candidates?.[0]?.finishReason ?? "") };
+  };
 
-  await recordAIUsage({ model: MODEL, feature: research ? "improve-product-field-research" : "improve-product-field", ...usageFromGeminiResponse(response) });
+  const first = await completeWithoutCutting(gen, prompt);
+  const notes: string[] = [];
+  if (first.stillCut) notes.push("A IA parou antes de terminar mesmo depois de continuar. Gere de novo.");
+  if (mode === "list") return { text: first.text.trim(), notes };
+  const fitted = await fitToLimits(gen, first.text, lim);
+  return { text: fitted.text.trim(), notes: [...notes, ...fitted.notes] };
+}
 
-  return (response.text ?? "").trim();
+/** Compatibilidade: devolve só o texto (usado onde as observações não importam). */
+export async function improveProductField(
+  fieldLabel: string,
+  currentValue: string,
+  context: ProductFieldContext = {},
+  mode: "text" | "list" = "text",
+  length: ProductFieldLength = "manter",
+  approach: ProductFieldApproach = "melhorar",
+  research = false,
+  limits: { maxWords?: number | null; maxChars?: number | null; minWords?: number | null; minChars?: number | null } = {},
+): Promise<string> {
+  return (await improveProductFieldDetailed(fieldLabel, currentValue, context, mode, length, approach, { research, limits })).text;
 }
 
 // Persona separada das demais — aqui a IA só reescreve o relato de um

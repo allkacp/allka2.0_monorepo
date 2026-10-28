@@ -12,7 +12,7 @@ const mount = (hours: number | null = 720) => render(<DeadlineBaseField version=
 const input = () => screen.getByTestId("deadline-unit").parentElement!.querySelector("input") as HTMLInputElement;
 const unit = () => screen.getByTestId("deadline-unit") as HTMLSelectElement;
 
-beforeEach(() => { act.mockClear(); api.updateCatalog2VersionInfo.mockClear(); });
+beforeEach(() => { window.localStorage.clear(); act.mockClear(); api.updateCatalog2VersionInfo.mockClear(); });
 
 // R21-15 (reunião 21/10): prazo comercial em minutos, horas ou dias, com conversão automática para HORAS (o que é guardado).
 describe("Prazo comercial · seletor de unidade", () => {
@@ -53,5 +53,18 @@ describe("Prazo comercial · seletor de unidade", () => {
     fireEvent.change(input(), { target: { value: "1.5" } });
     fireEvent.blur(input());
     expect(api.updateCatalog2VersionInfo).not.toHaveBeenCalled();
+  });
+});
+
+describe("Prazo comercial · a unidade escolhida permanece", () => {
+  it("em dias: digitar 3 dias salva 72 h e o campo continua mostrando 3 (não vira 72 dias)", async () => {
+    const { rerender } = render(<DeadlineBaseField version={{ id: "v9", state: "rascunho", base_commercial_deadline_hours: 24 }} act={act} ringOf={() => ""} locked={false} compact />);
+    fireEvent.change(screen.getByTestId("deadline-unit"), { target: { value: "d" } });
+    const input = screen.getByLabelText("Prazo comercial base em dias") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "3" } });
+    fireEvent.blur(input);
+    expect(api.updateCatalog2VersionInfo).toHaveBeenCalledWith("v9", { base_commercial_deadline_hours: 72 });
+    rerender(<DeadlineBaseField version={{ id: "v9", state: "rascunho", base_commercial_deadline_hours: 72 }} act={act} ringOf={() => ""} locked={false} compact />);
+    expect((screen.getByLabelText("Prazo comercial base em dias") as HTMLInputElement).value).toBe("3");
   });
 });

@@ -5,10 +5,12 @@
 // contexto da tarefa/etapa e a ação "Ir para a etapa". Entregável sem etapa aparece num grupo de pendências.
 import { useMemo, useState } from "react";
 import { FileIconMenu } from "./catalog2-commercial-ui";
-import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronRight, Copy, CopyPlus, Download, Paperclip, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, Copy, CopyPlus, Info, Paperclip, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { BRAND_GRADIENT_STYLE, BRAND_OUTLINE_CLASS } from "./catalog2-questionnaire-builder";
 import { apiClient } from "@/lib/api-client";
 import { visibilitySummary } from "./catalog2-ops-ui";
 import {
@@ -74,10 +76,9 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnl
   const stepInfo = (id: string | null | undefined) => { const i = steps.findIndex((s) => s.id === id); return i < 0 ? null : { id: steps[i].id as string, name: steps[i].name as string, index: i + 1 }; };
   const [lib, setLib] = useState(false);
   const [q, setQ] = useState("");
-  const [open, setOpen] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<{ d: any | null } | null>(null);
   const [toDelete, setToDelete] = useState<any | null>(null);
-  const toggle = (id: string) => setOpen((cur) => { const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const [toDup, setToDup] = useState<any | null>(null);
 
   const needle = norm(q).trim();
   const filtered = needle ? list.filter((d) => needle.split(/\s+/).every((w) => norm([d.name, d.description, d.type, d.format, stepInfo(d.step_id)?.name].join(" ")).includes(w))) : list;
@@ -99,27 +100,36 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnl
     const ids = list.map((x) => x.id); const a = ids.indexOf(d.id); const b = ids.indexOf(other.id); [ids[a], ids[b]] = [ids[b], ids[a]];
     void act(() => apiClient.reorderCatalog2Deliverables(task.id, ids), "Ordem dos entregáveis atualizada.");
   };
-  const allOpen = filtered.length > 0 && filtered.every((d) => open.has(d.id));
-  const iconBtn = "rounded-md p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30 dark:hover:bg-slate-800";
+  const iconBtn = "rounded-md p-1.5 text-slate-500 transition hover:bg-violet-50 hover:text-violet-700 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:bg-slate-800";
   const cur = modal?.d ? fieldsOf(modal.d) : fieldsOf({ step_id: "" });
 
   return (
     <div className="w-full min-w-0 space-y-2" data-testid="task-deliverables">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h4 className="flex items-center gap-1.5 text-base font-bold text-slate-900 dark:text-slate-100"><Paperclip className="h-4 w-4" />Entregáveis da tarefa <span className="text-xs font-normal text-slate-500">({list.length}) — resumo do que foi configurado nas etapas</span></h4>
+        <h4 className="flex items-center gap-1.5 text-base font-bold text-slate-900 dark:text-slate-100"><Paperclip className="h-4 w-4" />Entregáveis da tarefa <span className="text-xs font-normal text-slate-500">({list.length}) — resumo do que foi configurado nas etapas</span>
+          {orphanCount > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" data-testid="deliverables-orphans" aria-label="Atenção: entregável sem etapa responsável" className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-amber-300 bg-amber-50 text-amber-700 transition hover:bg-amber-100">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span className="sr-only">{orphanCount === 1 ? "1 entregável sem etapa responsável" : `${orphanCount} entregáveis sem etapa responsável`}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs border border-amber-300 !bg-amber-50 p-3 text-xs !text-amber-900">
+                <p className="text-sm font-bold">{orphanCount === 1 ? "1 entregável sem etapa responsável" : `${orphanCount} entregáveis sem etapa responsável`}</p>
+                <p className="mt-1">{orphanCount === 1 ? "Vincule-o" : "Vincule-os"} a uma etapa ({summaryOnly ? "abra a etapa de origem e use “Vincular da tarefa”" : "editar → “Etapa responsável”, ou abra a etapa e use “Vincular da tarefa”"}).</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </h4>
         <div className="flex flex-wrap items-center gap-2">
-          {list.length > 1 && <>
-            <button type="button" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200" disabled={allOpen} onClick={() => setOpen(new Set(filtered.map((d) => d.id)))}>Expandir todos</button>
-            <button type="button" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200" disabled={open.size === 0} onClick={() => setOpen(new Set())}>Recolher todos</button>
-          </>}
           {canEdit && <>
-            <Button type="button" size="sm" variant="outline" className="h-9" title="Reutilizar um entregável já cadastrado em outro produto" onClick={() => setLib((v) => !v)}><Copy className="h-3.5 w-3.5" />Reutilizar existente</Button>
-            <Button type="button" className="h-9 bg-blue-600 text-white hover:bg-blue-700" title="Adicionar entregável (o ideal é adicionar dentro da etapa)" onClick={() => setModal({ d: null })}><Plus className="h-4 w-4" />Adicionar</Button>
+            <Button type="button" size="sm" variant="outline" className={`h-9 ${BRAND_OUTLINE_CLASS}`} title="Reutilizar um entregável já cadastrado em outro produto" onClick={() => setLib((v) => !v)}><Copy className="h-3.5 w-3.5" />Reutilizar existente</Button>
+            <Button type="button" style={BRAND_GRADIENT_STYLE} className="h-9 gap-1.5 px-4 text-white shadow-md hover:brightness-110" title="Adicionar entregável (o ideal é adicionar dentro da etapa)" onClick={() => setModal({ d: null })}><Plus className="h-4 w-4" />Adicionar</Button>
           </>}
         </div>
       </div>
       {summaryOnly ? <p className="text-[11px] text-slate-500" data-testid="deliverables-hint">Resumo só para consulta: mostra o que foi configurado em cada etapa. Para criar ou editar um entregável, abra a etapa de origem pelo botão “Ir para a etapa”.</p> : <p className="text-[11px] text-slate-500" data-testid="deliverables-hint">Cadastre cada entregável dentro da própria etapa (“Entregáveis desta etapa”). Esta lista só reúne o que já foi configurado; editar aqui altera o mesmo registro.</p>}
-      {orphanCount > 0 && <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900" data-testid="deliverables-orphans">{orphanCount === 1 ? "1 entregável sem etapa responsável" : `${orphanCount} entregáveis sem etapa responsável`} — {orphanCount === 1 ? "vincule-o" : "vincule-os"} a uma etapa ({summaryOnly ? "abra a etapa de origem e use “Vincular da tarefa”" : "editar → “Etapa responsável”, ou abra a etapa e use “Vincular da tarefa”"}).</p>}
       {list.length > 3 && (
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
@@ -137,71 +147,74 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnl
             </h5>
             <ul>
               {g.items.map((d, i) => {
-                const isOpen = open.has(d.id);
                 const f = fieldsOf(d);
                 const hasFile = f.template_url.startsWith(FILE_PREFIX);
                 const sit = deliverableSituation(d);
                 const st = stepInfo(d.step_id);
+                const dt = "flex items-center justify-between gap-4";
                 return (
                   <li key={d.id} className="border-t border-slate-100 first:border-t-0 dark:border-slate-800" data-testid="deliverable-row">
-                    <div className={`flex items-start gap-1 px-2 py-2 ${isOpen ? "bg-sky-50 dark:bg-sky-950/20" : ""}`}>
-                      <button type="button" className="min-w-0 flex-1 text-left" aria-expanded={isOpen} aria-label={`${isOpen ? "Recolher" : "Expandir"} entregável ${f.name || "(sem nome)"}`} onClick={() => toggle(d.id)}>
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="min-w-0 truncate text-[15px] font-bold text-slate-900 dark:text-slate-100">{i + 1}ª {f.name || "(sem nome)"}</span>
-                          {isOpen ? <ChevronDown className="ml-auto h-4 w-4 shrink-0 text-sky-700" /> : <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-sky-700" />}
-                        </span>
-                        <span className="mt-1 flex flex-wrap items-center gap-1" data-testid="deliverable-chips">
-                          <Chip tone="sky">{shortType(f.type)}</Chip>
-                          <Chip tone={f.cycle_scope === "first_execution" ? "violet" : "slate"}>{f.cycle_scope === "first_execution" ? "só 1ª execução" : "todo ciclo"}</Chip>
-                          <Chip tone="slate">{labelOf(DELIVERABLE_RESPONSIBLES, f.responsible)}</Chip>
-                          {f.delivery_moment && <Chip tone="slate">{labelOf(DELIVERABLE_MOMENTS, f.delivery_moment)}</Chip>}
-                          <Chip tone={f.is_required ? "slate" : "amber"}>{f.is_required ? "obrigatório" : "opcional"}</Chip>
-                          <Chip tone={f.requires_approval ? "violet" : "slate"}>{f.requires_approval ? "aprovação do cliente" : "sem aprovação"}</Chip>
-                          <Chip tone="slate">{visibilitySummary(f.visibility)}</Chip>
-                          {f.is_conditional && <Chip tone="amber">condicional</Chip>}
-                          {(hasFile || f.template_name) && <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800" data-testid="deliverable-has-file" title={`Arquivo anexado: ${f.template_name || "modelo"} (abra o item para ver, baixar ou substituir)`}><Paperclip className="h-3 w-3" />arquivo anexado</span>}
-                          <span title={sit.draft ? "Salvo como rascunho incompleto" : sit.complete ? "Nome e descrição preenchidos." : `Falta: ${sit.missing.join(", ")}`}><Chip tone={sit.complete ? "green" : "amber"}>{sit.draft ? "rascunho" : sit.complete ? "completo" : "incompleto"}</Chip></span>
-                        </span>
-                      </button>
+                    <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-violet-50/40">
+                      <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-slate-900 dark:text-slate-100">{i + 1}ª {f.name || "(sem nome)"}</span>
+                      {(hasFile || f.template_name) && <span className="inline-flex shrink-0 items-center text-violet-600" data-testid="deliverable-has-file" title={`Arquivo anexado: ${f.template_name || "modelo"}`}><Paperclip className="h-4 w-4" /></span>}
+                      {!sit.complete && <span title={sit.draft ? "Salvo como rascunho incompleto" : `Falta: ${sit.missing.join(", ")}`}><Chip tone="amber">{sit.draft ? "rascunho" : "incompleto"}</Chip></span>}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" aria-label={`Informações do entregável ${f.name || "(sem nome)"}`} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-violet-200 bg-white text-violet-700 transition hover:bg-violet-50"><Info className="h-3.5 w-3.5" /></button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-md p-3 text-xs" data-testid="deliverable-info">
+                          <p className="text-sm font-bold">{f.name || "(sem nome)"}</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-1" data-testid="deliverable-chips">
+                            <Chip tone="sky">{shortType(f.type)}</Chip>
+                            <Chip tone={f.cycle_scope === "first_execution" ? "violet" : "slate"}>{f.cycle_scope === "first_execution" ? "só 1ª execução" : "todo ciclo"}</Chip>
+                            <Chip tone="slate">{labelOf(DELIVERABLE_RESPONSIBLES, f.responsible)}</Chip>
+                            {f.delivery_moment && <Chip tone="slate">{labelOf(DELIVERABLE_MOMENTS, f.delivery_moment)}</Chip>}
+                            <Chip tone={f.is_required ? "slate" : "amber"}>{f.is_required ? "obrigatório" : "opcional"}</Chip>
+                            <Chip tone={f.requires_approval ? "violet" : "slate"}>{f.requires_approval ? "aprovação do cliente" : "sem aprovação"}</Chip>
+                            <Chip tone="slate">{visibilitySummary(f.visibility)}</Chip>
+                            {f.is_conditional && <Chip tone="amber">condicional</Chip>}
+                            <Chip tone={sit.complete ? "green" : "amber"}>{sit.draft ? "rascunho" : sit.complete ? "completo" : "incompleto"}</Chip>
+                          </div>
+                          <dl className="mt-3 space-y-2">
+                            <div className={dt}><dt className="font-semibold opacity-90">Exige evidência?</dt><dd>{yesNo(f.evidence_required)}</dd></div>
+                            <div className={dt}><dt className="font-semibold opacity-90">Qualificação interna?</dt><dd>{yesNo(f.requires_qualification)}</dd></div>
+                            <div className={dt}><dt className="font-semibold opacity-90">Etapa responsável</dt><dd className="text-right">{st ? `Etapa ${st.index} — ${st.name}` : "Sem etapa (pendente)"}</dd></div>
+                            <div className={dt}><dt className="font-semibold opacity-90">Quem envia</dt><dd>{labelOf(DELIVERABLE_RESPONSIBLES, f.responsible)}</dd></div>
+                            <div className={dt}><dt className="font-semibold opacity-90">Momento da entrega</dt><dd>{labelOf(DELIVERABLE_MOMENTS, f.delivery_moment)}</dd></div>
+                            <div className={dt}><dt className="font-semibold opacity-90">Recorrência</dt><dd>{labelOf(DELIVERABLE_CYCLE_SCOPES, f.cycle_scope)}</dd></div>
+                            {f.format && <div className={dt}><dt className="font-semibold opacity-90">Formato</dt><dd>{f.format}</dd></div>}
+                            <div className={dt}><dt className="font-semibold opacity-90">Tipo</dt><dd>{labelOf(DELIVERABLE_TYPES, f.type)}</dd></div>
+                          </dl>
+                          {f.description && <p className="mt-2.5 border-t border-white/20 pt-2"><span className="font-semibold">Descrição:</span> <span className="opacity-90">{f.description}</span></p>}
+                          {f.is_conditional && <p className="mt-2"><span className="font-semibold">Condição (orientação):</span> <span className="opacity-90">{f.condition_text || "—"}</span></p>}
+                          {(hasFile || f.template_name) && <p className="mt-2 flex items-center gap-1"><Paperclip className="h-3 w-3" />Arquivo: {f.template_name || "modelo"}</p>}
+                          <p className="mt-2 text-[10px] opacity-70" title="Identificador permanente deste entregável" data-testid="deliverable-id">ID {d.key}</p>
+                        </TooltipContent>
+                      </Tooltip>
                       {summaryOnly && (st
-                        ? <button type="button" className="inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50" data-testid="deliverable-go-step" onClick={() => openStepEditor(st.id)}><ArrowRight className="h-3.5 w-3.5" />Ir para a etapa</button>
-                        : <span className="self-center rounded-md bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900" data-testid="deliverable-no-step">sem etapa responsável</span>)}
+                        ? <button type="button" className={`inline-flex h-8 shrink-0 items-center gap-1 rounded-md border px-2.5 text-xs font-semibold ${BRAND_OUTLINE_CLASS}`} data-testid="deliverable-go-step" onClick={() => openStepEditor(st.id)}><ArrowRight className="h-3.5 w-3.5" />Ir para a etapa</button>
+                        : <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" aria-label="Atenção: sem etapa responsável" data-testid="deliverable-no-step" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-amber-300 bg-amber-50 text-amber-700 transition hover:bg-amber-100">
+                                <AlertTriangle className="h-4 w-4" />
+                                <span className="sr-only">sem etapa responsável</span>
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="left" className="max-w-xs border border-amber-300 !bg-amber-50 p-3 text-xs !text-amber-900">
+                              <p className="text-sm font-bold">Sem etapa responsável</p>
+                              <p className="mt-1">Vincule este entregável a uma etapa: abra a etapa de origem e use “Vincular da tarefa”.</p>
+                            </TooltipContent>
+                          </Tooltip>)}
                       {canEdit && (
-                        <span className="flex shrink-0 items-center" data-testid="deliverable-actions">
-                          <button type="button" aria-label={`Subir entregável ${f.name}`} className={iconBtn} disabled={i === 0} onClick={() => move(d, g.items, -1)}><ArrowUp className="h-3.5 w-3.5" /></button>
-                          <button type="button" aria-label={`Descer entregável ${f.name}`} className={iconBtn} disabled={i === g.items.length - 1} onClick={() => move(d, g.items, 1)}><ArrowDown className="h-3.5 w-3.5" /></button>
-                          <button type="button" aria-label={`Duplicar entregável ${f.name}`} className={iconBtn} onClick={() => duplicate(d)}><CopyPlus className="h-3.5 w-3.5" /></button>
-                          <button type="button" aria-label={`Editar entregável ${f.name}`} className="rounded-md bg-sky-100 p-1.5 text-sky-700 hover:bg-sky-200" onClick={() => setModal({ d })}><Pencil className="h-4 w-4" /></button>
-                          <button type="button" aria-label={`Excluir entregável ${f.name}`} className="ml-1 rounded-md bg-rose-100 p-1.5 text-rose-600 hover:bg-rose-200" onClick={() => setToDelete(d)}><Trash2 className="h-4 w-4" /></button>
+                        <span className="flex shrink-0 items-center gap-0.5" data-testid="deliverable-actions">
+                          <button type="button" aria-label={`Subir entregável ${f.name}`} title="Subir" className={iconBtn} disabled={i === 0} onClick={() => move(d, g.items, -1)}><ArrowUp className="h-4 w-4" /></button>
+                          <button type="button" aria-label={`Descer entregável ${f.name}`} title="Descer" className={iconBtn} disabled={i === g.items.length - 1} onClick={() => move(d, g.items, 1)}><ArrowDown className="h-4 w-4" /></button>
+                          <button type="button" aria-label={`Duplicar entregável ${f.name}`} title="Duplicar" className={iconBtn} onClick={() => setToDup(d)}><CopyPlus className="h-4 w-4" /></button>
+                          <button type="button" aria-label={`Editar entregável ${f.name}`} title="Editar" className="rounded-md bg-violet-100 p-2 text-violet-700 transition hover:bg-violet-200" onClick={() => setModal({ d })}><Pencil className="h-4 w-4" /></button>
+                          <button type="button" aria-label={`Excluir entregável ${f.name}`} title="Excluir" className="rounded-md bg-rose-100 p-2 text-rose-600 transition hover:bg-rose-200" onClick={() => setToDelete(d)}><Trash2 className="h-4 w-4" /></button>
                         </span>
                       )}
                     </div>
-                    {isOpen && (
-                      <div className="space-y-2 px-3 py-3 text-sm" data-testid="deliverable-body">
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                          <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">Obrigatório? {yesNo(f.is_required)}</span>
-                          <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">Exige evidência? {yesNo(f.evidence_required)}</span>
-                          <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">Exige aprovação? {yesNo(f.requires_approval)}</span>
-                          <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">Qualificação interna? {yesNo(f.requires_qualification)}</span>
-                        </div>
-                        {f.description && <p className="text-slate-700 dark:text-slate-300"><span className="font-semibold">Descrição:</span> <span className="text-slate-500">{f.description}</span></p>}
-                        <div className="grid gap-x-6 gap-y-1 text-xs text-slate-600 dark:text-slate-300 sm:grid-cols-2">
-                          <p><span className="font-semibold">Quem envia:</span> {labelOf(DELIVERABLE_RESPONSIBLES, f.responsible)}</p>
-                          <p><span className="font-semibold">Etapa responsável:</span> {st ? `Etapa ${st.index} — ${st.name}` : "Sem etapa (pendente)"}</p>
-                          <p><span className="font-semibold">Momento da entrega:</span> {labelOf(DELIVERABLE_MOMENTS, f.delivery_moment)}</p>
-                          <p><span className="font-semibold">Recorrência:</span> {labelOf(DELIVERABLE_CYCLE_SCOPES, f.cycle_scope)}</p>
-                          {f.format && <p><span className="font-semibold">Formato:</span> {f.format}</p>}
-                          <p><span className="font-semibold">Tipo:</span> {labelOf(DELIVERABLE_TYPES, f.type)}</p>
-                          {f.is_conditional && <p className="sm:col-span-2"><span className="font-semibold">Condição (orientação):</span> {f.condition_text || "—"}</p>}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {hasFile
-                            ? <FileIconMenu file={{ id: f.template_url.slice(FILE_PREFIX.length), name: f.template_name || "modelo" }} readOnly onError={() => {}} />
-                            : f.template_name && <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-700"><Paperclip className="h-3 w-3" />{f.template_name}</span>}
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600" title="Identificador permanente deste entregável" data-testid="deliverable-id">ID {d.key}</span>
-                        </div>
-                      </div>
-                    )}
                   </li>
                 );
               })}
@@ -219,9 +232,14 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnl
           onClose={() => setModal(null)} />
       )}
       <ConfirmationDialog
-        open={!!toDelete} onClose={() => setToDelete(null)} title="Excluir entregável?" destructive confirmText="Excluir entregável"
+        elevated open={!!toDelete} onClose={() => setToDelete(null)} title="Excluir entregável?" destructive confirmText="Excluir entregável"
         message={<>O entregável “{toDelete?.name}” será excluído da tarefa. Se ele só precisa sair desta etapa, edite-o e troque a etapa responsável. Tarefas já contratadas continuam como estão; se ele já foi usado, a exclusão é recusada.</>}
         onConfirm={() => { if (toDelete) void act(() => apiClient.deleteCatalog2Deliverable(toDelete.id), "Entregável removido."); setToDelete(null); }}
+      />
+      <ConfirmationDialog
+        elevated open={!!toDup} onClose={() => setToDup(null)} title="Duplicar entregável?" destructive={false} confirmText="Duplicar entregável"
+        message={<>Será criada uma cópia do entregável “{toDup?.name}” nesta tarefa, com o nome terminando em “(cópia)”.</>}
+        onConfirm={() => { if (toDup) duplicate(toDup); setToDup(null); }}
       />
     </div>
   );

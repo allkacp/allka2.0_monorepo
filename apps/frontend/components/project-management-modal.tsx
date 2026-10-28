@@ -1,3 +1,4 @@
+import { AkBoth } from "@/components/price-with-allkoins";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { ProjectAdminResponsibleSection } from "@/components/project-admin-responsible-section";
 import type { FrontendProject } from "@/lib/project-adapter";
@@ -5053,10 +5054,7 @@ export function ProjectManagementModal({
                                     CARTEIRA
                                   </div>
                                   <div className="text-[10px] text-gray-500 mt-0.5">
-                                    Saldo: R${" "}
-                                    {walletBalance.toLocaleString("pt-BR", {
-                                      minimumFractionDigits: 2,
-                                    })}
+                                    Saldo: <AkBoth value={walletBalance} />
                                   </div>
                                 </div>
                               </div>
@@ -5080,10 +5078,7 @@ export function ProjectManagementModal({
                                       Saldo Disponível
                                     </div>
                                     <div className="text-2xl font-bold text-green-900">
-                                      R${" "}
-                                      {walletBalance.toLocaleString("pt-BR", {
-                                        minimumFractionDigits: 2,
-                                      })}
+                                      <AkBoth value={walletBalance} />
                                     </div>
                                   </div>
                                   <Wallet className="h-10 w-10 text-green-600 opacity-20" />
@@ -5165,11 +5160,7 @@ export function ProjectManagementModal({
                                     </Badge>
                                   </div>
                                   <div className="text-[10px] text-gray-500 mt-0.5">
-                                    {allkoinBalance.toLocaleString("pt-BR", {
-                                      minimumFractionDigits: 2,
-                                    })}{" "}
-                                    AK • 1 AK = R${" "}
-                                    {allkoinExchangeRate.toFixed(2)}
+                                    <AkBoth value={allkoinBalance} /> • 1 AK$ = R$ {allkoinExchangeRate.toFixed(2)}
                                   </div>
                                 </div>
                               </div>

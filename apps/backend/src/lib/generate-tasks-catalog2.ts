@@ -450,6 +450,8 @@ async function materializeTasksForProjectProduct(
               completion_criteria: step.completion_criteria ?? step.step_model?.completion_criteria ?? null,
               first_execution_only: !!(step.first_execution_only || step.step_model?.first_execution_only),
               ...(normalizeStepOps(step.ops)?.client_approval ? { client_approval_mode: normalizeStepOps(step.ops)!.client_approval!.mode } : {}),
+              // Etapa em ciclos: cada ciclo tem a SUA aprovação do cliente (ver stage-cycles.ts); a etapa em si não pede aprovação de novo ao fechar.
+              ...(normalizeStepOps(step.ops)?.cycles ? { cycles: normalizeStepOps(step.ops)!.cycles!.items, client_approval_mode: "none" } : {}),
               skip_when_same_executor: !!(step.skip_when_same_executor || step.step_model?.skip_when_same_executor),
               // Prompt da IA desta etapa (usado quando a execução é por IA).
               ...(normalizeStepOps(step.ops)?.ai_prompt ? { ai_prompt: normalizeStepOps(step.ops)!.ai_prompt } : {}),

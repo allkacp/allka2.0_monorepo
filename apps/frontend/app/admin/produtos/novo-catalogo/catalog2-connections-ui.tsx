@@ -1,12 +1,14 @@
 // Seção universal "Conexões e acessos necessários" do editor de produto (qualquer produto, atual ou futuro).
 // Opcional: desativada, o produto se comporta como se o módulo não existisse. Nunca coleta senha: só descreve o que é exigido.
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Eye, Layers, Link2, Plug, Plus, Save, Settings2, ShieldCheck, Trash2, X } from "lucide-react";
+import { ChevronDown, Eye, Info, Layers, Link2, Plug, Plus, Save, Settings2, ShieldCheck, Trash2, X } from "lucide-react";
 import { AccessLogo } from "./access-logo";
 import { accessPatch, splitAccesses } from "./step-access-picker";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { FramedModal, FRAMED_HEADER_CLASS } from "@/components/framed-panel";
 import { apiClient } from "@/lib/api-client";
 import { ButtonLoader } from "@/components/ui/loading";
 import { AccessConditionBuilder } from "./access-condition-builder";
@@ -308,49 +310,85 @@ export function AccessesSummary({ version, act, readOnly = true }: { version: an
     <div className="space-y-2">
       <p className="text-xs text-slate-500">Configure os acessos que serão solicitados nas etapas do processo.</p>
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/30" data-testid="accesses-summary-empty">Nenhum acesso pedido nas etapas ainda. Cadastre dentro de cada etapa, em “Conexões e acessos desta etapa”.</p>
+        <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/30" data-testid="accesses-summary-empty">Nenhum acesso aqui por enquanto. Os acessos aparecem nesta lista depois de cadastrados dentro de uma etapa (em “Conexões e acessos desta etapa”). Se nenhuma etapa pedir acesso, esta lista continua vazia.</p>
       ) : (
-        <ul className="space-y-2" data-testid="accesses-summary">
-          {rows.map((r) => {
+        <ul className="space-y-1.5" data-testid="accesses-summary">
+          {rows.map((r, idx) => {
             const req = reqById.get(r.key) ?? {};
             const perm = (r.type?.permission_levels ?? []).find((l: any) => l.key === req.permission_level)?.label ?? req.permission_level ?? "—";
             const ob = obligationOf(req.obligation);
-            const opened = openKey === r.key;
+            const stepsText = r.stepsLabels.length ? r.stepsLabels.join(", ") : "nenhuma etapa";
+            const fact = "flex items-center justify-between gap-4";
             return (
-              <li key={r.key} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/60" data-testid="summary-access">
-                <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                  <span className="flex min-w-[11rem] items-center gap-2.5">
-                    <AccessLogo type={{ ...r.type, name: r.name }} size={36} />
-                    <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{r.name}</span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${ob.cls}`}>{ob.text}</span>
+              <li key={r.key} className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900/60" data-testid="summary-access">
+                <div className="flex items-center gap-2.5">
+                  <span className="section-number-badge flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" data-testid="summary-access-number">{idx + 1}</span>
+                  <AccessLogo type={{ ...r.type, name: r.name }} size={30} />
+                  <span className="min-w-0 truncate text-sm font-bold text-slate-900 dark:text-slate-100">{r.name}</span>
+                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${ob.cls}`}>{ob.text}</span>
+                  <span className="ml-auto flex min-w-0 items-center gap-1.5" data-testid="summary-access-steps">
+                    <Layers className="h-3.5 w-3.5 shrink-0 text-violet-500" aria-hidden="true" />
+                    <span className="sr-only">Liberado em {stepsText}</span>
+                    <span className="hidden flex-wrap items-center gap-1 sm:flex" aria-hidden="true">
+                      {r.stepsLabels.length ? r.stepsLabels.map((l: string) => <span key={l} className="rounded-md bg-violet-50 px-1.5 py-0.5 text-[11px] font-bold text-violet-700 dark:bg-violet-950/40 dark:text-violet-200">{l}</span>) : <span className="text-[11px] text-slate-500">nenhuma etapa</span>}
+                    </span>
                   </span>
-                  <span className="flex min-w-[10rem] flex-1 items-center gap-2.5 md:border-l md:border-slate-200 md:pl-5 dark:md:border-slate-700" data-testid="summary-access-steps">
-                    <Layers className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
-                    <span className="min-w-0"><span className="block text-[11px] text-slate-500">Liberado em</span><span className="block text-[13px] font-bold text-slate-900 dark:text-slate-100">{r.stepsLabels.length ? r.stepsLabels.join(", ") : "nenhuma etapa"}</span></span>
-                  </span>
-                  <span className="flex min-w-[9rem] flex-1 items-center gap-2.5 md:border-l md:border-slate-200 md:pl-5 dark:md:border-slate-700">
-                    <ShieldCheck className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
-                    <span className="min-w-0"><span className="block text-[11px] text-slate-500">Permissão</span><span className="block text-[13px] font-bold text-slate-900 dark:text-slate-100">{perm}</span></span>
-                  </span>
-                  <span className="flex min-w-[10rem] flex-1 items-center gap-2.5 md:border-l md:border-slate-200 md:pl-5 dark:md:border-slate-700">
-                    <Link2 className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
-                    <span className="min-w-0"><span className="block text-[11px] text-slate-500">Método de acesso</span><span className="block text-[13px] font-bold text-slate-900 dark:text-slate-100">{methodLabel(req.method)}</span></span>
-                  </span>
-                  <button type="button" aria-expanded={opened} onClick={() => setOpenKey(opened ? null : r.key)} className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg bg-violet-50 px-3 text-xs font-semibold text-violet-700 hover:bg-violet-100 dark:bg-violet-950/40 dark:text-violet-200" data-testid="summary-access-details-btn"><Eye className="h-3.5 w-3.5" />{opened ? "Ocultar detalhes" : "Ver detalhes"}</button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button type="button" aria-label={`Informações do acesso ${r.name}`} className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-violet-200 bg-white text-violet-700 transition hover:bg-violet-50"><Info className="h-3.5 w-3.5" /></button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="max-w-sm p-3 text-xs" data-testid="summary-access-info">
+                      <p className="text-sm font-bold">{r.name}</p>
+                      <dl className="mt-2.5 space-y-2">
+                        <div className={fact}><dt className="font-semibold opacity-90">Obrigatoriedade</dt><dd>{ob.text}</dd></div>
+                        <div className={fact}><dt className="font-semibold opacity-90">Liberado em</dt><dd className="text-right">{stepsText}</dd></div>
+                        <div className={fact}><dt className="font-semibold opacity-90">Permissão</dt><dd className="text-right">{perm}</dd></div>
+                        <div className={fact}><dt className="font-semibold opacity-90">Método de acesso</dt><dd className="text-right">{methodLabel(req.method)}</dd></div>
+                      </dl>
+                    </TooltipContent>
+                  </Tooltip>
+                  <button type="button" onClick={() => setOpenKey(r.key)} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-violet-200 bg-white px-3 text-xs font-semibold text-violet-700 transition hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="summary-access-details-btn"><Eye className="h-3.5 w-3.5" />Ver detalhes</button>
                 </div>
-                {opened && (
-                  <dl className="mt-2 grid gap-x-6 gap-y-1 border-t border-slate-100 pt-2 text-xs sm:grid-cols-2 dark:border-slate-800" data-testid="summary-access-details">
-                    <div><dt className="inline text-slate-500">Cadastrado em: </dt><dd className="inline font-semibold">{r.origin}</dd></div>
-                    <div><dt className="inline text-slate-500">Liberado em: </dt><dd className="inline font-semibold">{r.stepsLabels.length ? r.stepsLabels.join(", ") : "nenhuma etapa"}</dd></div>
-                    <div><dt className="inline text-slate-500">Tipo: </dt><dd className="inline font-semibold">{r.type?.name ?? r.name}</dd></div>
-                    <div><dt className="inline text-slate-500">Quando é pedido: </dt><dd className="inline font-semibold">{req.when_needed === "before_step" ? "antes da etapa" : req.when_needed === "before_task" ? "antes da tarefa" : req.when_needed ?? "—"}</dd></div>
-                  </dl>
-                )}
               </li>
             );
           })}
         </ul>
       )}
+      {(() => {
+        const idx = rows.findIndex((x) => x.key === openKey);
+        if (idx < 0) return null;
+        const r = rows[idx];
+        const req = reqById.get(r.key) ?? {};
+        const perm = (r.type?.permission_levels ?? []).find((l: any) => l.key === req.permission_level)?.label ?? req.permission_level ?? "—";
+        const ob = obligationOf(req.obligation);
+        const stepsText = r.stepsLabels.length ? r.stepsLabels.join(", ") : "nenhuma etapa";
+        const cell = "rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/40";
+        const lab = "block text-[11px] font-semibold uppercase tracking-wide text-slate-500";
+        const val = "mt-0.5 block text-sm font-bold text-slate-900 dark:text-slate-100";
+        return (
+          <FramedModal open onOpenChange={(o) => { if (!o) setOpenKey(null); }} testId="summary-access-details" title={`Acesso — ${r.name}`}>
+            <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="section-number-badge flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white">{idx + 1}</span>
+                <AccessLogo type={{ ...r.type, name: r.name }} size={34} />
+                <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">{r.name}</p><p className="truncate text-xs text-slate-500">Resumo só de leitura. Para mudar, abra a etapa e use “Conexões e acessos desta etapa”.</p></div>
+                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${ob.cls}`}>{ob.text}</span>
+              </div>
+              <Button size="sm" variant="outline" className="border-violet-200 bg-white text-violet-700 hover:bg-violet-50" onClick={() => setOpenKey(null)} data-testid="summary-access-close">Fechar</Button>
+            </div>
+            <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">
+              <dl className="grid gap-3 sm:grid-cols-2">
+                <div className={cell}><dt className={lab}>Cadastrado em</dt><dd className={val}>{r.origin}</dd></div>
+                <div className={cell}><dt className={lab}>Liberado em</dt><dd className={val}>{stepsText}</dd></div>
+                <div className={cell}><dt className={lab}>Tipo</dt><dd className={val}>{r.type?.name ?? r.name}</dd></div>
+                <div className={cell}><dt className={lab}>Quando é pedido</dt><dd className={val}>{req.when_needed === "before_step" ? "antes da etapa" : req.when_needed === "before_task" ? "antes da tarefa" : req.when_needed ?? "—"}</dd></div>
+                <div className={cell}><dt className={lab}>Permissão</dt><dd className={val}>{perm}</dd></div>
+                <div className={cell}><dt className={lab}>Método de acesso</dt><dd className={val}>{methodLabel(req.method)}</dd></div>
+              </dl>
+            </div>
+          </FramedModal>
+        );
+      })()}
       {/* "Adicionar acesso" escondido (20/10): o resumo só mostra os acessos configurados; acessos se cadastram dentro da etapa. */}
       <div hidden className="hidden items-center gap-3 rounded-xl border border-dashed border-violet-300 bg-violet-50/40 px-3 py-3 dark:border-violet-800 dark:bg-violet-950/20" data-testid="summary-add-hint">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-violet-300 bg-white text-violet-600"><Plus className="h-4 w-4" aria-hidden="true" /></span>

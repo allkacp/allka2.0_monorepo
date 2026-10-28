@@ -36,6 +36,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -76,6 +77,7 @@ import { Catalog2PricingMemoryPopover } from "@/components/catalog2-pricing-memo
 import { useIsAdminMaster } from "@/hooks/use-is-admin-master";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { PageLoader } from "@/components/ui/loading";
+import { ProductStatusBadge } from "./novo-catalogo/product-status-badge";
 
 // Cadastro de Produtos — administração exclusiva dos produtos catalog2
 // (reunião 2026-09, consolidação "catálogo2 como cadastro definitivo"; e
@@ -121,21 +123,21 @@ const PENDENCY_LABEL: Record<string, string> = {
 };
 
 const PRODUCT_COLUMNS = [
-  { key: "number", label: "ID", width: 64, min: 40, align: "center" },
-  { key: "image", label: "Img", width: 58, min: 42, align: "left" },
+  { key: "number", label: "ID", width: 56, min: 40, align: "center" },
+  { key: "image", label: "Img", width: 52, min: 42, align: "left" },
   { key: "product", label: "Produto", width: 370, min: 180, align: "left" },
-  { key: "category", label: "Categoria", width: 103, min: 82, align: "left" },
-  { key: "tasks", label: "Tarefas", width: 100, min: 78, align: "left" },
-  { key: "price", label: "Preço", width: 120, min: 112, align: "left" },
+  { key: "category", label: "Categoria", width: 100, min: 82, align: "left" },
+  { key: "tasks", label: "Tarefas", width: 92, min: 78, align: "left" },
+  { key: "price", label: "Preço", width: 112, min: 112, align: "left" },
   {
     key: "pendencies",
     label: "Pendências",
-    width: 96,
+    width: 90,
     min: 90,
     align: "center",
   },
-  { key: "status", label: "Status", width: 125, min: 65, align: "left" },
-  { key: "actions", label: "Ações", width: 110, min: 64, align: "center" },
+  { key: "status", label: "Status", width: 118, min: 65, align: "left" },
+  { key: "actions", label: "Ações", width: 104, min: 64, align: "center" },
 ] as const;
 type ProductColumnKey = (typeof PRODUCT_COLUMNS)[number]["key"];
 // Colunas que ordenam ao clicar no cabeçalho (o valor é o "sort" enviado ao
@@ -170,13 +172,64 @@ function categoryStripeColor(name?: string | null): string {
   return "#94a3b8";
 }
 
-// Lembra ordenação e itens por página entre acessos (Ctrl+F5, novo login).
+// Ordenação e filtros valem só no MESMO DIA (Ctrl+F5/novo login mantêm; no dia
+// seguinte a lista volta ao padrão). Itens por página e colunas ficam sempre.
+const PRODUCT_LIST_SESSION_KEY = "allka:admin-products-list-session";
+type ProductListSession = {
+  sort?: string;
+  filters: Record<string, string | boolean>;
+};
+// Colunas cujo cabeçalho abre um menu com opções explícitas (em vez de só alternar).
+const HEADER_SORT_LABELS: Partial<Record<ProductColumnKey, [string, string]>> = {
+  product: ["Ordem alfabética (A → Z)", "Ordem alfabética (Z → A)"],
+  category: ["Categoria A → Z", "Categoria Z → A"],
+  price: ["Menor preço primeiro", "Maior preço primeiro"],
+};
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function readSavedSession(): ProductListSession {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PRODUCT_LIST_SESSION_KEY) || "{}");
+    if (saved.day !== todayKey()) return { filters: {} };
+    return {
+      sort: typeof saved.sort === "string" && saved.sort ? saved.sort : undefined,
+      filters: saved.filters && typeof saved.filters === "object" ? saved.filters : {},
+    };
+  } catch {
+    return { filters: {} };
+  }
+}
+
+function writeSavedSession(session: ProductListSession) {
+  try {
+    const raw = localStorage.getItem(PRODUCT_LIST_SESSION_KEY);
+    const prev = raw ? JSON.parse(raw) : null;
+    const same =
+      prev &&
+      prev.sort === session.sort &&
+      JSON.stringify(prev.filters) === JSON.stringify(session.filters);
+    // Só renova a data quando a pessoa realmente mudou algo.
+    if (same) return;
+    localStorage.setItem(
+      PRODUCT_LIST_SESSION_KEY,
+      JSON.stringify({ day: todayKey(), ...session }),
+    );
+  } catch {
+    // sem localStorage: segue sem lembrar
+  }
+}
+
+// Lembra itens por página entre acessos.
 function readSavedListPrefs(): { sort?: string; pageSize?: number } {
   try {
     const saved = JSON.parse(localStorage.getItem(PRODUCT_LIST_PREFERENCES_KEY) || "{}");
     const pageSize = Number(saved.pageSize);
     return {
-      sort: typeof saved.sort === "string" && saved.sort ? saved.sort : undefined,
+      sort: readSavedSession().sort,
       pageSize: Number.isInteger(pageSize) && pageSize >= 5 && pageSize <= 200 ? pageSize : undefined,
     };
   } catch {
@@ -198,10 +251,11 @@ function openReadinessItems(rp: any): { key: string; level: string; note: string
     .map(([key, v]: any) => ({ key, level: v.level, note: v.note }));
 }
 
-// Uma só ação por produto: "Continuar configuração" enquanto houver rascunho,
-// pendência ou nenhuma versão publicada; "Editar produto" quando já está completo.
+// Uma só ação por produto: "Continuar configuração" enquanto o produto AINDA NÃO foi publicado (ou tem pendência de prontidão);
+// produto já publicado é "Editar produto" — o rascunho só nasce quando a pessoa clica em Editar.
 function needsConfiguration(p: any, rp: any): boolean {
-  return !!p.has_draft || !p.published_version_number || openReadinessItems(rp).length > 0;
+  if (p.published_version_number) return false;
+  return true;
 }
 function configActionLabel(p: any, rp: any): string {
   return needsConfiguration(p, rp) ? "Continuar configuração" : "Editar produto";
@@ -333,19 +387,22 @@ export default function AdminProdutosPage() {
   );
 
   // filtros/listagem (preservados ao voltar do editor)
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("");
-  const [pillarId, setPillarId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [origin, setOrigin] = useState("");
-  const [roseReviewed, setRoseReviewed] = useState("");
-  const [reviewState, setReviewState] = useState("");
-  const [pendency, setPendency] = useState("");
+  const [savedFilters] = useState(() => readSavedSession().filters);
+  const [q, setQ] = useState(() => String(savedFilters.q ?? ""));
+  const [status, setStatus] = useState(() => String(savedFilters.status ?? ""));
+  const [pillarId, setPillarId] = useState(() => String(savedFilters.pillarId ?? ""));
+  const [categoryId, setCategoryId] = useState(() => String(savedFilters.categoryId ?? ""));
+  const [origin, setOrigin] = useState(() => String(savedFilters.origin ?? ""));
+  const [roseReviewed, setRoseReviewed] = useState(() => String(savedFilters.roseReviewed ?? ""));
+  const [reviewState, setReviewState] = useState(() => String(savedFilters.reviewState ?? ""));
+  const [pendency, setPendency] = useState(() => String(savedFilters.pendency ?? ""));
   // Aba rápida "Com pendências" — estado PRÓPRIO, independente de
   // `showCategoryFilters` (bug real: antes as duas abas reusavam o mesmo
   // booleano, então "Com pendências" só reabria "Categorias" e nunca
   // filtrava nada — ver teste "bug real: Com pendências").
-  const [onlyPendencies, setOnlyPendencies] = useState(false);
+  const [onlyPendencies, setOnlyPendencies] = useState(
+    () => savedFilters.onlyPendencies === true,
+  );
   const [sort, setSort] = useState<string>(() => readSavedListPrefs().sort ?? "name");
   const [importSummary, setImportSummary] = useState<any>(null);
   const [readiness, setReadiness] = useState<any>(null);
@@ -459,11 +516,17 @@ export default function AdminProdutosPage() {
         visible: [...visibleProductColumns],
         widths: productColumnWidths,
         columnLayoutVersion: 5,
-        sort,
         pageSize,
       }),
     );
-  }, [visibleProductColumns, productColumnWidths, sort, pageSize]);
+  }, [visibleProductColumns, productColumnWidths, pageSize]);
+
+  useEffect(() => {
+    writeSavedSession({
+      sort,
+      filters: { status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, q, onlyPendencies },
+    });
+  }, [sort, status, pillarId, categoryId, origin, roseReviewed, reviewState, pendency, q, onlyPendencies]);
 
   const beginProductColumnResize = useCallback(
     (event: React.PointerEvent, key: ProductColumnKey) => {
@@ -1221,7 +1284,7 @@ export default function AdminProdutosPage() {
               )}
 
               {/* Somente esta área rola: controles e cabeçalho da tabela ficam visíveis. */}
-              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto">
               {msg && (
                 <p className="px-4 py-2 text-sm text-blue-600 dark:text-blue-400">
                   {msg}
@@ -1258,19 +1321,43 @@ export default function AdminProdutosPage() {
                       ? overview.empty_message
                       : "Tente ajustar os filtros ou a busca para encontrar o que procura."}
                   </p>
+                  {!overview.is_empty &&
+                    (q || status || pillarId || categoryId || origin || roseReviewed || reviewState || pendency || onlyPendencies) && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setQ("");
+                          setStatus("");
+                          setPillarId("");
+                          setCategoryId("");
+                          setOrigin("");
+                          setRoseReviewed("");
+                          setReviewState("");
+                          setPendency("");
+                          setOnlyPendencies(false);
+                        }}
+                      >
+                        Limpar filtros
+                      </Button>
+                    )}
                 </div>
               ) : gridMode === "list" ? (
                 <div className="allka-table-scroll-body min-w-full">
+                  {/* A coluna "Produto" é a ELÁSTICA: com pouco espaço ela encolhe e corta o nome (…), e as demais colunas (status, ações…) continuam visíveis.
+                      Só quando nem assim couber, a tabela ganha rolagem horizontal. */}
                   <table
                     className="tabela-cartao w-full table-fixed text-xs"
-                    style={{ width: "100%" }}
+                    style={{ width: "100%", minWidth: PRODUCT_COLUMNS.filter((c) => visibleProductColumns.has(c.key)).reduce((sum, c) => sum + c.min, 0) }}
                   >
                     <colgroup>
                       {PRODUCT_COLUMNS.map((column) => (
                         <col
                           key={column.key}
                           style={{
-                            width: productColumnWidths[column.key],
+                            // Larguras em % do espaço disponível: tudo encolhe junto; "Produto" (sem largura) fica com o resto e corta o nome.
+                            width: column.key === "product" ? undefined : `${((productColumnWidths[column.key] / PRODUCT_COLUMNS.filter((c) => visibleProductColumns.has(c.key) && c.key !== "product").reduce((sum, c) => sum + productColumnWidths[c.key], productColumnWidths.product ?? 370)) * 100).toFixed(2)}%`,
                             visibility: visibleProductColumns.has(column.key)
                               ? "visible"
                               : "collapse",
@@ -1296,6 +1383,52 @@ export default function AdminProdutosPage() {
                                 const base = SORTABLE_COLUMNS[column.key]!;
                                 const active = sort === base || sort === `${base}_desc`;
                                 const desc = sort === `${base}_desc`;
+                                const menuLabels = HEADER_SORT_LABELS[column.key];
+                                if (menuLabels) {
+                                  return (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          type="button"
+                                          title={`Ordenar/filtrar por ${column.label}`}
+                                          className={`group flex w-full items-center gap-1 truncate uppercase transition-colors hover:text-violet-700 dark:hover:text-violet-300 ${active || (column.key === "category" && categoryId) ? "text-violet-700 dark:text-violet-300" : ""}`}
+                                        >
+                                          <span className="truncate">{column.label}</span>
+                                          {active ? (
+                                            desc ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronUp className="h-3.5 w-3.5 shrink-0" />
+                                          ) : (
+                                            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-slate-300 group-hover:text-slate-400" />
+                                          )}
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="start" className="normal-case">
+                                        <DropdownMenuItem onClick={() => setSort(base)}>
+                                          {menuLabels[0]}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setSort(`${base}_desc`)}>
+                                          {menuLabels[1]}
+                                        </DropdownMenuItem>
+                                        {column.key === "category" && (
+                                          <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => setCategoryId("")}>
+                                              {categoryId ? "" : "✓ "}Todas as categorias
+                                            </DropdownMenuItem>
+                                            {refs.categories.map((c2) => (
+                                              <DropdownMenuItem
+                                                key={c2.id}
+                                                onClick={() => setCategoryId(String(c2.id))}
+                                              >
+                                                {String(categoryId) === String(c2.id) ? "✓ " : ""}
+                                                {c2.name}
+                                              </DropdownMenuItem>
+                                            ))}
+                                          </>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  );
+                                }
                                 return (
                                   <button
                                     type="button"
@@ -1432,15 +1565,13 @@ export default function AdminProdutosPage() {
                               <ReadinessPendingBadge rp={rp} />
                             </td>
                             <td className="px-2 py-1">
-                              <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                <Badge
-                                  className={
-                                    STATUS_TONE[p.status] ??
-                                    "bg-muted text-muted-foreground"
-                                  }
-                                >
-                                  {STATUS_LABEL[p.status] ?? p.status}
-                                </Badge>
+                              <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
+                                <ProductStatusBadge
+                                  product={p}
+                                  tone={STATUS_TONE[p.status] ?? "bg-muted text-muted-foreground"}
+                                  label={STATUS_LABEL[p.status] ?? p.status}
+                                  onChanged={async () => { setMsg("Status do produto salvo."); await loadList(); await bootstrap(); }}
+                                />
                               </div>
                             </td>
                             <td className="px-2 py-1">

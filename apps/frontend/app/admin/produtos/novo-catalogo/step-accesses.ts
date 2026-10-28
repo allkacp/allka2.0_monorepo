@@ -61,10 +61,11 @@ export const configuredCount = (items: AccessItem[]) => activeItems(items).filte
 export const incompleteCount = (items: AccessItem[]) => activeItems(items).filter((i) => formIssues(i.form).length > 0).length;
 
 /** Mensagens para CONCLUIR, identificando o acesso pelo nome. */
-export function accessIssues(items: AccessItem[], needsAccess: boolean): { field: string; message: string }[] {
+/** `borrowed` = acessos de OUTRAS etapas que esta etapa escolheu usar (também contam como acesso da etapa). */
+export function accessIssues(items: AccessItem[], needsAccess: boolean, borrowed = 0): { field: string; message: string }[] {
   const out: { field: string; message: string }[] = [];
   const act = activeItems(items);
-  if (needsAccess && act.length === 0) out.push({ field: "accesses", message: "A etapa está marcada como “precisa de acesso”, mas nenhum acesso foi adicionado. Adicione um acesso ou desligue essa opção." });
+  if (needsAccess && act.length === 0 && borrowed === 0) out.push({ field: "accesses", message: "A etapa está marcada como “precisa de acesso”, mas nenhum acesso foi adicionado. Adicione um acesso ou desligue essa opção." });
   for (const i of act) {
     const iss = formIssues(i.form);
     if (iss.length) out.push({ field: `access:${i.uid}`, message: `O acesso “${accessName(i)}” está incompleto: ${iss.join("; ")}.` });

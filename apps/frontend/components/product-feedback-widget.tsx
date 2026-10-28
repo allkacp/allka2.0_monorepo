@@ -9,6 +9,7 @@
  * login/primeiro-acesso/share ficam fora do <AppLayout>, então montar este
  * componente dentro do AppLayout já garante que ele nunca aparece nelas.
  */
+import { FloatingToolSlot } from "@/components/floating-tools-rail";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageCircleQuestion, Send, RefreshCw, Inbox, Sparkles, Loader2 } from "lucide-react";
 import { HeaderSlideScreen } from "@/components/header-slide-screen";
@@ -258,7 +259,7 @@ export function ProductFeedbackWidget() {
           breakpoints must meet exactly here or there's a dead zone between
           lg and xl (~1024–1280px, common laptop/tablet-landscape widths)
           where neither trigger would render. */}
-      <div className="hidden lg:block fixed top-[245px] right-[8px] z-65 group">
+      <FloatingToolSlot className="hidden lg:block group" order={3} fallbackTop={245}>
         <button
           type="button"
           onClick={openForm}
@@ -270,7 +271,7 @@ export function ProductFeedbackWidget() {
         <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 group-hover:opacity-100 transition-opacity shadow-xl border border-white/10 z-50">
           Ajuda e sugestões
         </span>
-      </div>
+      </FloatingToolSlot>
 
       {/* Mobile/tablet trigger — floats above the bottom tab nav (which is
           itself "lg:hidden fixed bottom-0"), never underneath it or inside

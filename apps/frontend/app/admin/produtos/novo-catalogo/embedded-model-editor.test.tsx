@@ -66,7 +66,9 @@ describe("Editor de modelo global = o MESMO editor do produto, embutido", () => 
     mountEmbedded();
     expect(await screen.findByTestId("step-edit-form", {}, { timeout: 6000 })).toBeInTheDocument();
     for (const n of [1, 2, 3, 4, 5, 6]) expect(screen.getByTestId(`step-block-${n}`)).toBeInTheDocument();
-    expect(screen.getByTestId("step-guide-nav")).toBeInTheDocument();
+    expect(screen.queryByTestId("step-guide-nav")).not.toBeInTheDocument(); // com janelas, a navegação fica dentro de cada bloco
+    fireEvent.click(screen.getByRole("button", { name: "Expandir todos" }));
+    expect(screen.getByTestId("step-guide-nav")).toBeInTheDocument(); // modo lista
   });
 
   it("salvar uma etapa de modelo usado pergunta: criar novo modelo OU editar globalmente (sem 'somente neste produto'), com o impacto; escolher 'novo modelo' manda scope new_model", async () => {

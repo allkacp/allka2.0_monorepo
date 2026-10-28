@@ -10,6 +10,7 @@ import {
   lazy,
 } from "react";
 import { Link } from "react-router-dom";
+import { partnerAgencyExtraItems, agencyMayHaveInternalTasks } from "@/lib/partner-menu";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -1135,15 +1136,9 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
       // genuinamente novo e não tem equivalente na Agency: Agências,
       // Comissões, Saques — esses aparecem soltos na mesma lista, sem
       // separador/seção visual (pedido explícito: "não separado assim").
-      const partnerOnlyItems = navigationConfig.parceiro.filter(
-        (item) =>
-          item.href !== "/partner/dashboard" &&
-          item.href !== "/partner/usuarios" &&
-          item.href !== "/partner/clientes" &&
-          item.href !== "/partner/projetos" &&
-          item.href !== "/partner/relatorios",
-      );
-      return [...baseAgencyItems, ...partnerOnlyItems];
+      // 2026-10-26: "Agências" também NÃO entra — a agência Partner vê só
+      // Comissões e Saques além do menu da agência (ver lib/partner-menu.ts).
+      return [...baseAgencyItems, ...partnerAgencyExtraItems(navigationConfig.parceiro)];
     }
 
     return navigationConfig[accountType] || [];
@@ -1172,8 +1167,9 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
 
   const navigation = (() => {
     const baseResolved = getNavigationItems();
+    // "Tarefas internas" são da Allka: a agência Partner nunca vê (as demais agências/empresas, só se a administração liberou).
     const internalTasksItem = accountType === "agencias"
-      ? { name: "Tarefas internas", href: "/agency/tarefas-internas", icon: ClipboardList, current: false }
+      ? !agencyMayHaveInternalTasks(isPartnerActive) ? null : { name: "Tarefas internas", href: "/agency/tarefas-internas", icon: ClipboardList, current: false }
       : accountType === "empresas" ? { name: "Tarefas internas", href: "/company/tarefas-internas", icon: ClipboardList, current: false } : null;
     const secureBrowserHref = accountType === "agencias" ? "/agency/navegador-seguro" : accountType === "empresas" ? "/company/navegador-seguro" : accountType === "nomades" ? "/nomades/navegador-seguro" : accountType === "lider" ? "/leader/navegador-seguro" : null;
     const secureBrowserItem = secureBrowserHref ? { name: "Navegador seguro", href: secureBrowserHref, icon: Lock, current: false } : null;

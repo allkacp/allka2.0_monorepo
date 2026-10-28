@@ -21,7 +21,7 @@ import { prisma } from "../lib/prisma";
 import { verifyToken, evaluateAdminMasterAccess, requireAdminMaster } from "../middleware/auth";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { logCommercialChangeEvent } from "../lib/catalog2-commercial-change-log";
-import { CATALOG2_PERIODS, isCatalog2Period, isCurrentlyContractablePeriod, listPeriodsForAdmin } from "../lib/catalog2-periods";
+import { CATALOG2_PERIODS, CATALOG2_PERIOD_MONTHS, isCatalog2Period, isCurrentlyContractablePeriod, listPeriodsForAdmin } from "../lib/catalog2-periods";
 import { stepPerformance } from "../lib/step-performance";
 import { recordCatalog2ProductHistory, listCatalog2ProductHistory } from "../lib/catalog2-product-history";
 import { CONTINUITY_MODES } from "../lib/catalog2-continuity";
@@ -76,6 +76,7 @@ import { notifyUser } from "../lib/catalog2-commercial-flow";
 import { generateContractFromRequest, ContractingError } from "../lib/catalog2-contracting";
 import { ProductDraftError, draftProductWithAI } from "../lib/catalog2-product-draft-ai";
 import { QuestionnaireAiError, suggestQuestionnaire } from "../lib/catalog2-questionnaire-ai";
+import { ChecklistAiError, suggestChecklist } from "../lib/catalog2-checklist-ai";
 import { loadRegisteredLevels, parseAgencyLevels, serializeAgencyLevels, serializeAudiences, validateAgencyLevels, validateAudiences } from "../lib/catalog2-audience";
 import { EMERGENCY_EXTRA_KINDS, validateEmergencyStepInput } from "../lib/catalog2-emergency";
 import { EXECUTOR_KINDS, EXECUTOR_POLICIES, isRefPolicy, LEADER_MODES, parseDepends, validateStepExecutor, validateStepFlow } from "../lib/step-flow";
@@ -86,6 +87,7 @@ import { attachCatalog2QuoteToProject, assertPackageOnlyRules } from "../lib/cat
 import { recalculateProjectValue } from "../lib/project-value";
 import { aiCopyData, AI_MODES, AI_ACTORS, AI_TRIGGERS } from "../lib/catalog2-ai";
 import { applyResolution, RESOLUTION_ACTIONS, RESOLUTION_EFFECTS, type ResolutionAction } from "../lib/catalog2-commercial";
+import { unavailableSpecificAssignments } from "../lib/specific-assignee-impact";
 import { priceSummary } from "../lib/catalog2-price-summary";
 import { OPTION_AVAILABILITY } from "../lib/catalog2-availability";
 import { ADDON_TYPES, type AddonType } from "../lib/catalog2-addon-types";
@@ -715,6 +717,29 @@ router.post("/tasks/:id/questionnaire/ai-suggest", async (req, res, next) => {
     res.json(r);
   } catch (e) {
     if (e instanceof QuestionnaireAiError) { res.status(e.httpStatus).json({ error: e.message, code: "questionnaire_ai" }); return; }
+    handle(e, res, next);
+  }
+});
+// Checklist da etapa por IA: lê o cadastro (produto, tarefa, etapas, entregáveis, acessos) e o rascunho da etapa e SUGERE os itens de execução, aprovação e qualificação. Não salva nada.
+const checklistAiSchema = z.object({
+  existing: z.array(z.object({ kind: z.enum(["execucao", "aprovacao", "qualificacao"]), text: z.string().max(400) })).max(60).optional(),
+  kinds: z.array(z.enum(["execucao", "aprovacao", "qualificacao"])).max(3).optional(),
+  use_internal: z.boolean().optional(),
+  use_internet: z.boolean().optional(),
+  notes: z.string().max(1000).optional(),
+  draft: z.object({
+    name: z.string().max(300).optional(), description: z.string().max(4000).optional(), completion_criteria: z.string().max(4000).optional(), orientations: z.string().max(8000).optional(),
+    execution_mode: z.string().max(20).optional(), specialty: z.string().max(120).optional(), qualification: z.boolean().optional(), client_approval: z.string().max(60).optional(), internal: z.boolean().optional(),
+  }).optional(),
+});
+router.post("/steps/:id/checklist/ai-suggest", async (req, res, next) => {
+  try {
+    const d = checklistAiSchema.parse(req.body ?? {});
+    const r = await suggestChecklist(req.params.id as string, d);
+    await audit(req, "step_checklist_ai_suggested", { step_id: req.params.id, items: r.items.length, internet: !!d.use_internet });
+    res.json(r);
+  } catch (e) {
+    if (e instanceof ChecklistAiError) { res.status(e.httpStatus).json({ error: e.message, code: "checklist_ai" }); return; }
     handle(e, res, next);
   }
 });
@@ -1652,11 +1677,13 @@ router.put("/products/:id/periods/:period", async (req, res, next) => {
     }).parse(req.body);
     const product = await prisma.catalog2Product.findUnique({ where: { id: req.params.id as string }, select: { id: true } });
     if (!product) throw new Catalog2Error("Produto não encontrado.", 404);
-    const months = { mensal: 1, trimestral: 3, semestral: 6, anual: 12 }[period];
+    const months = CATALOG2_PERIOD_MONTHS[period];
     // Reunião 18/09/2026: guardamos a configuração dos períodos futuros,
     // mas impedimos que sejam ativados antes da decisão de lançamento.
     // A regra fica no backend para uma chamada direta nunca contornar a UI.
-    const effectiveIsActive = isCurrentlyContractablePeriod(period) ? (d.is_active ?? true) : false;
+    // 25/10: o admin já AUTORIZA e dá desconto em qualquer período; quem decide se o cliente vê/compra é o portão de venda
+    // (isCurrentlyContractablePeriod, usado na cotação, no catálogo e no checkout) — esse continua fechado para os períodos longos.
+    const effectiveIsActive = d.is_active ?? true;
     const before = await prisma.catalog2ProductPeriod.findUnique({ where: { product_id_period: { product_id: product.id, period } } });
     // Item 7.1: upsert + evento de histórico confirmados juntos. O
     // logCommercialChangeEvent (Item 4.1, âncora de proteção de preço —
@@ -4510,6 +4537,13 @@ async function computeProductReadiness(p: ReadinessProduct, forVersionId?: strin
       ? { level: "pronto", note: `v${published.version_number} publicada.` }
       : { level: "bloqueador", note: "Nunca publicado — invisível para o cliente (bloco 5 não publica)." },
   };
+
+  // Responsáveis nominais indisponíveis também sinalizam matrizes publicadas.
+  if (targetVersion) {
+    const assignmentTasks = await prisma.catalog2Task.findMany({ where: { version_id: targetVersion.id }, include: { steps: true } });
+    const unavailable = await unavailableSpecificAssignments(prisma, assignmentTasks);
+    if (unavailable.length) items.responsaveis = { level: "bloqueador", note: unavailable.map(i => i.message).join(" | ") };
+  }
 
   // R21-03 (reunião 21/10): etapa marcada como dependente de variação/adicional sem vínculo aparece como pendência de VARIAÇÕES (atalho Corrigir leva para lá).
   if (targetVersion) {

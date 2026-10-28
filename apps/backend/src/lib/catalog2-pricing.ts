@@ -669,9 +669,15 @@ async function computePricingCore(versionId: string, selection: PricingSelection
     if (!spec) return { rate: null, provisional: false };
     return { rate: spec.max_hourly_rate ?? null, provisional: false };
   };
-  const priceLine = (label: string, key: string, minutes: number, spec: { id: string; name: string; max_hourly_rate: number | null } | null | undefined, effortProvisional: boolean) => {
+  const priceLine = (label: string, key: string, minutes: number, spec: { id: string; name: string; max_hourly_rate: number | null } | null | undefined, effortProvisional: boolean, noCost = false) => {
     const { rate, provisional } = rateOf(spec);
     if (minutes === 0) warnings.push({ code: "task_without_time", message: `${label} não tem duração estimada.` });
+    // Etapa recebida por LÍDER ou EQUIPE INTERNA: as horas valem como prazo, mas não entram no custo do produto (a equipe interna já está coberta pela margem).
+    if (noCost) {
+      humanExact.push({ task_key: key, cost: 0 });
+      humanBreakdown.push({ task_key: key, specialty: null, minutes, rate: null, cost: 0, effort_is_provisional: effortProvisional, rate_is_provisional: false });
+      return;
+    }
     if (!spec && minutes > 0) {
       humanPending = true;
       stepsWithoutSpecialty.push(label);
@@ -700,7 +706,7 @@ async function computePricingCore(versionId: string, selection: PricingSelection
       const taskTarget = replaceTask.get(t.key);
       const sumBase = withMinutes.reduce((a, x) => a + x.m, 0);
       const factor = taskTarget != null && sumBase > 0 ? taskTarget / sumBase : 1;
-      for (const { s, m } of withMinutes) priceLine(`A etapa "${s.name}" da tarefa "${t.name}"`, `${t.key}:${s.key}`, replaceStep.has(`${t.key}:${s.key}`) ? m : m * factor, s.specialty ?? t.specialty, !!t.effort_is_provisional);
+      for (const { s, m } of withMinutes) priceLine(`A etapa "${s.name}" da tarefa "${t.name}"`, `${t.key}:${s.key}`, replaceStep.has(`${t.key}:${s.key}`) ? m : m * factor, s.specialty ?? t.specialty, !!t.effort_is_provisional, (s as any).executor_kind === "leader" || (s as any).executor_kind === "internal");
     } else if (!t.steps.some((s) => excludedStepRefs.has(`${t.key}:${s.key}`) && (s.estimated_minutes ?? 0) > 0)) {
       // (se todas as etapas com horas são de "primeira execução" fora deste cálculo, a tarefa não tem nada a cobrar aqui)
       priceLine(`A tarefa "${t.name}"`, t.key, replaceTask.get(t.key) ?? t.estimated_minutes ?? 0, t.specialty, !!t.effort_is_provisional);

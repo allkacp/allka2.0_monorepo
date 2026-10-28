@@ -3,7 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 
-const { startRoadmapSso, getRoadmapSsoBaseUrl, getCurrentUser, mockAccountType } = vi.hoisted(() => ({
+const { startRoadmapSso, getRoadmapSsoBaseUrl, getCurrentUser, mockAccountType, getInternalTaskSettings } = vi.hoisted(() => ({
+  getInternalTaskSettings: vi.fn(),
   startRoadmapSso: vi.fn(),
   getRoadmapSsoBaseUrl: vi.fn(),
   getCurrentUser: vi.fn(),
@@ -13,6 +14,7 @@ const { startRoadmapSso, getRoadmapSsoBaseUrl, getCurrentUser, mockAccountType }
 vi.mock("@/lib/api-client", () => ({
   apiClient: {
     getCurrentUser,
+    getInternalTaskSettings,
     startRoadmapSso,
     getRoadmapSsoBaseUrl,
     getProjects: vi.fn().mockResolvedValue(null),
@@ -31,7 +33,8 @@ vi.mock("@/contexts/account-type-context", () => ({
 vi.mock("@/contexts/sidebar-context", () => ({
   useSidebar: () => ({
     sidebarSettings: { backgroundColor: "bg-slate-900" },
-    agencyProfile: null,
+    // a barra da agência lê logo/nome da agência; para os demais perfis não é usado
+    agencyProfile: mockAccountType.value === "agencias" ? { logo: "", name: "Agência Teste" } : null,
     userProfile: { name: "Admin Teste", avatar: "AT", job_title: "Admin", role: "admin" },
     setSidebarCollapsed: vi.fn(),
     setSidebarWidth: vi.fn(),
@@ -235,5 +238,50 @@ describe("Sidebar — item 'Perfil' (Líder e Nômade)", () => {
     renderSidebar();
     const link = await screen.findByRole("link", { name: /^perfil$/i });
     expect(link).toHaveAttribute("href", "/nomades/perfil");
+  });
+});
+
+// Agência PARTNER (regra de 26/10/2026): vê o menu da agência (tudo DELA) + Comissões e Saques; NÃO vê "Agências" nem "Tarefas internas" (são da Allka).
+describe("Sidebar — agência Partner", () => {
+  const linkNames = () => screen.getAllByRole("link").map((a) => (a.textContent ?? "").trim());
+  const setUser = (partner: boolean) => localStorage.setItem("allka_user", JSON.stringify({ role: "agency_admin", account_type: "agencias", ...(partner ? { partner_status: "active" } : {}) }));
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAccountType.value = "agencias";
+    getCurrentUser.mockResolvedValue({ admin_profile: null });
+    // a administração liberou "Tarefas internas" para agências em geral — mesmo assim a Partner não vê
+    getInternalTaskSettings.mockResolvedValue({ can_use: true });
+  });
+
+  it("Partner ativa: vê Dashboard, Clientes, Usuários, Projetos, Catálogo, Conexões, Combos, Tarefas, Navegador seguro, Financeiro, Relatórios, Comissões e Saques", async () => {
+    setUser(true);
+    renderSidebar();
+    await waitFor(() => expect(getInternalTaskSettings).toHaveBeenCalled());
+    await screen.findByRole("link", { name: /Comissões/ });
+    const names = linkNames();
+    for (const esperado of ["Dashboard", "Clientes", "Usuários", "Projetos", "Catálogo", "Conexões e acessos", "Combos", "Tarefas", "Navegador seguro", "Financeiro", "Relatórios", "Comissões", "Saques"]) {
+      expect(names.some((n) => n.includes(esperado)), `faltou ${esperado}`).toBe(true);
+    }
+  });
+
+  it("Partner ativa: NÃO vê 'Agências' nem 'Tarefas internas'", async () => {
+    setUser(true);
+    renderSidebar();
+    await waitFor(() => expect(getInternalTaskSettings).toHaveBeenCalled());
+    await screen.findByRole("link", { name: /Comissões/ });
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).not.toContain("/partner/agencias");
+    expect(hrefs).not.toContain("/agency/tarefas-internas");
+    expect(linkNames().some((n) => n === "Agências" || n === "Tarefas internas")).toBe(false);
+  });
+
+  it("agência comum (sem Partner) com o módulo liberado continua vendo 'Tarefas internas' e não vê Comissões/Saques", async () => {
+    setUser(false);
+    renderSidebar();
+    await screen.findByRole("link", { name: /Tarefas internas/ });
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("/agency/tarefas-internas");
+    expect(hrefs).not.toContain("/partner/comissoes");
+    expect(hrefs).not.toContain("/partner/saques");
   });
 });

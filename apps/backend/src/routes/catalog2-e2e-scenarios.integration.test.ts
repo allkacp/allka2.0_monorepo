@@ -128,7 +128,10 @@ async function quote(token: string, productId: string, o: { period?: string; sel
   return r.json;
 }
 async function checkoutAndPay(token: string, quoteIds: string[]) {
-  const checkout = await api("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: quoteIds, checkout_client_action_id: crypto.randomUUID() } });
+  const created = await api("/api/projects", { method: "POST", token, body: { title: `[TESTE] E2E contratação ${crypto.randomUUID()}`, status: "draft" } });
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  projects.push(created.json.id);
+  const checkout = await api("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: quoteIds, checkout_client_action_id: crypto.randomUUID(), project_id: created.json.id } });
   assert.equal(checkout.status, 201, JSON.stringify(checkout.json));
   const projectId = checkout.json.project.id as string;
   projects.push(projectId);
@@ -233,12 +236,13 @@ describe("Pedido 3 · Fase 8 — cenários ponta a ponta", () => {
     assert.equal(await prisma.catalog2ProjectDeliveryCycle.count({ where: { project_product_id: pp.id } }), 0);
   });
 
-  it("2. assinatura mensal: 1º mês pago na compra; fatura do mês 2 emitida e paga; tarefas do mês 2; trimestral travado", async () => {
+  it("2. assinatura mensal: 1º mês pago na compra; fatura do mês 2 emitida e paga; tarefas do mês 2; trimestral só com configuração", async () => {
     const { product } = await mkProduct("Assinatura", { tasks: [{ key: "rotina" }], recurring: true });
     await configurePeriod(ADMIN.token, product.id, "mensal");
-    await configurePeriod(ADMIN.token, product.id, "trimestral", 10);
     const tri = await api("/api/catalog2/quotes", { method: "POST", token: CO_A.token, body: { product: product.id, selection: SEL, period: "trimestral" } });
-    assert.ok(tri.status >= 400 && tri.status < 500, "trimestral está pronto mas travado: " + tri.status);
+    // Desde 25/10 os períodos longos podem ser vendidos, mas somente se o
+    // administrador os configurar explicitamente. Sem configuração, bloquear.
+    assert.ok(tri.status >= 400 && tri.status < 500, "trimestral sem configuração deve bloquear: " + tri.status);
     const q = await quote(CO_A.token, product.id, { period: "mensal" });
     const { projectId, pps } = await checkoutAndPay(CO_A.token, [q.id]);
     const sub = await prisma.catalog2Subscription.findUniqueOrThrow({ where: { project_product_id: pps[0].id } });

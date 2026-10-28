@@ -13,6 +13,7 @@ import { generateNextUserCode } from "../lib/user-code";
 import { claimNextOrgSequenceNumber } from "../lib/company-sequence";
 import { hasMasterAccess, countActiveResponsibleAdmins } from "../lib/admin-account-safety";
 import { writeAccessAudit } from "../lib/product-feedback-service";
+import { specificAssigneeImpact } from "../lib/specific-assignee-impact";
 
 const router = Router();
 
@@ -156,6 +157,7 @@ const updateUserSchema = createUserSchema
   .extend({
     password: z.string().min(6).optional(),
     is_active: z.boolean().optional(),
+    assignment_confirmation: z.string().length(64).optional(),
     // Motivo opcional de bloqueio/desbloqueio — nunca persistido na própria
     // tabela users, só repassado pro log de auditoria (ver writeAccessAudit
     // no handler abaixo).
@@ -533,6 +535,43 @@ router.post(
 // account_type, conseguia chamar isto sobre qualquer outro usuário, incluindo
 // se auto-promover a admin/is_master via `role`/`admin_profile_id` no
 // payload — ver auditoria do lote "ações destrutivas de conta").
+// PATCH /api/users/me — AUTOATENDIMENTO: qualquer conta (agência, empresa, nômade, líder…) edita os PRÓPRIOS dados pessoais.
+// Só campos seguros (nome, telefone, foto e dados de perfil pessoal). Papel, situação, e-mail de login, senha, perfil de acesso, vínculos e
+// anotações internas continuam só com o admin (PUT /:id abaixo) — por isso a lista é fechada (.strict()) e um campo fora dela é recusado.
+const SELF_PROFILE_KEYS = PROFILE_FIELD_KEYS.filter((k) => k !== "admin_notes" && k !== "internal_notes");
+const selfUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  phone: z.string().max(40).optional(),
+  avatar: z.string().optional(),
+  ...Object.fromEntries(SELF_PROFILE_KEYS.map((k) => [k, profileFieldsSchema[k]])),
+}).strict();
+router.patch("/me", verifyToken, async (req, res, next) => {
+  try {
+    const parsed = selfUpdateSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      const bad = Array.from(new Set(parsed.error.issues.flatMap((i) => (i.code === "unrecognized_keys" ? (i as any).keys : [i.path.join(".")])))).filter(Boolean);
+      res.status(400).json({ error: `Estes campos só o administrador altera: ${bad.join(", ")}.`, code: "self_update_forbidden_fields" });
+      return;
+    }
+    const { name, phone, avatar, ...profileRest } = parsed.data as Record<string, any>;
+    const profileData: Record<string, unknown> = {};
+    for (const k of SELF_PROFILE_KEYS) if (profileRest[k] !== undefined) profileData[k] = k === "birth_date" && profileRest[k] ? new Date(profileRest[k] as string) : profileRest[k];
+    const userData: Record<string, unknown> = {};
+    if (name !== undefined) userData.name = name;
+    if (phone !== undefined) userData.phone = phone;
+    if (avatar !== undefined) userData.avatar = avatar;
+    const id = req.user!.id;
+    const user = await prisma.$transaction(async (tx) => {
+      if (Object.keys(userData).length > 0) await tx.user.update({ where: { id }, data: userData });
+      if (Object.keys(profileData).length > 0) await tx.userProfile.upsert({ where: { user_id: id }, create: { user_id: id, ...profileData }, update: profileData });
+      return tx.user.findUnique({ where: { id }, select: safeSelect });
+    });
+    res.json(flattenProfile(user!));
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.put(
   "/:id",
   verifyToken,
@@ -541,9 +580,10 @@ router.put(
   validate(updateUserSchema),
   async (req, res, next) => {
     try {
-      const { password, reason, ...rest } = req.body as {
+      const { password, reason, assignment_confirmation, ...rest } = req.body as {
         password?: string;
         reason?: string;
+        assignment_confirmation?: string;
         [key: string]: unknown;
       };
 
@@ -620,6 +660,12 @@ router.put(
       }
 
       const user = await prisma.$transaction(async (tx) => {
+        if (data.is_active === false && target.is_active) {
+          const impact = await specificAssigneeImpact(tx, id, "deactivate");
+          if (impact.has_impact && assignment_confirmation !== impact.token) {
+            throw Object.assign(new Error("Este usuário tem indicações pelo nome. Confira os vínculos antes de inativar."), { assignmentImpact: impact });
+          }
+        }
         if (Object.keys(data).length > 0) {
           await tx.user.update({ where: { id }, data });
         }
@@ -645,7 +691,8 @@ router.put(
       }
 
       res.json(flattenProfile(user!));
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.assignmentImpact) { res.status(409).json({ code: "specific_assignee_confirmation_required", error: err.message, impact: err.assignmentImpact }); return; }
       next(err);
     }
   },
@@ -763,7 +810,14 @@ router.delete(
         }
       }
 
-      await prisma.user.delete({ where: { id } });
+      await prisma.$transaction(async (tx) => {
+        const impact = await specificAssigneeImpact(tx, id, "delete");
+        if (impact.has_impact && req.body?.assignment_confirmation !== impact.token) {
+          throw Object.assign(new Error("Este usuário tem indicações pelo nome. Confira os vínculos antes de excluir."), { assignmentImpact: impact });
+        }
+        // Preserva a matriz: referência ausente vira pendência, não rodízio.
+        await tx.user.delete({ where: { id } });
+      });
 
       await writeAccessAudit({
         actorId: req.user!.id,
@@ -779,6 +833,7 @@ router.delete(
       // de FK em vez de simplesmente apagar em cascata o histórico da
       // organização. Isso é o comportamento certo — só falta a mensagem
       // amigável em vez do 500 genérico.
+      if (err?.assignmentImpact) { res.status(409).json({ code: "specific_assignee_confirmation_required", error: err.message, impact: err.assignmentImpact }); return; }
       if (err?.code === "P2003") {
         res.status(409).json({
           error: "Este usuário possui uma organização (agência ou empresa) ou outros registros vinculados que impedem a exclusão. Resolva esses vínculos antes de excluir a conta.",

@@ -181,6 +181,8 @@ Detalhes completos em [produtos.md](./produtos.md). Regras essenciais:
 
 ### Comissões
 
+- **Contratação Agency/Agency Partner → cliente final por link (28/10/2026):** escolher taxa única sobre o total ou taxas individuais por produto/configuração da cesta. Cada linha usa o percentual sobre o preço agregado da cotação (já inclui sua quantidade), não sobre cada unidade arredondada separadamente. O percentual é acréscimo ao preço, não desconto/margem por dentro. Cada taxa deve estar entre 0 e 100; o modo por produto exige todas as linhas sem duplicatas. Os snapshots preservam taxas/totais e não são reescritos por retry. Cliente vê apenas preços finais; crédito de comissão só após pagamento confirmado, uma vez por pagamento. Se a agência paga, não há comissão para cliente final. Regras de comissão de indicação/Partner abaixo são outro fluxo.
+
 - **Agência**: % do valor do projeto (conforme `PartnerLevel`).
 - **Parceiro**: % sobre MRR das agências que indicou.
 - **Nômade**: valor direto da tarefa executada.

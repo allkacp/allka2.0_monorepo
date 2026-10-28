@@ -32,6 +32,9 @@ describe("dashboardToolbarControlClass — classe de percepção de clicável", 
 
   it("usa anel branco no cabeçalho escuro do Admin (contraste)", () => {
     expect(dashboardToolbarControlClass({ theme: "dark" })).toMatch(/focus-visible:ring-white/);
+    expect(dashboardToolbarControlClass({ theme: "dark" })).toContain("!text-white");
+    expect(dashboardToolbarControlClass({ theme: "dark" })).toContain("[&_svg]:!text-white");
+    expect(dashboardToolbarControlClass({ theme: "dark" })).toContain("border-white/60");
   });
 
   it("só o gatilho de menu ganha o sinal de 'aberto' (data-[state=open]) — e não é só cor", () => {

@@ -128,16 +128,73 @@ export const EVIDENCE_TYPE_LABEL: Record<EvidenceType, string> = { print: "Print
 export const CLIENT_APPROVAL_MODES = ["none", "step", "deliverables", "awareness"] as const;
 export type ClientApprovalMode = (typeof CLIENT_APPROVAL_MODES)[number];
 export const CLIENT_SILENCE_ACTIONS = ["wait", "remind", "escalate"] as const;
+export const CLIENT_SILENCE_STEPS = ["remind", "escalate"] as const;
 export const ADJUST_RECEIVERS = ["executor", "leader"] as const;
 export interface ClientApprovalOps {
   mode: ClientApprovalMode;
   /** O que fazer quando o cliente não responde no prazo (registrado no cadastro; hoje o prazo é mostrado e acompanhado). */
   silence_action?: (typeof CLIENT_SILENCE_ACTIONS)[number];
+  /** Várias ações ao mesmo tempo (lembrar o cliente E avisar o líder). Vazio = continuar aguardando. `silence_action` guarda a primeira, por compatibilidade. */
+  silence_actions?: (typeof CLIENT_SILENCE_STEPS)[number][];
   adjust_receiver?: (typeof ADJUST_RECEIVERS)[number];
   adjustment_limit?: number;
 }
 
+/** Etapa em ciclos (23/10): a etapa dura vários períodos (ex.: gestão semanal por 30 dias). O cadastro lista CADA ciclo, com o seu período (dias
+ * contados a partir do início da etapa) e as suas regras. Cada ciclo termina com entrega aprovada pelo cliente em prazo curto; o ciclo seguinte
+ * começa na data certa com ou sem aprovação; reprovação vira orientação do ciclo seguinte (o anterior não reabre); a etapa fecha no último ciclo. */
+export interface StepCycleItem {
+  /** Primeiro dia do ciclo (1 = dia em que a etapa começa). */
+  from_day: number;
+  /** Último dia do ciclo (inclusive). */
+  to_day: number;
+  /** Quantos dias úteis o cliente tem para aprovar a entrega deste ciclo. */
+  approval_window_days: number;
+  /** Horas de trabalho previstas neste ciclo (opcional; informativo). */
+  hours?: number;
+  /** Regra/orientação própria deste ciclo (opcional). */
+  rule?: string;
+}
+export interface StepCyclesOps { items: StepCycleItem[] }
+export const STEP_CYCLES_MAX = 60;
+
+/** Aceita o formato antigo (period_days/total_days/approval_window_days) gerando a lista de ciclos. Devolve null se algo estiver inválido. */
+export function normalizeStepCycles(raw: unknown): StepCyclesOps | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  let list: unknown[] = [];
+  if (Array.isArray(r.items)) list = r.items;
+  else {
+    const pd = Number(r.period_days), td = Number(r.total_days), aw = Number(r.approval_window_days);
+    if (!(Number.isInteger(pd) && pd >= 1 && pd <= 90 && Number.isInteger(td) && td >= pd && td <= 366 && Number.isInteger(aw) && aw >= 1 && aw <= 30)) return null;
+    for (let from = 1; from <= td && list.length < STEP_CYCLES_MAX; from += pd) list.push({ from_day: from, to_day: Math.min(from + pd - 1, td), approval_window_days: aw });
+  }
+  if (list.length === 0 || list.length > STEP_CYCLES_MAX) return null;
+  const items: StepCycleItem[] = [];
+  let prevTo = 0;
+  for (const it of list) {
+    if (!it || typeof it !== "object") return null;
+    const x = it as Record<string, unknown>;
+    const from = Number(x.from_day), to = Number(x.to_day), aw = Number(x.approval_window_days);
+    if (!(Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(aw))) return null;
+    if (from < 1 || to < from || to > 366 || from <= prevTo || aw < 1 || aw > 30) return null;
+    const item: StepCycleItem = { from_day: from, to_day: to, approval_window_days: aw };
+    if (x.hours != null && x.hours !== "") {
+      const h = Number(x.hours);
+      if (!(Number.isFinite(h) && h >= 0 && h <= 1000)) return null;
+      if (h > 0) item.hours = Math.round(h * 100) / 100;
+    }
+    const rule = typeof x.rule === "string" ? x.rule.trim().slice(0, 500) : "";
+    if (rule) item.rule = rule;
+    items.push(item);
+    prevTo = to;
+  }
+  return { items };
+}
+
 export interface StepOps {
+  /** Etapa em ciclos (ver StepCyclesOps). Ausente = etapa comum. */
+  cycles?: StepCyclesOps;
   /** A etapa foi declarada SEM entregáveis (19/10). Ausente = não declarado (vale o que estiver ligado à etapa). */
   no_deliverables?: boolean;
   /** Aprovação do cliente (explícita). Ausente = comportamento anterior (etapa visível ao cliente é aprovada por ele). */
@@ -195,7 +252,9 @@ export const stepOpsSchema = z
     ai_qualifier_user_id: z.string().max(60).nullish(),
     evidence_types: z.array(z.enum(EVIDENCE_TYPES)).max(EVIDENCE_TYPES.length).nullish(),
     no_deliverables: z.boolean().nullish(),
-    client_approval: z.object({ mode: z.enum(CLIENT_APPROVAL_MODES), silence_action: z.enum(CLIENT_SILENCE_ACTIONS).nullish(), adjust_receiver: z.enum(ADJUST_RECEIVERS).nullish(), adjustment_limit: z.number().int().min(0).max(50).nullish() }).nullish(),
+    // Etapa em ciclos: recusa configuração inválida (ciclos sobrepostos, prazo 0…) em vez de descartar em silêncio.
+    cycles: z.unknown().refine((v) => v == null || normalizeStepCycles(v) !== null, "Ciclos inválidos: confira os períodos (sem sobreposição) e o prazo de aprovação de 1 a 30 dias úteis.").nullish(),
+    client_approval: z.object({ mode: z.enum(CLIENT_APPROVAL_MODES), silence_action: z.enum(CLIENT_SILENCE_ACTIONS).nullish(), silence_actions: z.array(z.enum(CLIENT_SILENCE_STEPS)).max(2).nullish(), adjust_receiver: z.enum(ADJUST_RECEIVERS).nullish(), adjustment_limit: z.number().int().min(0).max(50).nullish() }).nullish(),
     access_scope: z.enum(["all", "some"]).nullish(),
     access_keys: z.array(z.string().max(60)).max(40).nullish(),
     access_parked: z.object({ reqs: z.array(z.record(z.string(), z.unknown())).max(40), keys: z.array(z.string().max(60)).max(40) }).nullish(),
@@ -265,14 +324,20 @@ export function normalizeStepOps(raw: unknown): StepOps | null {
     if (items.length) out.checklist = items;
   }
   if (r.no_deliverables === true) out.no_deliverables = true;
-  const ca = r.client_approval as { mode?: unknown; silence_action?: unknown; adjust_receiver?: unknown; adjustment_limit?: unknown } | undefined;
+  const ca = r.client_approval as { mode?: unknown; silence_action?: unknown; silence_actions?: unknown; adjust_receiver?: unknown; adjustment_limit?: unknown } | undefined;
   if (ca && typeof ca === "object" && (CLIENT_APPROVAL_MODES as readonly string[]).includes(ca.mode as string)) {
     const o: ClientApprovalOps = { mode: ca.mode as ClientApprovalMode };
     if ((CLIENT_SILENCE_ACTIONS as readonly string[]).includes(ca.silence_action as string)) o.silence_action = ca.silence_action as ClientApprovalOps["silence_action"];
+    if (Array.isArray(ca.silence_actions)) {
+      const acts = (CLIENT_SILENCE_STEPS as readonly string[]).filter((k) => (ca.silence_actions as unknown[]).includes(k)) as ClientApprovalOps["silence_actions"];
+      if (acts && acts.length) { o.silence_actions = acts; o.silence_action = acts[0]; }
+    }
     if ((ADJUST_RECEIVERS as readonly string[]).includes(ca.adjust_receiver as string)) o.adjust_receiver = ca.adjust_receiver as ClientApprovalOps["adjust_receiver"];
     if (typeof ca.adjustment_limit === "number" && Number.isInteger(ca.adjustment_limit) && ca.adjustment_limit >= 0 && ca.adjustment_limit <= 50) o.adjustment_limit = ca.adjustment_limit;
     out.client_approval = o;
   }
+  const cyc = normalizeStepCycles(r.cycles);
+  if (cyc) out.cycles = cyc;
   if (r.access_scope === "all") out.access_scope = "all";
   if (r.access_scope === "some" && Array.isArray(r.access_keys)) {
     const keys = Array.from(new Set(r.access_keys.filter((k): k is string => typeof k === "string").map((k) => k.trim().slice(0, 60)).filter(Boolean))).slice(0, 40);

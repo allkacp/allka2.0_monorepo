@@ -138,3 +138,12 @@ describe("Acessos da etapa em rascunho da tela", () => {
     expect(otherUsers(version, "ga_1", "t1", "s2")).toEqual([]);
   });
 });
+
+describe("etapa que usa um acesso de OUTRA etapa", () => {
+  it("não fica 'sem acesso': o acesso emprestado conta; sem nenhum próprio e sem emprestado continua avisando", async () => {
+    const { accessIssues } = await import("./step-accesses");
+    expect(accessIssues([], true, 1)).toEqual([]);
+    expect(accessIssues([], true, 0).map((i) => i.field)).toEqual(["accesses"]);
+    expect(accessIssues([], false, 0)).toEqual([]);
+  });
+});

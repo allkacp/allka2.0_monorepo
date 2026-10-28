@@ -41,6 +41,8 @@ export function linkItem(d: any, stepId: string): DelivItem {
 export function syncDelivStates(items: DelivItem[]): DelivItem[] {
   return items.map((i) => (i.state === "saved" || i.state === "edited") && i.base ? { ...i, state: same(i.fields, i.base) && i.draft === i.serverDraft ? "saved" as const : "edited" as const } : i);
 }
+/** Marcado como rascunho no servidor, mas com todos os campos obrigatórios preenchidos: não falta nada. A marca de rascunho só sai ao concluir a etapa. */
+export const isStaleDraft = (i: DelivItem): boolean => !!i.draft && (i.state === "saved" || i.state === "linked" || i.state === "edited") && deliverableIssues(i.fields).length === 0;
 export const activeDeliv = (items: DelivItem[]) => items.filter((i) => i.state !== "unlinked" && i.state !== "deleted");
 export const hasDelivPending = (items: DelivItem[]) => items.some((i) => i.state !== "saved");
 
@@ -55,7 +57,7 @@ export function delivIssues(items: DelivItem[], declaredNone: boolean): { field:
   }
   for (const i of act) {
     const iss = deliverableIssues(i.fields);
-    if (iss.length || i.draft) out.push({ field: `deliverable:${i.uid}`, message: `O entregável “${i.fields.name.trim() || "(sem nome)"}” está incompleto${iss.length ? `: ${iss.map((x) => x.message.replace(/\.$/, "").toLowerCase()).join("; ")}` : " (salvo como rascunho)"}.` });
+    if (iss.length || (i.draft && !isStaleDraft(i))) out.push({ field: `deliverable:${i.uid}`, message: `O entregável “${i.fields.name.trim() || "(sem nome)"}” está incompleto${iss.length ? `: ${iss.map((x) => x.message.replace(/\.$/, "").toLowerCase()).join("; ")}` : " (salvo como rascunho)"}.` });
   }
   return out;
 }

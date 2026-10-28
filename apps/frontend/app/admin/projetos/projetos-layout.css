@@ -1,0 +1,40 @@
+/* Referência Clientes: estilos locais, sem alterar shell nem dados dos projetos. */
+.projects-reference { container-type: inline-size; container-name: projects-reference; }
+.project-reference-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); min-height: 65px; }
+.project-reference-stat { padding: 8px clamp(6px, 1cqw, 20px); gap: clamp(5px, .8cqw, 12px); }
+.project-reference-stat + .project-reference-stat { border-left: 1px solid #e2e8f0; }
+.project-reference-stat-icon { width: clamp(28px, 3.5cqw, 48px); height: clamp(28px, 3.5cqw, 48px); }
+.project-reference-stat-icon svg { width: 50%; height: 50%; }
+.project-reference-stat-label { font-size: clamp(9px, .9cqw, 11px); line-height: 1.25; }
+.project-reference-stat-value { font-size: clamp(20px, 2.3cqw, 28px); line-height: 1; }
+.projects-reference-table { table-layout: fixed; min-width: 0 !important; }
+.projects-reference-table th, .projects-reference-table td { min-width: 0; padding-inline: clamp(4px, .75cqw, 16px) !important; }
+.projects-reference-table th { padding-block: 10px; background: #f8fafc !important; color: #365a91; }
+.projects-reference-table td { padding-block: 6px; }
+.projects-reference-table th > div:first-child { display: flex; min-width: 0; max-width: 100%; }
+.projects-reference-table th button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projects-reference-table td > div { min-width: 0; max-width: 100%; }
+.projects-reference-table td:not(.project-actions) { overflow: hidden; }
+.projects-reference-table td[data-rotulo="Projeto"] p { font-size: clamp(10px, 1cqw, 14px); }
+.projects-reference-table td[data-rotulo="Projeto"] > div > :first-child { border-radius: 999px; }
+.projects-reference-table .project-actions { position: sticky; right: 0; z-index: 4; padding-inline: 3px !important; }
+.projects-reference-table tbody .project-actions { background: inherit; box-shadow: -1px 0 0 #e2e8f0; }
+.project-reference-action { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: 8px; border: 1px solid #e8edf5; background: white; color: #6d43b8; box-shadow: 0 4px 10px rgba(15,23,42,.06); transition: all .15s; }
+.project-reference-action:hover:not(:disabled) { background: linear-gradient(135deg,#2558ff,#6e2c96,#d92293); color: white; border-color: transparent; transform: translateY(-1px); }
+.project-reference-action:focus-visible { outline: 2px solid #8238e9; outline-offset: 2px; }
+.project-reference-action:disabled { opacity: .4; cursor: not-allowed; }
+.dark .project-reference-stats { background: #111827; }
+.dark .project-reference-stat-label, .dark .project-reference-stat-value { color: #dbeafe; }
+.dark .projects-reference-table th { background: #111827 !important; color: #cbd5e1; }
+.dark .project-reference-action { background: #1e293b; border-color: #334155; color: #c4b5fd; }
+@container projects-reference (max-width: 950px) {
+  .projects-reference-table th, .projects-reference-table th button { font-size: 9px !important; letter-spacing: 0; }
+  .projects-reference-table td { font-size: 10px; }
+}
+@container projects-reference (max-width: 520px) {
+  .project-reference-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .project-reference-stat { min-height: 58px; }
+}
+@media (max-width: 767px) {
+  .projects-reference-table .project-actions { position: static; }
+}

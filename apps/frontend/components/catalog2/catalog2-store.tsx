@@ -24,6 +24,7 @@ import { Catalog2ProductDetail } from "@/components/catalog2-product-detail";
 import { ProductViewModeToggle } from "@/components/product-view-mode-toggle";
 import { usePersistedViewMode, viewModeGridClass } from "@/lib/use-persisted-view-mode";
 import { PageLoader } from "@/components/ui/loading";
+import { Money, PriceWithAllkoins, fmtPriceBRL } from "@/components/price-with-allkoins";
 
 type Portal = "admin" | "company" | "agency" | "leader";
 
@@ -38,13 +39,13 @@ const PORTAL_BASE_PATH: Record<Portal, string> = {
   leader: "/leader/catalogo-produtos",
 };
 
-function money(v: number | null | undefined, currency = "BRL") {
+function money(v: number | null | undefined, _currency = "BRL") {
   if (v == null) return "A definir";
-  return `${currency} ${Number(v).toFixed(2)}`;
+  return fmtPriceBRL(v);
 }
 
 // Item 6 (reunião 2026-09-14, "Modalidades de contratação por período").
-const PERIOD_LABEL: Record<string, string> = { mensal: "Mensal", trimestral: "Trimestral", semestral: "Semestral", anual: "Anual" };
+const PERIOD_LABEL: Record<string, string> = { mensal: "Mensal", bimestral: "Bimestral", trimestral: "Trimestral", semestral: "Semestral", anual: "Anual" };
 
 export function Catalog2Store({ portal }: { portal: Portal }) {
   const navigate = useNavigate();
@@ -68,6 +69,13 @@ export function Catalog2Store({ portal }: { portal: Portal }) {
 
   const [refs, setRefs] = useState<{ pillars: any[]; categories: any[]; four_f: any[] }>({ pillars: [], categories: [], four_f: [] });
   const [cartOpen, setCartOpen] = useState(false);
+  // Atalho do cabeçalho global: abre a mesma cesta, não uma cópia local.
+  useEffect(() => {
+    if (sp.get("cesta") === "1" && portal !== "leader") {
+      setCartOpen(true);
+      setSp(prev => { const next = new URLSearchParams(prev); next.delete("cesta"); return next; }, { replace: true });
+    }
+  }, [sp, setSp, portal]);
   const [cart, setCart] = useState<{ items: any[]; count: number; needs_revalidation: boolean }>({ items: [], count: 0, needs_revalidation: false });
   const [forbidden, setForbidden] = useState(false);
 
@@ -413,9 +421,9 @@ function CartDrawer({ portal, cart, onClose, onChanged, onOpenProduct }: any) {
                 <div className="mt-1 text-xs text-neutral-500">
                   qtd {it.quantity}
                   {it.period ? (
-                    <> · {PERIOD_LABEL[it.period] ?? it.period} — {it.period_pricing?.available ? money(it.period_pricing.total_price, it.period_pricing.currency) : "período indisponível"}</>
+                    <> · {PERIOD_LABEL[it.period] ?? it.period} — {it.period_pricing?.available ? <Money value={it.period_pricing.total_price} /> : "período indisponível"}</>
                   ) : (
-                    <> · {it.pricing ? money(it.pricing.commercial_price, it.pricing.currency) : "recalcular"}</>
+                    <> · {it.pricing ? <Money value={it.pricing.commercial_price} /> : "recalcular"}</>
                   )}
                   {!it.current && <span className="ml-1 text-amber-600">(nova versão publicada — revise)</span>}
                 </div>

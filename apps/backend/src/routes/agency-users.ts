@@ -13,9 +13,9 @@ import { writeAccessAudit } from "../lib/product-feedback-service";
 // aceita agency_id vindo do frontend. Espelha company-users.ts (Tarefa 10).
 const router = Router();
 
-// Único role atribuível via self-service — nunca agency_admin (impede
+// Colaborador e consultor via self-service — nunca agency_admin (impede
 // autopromoção e criação de um segundo principal por esse caminho).
-const AGENCY_ASSIGNABLE_ROLES = ["agency_user"] as const;
+const AGENCY_ASSIGNABLE_ROLES = ["agency_user", "agency_consultant"] as const;
 
 // Só agency_admin gerencia a equipe — agency_user recebe 403.
 function requireAgencyAdmin(req: Request, res: Response, next: NextFunction): void {

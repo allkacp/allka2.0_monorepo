@@ -83,6 +83,9 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import { formatCompanySequenceId } from "@/lib/company-display-id";
+import { getCurrentUserScopedStorageKey } from "@/lib/dashboard-storage-scope";
+import "./empresas-layout.css";
 import { ExportButton } from "@/components/export-button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -101,6 +104,7 @@ import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { CompanyEditSlidePanel } from "@/components/company-edit-slide-panel";
 import { CompanyViewSlidePanel } from "@/components/company-view-slide-panel";
+import { CompanyReferenceFrame } from "@/components/company-reference-frame";
 import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useSidebar } from "@/contexts/sidebar-context";
 import {
@@ -159,34 +163,38 @@ function CompanyCompactStatCard({
   tone: "blue" | "emerald" | "violet" | "orange";
 }) {
   const palette = {
-    blue: "bg-blue-50 text-blue-600 ring-blue-100",
-    emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100",
-    violet: "bg-violet-50 text-violet-600 ring-violet-100",
-    orange: "bg-orange-50 text-orange-600 ring-orange-100",
+    blue: "bg-sky-50 text-[#1877e8] ring-sky-100",
+    emerald: "bg-emerald-50 text-[#05ae70] ring-emerald-100",
+    violet: "bg-violet-50 text-[#8238e9] ring-violet-100",
+    orange: "bg-orange-50 text-[#ff6a1a] ring-orange-100",
   }[tone];
 
   return (
-    <div className="flex h-full min-w-0 items-center gap-3 px-4 sm:px-5">
+    <div className="company-stat flex h-full min-w-0 items-center">
       <span
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${palette}`}
+        className={`company-stat-icon flex shrink-0 items-center justify-center rounded-full ring-1 ${palette}`}
       >
-        <Icon className="h-5 w-5" />
+        <Icon className="stroke-[2]" />
       </span>
       <div className="min-w-0">
-        <p className="truncate text-[10px] font-bold uppercase tracking-wide text-[#5d7195]">
+        <p className="company-stat-label font-bold uppercase tracking-[0.02em] text-[#31578f]">
           {label}
         </p>
-        <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold leading-7 text-[#10264f]">
+        <div className="mt-1 flex min-w-0 items-center gap-1">
+          <span className="company-stat-number font-extrabold tracking-tight text-[#0c2455]">
             {value}
           </span>
-          <span className="hidden rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 sm:inline">
-            +0% mês
+          <span className="company-stat-trend inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-600">
+            <TrendingUp className="h-3 w-3" /> +0% <span className="font-normal text-slate-400">no mês</span>
           </span>
         </div>
       </div>
     </div>
   );
+}
+
+function CompanyReferenceAction({ label, icon: Icon, onClick }: { label: string; icon: typeof Eye; onClick: () => void }) {
+  return <TooltipProvider delayDuration={400}><Tooltip><TooltipTrigger asChild><button type="button" aria-label={label} className="company-reference-action" onClick={onClick}><Icon className="h-3.5 w-3.5" /></button></TooltipTrigger><TooltipContent className="text-xs font-medium">{label}</TooltipContent></Tooltip></TooltipProvider>;
 }
 
 // "partner" não é mais um CompanyType — Partner é um upgrade da própria
@@ -917,26 +925,26 @@ export default function EmpresasPage() {
 
   // ── Column resize ──────────────────────────────────────────────
   const allDefaultWidths: Record<ColKey, number> = {
-    acoes: 99,
-    id: 85,
-    empresa: 340,
-    contato: 240,
-    cnpj: 210,
+    acoes: 96,
+    id: 112,
+    empresa: 280,
+    contato: 136,
+    cnpj: 150,
     status: 108,
-    plano: 118,
-    tipo: 135,
-    membro_desde: 140,
+    plano: 94,
+    tipo: 150,
+    membro_desde: 122,
   };
   const allMinWidths: Record<ColKey, number> = {
-    acoes: 99,
+    acoes: 96,
     id: 72,
-    empresa: 260,
-    contato: 180,
-    cnpj: 180,
-    status: 92,
-    plano: 98,
-    tipo: 115,
-    membro_desde: 110,
+    empresa: 72,
+    contato: 72,
+    cnpj: 72,
+    status: 72,
+    plano: 72,
+    tipo: 72,
+    membro_desde: 72,
   };
   const defaultColWidths = visibleColumnsList.map(
     (c) => allDefaultWidths[c.key],
@@ -1066,6 +1074,7 @@ export default function EmpresasPage() {
   }, []);
 
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [companySortingStorageKey] = useState(() => getCurrentUserScopedStorageKey("allka:admin-companies-sort"));
   const {
     sortKey: companySortKey,
     sortDir: companySortDir,
@@ -1074,7 +1083,7 @@ export default function EmpresasPage() {
     columnFilters,
     toggleColumnFilter,
     clearColumnFilter,
-  } = useSorting<Company>();
+  } = useSorting<Company>({ storageKey: companySortingStorageKey, allowedKeys: ["sequence_number", "name", "status", "plan", "type", "created_at"] });
 
   // Mapping from ColKey to Company field for sortable columns
   const sortableColMap: Partial<Record<string, keyof Company>> = {
@@ -1163,6 +1172,7 @@ export default function EmpresasPage() {
     setCreateWithOwnerDiscardConfirmOpen,
   ] = useState(false);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
+  const [editFromView, setEditFromView] = useState(false);
   const [viewPanelOpen, setViewPanelOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
 
@@ -1723,7 +1733,7 @@ export default function EmpresasPage() {
     // comentário acima de `matchesTypeAndPartnerFilter`).
     return typeFilteredCompanies
       .filter((c) => {
-        const idCode = `emp_${c.sequence_number ?? ""}`;
+        const idCode = formatCompanySequenceId(c.sequence_number);
         return (
           c.name?.toLowerCase().includes(q) || idCode.toLowerCase().includes(q)
         );
@@ -1749,7 +1759,7 @@ export default function EmpresasPage() {
   // nunca revertem pra fora dele. Isso também é o que garante "filtro antes
   // da paginação": a paginação (`paginatedCompanies` abaixo) sempre faz
   // `.slice()` em cima do resultado JÁ filtrado por tipo e por tudo mais.
-  const filteredCompanies = useMemo(() => {
+  const baseFilteredCompanies = useMemo(() => {
     let filtered: Company[] = typeFilteredCompanies;
 
     if (searchQuery.trim()) {
@@ -1773,7 +1783,7 @@ export default function EmpresasPage() {
               ? company.phone.replace(/\D/g, "").includes(rawDigits)
               : false));
         // ID match — "emp_7", "7", etc.
-        const idCode = `emp_${company.sequence_number ?? ""}`;
+        const idCode = formatCompanySequenceId(company.sequence_number);
         const idMatch =
           idCode.toLowerCase().includes(q) ||
           (rawDigits.length > 0 &&
@@ -1905,9 +1915,10 @@ export default function EmpresasPage() {
   // Reset to page 1 whenever filter criteria change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, advancedFilters]);
+  }, [searchQuery, advancedFilters, columnFilters]);
 
-  const paginatedCompanies = sortCompanies(filteredCompanies).slice(
+  const filteredCompanies = useMemo(() => sortCompanies(companySortKey ? baseFilteredCompanies : [...baseFilteredCompanies].sort((a, b) => (a.sequence_number ?? a.id) - (b.sequence_number ?? b.id))), [baseFilteredCompanies, sortCompanies, companySortKey]);
+  const paginatedCompanies = filteredCompanies.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize,
   );
@@ -2408,7 +2419,8 @@ export default function EmpresasPage() {
     }
   };
 
-  const handleEditCompany = (company: Company) => {
+  const handleEditCompany = (company: Company, nested = false) => {
+    setEditFromView(nested);
     setSelectedCompany(company);
     setEditPanelOpen(true);
   };
@@ -2532,7 +2544,8 @@ export default function EmpresasPage() {
       });
     }
     setEditPanelOpen(false);
-    setSelectedCompany(null);
+    if (editFromView) setSelectedCompany(current => current ? { ...current, ...data } : current);
+    else setSelectedCompany(null);
   };
 
   const handleDeleteCompany = async (id: number) => {
@@ -2923,9 +2936,9 @@ export default function EmpresasPage() {
           </div>
 
           <div className="allka-users-scroll flex-1 min-h-0 overflow-y-scroll">
-            <div className="space-y-0 pr-[4px]">
+            <div className="companies-responsive space-y-0 pr-[4px]">
               {/* Stats Cards */}
-              <div className="mt-[5px] mb-[5px] grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 xl:h-[65px] xl:grid-cols-4 xl:divide-x xl:divide-slate-200">
+              <div data-testid="company-stats" className="company-stats mt-[5px] mb-[5px] grid overflow-hidden rounded-xl border border-slate-200/80 bg-white/80">
                 <CompanyCompactStatCard
                   label="Total de Empresas"
                   value={stats.total}
@@ -2959,7 +2972,7 @@ export default function EmpresasPage() {
                   {/* Search — com autocompletar por nome/ID */}
                   <div
                     ref={searchBoxRef}
-                    className="flex-1 relative min-w-[220px] basis-full sm:basis-auto"
+                    className="relative flex-1 min-w-[220px] max-w-sm"
                   >
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#7d1b6a]/50 dark:text-[#c07ab0]/60 z-10" />
                     <Input
@@ -2975,7 +2988,7 @@ export default function EmpresasPage() {
                           (e.target as HTMLInputElement).blur();
                         }
                       }}
-                      className="h-9 w-full rounded-lg border-slate-200 bg-white pl-8 pr-9 text-sm shadow-sm focus-visible:border-[#7d1b6a]/60 focus-visible:ring-2 focus-visible:ring-[#7d1b6a]/40"
+                      className="pl-8 pr-9 h-9 text-sm"
                     />
                     {searchQuery.trim() && (
                       <button
@@ -3009,8 +3022,7 @@ export default function EmpresasPage() {
                                   {c.name}
                                 </p>
                                 <p className="text-[11px] text-slate-400 font-mono">
-                                  emp_
-                                  {c.sequence_number ?? c.id}
+                                  {formatCompanySequenceId(c.sequence_number ?? c.id)}
                                 </p>
                               </div>
                             </button>
@@ -3147,7 +3159,7 @@ export default function EmpresasPage() {
                                 "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                             }}
                           />
-                          <Filter className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
+                          <Filter className="relative z-10 h-4 w-4 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={6}>
@@ -3173,7 +3185,7 @@ export default function EmpresasPage() {
                                 "var(--app-brand-button, linear-gradient(135deg,#000000 0%,#1a2a6f 45%,#c81a7f 100%))",
                             }}
                           />
-                          <Settings2 className="relative z-10 h-5 w-5 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
+                          <Settings2 className="relative z-10 h-4 w-4 text-[#7d1b6a] dark:text-[#c07ab0] group-hover:text-white transition-colors" />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={6}>
@@ -3269,7 +3281,7 @@ export default function EmpresasPage() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className={totalPages > 1 ? "flex items-center gap-1 flex-shrink-0" : "hidden"}>
                     <button
                       onClick={() =>
                         setCurrentPage(Math.max(1, currentPage - 1))
@@ -3336,16 +3348,9 @@ export default function EmpresasPage() {
                   className="overflow-x-auto empresas-table-body allka-table-scroll-body"
                 >
                   <table
-                    className="tabela-cartao allka-fit-table w-full table-fixed text-xs"
-                    style={{
-                      tableLayout: "fixed",
-                      width: fittedColWidths.reduce(
-                        (total, width) => total + width,
-                        0,
-                      ),
-                      minWidth: "100%",
-                    }}
+                    className="companies-reference-table tabela-cartao w-full table-fixed text-xs"
                   >
+                    <colgroup>{visibleColumnsList.map((col, index) => <col key={col.key} style={{ width: col.key === "acoes" ? 96 : `calc((100% - 96px) * ${(colWidths[index] || allDefaultWidths[col.key]) / visibleColumnsList.reduce((sum, item, i) => sum + (item.key === "acoes" ? 0 : colWidths[i] || allDefaultWidths[item.key]), 0)})` }} />)}</colgroup>
                     <thead>
                       <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                         {visibleColumnsList.map((col, i) => (
@@ -3361,7 +3366,6 @@ export default function EmpresasPage() {
                               background: "var(--table-head)",
                               boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                               borderRight: "1px solid rgba(148,163,184,0.16)",
-                              width: fittedColWidths[i],
                             }}
                           >
                             <TooltipProvider delayDuration={300}>
@@ -3375,7 +3379,7 @@ export default function EmpresasPage() {
                                         label={col.label}
                                         field={String(sortableColMap[col.key]!)}
                                         type={
-                                          col.key === "status" ||
+                                          col.key === "id" ? "number" : col.key === "membro_desde" ? "date" : col.key === "status" ||
                                           col.key === "plano" ||
                                           col.key === "tipo"
                                             ? "status"
@@ -3391,21 +3395,20 @@ export default function EmpresasPage() {
                                           handleCompanySort(f as any, d)
                                         }
                                         columnFilters={columnFilters}
-                                        onFilter={toggleColumnFilter}
+                                        onFilter={(field, value) => {
+                                          if (field === "status") setAdvancedFilters(current => ({ ...current, statuses: [] }));
+                                          toggleColumnFilter(field, value);
+                                        }}
                                         onClearFilter={clearColumnFilter}
+                                        filterLabels={col.key === "id" ? Object.fromEntries(companies.map(c => [String(c.sequence_number ?? c.id), formatCompanySequenceId(c.sequence_number ?? c.id)])) : undefined}
+                                        filterBadgeClasses={col.key === "status" ? { active: "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700", inactive: "rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600", pending: "rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700" } : undefined}
                                         filterValues={
-                                          col.key === "status"
-                                            ? [
-                                                ...new Set(
-                                                  filteredCompanies.map((c) =>
-                                                    String(c.status),
-                                                  ),
-                                                ),
-                                              ]
+                                          col.key === "id" ? companies.map(c => String(c.sequence_number ?? c.id)).sort((a,b) => Number(a)-Number(b)) : col.key === "status"
+                                            ? ["active", "inactive", "pending"]
                                             : col.key === "plano"
                                               ? [
                                                   ...new Set(
-                                                    filteredCompanies.map((c) =>
+                                                    companies.map((c) =>
                                                       String(c.plan),
                                                     ),
                                                   ),
@@ -3413,7 +3416,7 @@ export default function EmpresasPage() {
                                               : col.key === "tipo"
                                                 ? [
                                                     ...new Set(
-                                                      filteredCompanies.map(
+                                                      companies.map(
                                                         (c) => String(c.type),
                                                       ),
                                                     ),
@@ -3451,7 +3454,8 @@ export default function EmpresasPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {paginatedCompanies.map((company, rowIndex) => (
-                        <tr
+                          <tr
+                            onClick={() => handleViewCompany(company)}
                           key={company.id}
                           className={`group transition-colors cursor-pointer ${
                             rowIndex % 2 === 0
@@ -3644,6 +3648,7 @@ export default function EmpresasPage() {
                           {/* ID */}
                           {mostrarCol("id") && (
                             <td
+                              data-rotulo="ID"
                               className="px-2 py-1.5 text-center"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
@@ -3651,8 +3656,7 @@ export default function EmpresasPage() {
                               }}
                             >
                               <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">
-                                emp_
-                                {company.sequence_number ?? company.id}
+                                {formatCompanySequenceId(company.sequence_number ?? company.id)}
                               </span>
                             </td>
                           )}
@@ -3660,6 +3664,7 @@ export default function EmpresasPage() {
                           {/* Company */}
                           {mostrarCol("empresa") && (
                             <td
+                              data-rotulo="Empresa"
                               className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
@@ -3766,6 +3771,7 @@ export default function EmpresasPage() {
                           {/* Contact */}
                           {mostrarCol("contato") && (
                             <td
+                              data-rotulo="Contato"
                               className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
@@ -3848,6 +3854,7 @@ export default function EmpresasPage() {
                           {/* CNPJ + Users */}
                           {mostrarCol("cnpj") && (
                             <td
+                              data-rotulo="CNPJ"
                               className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
@@ -3873,6 +3880,7 @@ export default function EmpresasPage() {
                           {/* Status */}
                           {mostrarCol("status") && (
                             <td
+                              data-rotulo="Status"
                               className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
@@ -3909,6 +3917,7 @@ export default function EmpresasPage() {
                           {/* Plan */}
                           {mostrarCol("plano") && (
                             <td
+                              data-rotulo="Plano"
                               className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
@@ -4081,6 +4090,7 @@ export default function EmpresasPage() {
                           {/* Type */}
                           {mostrarCol("tipo") && (
                             <td
+                              data-rotulo="Tipo"
                               className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
@@ -4143,6 +4153,7 @@ export default function EmpresasPage() {
                           {/* Membro Desde */}
                           {mostrarCol("membro_desde") && (
                             <td
+                              data-rotulo="Cadastro"
                               className="px-4 py-1.5"
                               style={{
                                 borderRight: "1px solid rgba(148,163,184,0.15)",
@@ -4160,21 +4171,24 @@ export default function EmpresasPage() {
                           )}
                           {mostrarCol("acoes") && (
                             <td
-                              className="px-2 py-1.5 text-center"
+                              className="company-reference-actions px-2 py-1.5 text-center"
                               onClick={(event) => event.stopPropagation()}
                             >
+                              <div className="flex items-center justify-center gap-1">
+                              <CompanyReferenceAction label={`Ver empresa ${company.name}`} icon={Eye} onClick={() => handleViewCompany(company)} />
+                              <CompanyReferenceAction label={`Editar empresa ${company.name}`} icon={Pencil} onClick={() => handleEditCompany(company)} />
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <button
                                     aria-label={`Mais ações para ${company.name}`}
-                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#31578f] transition-colors hover:bg-blue-50 hover:text-[#2558ff]"
+                                    className="company-reference-action text-slate-400"
                                   >
-                                    <MoreHorizontal className="h-4 w-4" />
+                                    <MoreHorizontal className="h-3.5 w-3.5" />
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent
                                   align="end"
-                                  className="min-w-40"
+                                  className="w-52 rounded-xl p-1.5"
                                 >
                                   <DropdownMenuItem
                                     onClick={() => openInfoPanel(company)}
@@ -4194,8 +4208,15 @@ export default function EmpresasPage() {
                                     <Pencil className="mr-2 h-3.5 w-3.5" />{" "}
                                     Editar empresa
                                   </DropdownMenuItem>
+                                  {company.type === "nomad" && <>
+                                    <DropdownMenuItem onClick={() => requestToggleNomadStatus(company)}>{company.status === "active" ? "Desativar empresa Nomad" : "Reativar empresa Nomad"}</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => requestRemoveNomadProfile(company)}>Excluir empresa Nomad</DropdownMenuItem>
+                                  </>}
+                                  {company.type === "company" && <DropdownMenuItem onClick={() => handleDeleteCompany(company.id)}>Excluir empresa</DropdownMenuItem>}
+                                  {company.type === "agency" && company.partner_status !== "active" && company.partner_status !== "invited" && <DropdownMenuItem onClick={() => handleInvitePartner(company)}>Convidar para Partner</DropdownMenuItem>}
                                 </DropdownMenuContent>
                               </DropdownMenu>
+                              </div>
                             </td>
                           )}
                         </tr>
@@ -4296,7 +4317,7 @@ export default function EmpresasPage() {
 
                     <nav
                       aria-label="Paginação da tabela de empresas"
-                      className="flex items-center gap-1 flex-wrap"
+                      className={totalPages > 1 ? "flex items-center gap-1 flex-wrap" : "hidden"}
                     >
                       <button
                         type="button"
@@ -5360,7 +5381,9 @@ export default function EmpresasPage() {
           (() => {
             const company = infoPanelCompany;
             return (
-              <StandardModalDialog
+              <CompanyReferenceFrame
+                enabled
+                company={company}
                 open={infoPanelOpen}
                 onClose={closeInfoPanel}
                 title={
@@ -5369,7 +5392,7 @@ export default function EmpresasPage() {
                     <span className="truncate">{company.name}</span>
                   </div>
                 }
-                subtitle={`emp_${company.sequence_number ?? company.id} · ${company.location || "Localização não informada"}`}
+                subtitle={`${formatCompanySequenceId(company.sequence_number ?? company.id)} · ${company.location || "Localização não informada"}`}
                 footer={
                   <div className="flex items-center justify-end gap-2 w-full">
                     <Button
@@ -5605,7 +5628,7 @@ export default function EmpresasPage() {
                     </div>
                   </div>
                 </div>
-              </StandardModalDialog>
+              </CompanyReferenceFrame>
             );
           })()}
 
@@ -6582,6 +6605,8 @@ export default function EmpresasPage() {
         {selectedCompany && (
           <>
             <CompanyViewSlidePanel
+              referenceFrame
+              onEditRequest={(company) => handleEditCompany(company, true)}
               open={viewPanelOpen}
               onClose={() => {
                 setViewPanelOpen(false);
@@ -6601,10 +6626,12 @@ export default function EmpresasPage() {
               }}
             />
             <CompanyEditSlidePanel
+              referenceFrame
+              frameMode={editFromView ? "modal" : "panel"}
               open={editPanelOpen}
               onClose={() => {
                 setEditPanelOpen(false);
-                setSelectedCompany(null);
+                if (!viewPanelOpen) setSelectedCompany(null);
               }}
               company={selectedCompany}
               onSave={handleSaveCompany}

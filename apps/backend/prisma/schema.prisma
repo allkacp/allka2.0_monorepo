@@ -86,6 +86,7 @@ model User {
   created_projects                   Project[]                          @relation("ProjectCreatedBy")
   archived_projects                  Project[]                          @relation("ProjectArchivedBy")
   admin_responsible_projects         Project[]                          @relation("ProjectAdminResponsible")
+  consultant_projects               Project[]                          @relation("ProjectConsultant")
   profile                            UserProfile?
   deleted_company_archives           CompanyArchive[]                   @relation("CompanyArchiveDeletedBy")
   product_feedback_override          ProductFeedbackUserOverride?
@@ -366,6 +367,7 @@ model Client {
   updated_at DateTime @updatedAt
 
   links ClientLink[]
+  projects Project[] @relation("ProjectClientRecord")
 
   // ── Rastreio da plataforma antiga ─────────────────────────────────────
   // id numérico do registro equivalente no dump legado (Dump20260423.sql).
@@ -719,6 +721,11 @@ model Project {
   // company | agency | nomad
   consultant           String?
   consultant_email     String?
+  consultant_user_id   String?
+  consultant_user      User? @relation("ProjectConsultant", fields: [consultant_user_id], references: [id], onDelete: SetNull)
+  client_record_id     String?
+  client_record        Client? @relation("ProjectClientRecord", fields: [client_record_id], references: [id], onDelete: SetNull)
+  registered_contacts_required Boolean @default(false)
   team_size            Int             @default(0)
   nomades              String?         @db.LongText
   // JSON: string[]
@@ -789,6 +796,8 @@ model Project {
   @@index([archived_by_user_id])
   @@index([archived_at])
   @@index([admin_responsible_user_id])
+  @@index([consultant_user_id])
+  @@index([client_record_id])
   @@map("projects")
 }
 
@@ -2024,6 +2033,8 @@ model ProjectTaskStage {
   updated_at DateTime @updatedAt
 
   attachments TaskAttachment[]
+  // Etapa em ciclos (23/10): um registro por ciclo (período, entrega, aprovação do cliente). Ver src/lib/stage-cycles.ts.
+  cycles ProjectTaskStageCycle[]
 
   @@unique([project_task_id, source_key])
   @@map("project_task_stages")
@@ -5225,7 +5236,7 @@ model Catalog2QuestionnaireQuestion {
   questionnaire    Catalog2Questionnaire @relation(fields: [questionnaire_id], references: [id], onDelete: Cascade)
 
   key         String
-  label       String
+  label       String @db.VarChar(500)
   is_required Boolean @default(true)
   sort_order  Int     @default(0)
 
@@ -6169,6 +6180,8 @@ model Catalog2TaskStep {
 // cargas automáticas (importações, clones) — nunca é identidade pra usuário.
 model Catalog2TaskModel {
   id                       Int     @id @default(autoincrement())
+  // Número que aparece na tela ("Tarefa ID 01"): sequencial, sem buracos; a próxima tarefa criada recebe o maior + 1.
+  number                   Int?    @unique
   name                     String
   description              String? @db.Text
   // "humano" | "ia" | "hibrido" (Humano ou IA)
@@ -8032,4 +8045,38 @@ model Catalog2AiGuide {
   updated_at         DateTime @updatedAt
 
   @@map("catalog2_ai_guides")
+}
+
+// Ciclo de uma etapa em ciclos (ex.: semana 1 da gestão de campanhas). Regras: cada ciclo termina com uma entrega aprovada pelo cliente em prazo curto;
+// o ciclo seguinte começa na data certa COM OU SEM aprovação; a reprovação vira orientação do ciclo seguinte (o anterior NÃO reabre);
+// a etapa só fecha quando todos os ciclos estiverem encerrados.
+model ProjectTaskStageCycle {
+  id                   String           @id @default(cuid())
+  stage_id             String
+  stage                ProjectTaskStage @relation(fields: [stage_id], references: [id], onDelete: Cascade)
+  cycle_index          Int
+  from_day             Int
+  to_day               Int
+  approval_window_days Int
+  hours                Float?
+  rule                 String?          @db.Text
+  starts_at            DateTime
+  ends_at              DateTime
+  // agendado | em_andamento | aguardando_aprovacao | aprovado | reprovado | sem_resposta
+  status               String           @default("agendado")
+  delivered_at         DateTime?
+  delivered_by         String?
+  delivery_note        String?          @db.Text
+  approval_due_at      DateTime?
+  decided_at           DateTime?
+  decided_by           String?
+  client_comment       String?          @db.Text
+  // Orientação que veio da reprovação do ciclo anterior (o ciclo anterior não reabre).
+  guidance_from_previous String?        @db.Text
+  created_at           DateTime         @default(now())
+  updated_at           DateTime         @updatedAt
+
+  @@unique([stage_id, cycle_index])
+  @@index([status, starts_at])
+  @@map("project_task_stage_cycles")
 }

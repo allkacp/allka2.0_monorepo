@@ -114,4 +114,27 @@ describe("SelfProfilePage", () => {
     expect(screen.getByTestId("panel")).toHaveAttribute("data-viewer-role", "agency");
     expect(panelProps.current.agencyFinancial).toMatchObject({ currentMrr: 1000, projectRevenue: 800 });
   });
+
+  it("agência: 'Meu Perfil' mostra a PESSOA logada (sessão) e o ID da agência como 'ID 01', sem misturar com o e-mail/telefone da agência", async () => {
+    accountConfig.accountType = "agencias";
+    apiClientMock.getCurrentUser.mockResolvedValue({ id: "u-11", name: "Ana Lima", email: "ana@agencia.com", phone: null, user_code: "user_11" });
+    agenciaCtx.profile = { id: "ag-1", name: "Lamego Academy", email: "adm@agencia.com", phone: "1133603608", sequenceNumber: 1, currentMrr: 0, plan: "", planDiscount: 0 };
+    renderPage("/agency/perfil");
+    await waitFor(() => expect(screen.getByTestId("panel")).toBeInTheDocument());
+    expect(apiClientMock.getCurrentUser).toHaveBeenCalledTimes(1);
+    expect(panelProps.current.user).toMatchObject({
+      id: "u-11", name: "Ana Lima", email: "ana@agencia.com", phone: "",
+      agency_id_label: "ID 01", agency_name: "Lamego Academy",
+      // a carteira mostrada é a da agência (o painel precisa do id dela para achar o saldo)
+      agency_id: "ag-1",
+    });
+  });
+
+  it("agência: sem número cadastrado não inventa ID", async () => {
+    accountConfig.accountType = "agencias";
+    agenciaCtx.profile = { id: "ag-1", name: "Sem Número", email: "s@x.com", currentMrr: 0, plan: "", planDiscount: 0 };
+    renderPage("/agency/perfil");
+    await waitFor(() => expect(screen.getByTestId("panel")).toBeInTheDocument());
+    expect(panelProps.current.user.agency_id_label).toBeUndefined();
+  });
 });

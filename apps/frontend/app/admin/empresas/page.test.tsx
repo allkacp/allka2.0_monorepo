@@ -112,9 +112,46 @@ function renderPage() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  for (const key of Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i)!)) if (key.startsWith("allka:admin-companies-sort")) localStorage.removeItem(key);
   apiMock.getNomades.mockResolvedValue({ data: [nomadFixture()], total: 1 });
   apiMock.getCompanies.mockResolvedValue({ data: [], total: 0 });
   apiMock.getAgencies.mockResolvedValue({ data: [], total: 0 });
+});
+
+describe("admin/empresas — ID normalizado e filtros de coluna", () => {
+  beforeEach(() => {
+    apiMock.getNomades.mockResolvedValue({ data: [], total: 0 });
+    apiMock.getAgencies.mockResolvedValue({ data: [agencyFixture({ id: "agency-real", sequence_number: 1, name: "Lamego Academy" })], total: 1 });
+    apiMock.getCompanies.mockResolvedValue({ data: [companyFixture({ id: "company-real", sequence_number: 2, name: "Rose Consultoria" }), companyFixture({ id: "company-off", sequence_number: 10, name: "Empresa Inativa", status: "inativo" })], total: 2 });
+  });
+  it("exibe 001/002 sem prefixo e mantém opções de ID após filtrar", async () => {
+    const user = userEvent.setup(); renderPage();
+    expect(await screen.findByText("001")).toBeInTheDocument();
+    expect(screen.getByText("002")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Opções da coluna ID" }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "002" }));
+    expect(getTbodyRowTexts().join(" ")).toContain("Rose Consultoria");
+    expect(getTbodyRowTexts().join(" ")).not.toContain("Lamego Academy");
+    expect(screen.getByRole("menuitemcheckbox", { name: "001" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemcheckbox", { name: "002" })).toBeChecked();
+  });
+  it("escolher Inativo supera o filtro inicial Ativos e mantém todos os status disponíveis", async () => {
+    const user = userEvent.setup(); renderPage(); await screen.findByText("001");
+    await user.click(screen.getByRole("button", { name: "Opções da coluna Status" }));
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Inativo" }));
+    await waitFor(() => expect(getTbodyRowTexts().join(" ")).toContain("Empresa Inativa"));
+    expect(getTbodyRowTexts()).toHaveLength(1);
+    expect(screen.getByRole("menuitemcheckbox", { name: "Ativo" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemcheckbox", { name: "Pendente" })).toBeInTheDocument();
+  });
+  it("ordenação numérica escolhida permanece ao retornar à tela", async () => {
+    const user = userEvent.setup(); const first = renderPage(); await screen.findByText("001");
+    await user.click(screen.getByRole("button", { name: "Opções da coluna ID" }));
+    await user.click(screen.getByRole("menuitem", { name: "Maior → Menor" }));
+    expect(getTbodyRowTexts()[0]).toContain("Rose Consultoria");
+    first.unmount(); renderPage(); await screen.findByText("001");
+    expect(getTbodyRowTexts()[0]).toContain("Rose Consultoria");
+  });
 });
 
 describe("admin/empresas — empresa Nomad: desativar/reativar (reversível)", () => {

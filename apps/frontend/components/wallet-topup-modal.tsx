@@ -3,12 +3,15 @@
 // Adicionar crédito à carteira (cartão ou Pix). Fala só com /api/wallet-topup; qual gateway cobra (fake de teste, Mercado Pago, Asaas,
 // PagBank, Stripe…) é decisão do backend — esta tela não muda quando o gateway trocar. O número do cartão não é guardado: o backend só usa os 4 últimos dígitos.
 
+import { AkBoth } from "@/components/price-with-allkoins";
+import { fmtAllkoinsBoth } from "@/lib/allkoins";
 import { useEffect, useState } from "react";
 import { Loader2, CreditCard, QrCode, CheckCircle2, AlertCircle, Copy } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
+// O que o cliente PAGA continua em reais (Pix/cartão); o que ele RECEBE e o saldo são sempre Allkoins (1 AK = R$ 1,00 hoje).
 const brl = (n: number) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
 
 /** Converte "50", "50,00" ou "1.250,50" em número; inválido vira NaN. */
@@ -41,7 +44,7 @@ export function WalletTopupModal({ open, onOpenChange, onDone }: { open: boolean
         const r = await apiClient.getWalletTopupIntent(hostedIntent.id);
         if (r.status !== "pending") {
           setHostedIntent(r);
-          setMsg(r.status === "paid" ? { ok: true, text: `Pagamento confirmado! Novo saldo: ${brl(r.balance_brl)}.` } : { ok: false, text: "O pagamento não foi concluído. Gere uma nova cobrança." });
+          setMsg(r.status === "paid" ? { ok: true, text: `Pagamento confirmado! Novo saldo: ${fmtAllkoinsBoth(r.balance_brl)}.` } : { ok: false, text: "O pagamento não foi concluído. Gere uma nova cobrança." });
           setSummary(await apiClient.getWalletTopupSummary().catch(() => null));
           onDone?.();
         }
@@ -66,12 +69,12 @@ export function WalletTopupModal({ open, onOpenChange, onDone }: { open: boolean
     } finally { setBusy(false); }
   }
 
-  const payCard = () => run(() => apiClient.topupWalletByCard({ amount: value, card_number: card.number, holder: card.holder }), (r) => `Pagamento aprovado! Novo saldo: ${brl(r.balance_brl)}.`);
+  const payCard = () => run(() => apiClient.topupWalletByCard({ amount: value, card_number: card.number, holder: card.holder }), (r) => `Pagamento aprovado! Novo saldo: ${fmtAllkoinsBoth(r.balance_brl)}.`);
   const makePix = async () => {
     const r = await run(() => apiClient.createWalletPix({ amount: value }), () => "Código Pix gerado. Pague pelo app do seu banco.");
     if (r) setPix({ transactionId: r.transactionId, copyPaste: r.copyPaste });
   };
-  const simulatePix = () => run(() => apiClient.confirmWalletPixSandbox({ transaction_id: pix!.transactionId }), (r) => `Pix recebido! Novo saldo: ${brl(r.balance_brl)}.`).then(() => setPix(null));
+  const simulatePix = () => run(() => apiClient.confirmWalletPixSandbox({ transaction_id: pix!.transactionId }), (r) => `Pix recebido! Novo saldo: ${fmtAllkoinsBoth(r.balance_brl)}.`).then(() => setPix(null));
 
   const startHosted = async (m: "pix" | "card") => {
     const r = await run(() => apiClient.startWalletTopup({ amount: value, method: m }), () => (m === "pix" ? "Código Pix gerado. Pague pelo app do seu banco; confirmamos sozinhos." : "Abrimos a página segura do cartão numa nova aba. Volte aqui depois de pagar."));
@@ -85,8 +88,8 @@ export function WalletTopupModal({ open, onOpenChange, onDone }: { open: boolean
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Adicionar crédito</DialogTitle>
-          <DialogDescription>Saldo atual: <strong>{brl(summary?.balance_brl ?? 0)}</strong>. O crédito é usado em alterações por IA e outros serviços.</DialogDescription>
+          <DialogTitle>Adicionar Allkoins</DialogTitle>
+          <DialogDescription>Saldo atual: <strong data-testid="topup-balance"><AkBoth value={summary?.balance_brl ?? 0} /></strong>. Allkoins são a moeda da Allka (1 Allkoin = R$ 1,00) e pagam alterações por IA e outros serviços.</DialogDescription>
         </DialogHeader>
 
         {summary?.is_sandbox && (
@@ -96,8 +99,9 @@ export function WalletTopupModal({ open, onOpenChange, onDone }: { open: boolean
         )}
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-600">Valor (R$)</label>
+          <label className="mb-1 block text-xs font-medium text-neutral-600">Valor a pagar (R$)</label>
           <input className={input} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          {amountOk && <p className="mt-1 text-xs text-neutral-500" data-testid="topup-receive">Você recebe <strong><AkBoth value={value} /></strong>.</p>}
           {!amountOk && <p className="mt-1 text-xs text-red-600">Informe um valor entre {brl(summary?.min_brl ?? 5)} e {brl(summary?.max_brl ?? 5000)}.</p>}
         </div>
 

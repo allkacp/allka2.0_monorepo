@@ -314,6 +314,7 @@ describe("Navegação guiada, status real e campos dependentes", () => {
   it("Anterior / Próximo abre o bloco seguinte e termina no resumo final", () => {
     mount();
     openEditor();
+    fireEvent.click(screen.getByRole("button", { name: "Expandir todos" })); // o Anterior/Próximo do painel existe no modo lista
     const where = () => screen.getByTestId("step-guide-where").textContent;
     expect(screen.getByTestId("step-guide-prev")).toBeDisabled();
     expect(where()).toBe("Bloco 1 de 6");

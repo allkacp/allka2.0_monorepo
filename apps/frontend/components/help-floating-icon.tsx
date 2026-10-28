@@ -13,6 +13,7 @@
  * (curso/conteúdo estático, outro sistema). Nenhum editor administrativo de
  * conteúdo dos tours ainda.
  */
+import { FloatingToolSlot } from "@/components/floating-tools-rail";
 import { Map as MapIcon, PlayCircle, RotateCcw, CheckCircle2, Search, Ban } from "lucide-react";
 import { HeaderSlideScreen } from "@/components/header-slide-screen";
 import { Button } from "@/components/ui/button";
@@ -65,7 +66,7 @@ export function HelpFloatingIcon() {
   return (
     <>
       {/* Desktop — barra vertical direita, próximo slot livre da coluna. */}
-      <div className="hidden lg:block fixed top-[325px] right-[8px] z-65 group">
+      <FloatingToolSlot className="hidden lg:block group" order={5} fallbackTop={325}>
         <button
           type="button"
           data-tour-id="help-button"
@@ -79,7 +80,7 @@ export function HelpFloatingIcon() {
         <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
           Tutoriais guiados
         </span>
-      </div>
+      </FloatingToolSlot>
 
       {/* Mobile/tablet — mesmo padrão de botão flutuante redondo, mais um degrau empilhado acima de Alertas. */}
       <button

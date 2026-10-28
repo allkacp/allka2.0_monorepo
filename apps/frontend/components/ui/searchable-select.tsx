@@ -23,6 +23,7 @@ export interface SearchableSelectItem {
 }
 
 interface SearchableSelectProps {
+  ariaLabel?: string;
   items: SearchableSelectItem[];
   value: string;
   onValueChange: (value: string) => void;
@@ -49,6 +50,7 @@ interface SearchableSelectProps {
 }
 
 export function SearchableSelect({
+  ariaLabel,
   items,
   value,
   onValueChange,
@@ -73,6 +75,7 @@ export function SearchableSelect({
         <button
           type="button"
           role="combobox"
+          aria-label={ariaLabel}
           aria-expanded={open}
           className={cn(
             "flex h-9 w-full items-center justify-between rounded-md border bg-white px-3 py-2 text-sm shadow-xs dark:bg-card",

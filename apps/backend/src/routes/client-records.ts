@@ -188,7 +188,7 @@ const updateLinkSchema = z.object({
   agency_id: z.string().nullable().optional(),
   company_id: z.string().nullable().optional(),
   partner_id: z.string().nullable().optional(),
-});
+}).strict();
 
 type ClientWithLinks = {
   id: string;
@@ -215,7 +215,7 @@ type ClientWithLinks = {
   created_by_user_id: string | null;
   created_at: Date;
   updated_at: Date;
-  links: { id: string; agency_id: string | null; company_id: string | null; partner_id: string | null; status: string }[];
+  links: { id: string; agency_id: string | null; company_id: string | null; partner_id: string | null; status: string; agency?: { id: string; name: string; partner_profile: { status: string } | null } | null; company?: { id: string; name: string } | null; partner?: { id: string; agency: { name: string } } | null }[];
 };
 
 function toClientDTO(c: ClientWithLinks) {
@@ -251,15 +251,38 @@ function toClientDTO(c: ClientWithLinks) {
       company_id: l.company_id,
       partner_id: l.partner_id,
       status: l.status,
+      owner: l.agency ? { id: l.agency.id, kind: "agency", name: l.agency.name, category: ["active", "ativo"].includes(l.agency.partner_profile?.status ?? "") ? "Agência Partner" : "Agência" }
+        : l.company ? { id: l.company.id, kind: "company", name: l.company.name, category: "Company" }
+        : l.partner ? { id: l.partner.id, kind: "partner", name: l.partner.agency.name, category: "Agência Partner" } : null,
     })),
   };
 }
 
 const CLIENT_INCLUDE = {
   links: {
-    select: { id: true, agency_id: true, company_id: true, partner_id: true, status: true },
+    select: { id: true, agency_id: true, company_id: true, partner_id: true, status: true, agency: { select: { id: true, name: true, partner_profile: { select: { status: true } } } }, company: { select: { id: true, name: true } }, partner: { select: { id: true, agency: { select: { name: true } } } } },
   },
 } as const;
+
+// Busca de empresas CONCRETAS, nunca usuários/categorias soltas. Partner é
+// categoria da própria Agency: um único resultado, sem duplicar a agência.
+router.get("/owner-options", verifyToken, async (req, res, next) => {
+  try {
+    if (!isAdminUser(req.user)) { res.status(403).json({ error: "Somente o administrador pode escolher outra empresa para o cliente." }); return; }
+    const q = String(req.query.q ?? "").trim();
+    if (q.length > 100) { res.status(400).json({ error: "A busca deve ter até 100 caracteres." }); return; }
+    const where = q ? { name: { contains: q } } : {};
+    const [agencies, companies] = await Promise.all([
+      prisma.agency.findMany({ where, take: 25, orderBy: { name: "asc" }, select: { id: true, name: true, partner_profile: { select: { status: true } } } }),
+      prisma.company.findMany({ where: { ...where, type: { notIn: ["nomade", "nomad", "nômade"] } }, take: 25, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    ]);
+    const all = [
+      ...agencies.map(a => ({ id: a.id, kind: "agency" as const, name: a.name, category: ["active", "ativo"].includes(a.partner_profile?.status ?? "") ? "Agência Partner" : "Agência" })),
+      ...companies.map(c => ({ id: c.id, kind: "company" as const, name: c.name, category: "Company" })),
+    ].sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }) || a.id.localeCompare(b.id));
+    res.json({ data: all.slice(0, 25), has_more: all.length > 25 || agencies.length === 25 || companies.length === 25 });
+  } catch (err) { next(err); }
+});
 
 // Resolve o id do próprio perfil (Agency/Company/Partner) do usuário logado,
 // usado pra escopar a listagem/leitura só ao que está vinculado a ele.
@@ -487,7 +510,7 @@ router.post("/", verifyToken, validate(createClientSchema), async (req, res, nex
         }
         linkAgencyId = body.agency_id;
       } else if (body.company_id) {
-        const exists = await prisma.company.findUnique({ where: { id: body.company_id }, select: { id: true } });
+        const exists = await prisma.company.findFirst({ where: { id: body.company_id, type: { notIn: ["nomade", "nomad", "nômade"] } }, select: { id: true } });
         if (!exists) {
           res.status(400).json({ error: "Company não encontrada" });
           return;
@@ -653,7 +676,7 @@ router.put("/:id/link", verifyToken, validate(updateLinkSchema), async (req, res
       }
       agencyId = body.agency_id;
     } else if (body.company_id) {
-      const exists = await prisma.company.findUnique({ where: { id: body.company_id }, select: { id: true } });
+      const exists = await prisma.company.findFirst({ where: { id: body.company_id, type: { notIn: ["nomade", "nomad", "nômade"] } }, select: { id: true } });
       if (!exists) {
         res.status(400).json({ error: "Company não encontrada" });
         return;

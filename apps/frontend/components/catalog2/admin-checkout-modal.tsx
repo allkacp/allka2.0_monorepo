@@ -12,6 +12,7 @@
 // attachCatalog2QuoteToProject com um ClientContext de impersonation da
 // conta-alvo) — nunca uma segunda implementação de preço.
 
+import { AkBoth } from "@/components/price-with-allkoins";
 import { useEffect, useState } from "react";
 import { Search, Loader2, Wallet, Gift, Link2, AlertTriangle, CheckCircle2, Copy, ExternalLink, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -261,7 +262,7 @@ export function AdminCheckoutModal({
                   <p className="text-sm font-semibold">{target.name}</p>
                   <p className="text-[11px] text-muted-foreground">
                     {target.kind === "company" ? "Empresa" : "Agência"}
-                    {target.email ? ` · ${target.email}` : ""} · Saldo allkoin: {fmtBRL(target.wallet_balance)}
+                    {target.email ? ` · ${target.email}` : ""} · Saldo: <AkBoth value={target.wallet_balance} />
                   </p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setTarget(null)}>Trocar</Button>
@@ -296,7 +297,7 @@ export function AdminCheckoutModal({
                             {r.kind === "company" ? "empresa" : "agência"}
                           </span>
                         </span>
-                        <span className="text-[11px] text-muted-foreground">{fmtBRL(r.wallet_balance)}</span>
+                        <span className="text-[11px] text-muted-foreground"><AkBoth value={r.wallet_balance} /></span>
                       </button>
                     ))}
                   </div>
@@ -357,7 +358,7 @@ export function AdminCheckoutModal({
                   )}
                 >
                   <Wallet className="h-4 w-4 text-violet-600" />
-                  <span className="flex-1">Debitar da carteira allkoin ({fmtBRL(target.wallet_balance)})</span>
+                  <span className="flex-1">Debitar da carteira de Allkoins — saldo <AkBoth value={target.wallet_balance} /></span>
                 </button>
                 <button
                   type="button"

@@ -1,6 +1,9 @@
+import { announceCatalogCartChange } from "@/lib/catalog-cart-events";
 // ─── Allka API Client ─────────────────────────────────────────────────────────
 // Authenticated HTTP client for the Allka platform backend.
 // Token is stored in localStorage under "allka_token".
+
+import { withAssigneeConfirmation } from "./specific-assignee-confirmation";
 
 const API_BASE_URL =
   (typeof import.meta !== "undefined" &&
@@ -983,6 +986,7 @@ class ApiClient {
   updateCatalog2AiGuide(id: string, body: Record<string, any>) { return this.c2<any>("PUT", `/ai-guides/${id}`, body); }
   deleteCatalog2AiGuide(id: string) { return this.c2<any>("DELETE", `/ai-guides/${id}`); }
   draftCatalog2ProductWithAI(productId: string, messages: { role: "user" | "assistant"; text: string }[], current: Record<string, any> | null) { return this.c2<{ draft: any; reply: string }>("POST", `/products/${productId}/ai-draft`, { messages, current }); }
+  suggestCatalog2StepChecklist(stepId: string, body: { existing?: { kind: string; text: string }[]; kinds?: string[]; use_internal?: boolean; use_internet?: boolean; notes?: string; draft?: Record<string, any> }) { return this.c2<{ items: { kind: "execucao" | "aprovacao" | "qualificacao"; text: string; required: boolean }[]; read: string[] }>("POST", `/steps/${stepId}/checklist/ai-suggest`, body); }
   suggestCatalog2TaskQuestionnaire(taskId: string, existingLabels: string[] = []) { return this.c2<{ name: string; description: string | null; questions: any[] }>("POST", `/tasks/${taskId}/questionnaire/ai-suggest`, { existing_labels: existingLabels }); }
   getAiChangePricing(days = 90) { return this.get<any>(`/ai-usage/change-pricing?days=${days}`); }
   saveAiChangePricing(body: Record<string, any>) { return this.put<any>(`/ai-usage/change-pricing`, body); }
@@ -1223,21 +1227,25 @@ class ApiClient {
   cancelClientCatalog2Quote(id: string) { return this.cc("POST", `/quotes/${id}/cancel`); }
   getClientCatalog2Cart() { return this.cc<{ items: any[]; count: number; needs_revalidation: boolean }>("GET", "/cart"); }
   addClientCatalog2CartItem(product: string, selection: Record<string, any>, period?: string | null) {
-    return this.cc("POST", "/cart/items", { product, selection, ...(period ? { period } : {}) });
+    return this.cc("POST", "/cart/items", { product, selection, ...(period ? { period } : {}) }).then(result => { announceCatalogCartChange(); return result; });
   }
   updateClientCatalog2CartItem(id: string, selection: Record<string, any>, period?: string | null) {
-    return this.cc("PUT", `/cart/items/${id}`, { ...selection, ...(period !== undefined ? { period } : {}) });
+    return this.cc("PUT", `/cart/items/${id}`, { ...selection, ...(period !== undefined ? { period } : {}) }).then(result => { announceCatalogCartChange(); return result; });
   }
   /** Assinaturas mensais contínuas (Pedido 3, fase 4). */
   listSubscriptions() { return this.cc<{ data: any[] }>("GET", "/subscriptions"); }
   subscriptionAction(id: string, action: "pause" | "resume" | "cancel" | "pay", body: Record<string, unknown> = {}) { return this.cc("POST", `/subscriptions/${id}/${action}`, body); }
-  removeClientCatalog2CartItem(id: string) { return this.cc("DELETE", `/cart/items/${id}`); }
-  clearClientCatalog2Cart() { return this.cc("POST", "/cart/clear"); }
+  removeClientCatalog2CartItem(id: string) { return this.cc("DELETE", `/cart/items/${id}`).then(result => { announceCatalogCartChange(); return result; }); }
+  clearClientCatalog2Cart() { return this.cc("POST", "/cart/clear").then(result => { announceCatalogCartChange(); return result; }); }
 
   // ── Checkout / pedido / aditivos do catalog2 (sprint de produtos, bloco 6/6) ──
-  checkoutCatalog2(body: { quote_ids: string[]; checkout_client_action_id: string }) {
-    return this.cc<{ project: any; project_products: any[]; next_step: string; payment_endpoint: string; already_processed: boolean }>("POST", "/checkout", body);
+  getCatalog2EligibleProjects() {
+    return this.cc<{ data: { id: string; title: string; project_code: string | null; status: string }[] }>("GET", "/checkout/eligible-projects");
   }
+  checkoutCatalog2(body: { quote_ids: string[]; checkout_client_action_id: string; project_id: string; payer?: "agency" | "client"; commission_percent?: number; commission_mode?: "total" | "per_product"; item_commissions?: { quote_id: string; percent: number }[] }) {
+    return this.cc<{ project: any; project_products: any[]; next_step: string; payment_endpoint: string; already_processed: boolean; payment_link_path?: string | null }>("POST", "/checkout", body);
+  }
+  agencyPaymentLink(projectId: string) { return this.cc<{ path: string }>("POST", `/checkout/${encodeURIComponent(projectId)}/payment-link`, {}); }
   cancelCatalog2ProjectProduct(projectProductId: string) {
     return this.cc("POST", `/checkout/${projectProductId}/cancel`);
   }
@@ -1410,7 +1418,7 @@ class ApiClient {
   savePlatformTheme(body: { settings: Record<string, any>; presets?: Array<{ id: string; name: string; value: string; preview: string }> }) { return this.put<any>("/platform-theme", body); }
   // Painel operacional da tarefa (A8b fase 5): etapas, portões de aprovação, prazos (SLA) e entradas de outros produtos.
   getTaskFlowPanel(taskId: string) { return this.get<any>(`/task-flow/${taskId}`); }
-  decideStage(taskId: string, stageId: string, tipo: "qualificacao" | "especialista" | "aprovacao", decisao: "aprovar" | "reprovar" | "comentar", comentario?: string) {
+  decideStage(taskId: string, stageId: string, tipo: "qualificacao" | "especialista" | "aprovacao", decisao: "aprovar" | "reprovar" | "comentar" | "encaminhar", comentario?: string) {
     return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/decisao`, { tipo, decisao, ...(comentario ? { comentario } : {}) });
   }
   // Tela única de qualificação de etapas (líder, qualificador específico, nômade qualificador, admin).
@@ -1419,6 +1427,10 @@ class ApiClient {
   decideQualificacao(stageId: string, decisao: "aprovar" | "reprovar" | "comentar", comentario?: string) {
     return this.post<any>(`/qualificacoes/etapas/${stageId}/decisao`, { decisao, ...(comentario ? { comentario } : {}) });
   }
+  // Etapa em ciclos: lista, entrega do executor e aprovação do cliente por ciclo.
+  getStageCycles(taskId: string, stageId: string) { return this.get<any>(`/project-tasks/${taskId}/etapas/${stageId}/ciclos`); }
+  deliverStageCycle(taskId: string, stageId: string, cycleId: string, nota?: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/ciclos/${cycleId}/entregar`, nota ? { nota } : {}); }
+  decideStageCycle(taskId: string, stageId: string, cycleId: string, decisao: "aprovar" | "reprovar", comentario?: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/ciclos/${cycleId}/decisao`, { decisao, ...(comentario ? { comentario } : {}) }); }
   warnStageClient(taskId: string, stageId: string, mensagem: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/avisar-cliente`, { mensagem }); }
   requireDispensedStage(taskId: string, stageId: string, justificativa: string) { return this.post<any>(`/project-tasks/${taskId}/etapas/${stageId}/exigir`, { justificativa }); }
   forceFirstExecution(projectProductId: string, reason: string, cancel = false) { return this.post<any>(`/admin/catalog2/project-products/${projectProductId}/force-first-execution`, { reason, cancel }); }
@@ -1621,11 +1633,16 @@ class ApiClient {
   }
 
   async updateUser(id: string | number, data: Record<string, any>) {
-    return this.put(`/users/${id}`, data);
+    return withAssigneeConfirmation(token => this.put(`/users/${id}`, { ...data, ...(token ? { assignment_confirmation: token } : {}) }));
+  }
+
+  /** Autoatendimento: a própria pessoa edita os seus dados pessoais (nome, telefone, endereço…). Acesso, e-mail e papel continuam só com o admin. */
+  async updateMyUser(data: Record<string, any>) {
+    return this.patch<any>("/users/me", data);
   }
 
   async deleteUser(id: string | number, reason?: string) {
-    return this.del(`/users/${id}`, reason ? { reason } : undefined);
+    return withAssigneeConfirmation(token => this.del(`/users/${id}`, { ...(reason ? { reason } : {}), ...(token ? { assignment_confirmation: token } : {}) }));
   }
 
   // ─── Companies ────────────────────────────────────────────────────────────
@@ -1731,6 +1748,10 @@ class ApiClient {
     return this.get("/client-records", filters);
   }
 
+  async searchClientOwnerOptions(query: string) {
+    return this.get<{ data: { id: string; kind: "agency" | "company" | "partner"; name: string; category: string }[]; has_more: boolean }>("/client-records/owner-options", { q: query });
+  }
+
   async getClientRecord(id: string) {
     return this.get(`/client-records/${id}`);
   }
@@ -1756,6 +1777,10 @@ class ApiClient {
     return this.get("/projects", filters);
   }
 
+  async getProjectContactOptions(filters: Record<string, string>) {
+    return this.get("/projects/contact-options", filters);
+  }
+
   async getProject(id: string | number) {
     return this.get(`/projects/${id}`);
   }
@@ -1778,7 +1803,8 @@ class ApiClient {
     if (params.client_id) q.set("client_id", params.client_id);
     if (params.agency) q.set("agency", params.agency);
     if (params.exclude_id) q.set("exclude_id", params.exclude_id);
-    return this.get(`/projects/check-name?${q.toString()}`);
+    const result = await this.get<{ exists?: boolean; duplicate?: boolean; conflictId?: string }>(`/projects/check-name?${q.toString()}`);
+    return { duplicate: result.duplicate ?? result.exists ?? false, conflictId: result.conflictId };
   }
 
   async updateProject(id: string | number, data: Record<string, any>) {
@@ -3022,6 +3048,11 @@ class ApiClient {
     length?: "manter" | "curto" | "medio" | "longo";
     approach?: "melhorar" | "recriar";
     research?: boolean;
+    /** Usar o banco interno de IA (documentos da Allka). Padrão: sim. */
+    use_internal_bank?: boolean;
+    /** Limite do próprio campo (vale quando não há máximo escolhido). */
+    field_max_chars?: number | null;
+    field_max_words?: number | null;
     max_words?: number | null;
     max_chars?: number | null;
     min_words?: number | null;

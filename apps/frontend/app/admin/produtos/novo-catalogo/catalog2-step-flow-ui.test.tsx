@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 const saveFlow = vi.fn(async () => ({ ok: true }));
+vi.mock("@/hooks/useAppFrameMetrics", () => ({ useAppFrameMetrics: () => ({ top: 0, left: 0, width: 1000, height: 800, sidebarWidth: 72 }) }));
 vi.mock("@/lib/api-client", () => ({ apiClient: { saveCatalog2StepFlow: (...a: unknown[]) => (saveFlow as any)(...a) } }));
 
 import { StepFlowEditor, StepFlowControls, flowSummary, stepFlowChips, stepStartMode, startChangePayload } from "./catalog2-step-flow-ui";
@@ -76,6 +77,9 @@ describe("Fluxo das etapas (A8) · editor", () => {
   it("visão organizada do fluxo salvo: fases, o que espera o quê, executor e botão Editar fluxo", () => {
     const steps = mk({ depends_on: ["s2", "s3"], executor_policy: "same_as_step", executor_same_as_key: "s2" }).map((s, i) => (i < 3 ? { ...s, depends_on: i === 2 ? ["s1"] : [] } : s));
     render(<StepFlowEditor task={{ id: "tv", stage_execution: "stage", steps }} readOnly={false} act={act} allowEdit />);
+    expect(screen.getByTestId("flow-phases")).toBeInTheDocument();
+    expect(screen.queryByTestId("flow-overview")).toBeNull(); // o detalhe só abre na janela de configurações avançadas
+    fireEvent.click(screen.getByTestId("flow-advanced-btn"));
     expect(screen.getByTestId("flow-overview")).toBeInTheDocument();
     expect(screen.getByTestId("flow-wave-1").textContent).toMatch(/rodando juntas: etapas 1 \+ 2/);
     expect(screen.getByTestId("flow-step-s3").textContent).toMatch(/Começa depois que etapa 1 \(Briefing\) for aprovada/);
@@ -83,6 +87,7 @@ describe("Fluxo das etapas (A8) · editor", () => {
     expect(screen.getByTestId("flow-step-s4").textContent).toMatch(/mesmo executor da etapa 2/);
     expect(screen.getByTestId("flow-step-s1").textContent).toMatch(/Libera depois.*etapa 3 \(Texto\)/);
     expect(screen.getByTestId("flow-step-s4").textContent).toMatch(/última nesse caminho/);
+    fireEvent.click(screen.getByTestId("flow-advanced-close"));
     expect(screen.queryByLabelText("Quando a etapa 1 começa")).toBeNull();
     fireEvent.click(screen.getByTestId("edit-step-flow"));
     expect(screen.getByLabelText("Quando a etapa 1 começa")).toBeInTheDocument();

@@ -53,6 +53,7 @@ import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api-client";
+import { formatClientSequenceId } from "@/lib/client-display-id";
 import { PageLoader } from "@/components/ui/loading";
 
 // Client é uma entidade real, separada de Company — servida por
@@ -94,9 +95,6 @@ interface ClientRecord {
   links: ClientLink[];
 }
 
-function formatClientSequenceId(seq: number): string {
-  return `cli_${String(seq).padStart(5, "0")}`;
-}
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("pt-BR");

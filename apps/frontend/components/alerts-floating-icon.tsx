@@ -22,6 +22,7 @@
  * sugestões" — empilhado acima dele, nunca os dois ícones (desktop/mobile)
  * visíveis ao mesmo tempo (alternam por breakpoint, igual ao padrão existente).
  */
+import { FloatingToolSlot } from "@/components/floating-tools-rail";
 import { useEffect, useRef, useState } from "react";
 import { playCategorySound } from "@/lib/notification-sounds";
 import { AlertTriangle } from "lucide-react";
@@ -123,7 +124,7 @@ export function AlertsFloatingIcon() {
   return (
     <>
       {/* Desktop — barra vertical direita, mesma coluna dos outros ícones. */}
-      <div className="hidden lg:block fixed top-[285px] right-[8px] z-65 group">
+      <FloatingToolSlot className="hidden lg:block group" order={4} fallbackTop={285}>
         <button
           type="button"
           data-tour-id="alerts-button"
@@ -147,7 +148,7 @@ export function AlertsFloatingIcon() {
         <span className="pointer-events-none absolute top-full right-0 mt-2 whitespace-nowrap rounded-lg bg-gray-900/95 px-2.5 py-1.5 text-[11px] text-white opacity-0 shadow-xl border border-white/10 transition-opacity duration-150 group-hover:opacity-100">
           Alertas
         </span>
-      </div>
+      </FloatingToolSlot>
 
       {/* Mobile/tablet — mesmo padrão do botão flutuante redondo de "Ajuda e
           sugestões", empilhado acima dele (mesma posição right-4, bottom

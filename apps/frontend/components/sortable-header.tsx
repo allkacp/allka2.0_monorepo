@@ -49,6 +49,9 @@ export interface SortableHeaderProps {
    * Provide this to enable the filter section (status / plan / type columns).
    */
   filterValues?: string[]
+  /** Rótulos opcionais sem alterar o valor usado no filtro (ex.: 1 → 001). */
+  filterLabels?: Record<string, string>
+  filterBadgeClasses?: Record<string, string>
   className?: string
 }
 
@@ -121,6 +124,8 @@ export function SortableHeader({
   onFilter,
   onClearFilter,
   filterValues,
+  filterLabels,
+  filterBadgeClasses,
   className,
 }: SortableHeaderProps) {
   const isActive = sortKey === field
@@ -260,9 +265,10 @@ export function SortableHeader({
                     key={val}
                     checked={activeFilters.includes(val)}
                     onCheckedChange={() => onFilter!(field, val)}
+                    onSelect={(event) => event.preventDefault()}
                     className="text-sm"
                   >
-                    {humanize(val)}
+                    <span className={filterBadgeClasses?.[val]}>{filterLabels?.[val] ?? humanize(val)}</span>
                   </DropdownMenuCheckboxItem>
                 ))}
 

@@ -102,7 +102,9 @@ import {
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
 import { ItemsPerPageSelect } from "@/components/items-per-page-select";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
-import { fitColumnWidths, useTableScrollSync } from "@/hooks/useTableScrollSync";
+import { useTableScrollSync } from "@/hooks/useTableScrollSync";
+import { TaskReferenceStat as StatCard } from "@/components/task-reference-stat";
+import "./tarefas-layout.css";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel";
@@ -563,19 +565,6 @@ const ALL_COLUMNS: {
   },
 ];
 
-// Mínimos usados quando a tabela encolhe para caber na tela.
-const FIT_MIN_WIDTHS: Partial<Record<ColKey, number>> = {
-  acoes: 99,
-  codigo: 80,
-  tarefa: 140,
-  projeto: 90,
-  cliente: 80,
-  produto: 80,
-  status: 110,
-  prazo: 90,
-  execucao: 90,
-};
-
 const DEFAULT_VISIBLE: ColKey[] = [
   "acoes",
   "codigo",
@@ -789,48 +778,6 @@ function AvatarBubble({
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  gradient,
-  border,
-  active,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  icon: any;
-  gradient: string;
-  border: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "relative rounded-xl bg-linear-to-br text-white shadow-lg text-left px-3 pt-2 pb-1.5 transition-all duration-200 overflow-hidden w-full border-2",
-        gradient,
-        border,
-        active
-          ? "ring-2 ring-white/60 ring-offset-1 ring-offset-slate-100 scale-[1.02] shadow-xl"
-          : "hover:scale-[1.02] hover:shadow-xl",
-      )}
-    >
-      <div className="flex items-center justify-between mb-1">
-        <p className="text-xs font-medium text-white/70 leading-tight">
-          {label}
-        </p>
-        <div className="bg-white/20 rounded-md p-1 shrink-0 ml-1">
-          <Icon className="h-3 w-3 text-white" />
-        </div>
-      </div>
-      <p className="text-2xl font-bold text-white leading-none">{value}</p>
-    </button>
-  );
-}
 
 // ─── Assign Nomade Dialog ─────────────────────────────────────────────────────
 
@@ -1197,12 +1144,11 @@ export default function AdminTarefasPage({
     handleTableScroll,
     handleBottomBarScroll,
     hasHorizontalOverflow,
-    tableBoxWidth,
   } = useTableScrollSync([loading, visibleCols.size]);
 
   // Column resize
   const [colWidths, setColWidths] = useState<number[]>(() =>
-    ALL_COLUMNS.filter((c) => DEFAULT_VISIBLE.includes(c.key)).map(
+    ALL_COLUMNS.filter((c) => DEFAULT_VISIBLE.includes(c.key) && c.key !== "acoes").map(
       (c) => c.defaultW,
     ),
   );
@@ -1212,14 +1158,9 @@ export default function AdminTarefasPage({
     startWidth: number;
   } | null>(null);
 
-  const visibleColumnsList = ALL_COLUMNS.filter((c) => visibleCols.has(c.key));
-  // Larguras que cabem na área visível, sem rolagem horizontal.
-  const fittedColWidths = fitColumnWidths(
-    colWidths,
-    tableBoxWidth,
-    64,
-    visibleColumnsList.map((c) => FIT_MIN_WIDTHS[c.key]),
-  );
+  const visibleColumnsList = ALL_COLUMNS.filter((c) => visibleCols.has(c.key) && c.key !== "acoes");
+  const showActions = visibleCols.has("acoes");
+  const columnWeightTotal = visibleColumnsList.reduce((sum, col, i) => sum + (colWidths[i] ?? col.defaultW), 0);
 
   useEffect(() => {
     setColWidths(visibleColumnsList.map((c) => c.defaultW));
@@ -2110,7 +2051,7 @@ export default function AdminTarefasPage({
     );
 
   return (
-    <TooltipProvider>
+    <TooltipProvider delayDuration={400}>
       <div className={STANDARD_SHELL_PANEL_CLASS}>
         <div className="relative h-full min-h-0 flex flex-col">
           {/* Tela Slide (EmbeddedSlideScreen) — precisam ficar DENTRO do
@@ -2215,72 +2156,64 @@ export default function AdminTarefasPage({
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="space-y-0">
+            <div className="tasks-reference space-y-0">
               {/* ── Stat Cards ─────────────────────────────────────────── */}
-              <div className="mt-[5px] mb-[5px] grid grid-cols-2 gap-3 sm:grid-cols-4 lg:h-[65px] lg:grid-cols-8">
+              <div data-testid="task-reference-stats" className="task-reference-stats mt-[5px] mb-[5px] grid overflow-hidden rounded-xl border border-slate-200/80 bg-white/80">
                 {[
                   {
                     key: null,
                     label: "Total",
                     value: stats.total,
-                    grad: "from-slate-600 to-slate-800",
-                    border: "border-slate-400/60 dark:border-slate-700/70",
+                    tone: "slate" as const,
                     icon: CheckSquare2,
                   },
                   {
                     key: "PARA_LANCAMENTO",
                     label: "Para lançamento",
                     value: stats.paraLancamento,
-                    grad: "from-indigo-500 to-indigo-700",
-                    border: "border-indigo-300/70 dark:border-indigo-800/70",
+                    tone: "indigo" as const,
                     icon: Clock,
                   },
                   {
                     key: "EM_LANCAMENTO",
                     label: "Em lançamento",
                     value: stats.emLancamento,
-                    grad: "from-violet-500 to-indigo-700",
-                    border: "border-violet-300/70 dark:border-violet-800/70",
+                    tone: "violet" as const,
                     icon: SendHorizonal,
                   },
                   {
                     key: "EM_EXECUCAO",
                     label: "Em execução",
                     value: stats.emExecucao,
-                    grad: "from-blue-500 to-blue-700",
-                    border: "border-blue-300/70 dark:border-blue-800/70",
+                    tone: "blue" as const,
                     icon: PlayCircle,
                   },
                   {
                     key: "aprovacao",
                     label: "Em aprovação",
                     value: stats.emAprovacao,
-                    grad: "from-violet-500 to-purple-700",
-                    border: "border-violet-300/70 dark:border-violet-800/70",
+                    tone: "violet" as const,
                     icon: CheckCircle2,
                   },
                   {
                     key: "overdue",
                     label: "Atrasadas",
                     value: stats.atrasadas,
-                    grad: "from-red-500 to-rose-700",
-                    border: "border-red-300/70 dark:border-red-800/70",
+                    tone: "red" as const,
                     icon: AlertCircle,
                   },
                   {
                     key: "concluido",
                     label: "Concluídas",
                     value: stats.concluidas,
-                    grad: "from-emerald-500 to-emerald-700",
-                    border: "border-emerald-300/70 dark:border-emerald-800/70",
+                    tone: "emerald" as const,
                     icon: ThumbsUp,
                   },
                   {
                     key: "AGUARDANDO_NOMADE",
                     label: "Aguard. nômade",
                     value: stats.aguardandoNomade,
-                    grad: "from-purple-500 to-purple-700",
-                    border: "border-purple-300/70 dark:border-purple-800/70",
+                    tone: "violet" as const,
                     icon: UserSearch,
                   },
                 ].map((c) => {
@@ -2300,8 +2233,7 @@ export default function AdminTarefasPage({
                       label={c.label}
                       value={c.value}
                       icon={c.icon}
-                      gradient={c.grad}
-                      border={c.border}
+                      tone={c.tone}
                       active={isActive}
                       onClick={() => {
                         setSearch("");
@@ -2336,9 +2268,9 @@ export default function AdminTarefasPage({
               </div>
 
               {/* ── Main Card ─────────────────────────────────── */}
-              <div className="bg-white dark:bg-slate-900 border border-[#e8edf5] dark:border-slate-700 rounded-xl shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-slate-900 border border-[#e6ebf3] dark:border-slate-700 rounded-[20px] shadow-[0_12px_32px_rgba(15,23,42,.06)] overflow-hidden">
                 {/* Row 1 — search + icon toolbar buttons */}
-                <div className="flex items-center gap-2 flex-wrap px-[18px] py-3">
+                <div className="flex items-center gap-2 flex-wrap px-3 py-2">
                   <div className="relative flex-1 min-w-[220px] max-w-sm">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -2454,18 +2386,10 @@ export default function AdminTarefasPage({
                     onScroll={handleTableScroll}
                     className="overflow-x-auto allka-table-scroll-body"
                   >
-                    <table
-                      className="allka-fit-table text-sm"
-                      style={{
-                        tableLayout: "fixed",
-                        width: fittedColWidths.reduce((a, b) => a + b, 0),
-                        minWidth: "100%",
-                      }}
-                    >
+                    <table className="tasks-reference-table tabela-cartao w-full text-xs" style={{ tableLayout: "fixed" }}>
                       <colgroup>
-                        {fittedColWidths.map((w, i) => (
-                          <col key={i} style={{ width: w }} />
-                        ))}
+                        {visibleColumnsList.map((col, i) => <col key={col.key} style={{ width: `calc((100% - ${showActions ? 96 : 0}px) * ${(colWidths[i] ?? col.defaultW) / columnWeightTotal})` }} />)}
+                        {showActions && <col style={{ width: 96 }} />}
                       </colgroup>
                       <thead>
                         <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
@@ -2551,6 +2475,7 @@ export default function AdminTarefasPage({
                               </th>
                             );
                           })}
+                          {showActions && <th className="task-reference-actions text-center uppercase font-bold">Ações</th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -2574,25 +2499,593 @@ export default function AdminTarefasPage({
                               className={cn(
                                 "border-b border-slate-100 dark:border-slate-700/50 transition-colors group",
                                 rowIdx % 2 === 0
-                                  ? "bg-[#F1F4F9] dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#D9E1ED] dark:hover:bg-[oklch(0.21_0.024_258)]"
-                                  : "bg-[#DCE3EE] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#C7D2E3] dark:hover:bg-[oklch(0.21_0.024_258)]",
+                                  ? "bg-white dark:bg-[oklch(0.14_0.026_258)] hover:bg-[#f3f7ff] dark:hover:bg-[oklch(0.21_0.024_258)]"
+                                  : "bg-[#f5f8fc] dark:bg-[oklch(0.185_0.024_258)] hover:bg-[#eaf2ff] dark:hover:bg-[oklch(0.21_0.024_258)]",
                                 overdue && "bg-red-50/50 dark:bg-red-950/10",
                               )}
                             >
+                              {/* ID */}
+                              {visibleCols.has("id") && (
+                                <td data-rotulo="ID"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <span className="text-[11px] font-mono text-slate-400">
+                                    #{String(tarefa.id)}
+                                  </span>
+                                </td>
+                              )}
+
+                              {/* Código */}
+                              {visibleCols.has("codigo") && (
+                                <td data-rotulo="Código"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <div className="flex flex-col gap-0.5">
+                                    {tarefa.task_code ||
+                                    tarefa.code_snapshot ? (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 cursor-help">
+                                            {tarefa.task_code
+                                              ? formatTaskCode(tarefa.task_code)
+                                              : tarefa.code_snapshot}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent
+                                          side="top"
+                                          className="text-xs"
+                                        >
+                                          Código único da tarefa
+                                          {tarefa.task_code
+                                            ? ` (original: ${tarefa.task_code})`
+                                            : ""}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : (
+                                      <span className="text-slate-300 dark:text-slate-600">
+                                        —
+                                      </span>
+                                    )}
+                                    {/* Tarefa vinda da plataforma antiga: mostra o número de lá e
+                                  sinaliza quando ela continua no formato antigo (sem modelo
+                                  de tarefa novo por trás). */}
+                                    <LegacyIdBadge
+                                      legacyId={(tarefa as any).legacy_id}
+                                      entidade="tarefa"
+                                      modeloAntigo={Boolean(
+                                        (tarefa as any).legacy_model,
+                                      )}
+                                    />
+                                  </div>
+                                </td>
+                              )}
+
+                              {/* Tarefa */}
+                              {visibleCols.has("tarefa") && (
+                                <td data-rotulo="Tarefa"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        className="text-left w-full"
+                                        onClick={() => {
+                                          setSelectedTarefa(tarefa);
+                                          setDrawerStartInEditMode(false);
+                                          setDrawerOpen(true);
+                                          navigate(
+                                            `${routeBase}/${tarefa.task_code || tarefa.id}`,
+                                            {
+                                              replace: true,
+                                            },
+                                          );
+                                        }}
+                                      >
+                                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors leading-snug">
+                                          {tarefa.title}
+                                        </p>
+                                        {tarefa.fase && (
+                                          <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                            {tarefa.fase}
+                                          </span>
+                                        )}
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs max-w-[280px]"
+                                    >
+                                      {tarefa.title}
+                                      {tarefa.fase
+                                        ? ` · Fase: ${tarefa.fase}`
+                                        : ""}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
+
+                              {/* Projeto */}
+                              {visibleCols.has("projeto") && (
+                                <td data-rotulo="Projeto"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                        <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                                          {tarefa.project.title}
+                                        </span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs"
+                                    >
+                                      Projeto: {tarefa.project.title}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
+
+                              {/* Cliente */}
+                              {visibleCols.has("cliente") && (
+                                <td data-rotulo="Cliente"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.project.client ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                          <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                          <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                                            {tarefa.project.client.name}
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        {tarefa.project.client.name}
+                                        {tarefa.project.client.cnpj
+                                          ? ` · CNPJ: ${tarefa.project.client.cnpj}`
+                                          : ""}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Agência */}
+                              {visibleCols.has("agencia") && (
+                                <td data-rotulo="Resp. Agência"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.responsavel_agencia ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                          <AvatarBubble
+                                            name={
+                                              tarefa.responsavel_agencia.name
+                                            }
+                                            colorClass="bg-blue-500"
+                                          />
+                                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                                            {tarefa.responsavel_agencia.name}
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        {tarefa.responsavel_agencia.name}
+                                        {tarefa.responsavel_agencia.email
+                                          ? ` · ${tarefa.responsavel_agencia.email}`
+                                          : ""}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Produto */}
+                              {visibleCols.has("produto") && (
+                                <td data-rotulo="Produto"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                        <Package className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                                        <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                                          {
+                                            tarefa.project_product
+                                              .product_name_snapshot
+                                          }
+                                        </span>
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs"
+                                    >
+                                      {
+                                        tarefa.project_product
+                                          .product_name_snapshot
+                                      }
+                                      {tarefa.project_product
+                                        .product_category_snapshot
+                                        ? ` · ${tarefa.project_product.product_category_snapshot}`
+                                        : ""}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
+
+                              {/* Status */}
+                              {visibleCols.has("status") && (
+                                <td data-rotulo="Status"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="cursor-help inline-block">
+                                        <StatusBadge status={tarefa.status} />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs"
+                                    >
+                                      Etapa atual:{" "}
+                                      {STATUS_CFG[tarefa.status]?.label ??
+                                        tarefa.status}
+                                      {tarefa.updated_at
+                                        ? ` · Atualizado em ${fmtDate(tarefa.updated_at)}`
+                                        : ""}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
+
+                              {/* Nômade */}
+                              {visibleCols.has("nomade") && (
+                                <td data-rotulo="Nômade"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.nomade_responsavel ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1.5 min-w-0 cursor-help">
+                                          <AvatarBubble
+                                            name={
+                                              tarefa.nomade_responsavel.name
+                                            }
+                                            colorClass="bg-purple-500"
+                                          />
+                                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                                            {tarefa.nomade_responsavel.name}
+                                          </span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        {tarefa.nomade_responsavel.name}
+                                        {tarefa.nomade_responsavel.email
+                                          ? ` · ${tarefa.nomade_responsavel.email}`
+                                          : ""}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        setAssignTask(tarefa);
+                                        setAssignOpen(true);
+                                      }}
+                                      className="text-[11px] text-slate-400 hover:text-purple-600 underline underline-offset-2 transition-colors"
+                                    >
+                                      Atribuir
+                                    </button>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Líder */}
+                              {visibleCols.has("lider") && (
+                                <td data-rotulo="Líder"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.project.consultant ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="text-xs text-slate-600 dark:text-slate-400 truncate block cursor-help">
+                                          {tarefa.project.consultant}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        Líder responsável:{" "}
+                                        {tarefa.project.consultant}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Prazo entrega */}
+                              {visibleCols.has("prazo") && (
+                                <td data-rotulo="Prazo entrega"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.due_date ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <div className="cursor-help">
+                                          <span
+                                            className={cn(
+                                              "text-sm font-medium",
+                                              overdue
+                                                ? "text-red-600 dark:text-red-400"
+                                                : "text-slate-600 dark:text-slate-400",
+                                            )}
+                                          >
+                                            {fmtDate(tarefa.due_date, true)}
+                                          </span>
+                                          {dias !== null && (
+                                            <p
+                                              className={cn(
+                                                "text-[10px] mt-0.5 leading-none",
+                                                overdue
+                                                  ? "text-red-500"
+                                                  : dias <= 3
+                                                    ? "text-amber-500"
+                                                    : "text-slate-400",
+                                              )}
+                                            >
+                                              {dias < 0
+                                                ? `${Math.abs(dias)}d atraso`
+                                                : dias === 0
+                                                  ? "hoje"
+                                                  : `${dias}d`}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        Prazo: {fmtDate(tarefa.due_date)}
+                                        {dias !== null
+                                          ? dias < 0
+                                            ? ` · Atrasada há ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? "" : "s"}`
+                                            : dias === 0
+                                              ? " · Vence hoje"
+                                              : ` · Faltam ${dias} dia${dias === 1 ? "" : "s"}`
+                                          : ""}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Prazo execução */}
+                              {visibleCols.has("execucao") && (
+                                <td data-rotulo="Prazo execução"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {tarefa.start_date ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="text-sm text-slate-600 dark:text-slate-400 cursor-help">
+                                          {fmtDate(tarefa.start_date, true)}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="top"
+                                        className="text-xs"
+                                      >
+                                        Início da execução:{" "}
+                                        {fmtDate(tarefa.start_date)}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Atraso */}
+                              {visibleCols.has("atraso") && (
+                                <td data-rotulo="Atraso"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {(() => {
+                                    const isTerminal = [
+                                      "CONCLUIDA",
+                                      "CANCELADA",
+                                      "APROVADA",
+                                    ].includes(tarefa.status);
+                                    if (!tarefa.due_date || isTerminal) {
+                                      return (
+                                        <span className="text-slate-300 dark:text-slate-600">
+                                          —
+                                        </span>
+                                      );
+                                    }
+                                    const tone = urgencyTone(dias, overdue);
+                                    const label = overdue
+                                      ? `${Math.abs(dias ?? 0)}d atraso`
+                                      : dias === 0
+                                        ? "Hoje"
+                                        : `${dias}d`;
+                                    const explanation = overdue
+                                      ? `Atrasada há ${Math.abs(dias ?? 0)} dia${Math.abs(dias ?? 0) === 1 ? "" : "s"} (prazo era ${fmtDate(tarefa.due_date)})`
+                                      : dias === 0
+                                        ? "Vence hoje — última chance antes de atrasar"
+                                        : `Faltam ${dias} dia${dias === 1 ? "" : "s"} para o prazo (${fmtDate(tarefa.due_date)})`;
+                                    return (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span
+                                            className={cn(
+                                              "inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 border cursor-help",
+                                              tone.text,
+                                              tone.bg,
+                                              tone.border,
+                                            )}
+                                          >
+                                            {tone.pulse ? (
+                                              <span className="relative flex h-2 w-2 shrink-0">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
+                                              </span>
+                                            ) : (
+                                              <AlertCircle className="h-3 w-3" />
+                                            )}
+                                            {label}
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent
+                                          side="top"
+                                          className="text-xs"
+                                        >
+                                          {explanation}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })()}
+                                </td>
+                              )}
+
+                              {/* Prioridade */}
+                              {visibleCols.has("prioridade") && (
+                                <td data-rotulo="Prioridade"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="cursor-help inline-block">
+                                        <PriorityBadge
+                                          priority={tarefa.priority as Priority}
+                                        />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      className="text-xs"
+                                    >
+                                      {PRIORITY_INFO[
+                                        tarefa.priority as Priority
+                                      ] ?? "Prioridade da tarefa."}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              )}
                               {/* A\ç\ões \— pinned/sticky, matching the platform-wide icon-column recipe */}
                               {visibleCols.has("acoes") && (
                                 <td
-                                  className={cn(
-                                    "px-2 py-3 transition-colors",
-                                    rowIdx % 2 === 0
-                                      ? "bg-[#ECEFF4] group-hover:bg-[#D9E1ED] dark:bg-[oklch(0.14_0.026_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]"
-                                      : "bg-[#D6DCE8] group-hover:bg-[#C7D2E3] dark:bg-[oklch(0.185_0.024_258)] dark:group-hover:bg-[oklch(0.21_0.024_258)]",
-                                  )}
+                                  data-rotulo="Ações" className="task-reference-actions"
                                   style={{
                                     position: "sticky",
-                                    left: 0,
+                                    right: 0,
                                     zIndex: 1,
-                                    minWidth: 99,
+                                    width: 96,
                                     borderRight:
                                       "1px solid rgba(100,116,139,0.18)",
                                   }}
@@ -2601,6 +3094,7 @@ export default function AdminTarefasPage({
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <button
+                                          aria-label={`Ver tarefa ${tarefa.title}`}
                                           onClick={() => {
                                             setSelectedTarefa(tarefa);
                                             setDrawerStartInEditMode(false);
@@ -2626,7 +3120,7 @@ export default function AdminTarefasPage({
                                     </Tooltip>
                                     <Tooltip>
                                       <TooltipTrigger asChild>
-                                        <button
+                                        <button aria-label={`Editar tarefa ${tarefa.title}`}
                                           onClick={() => {
                                             setSelectedTarefa(tarefa);
                                             setDrawerStartInEditMode(true);
@@ -2652,13 +3146,13 @@ export default function AdminTarefasPage({
                                     </Tooltip>
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
-                                        <button className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
+                                        <button aria-label={`Mais ações — ${tarefa.title}`} className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] bg-white dark:bg-slate-800 border border-[#e8edf5] dark:border-slate-700 text-slate-400 dark:text-slate-500 shadow-[0_4px_10px_rgba(15,23,42,0.06)] hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white dark:hover:text-[#0a1628] hover:border-transparent hover:shadow-[0_8px_18px_rgba(15,23,42,0.18)] hover:-translate-y-px transition-all duration-150">
                                           <MoreHorizontal className="h-3.5 w-3.5" />
                                         </button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent
-                                        align="start"
-                                        className="w-56 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60"
+                                        align="end"
+                                        className="w-52 rounded-xl p-1.5 shadow-lg border-slate-200/70 dark:border-slate-700/60"
                                       >
                                         <DropdownMenuItem
                                           className="gap-2.5 rounded-lg py-2 px-2.5 text-sm cursor-pointer"
@@ -2834,579 +3328,6 @@ export default function AdminTarefasPage({
                                 </td>
                               )}
 
-                              {/* ID */}
-                              {visibleCols.has("id") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <span className="text-[11px] font-mono text-slate-400">
-                                    #{String(tarefa.id)}
-                                  </span>
-                                </td>
-                              )}
-
-                              {/* Código */}
-                              {visibleCols.has("codigo") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <div className="flex flex-col gap-0.5">
-                                    {tarefa.task_code ||
-                                    tarefa.code_snapshot ? (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 cursor-help">
-                                            {tarefa.task_code
-                                              ? formatTaskCode(tarefa.task_code)
-                                              : tarefa.code_snapshot}
-                                          </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent
-                                          side="top"
-                                          className="text-xs"
-                                        >
-                                          Código único da tarefa
-                                          {tarefa.task_code
-                                            ? ` (original: ${tarefa.task_code})`
-                                            : ""}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    ) : (
-                                      <span className="text-slate-300 dark:text-slate-600">
-                                        —
-                                      </span>
-                                    )}
-                                    {/* Tarefa vinda da plataforma antiga: mostra o número de lá e
-                                  sinaliza quando ela continua no formato antigo (sem modelo
-                                  de tarefa novo por trás). */}
-                                    <LegacyIdBadge
-                                      legacyId={(tarefa as any).legacy_id}
-                                      entidade="tarefa"
-                                      modeloAntigo={Boolean(
-                                        (tarefa as any).legacy_model,
-                                      )}
-                                    />
-                                  </div>
-                                </td>
-                              )}
-
-                              {/* Tarefa */}
-                              {visibleCols.has("tarefa") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        className="text-left w-full"
-                                        onClick={() => {
-                                          setSelectedTarefa(tarefa);
-                                          setDrawerStartInEditMode(false);
-                                          setDrawerOpen(true);
-                                          navigate(
-                                            `${routeBase}/${tarefa.task_code || tarefa.id}`,
-                                            {
-                                              replace: true,
-                                            },
-                                          );
-                                        }}
-                                      >
-                                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate hover:text-blue-600 dark:hover:text-blue-400 transition-colors leading-snug">
-                                          {tarefa.title}
-                                        </p>
-                                        {tarefa.fase && (
-                                          <span className="text-[10px] bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded mt-0.5 inline-block">
-                                            {tarefa.fase}
-                                          </span>
-                                        )}
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent
-                                      side="top"
-                                      className="text-xs max-w-[280px]"
-                                    >
-                                      {tarefa.title}
-                                      {tarefa.fase
-                                        ? ` · Fase: ${tarefa.fase}`
-                                        : ""}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </td>
-                              )}
-
-                              {/* Projeto */}
-                              {visibleCols.has("projeto") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                        <FolderOpen className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                          {tarefa.project.title}
-                                        </span>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent
-                                      side="top"
-                                      className="text-xs"
-                                    >
-                                      Projeto: {tarefa.project.title}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </td>
-                              )}
-
-                              {/* Cliente */}
-                              {visibleCols.has("cliente") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  {tarefa.project.client ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                          <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                                          <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                            {tarefa.project.client.name}
-                                          </span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent
-                                        side="top"
-                                        className="text-xs"
-                                      >
-                                        {tarefa.project.client.name}
-                                        {tarefa.project.client.cnpj
-                                          ? ` · CNPJ: ${tarefa.project.client.cnpj}`
-                                          : ""}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <span className="text-slate-300 dark:text-slate-600">
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                              )}
-
-                              {/* Agência */}
-                              {visibleCols.has("agencia") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  {tarefa.responsavel_agencia ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                          <AvatarBubble
-                                            name={
-                                              tarefa.responsavel_agencia.name
-                                            }
-                                            colorClass="bg-blue-500"
-                                          />
-                                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                                            {tarefa.responsavel_agencia.name}
-                                          </span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent
-                                        side="top"
-                                        className="text-xs"
-                                      >
-                                        {tarefa.responsavel_agencia.name}
-                                        {tarefa.responsavel_agencia.email
-                                          ? ` · ${tarefa.responsavel_agencia.email}`
-                                          : ""}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <span className="text-slate-300 dark:text-slate-600">
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                              )}
-
-                              {/* Produto */}
-                              {visibleCols.has("produto") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                        <Package className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-                                        <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                          {
-                                            tarefa.project_product
-                                              .product_name_snapshot
-                                          }
-                                        </span>
-                                      </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent
-                                      side="top"
-                                      className="text-xs"
-                                    >
-                                      {
-                                        tarefa.project_product
-                                          .product_name_snapshot
-                                      }
-                                      {tarefa.project_product
-                                        .product_category_snapshot
-                                        ? ` · ${tarefa.project_product.product_category_snapshot}`
-                                        : ""}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </td>
-                              )}
-
-                              {/* Status */}
-                              {visibleCols.has("status") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="cursor-help inline-block">
-                                        <StatusBadge status={tarefa.status} />
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent
-                                      side="top"
-                                      className="text-xs"
-                                    >
-                                      Etapa atual:{" "}
-                                      {STATUS_CFG[tarefa.status]?.label ??
-                                        tarefa.status}
-                                      {tarefa.updated_at
-                                        ? ` · Atualizado em ${fmtDate(tarefa.updated_at)}`
-                                        : ""}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </td>
-                              )}
-
-                              {/* Nômade */}
-                              {visibleCols.has("nomade") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  {tarefa.nomade_responsavel ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="flex items-center gap-1.5 min-w-0 cursor-help">
-                                          <AvatarBubble
-                                            name={
-                                              tarefa.nomade_responsavel.name
-                                            }
-                                            colorClass="bg-purple-500"
-                                          />
-                                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                                            {tarefa.nomade_responsavel.name}
-                                          </span>
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent
-                                        side="top"
-                                        className="text-xs"
-                                      >
-                                        {tarefa.nomade_responsavel.name}
-                                        {tarefa.nomade_responsavel.email
-                                          ? ` · ${tarefa.nomade_responsavel.email}`
-                                          : ""}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <button
-                                      onClick={() => {
-                                        setAssignTask(tarefa);
-                                        setAssignOpen(true);
-                                      }}
-                                      className="text-[11px] text-slate-400 hover:text-purple-600 underline underline-offset-2 transition-colors"
-                                    >
-                                      Atribuir
-                                    </button>
-                                  )}
-                                </td>
-                              )}
-
-                              {/* Líder */}
-                              {visibleCols.has("lider") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  {tarefa.project.consultant ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="text-xs text-slate-600 dark:text-slate-400 truncate block cursor-help">
-                                          {tarefa.project.consultant}
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent
-                                        side="top"
-                                        className="text-xs"
-                                      >
-                                        Líder responsável:{" "}
-                                        {tarefa.project.consultant}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <span className="text-slate-300 dark:text-slate-600">
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                              )}
-
-                              {/* Prazo entrega */}
-                              {visibleCols.has("prazo") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  {tarefa.due_date ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <div className="cursor-help">
-                                          <span
-                                            className={cn(
-                                              "text-sm font-medium",
-                                              overdue
-                                                ? "text-red-600 dark:text-red-400"
-                                                : "text-slate-600 dark:text-slate-400",
-                                            )}
-                                          >
-                                            {fmtDate(tarefa.due_date, true)}
-                                          </span>
-                                          {dias !== null && (
-                                            <p
-                                              className={cn(
-                                                "text-[10px] mt-0.5 leading-none",
-                                                overdue
-                                                  ? "text-red-500"
-                                                  : dias <= 3
-                                                    ? "text-amber-500"
-                                                    : "text-slate-400",
-                                              )}
-                                            >
-                                              {dias < 0
-                                                ? `${Math.abs(dias)}d atraso`
-                                                : dias === 0
-                                                  ? "hoje"
-                                                  : `${dias}d`}
-                                            </p>
-                                          )}
-                                        </div>
-                                      </TooltipTrigger>
-                                      <TooltipContent
-                                        side="top"
-                                        className="text-xs"
-                                      >
-                                        Prazo: {fmtDate(tarefa.due_date)}
-                                        {dias !== null
-                                          ? dias < 0
-                                            ? ` · Atrasada há ${Math.abs(dias)} dia${Math.abs(dias) === 1 ? "" : "s"}`
-                                            : dias === 0
-                                              ? " · Vence hoje"
-                                              : ` · Faltam ${dias} dia${dias === 1 ? "" : "s"}`
-                                          : ""}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <span className="text-slate-300 dark:text-slate-600">
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                              )}
-
-                              {/* Prazo execução */}
-                              {visibleCols.has("execucao") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  {tarefa.start_date ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="text-sm text-slate-600 dark:text-slate-400 cursor-help">
-                                          {fmtDate(tarefa.start_date, true)}
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent
-                                        side="top"
-                                        className="text-xs"
-                                      >
-                                        Início da execução:{" "}
-                                        {fmtDate(tarefa.start_date)}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <span className="text-slate-300 dark:text-slate-600">
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                              )}
-
-                              {/* Atraso */}
-                              {visibleCols.has("atraso") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  {(() => {
-                                    const isTerminal = [
-                                      "CONCLUIDA",
-                                      "CANCELADA",
-                                      "APROVADA",
-                                    ].includes(tarefa.status);
-                                    if (!tarefa.due_date || isTerminal) {
-                                      return (
-                                        <span className="text-slate-300 dark:text-slate-600">
-                                          —
-                                        </span>
-                                      );
-                                    }
-                                    const tone = urgencyTone(dias, overdue);
-                                    const label = overdue
-                                      ? `${Math.abs(dias ?? 0)}d atraso`
-                                      : dias === 0
-                                        ? "Hoje"
-                                        : `${dias}d`;
-                                    const explanation = overdue
-                                      ? `Atrasada há ${Math.abs(dias ?? 0)} dia${Math.abs(dias ?? 0) === 1 ? "" : "s"} (prazo era ${fmtDate(tarefa.due_date)})`
-                                      : dias === 0
-                                        ? "Vence hoje — última chance antes de atrasar"
-                                        : `Faltam ${dias} dia${dias === 1 ? "" : "s"} para o prazo (${fmtDate(tarefa.due_date)})`;
-                                    return (
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <span
-                                            className={cn(
-                                              "inline-flex items-center gap-1 text-[10px] font-semibold rounded-full px-2 py-0.5 border cursor-help",
-                                              tone.text,
-                                              tone.bg,
-                                              tone.border,
-                                            )}
-                                          >
-                                            {tone.pulse ? (
-                                              <span className="relative flex h-2 w-2 shrink-0">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
-                                              </span>
-                                            ) : (
-                                              <AlertCircle className="h-3 w-3" />
-                                            )}
-                                            {label}
-                                          </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent
-                                          side="top"
-                                          className="text-xs"
-                                        >
-                                          {explanation}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    );
-                                  })()}
-                                </td>
-                              )}
-
-                              {/* Prioridade */}
-                              {visibleCols.has("prioridade") && (
-                                <td
-                                  className="px-3 py-3.5"
-                                  style={{
-                                    borderRight:
-                                      "1px solid rgba(148,163,184,0.15)",
-                                    overflow: "hidden",
-                                  }}
-                                >
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <span className="cursor-help inline-block">
-                                        <PriorityBadge
-                                          priority={tarefa.priority as Priority}
-                                        />
-                                      </span>
-                                    </TooltipTrigger>
-                                    <TooltipContent
-                                      side="top"
-                                      className="text-xs"
-                                    >
-                                      {PRIORITY_INFO[
-                                        tarefa.priority as Priority
-                                      ] ?? "Prioridade da tarefa."}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </td>
-                              )}
                             </tr>
                           );
                         })}

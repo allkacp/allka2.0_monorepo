@@ -188,6 +188,7 @@ export function StepAccessesEditor({ version, scope, readOnly, items, setItems, 
                         <span className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">{accessName(i)}</span>
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${badge.cls}`} data-testid="access-state">{badge.text}</span>
                         {issuesNow.length > 0 && !removed && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">incompleto</span>}
+                        {!removed && i.form.shared_with_steps && <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800" data-testid="access-shared-chip" title="As outras etapas podem usar este mesmo acesso, sem cadastrar de novo.">disponível para outras etapas</span>}
                       </span>
                       <span className="block text-[11px] text-slate-500">O cliente libera por: {methodLabel(i.form.method)}{i.form.obligation === "optional" ? " · opcional" : i.form.obligation === "conditional" ? " · condicional" : " · obrigatório"}</span>
                     </button>

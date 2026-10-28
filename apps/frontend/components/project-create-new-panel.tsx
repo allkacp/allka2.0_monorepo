@@ -54,6 +54,7 @@ import { ButtonLoader } from "@/components/ui/loading";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAccountType } from "@/contexts/account-type-context";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { ProjectRegisteredContacts } from "@/components/project-registered-contacts";
 import { Badge } from "@/components/ui/badge";
 import {
   Accordion,
@@ -195,6 +196,9 @@ interface ProjectCreateNewPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreate: (project: any) => void;
+  /** No checkout, cria somente o projeto em rascunho e retorna ao pedido atual. */
+  projectOnly?: boolean;
+  organizationType?: "agency" | "company";
   /** Optional: pre-fill all fields (for Clone mode) */
   initialData?: Partial<{
     nome: string;
@@ -206,6 +210,8 @@ interface ProjectCreateNewPanelProps {
     clienteCnpj: string;
     consultor: string;
     emailConsultor: string;
+    consultorId: string;
+    clientRecordId: string;
     dataInicio: string;
     prazo: string;
     orcamento: string;
@@ -255,6 +261,8 @@ interface FormData {
   clienteCnpj: string;
   consultor: string;
   emailConsultor: string;
+  consultorId: string;
+  clientRecordId: string;
   dataInicio: string;
   prazo: string;
   orcamento: string;
@@ -284,6 +292,8 @@ const EMPTY_FORM: FormData = {
   clienteCnpj: "",
   consultor: "",
   emailConsultor: "",
+  consultorId: "",
+  clientRecordId: "",
   dataInicio: "",
   prazo: "",
   orcamento: "",
@@ -312,6 +322,8 @@ export function ProjectCreateNewPanel({
   draftCommissionData,
   draftProjectId,
   resumeToCheckout,
+  projectOnly = false,
+  organizationType = "company",
 }: ProjectCreateNewPanelProps) {
   const { toast } = useToast();
   const { accountType } = useAccountType();
@@ -326,13 +338,9 @@ export function ProjectCreateNewPanel({
   const [savedDraftId, setSavedDraftId] = useState<string | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
-  const ALL_ACCORDIONS = [
-    "dados",
-    "responsavel",
-    "datas",
-    "orcamento",
-    "config",
-  ];
+  const [saveError, setSaveError] = useState("");
+  const formScrollRef = useRef<HTMLDivElement>(null);
+  const ALL_ACCORDIONS = ["dados"];
   const [openAccordions, setOpenAccordions] = useState<string[]>(["dados"]);
 
   // Company-scoping state (string | null — Company.id is a CUID string)
@@ -346,7 +354,7 @@ export function ProjectCreateNewPanel({
   // projeto vai gravar em client_id (legado, só Company) ou agency_id.
   const [resolvedCompanyType, setResolvedCompanyType] = useState<
     "company" | "agency"
-  >("company");
+  >(organizationType);
 
   // New-client inline form state
   const [showNewClientForm, setShowNewClientForm] = useState(false);
@@ -476,6 +484,7 @@ export function ProjectCreateNewPanel({
     if (open) {
       setFormData(buildFormFromInitial());
       setErrors({});
+      setSaveError("");
       setNameCheckState("idle");
       setSubmitAttempted(false);
       setAvatarPreview(null);
@@ -489,6 +498,7 @@ export function ProjectCreateNewPanel({
         companyIdProp != null ? String(companyIdProp) : null,
       );
       setResolvedCompanyName(companyName ?? "");
+      setResolvedCompanyType(organizationType);
       setLocalClients([]);
       setLocalCompanies([]);
       setApiCompanies([]);
@@ -694,7 +704,7 @@ export function ProjectCreateNewPanel({
   // Also populates the "Cliente" dropdown from the same company users
   // (each Company.user is both a possible client contact AND consultant).
   useEffect(() => {
-    if (!open) return;
+    if (!open || projectOnly) return;
     // No resolved company → nothing to scope the query to. Without this,
     // an unscoped getUsers() call would return every platform user (e.g.
     // for Agency, which has no company_id to filter by), flooding the
@@ -803,7 +813,7 @@ export function ProjectCreateNewPanel({
   // Consultor Responsável já usa. Sem escopo aqui o Admin via TODOS os
   // clientes da plataforma no seletor, não só os desta empresa/agência.
   useEffect(() => {
-    if (!open) return;
+    if (!open || projectOnly) return;
     if (!resolvedCompanyId) {
       setLocalClients([]);
       setLoadingClients(false);
@@ -859,17 +869,19 @@ export function ProjectCreateNewPanel({
       return;
     }
     setNameCheckState("checking");
+    let active = true;
     nameCheckTimer.current = setTimeout(async () => {
       try {
         const result = await apiClient.checkProjectName({
           title: name,
-          client_id: resolvedCompanyId ?? undefined,
+          client_id: resolvedCompanyType === "agency" ? undefined : resolvedCompanyId ?? undefined,
           agency: effectiveAgencyName || undefined,
           // exclude the current draft/project if editing
           exclude_id:
-            preCreatedProjectId ??
+            savedDraftId ?? preCreatedProjectId ??
             (draftProjectId ? String(draftProjectId) : undefined),
         });
+        if (!active) return;
         setNameCheckState(result.duplicate ? "duplicate" : "ok");
         // Mirror into errors so the field turns red live
         setErrors((prev) => ({
@@ -879,15 +891,17 @@ export function ProjectCreateNewPanel({
             : undefined,
         }));
       } catch {
+        if (!active) return;
         // API unavailable — don't block the user, just clear the check
         setNameCheckState("idle");
       }
     }, 500);
     return () => {
+      active = false;
       if (nameCheckTimer.current) clearTimeout(nameCheckTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveAgencyName, formData.nome, resolvedCompanyId, formData.agencia]);
+  }, [effectiveAgencyName, formData.nome, resolvedCompanyId, resolvedCompanyType, formData.agencia, savedDraftId, preCreatedProjectId, draftProjectId]);
 
   // ── Helpers ──
   const updateField = <K extends keyof FormData>(
@@ -895,6 +909,7 @@ export function ProjectCreateNewPanel({
     value: FormData[K],
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    setSaveError("");
     if (errors[field as string])
       setErrors((prev) => ({ ...prev, [field]: undefined }));
   };
@@ -925,13 +940,28 @@ export function ProjectCreateNewPanel({
     if (formData.clienteEmail.trim() && !/\S+@\S+\.\S+/.test(formData.clienteEmail)) {
       e.clienteEmail = "E-mail inválido";
     }
+    if (projectOnly && !formData.consultorId) e.consultor = "Cadastre e selecione um consultor vinculado à empresa.";
+    if (projectOnly && !formData.clientRecordId) e.cliente = "Cadastre e selecione um cliente vinculado à empresa.";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (loading) return;
+    setSaveError("");
     if (!validateForm()) {
       setSubmitAttempted(true);
+      setOpenAccordions(["dados"]);
+      formScrollRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (projectOnly) {
+      setLoadingAction("submit");
+      const created = await confirmSubmit("draft");
+      if (created?.id) {
+        onCreate(created);
+        handleClose();
+      }
       return;
     }
     // Go to product catalog first — user must add at least one product before finalizing
@@ -1008,6 +1038,7 @@ export function ProjectCreateNewPanel({
           formData.companyType === "all" ? undefined : formData.companyType,
         consultant: formData.consultor || undefined,
         consultant_email: formData.emailConsultor || undefined,
+        ...(projectOnly ? { registered_contacts_required: true, consultant_user_id: formData.consultorId, client_record_id: formData.clientRecordId } : {}),
         // Admin responsável (ata 2026-08) — só Admin envia isto; string
         // seleciona, "" vira null (deixar sem responsável é permitido).
         ...(isAdmin ? { admin_responsible_user_id: formData.adminResponsavel || null } : {}),
@@ -1080,12 +1111,16 @@ export function ProjectCreateNewPanel({
     } catch (err: any) {
       console.error("[confirmSubmit]", err);
       // 409 = duplicate project name
-      if (String(err?.message).includes("duplicate_project_name")) {
+      if (err?.code === "duplicate_project_name" || String(err?.message).includes("duplicate_project_name") || (err?.status === 409 && /projeto.*nome/i.test(err?.message ?? ""))) {
         setNameCheckState("duplicate");
         setErrors((prev) => ({
           ...prev,
           nome: "Já existe um projeto com esse nome para esta empresa.",
         }));
+        setSaveError("Já existe um projeto com esse nome para esta empresa. Altere o nome ou cancele e selecione o projeto existente na contratação.");
+        setSubmitAttempted(true);
+        setOpenAccordions(["dados"]);
+        formScrollRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
         toast({
           title: "Nome duplicado",
           description:
@@ -1094,6 +1129,7 @@ export function ProjectCreateNewPanel({
         });
         return;
       }
+      setSaveError(err?.message || "Não foi possível salvar o projeto. Confira os dados e tente novamente.");
       toast({
         title: "Erro ao salvar projeto",
         description: isDraft
@@ -1855,11 +1891,9 @@ export function ProjectCreateNewPanel({
 
   // ── Error counts ──
   const sectionErrors = {
-    dados: [errors.nome, errors.agencia, errors.cliente].filter(
+    dados: [errors.nome, errors.agencia, errors.cliente, errors.consultor, errors.emailConsultor, errors.sincronizadoBitrix].filter(
       Boolean,
     ).length,
-    responsavel: [errors.consultor, errors.emailConsultor].filter(Boolean)
-      .length,
   };
   const totalErrors = Object.values(sectionErrors).reduce((a, b) => a + b, 0);
 
@@ -1961,6 +1995,15 @@ export function ProjectCreateNewPanel({
           // No celular: "Próximo" em cima, largura inteira; Cancelar e
           // Rascunho lado a lado embaixo — empilhados, os três botões
           // ocupavam quase metade da tela e sobrava pouco para o formulário.
+          <div className="w-full space-y-2">
+          {projectOnly && !loading && <p role="status" className="text-xs text-slate-600">
+            Projeto ainda não salvo. Cadastrar cliente e consultor não salva o projeto; selecione os dois e clique em Salvar projeto.
+          </p>}
+          {saveError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{saveError}</p>}
+          {submitAttempted && totalErrors > 0 && !saveError && <div role="alert" data-testid="project-save-validation" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <p className="font-medium">O projeto não foi salvo. Revise os campos destacados em Dados do Projeto:</p>
+            <ul className="mt-1 list-disc pl-4">{Object.entries(errors).filter(([, message]) => !!message).map(([field, message]) => <li key={field}>{message}</li>)}</ul>
+          </div>}
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:items-center sm:justify-start sm:gap-3 w-full">
             <Button
               variant="outline"
@@ -1970,7 +2013,7 @@ export function ProjectCreateNewPanel({
             >
               Cancelar
             </Button>
-            <div className="flex min-w-0 flex-col items-end gap-1 order-3 sm:order-none">
+            {!projectOnly && <div className="flex min-w-0 flex-col items-end gap-1 order-3 sm:order-none">
               <Button
                 variant="outline"
                 onClick={handleSaveDraftNow}
@@ -1992,14 +2035,15 @@ export function ProjectCreateNewPanel({
                   {draftBlockReason}
                 </p>
               )}
-            </div>
+            </div>}
             <Button
               className="btn-brand w-full sm:w-auto col-span-2 order-1 sm:order-none"
               onClick={handleSubmit}
               disabled={loading}
             >
-              {cloneMode ? "Clonar Projeto" : "Próximo"}
+              {loadingAction === "submit" && loading ? <ButtonLoader text="Salvando..." /> : projectOnly ? "Salvar projeto" : cloneMode ? "Clonar Projeto" : "Próximo"}
             </Button>
+          </div>
           </div>
         }
       >
@@ -2129,7 +2173,7 @@ export function ProjectCreateNewPanel({
           )}
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-background">
+          <div ref={formScrollRef} className="flex-1 overflow-y-auto px-[50px] py-[50px] bg-slate-200 dark:bg-background">
             {/* Validation warning */}
             {submitAttempted && totalErrors > 0 && (
               <div className="mb-4 flex items-center gap-2.5 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
@@ -2319,6 +2363,7 @@ export function ProjectCreateNewPanel({
                         )}
                       </div>
 
+                      {projectOnly ? <ProjectRegisteredContacts ownerId={resolvedCompanyId} ownerType={organizationType} ownerName={resolvedCompanyName || companyName || agencyName || ""} value={formData} errors={errors} onChange={fields => { for (const [key, val] of Object.entries(fields)) updateField(key as keyof FormData, val); }} /> : <>
                       <div className="col-span-2 space-y-1">
                         <Label className="text-xs font-medium text-slate-600">
                           Consultor Responsável *
@@ -2628,31 +2673,18 @@ export function ProjectCreateNewPanel({
                           </p>
                         </div>
                       </div>
+                      </>}
                     </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              {/* ── SEÇÃO 2: ORÇAMENTO ── */}
-              <AccordionItem
-                value="orcamento"
-                className="border border-slate-200 rounded-lg overflow-hidden"
-              >
-                <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-orange-100 text-orange-700">2</Badge>
-                    Orçamento
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="border-t bg-white px-3 py-3">
+                  <div className="mt-3 border-t border-slate-100 pt-3">
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">
-                        Valor do Projeto (R$)
+                      <Label htmlFor="project-budget" className="text-xs font-medium text-slate-600">
+                        Orçamento previsto (R$)
                       </Label>
                       <div className="relative">
                         <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                         <Input
+                          id="project-budget"
+                          aria-describedby="project-budget-help"
                           placeholder="0,00"
                           value={formData.orcamento}
                           onChange={(e) =>
@@ -2661,24 +2693,12 @@ export function ProjectCreateNewPanel({
                           className="h-8 text-xs pl-8"
                         />
                       </div>
+                      <p id="project-budget-help" className="text-[11px] text-slate-500">
+                        Valor que você prevê usar neste projeto. Serve como referência para acompanhar os gastos; não altera o preço dos produtos contratados.
+                      </p>
                     </div>
                   </div>
-                </AccordionContent>
-              </AccordionItem>
-
-              {/* ── SEÇÃO 3: CONFIGURAÇÕES ── */}
-              <AccordionItem
-                value="config"
-                className="border border-slate-200 rounded-lg overflow-hidden"
-              >
-                <AccordionTrigger className="px-3 py-2 bg-white hover:bg-slate-50 text-xs font-semibold">
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-indigo-100 text-indigo-700">3</Badge>
-                    Configurações &amp; Descrição
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="border-t bg-white px-3 py-3 space-y-4">
+                  <div className="mt-3 border-t border-slate-100 pt-3 space-y-3">
                     {/* Toggles */}
                     <div className="grid grid-cols-2 gap-3">
                       <label className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors">
@@ -2692,6 +2712,8 @@ export function ProjectCreateNewPanel({
                         </div>
                         <button
                           type="button"
+                          aria-label="Permite Portfólio"
+                          aria-pressed={formData.permitePortfolio}
                           onClick={() =>
                             updateField(
                               "permitePortfolio",
@@ -2728,6 +2750,8 @@ export function ProjectCreateNewPanel({
                         </div>
                         <button
                           type="button"
+                          aria-label="Sincronizar Bitrix"
+                          aria-pressed={formData.sincronizadoBitrix}
                           disabled={!isAdmin}
                           onClick={() =>
                             isAdmin &&
@@ -2769,10 +2793,11 @@ export function ProjectCreateNewPanel({
 
                     {/* Descrição */}
                     <div className="space-y-1">
-                      <Label className="text-xs font-medium text-slate-600">
+                      <Label htmlFor="project-description" className="text-xs font-medium text-slate-600">
                         Descrição do Projeto
                       </Label>
                       <Textarea
+                        id="project-description"
                         placeholder="Descreva os objetivos e escopo do projeto..."
                         value={formData.descricao}
                         onChange={(e) =>
@@ -2781,6 +2806,7 @@ export function ProjectCreateNewPanel({
                         className="text-xs min-h-[80px] resize-none"
                       />
                     </div>
+                  </div>
                   </div>
                 </AccordionContent>
               </AccordionItem>

@@ -38,6 +38,7 @@ export function dashboardToolbarControlClass({
 }: DashboardToolbarControlOptions = {}): string {
   return cn(
     "cursor-pointer",
+    theme === "dark" && "!text-white [&_svg]:!text-white border-white/60 bg-white/10 hover:bg-white/20",
     theme === "dark" ? FOCUS_RING_DARK : FOCUS_RING_LIGHT,
     menu &&
       (theme === "dark"

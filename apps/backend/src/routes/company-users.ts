@@ -17,7 +17,7 @@ const router = Router();
 // não inclui company_admin aqui — restringe o self-service ao mínimo que já
 // tem sentido (usuário comum / financeiro), evitando uma empresa promover
 // alguém a admin da própria conta sem esse fluxo ter sido pedido.
-const COMPANY_ASSIGNABLE_ROLES = ["company_user", "company_financial"] as const;
+const COMPANY_ASSIGNABLE_ROLES = ["company_user", "company_financial", "company_consultant"] as const;
 
 // Só company_admin gerencia a equipe — company_user/company_financial
 // recebem 403 (Tarefa 10). account_type sozinho não basta mais: um

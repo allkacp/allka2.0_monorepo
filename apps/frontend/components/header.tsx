@@ -47,8 +47,10 @@ import { NotificationsPanel } from "@/components/notifications-panel";
 import { usePartner } from "@/contexts/partner-context";
 import { useEmpresa } from "@/contexts/empresa-context";
 import { useAgencia } from "@/contexts/agencia-context";
+import { AllkoinsAmount } from "@/components/price-with-allkoins";
 import { apiClient } from "@/lib/api-client";
-import { isCatalogRoute } from "@/lib/catalog-access";
+import { WalletTopupModal } from "@/components/wallet-topup-modal";
+import { HeaderCatalogCart } from "@/components/header-catalog-cart";
 import { useProjectBasket } from "@/contexts/project-basket-context";
 import { ProjectBasketDrawer } from "@/components/project-basket-drawer";
 import { useNotificationsPanel } from "@/contexts/notifications-panel-context";
@@ -220,13 +222,40 @@ export function Header({
     closeMobileSidebar();
   }, [location.pathname, closeMobileSidebar]);
 
+  // Saldo em carteira (só empresas e agências): sempre visível no topo; atualiza ao voltar para a aba, depois de uma recarga ou de uma compra.
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [topupOpen, setTopupOpen] = useState(false);
+  const hasWallet = accountType === "agencias" || accountType === "empresas";
+  // Quem está logado (a pessoa) × a organização (agência/empresa): o cartão do usuário mostra os dois e o nível.
+  const isOrgAccount = accountType === "agencias" || accountType === "empresas";
+  const reloadWallet = useCallback(() => {
+    if (!hasWallet) return;
+    Promise.resolve(apiClient.getWalletTopupSummary?.()).then((r: any) => setWalletBalance(typeof r?.balance_brl === "number" ? r.balance_brl : 0)).catch(() => setWalletBalance(null));
+  }, [hasWallet]);
+  useEffect(() => {
+    reloadWallet();
+    const on = () => reloadWallet();
+    window.addEventListener("focus", on);
+    window.addEventListener("wallet:changed", on);
+    const t = window.setInterval(on, 60000);
+    return () => { window.removeEventListener("focus", on); window.removeEventListener("wallet:changed", on); window.clearInterval(t); };
+  }, [reloadWallet]);
+
   // Fetch authenticated user to show real name in greeting (also for admin —
   // previously skipped, which left the header/sidebar stuck on the
   // sidebar-context placeholder default instead of the real logged-in name).
   useEffect(() => {
-    apiClient
+    const load = () => apiClient
       .getCurrentUser()
       .then((u: any) => {
+        // Mantém o status de Partner da sessão em dia (antes só valia o que veio no login: virar Partner depois não aparecia até sair e entrar).
+        try {
+          const stored = JSON.parse(localStorage.getItem("allka_user") || "{}");
+          if (u && stored && stored.partner_status !== u.partner_status) {
+            localStorage.setItem("allka_user", JSON.stringify({ ...stored, partner_status: u.partner_status ?? null }));
+            window.dispatchEvent(new Event("allka:profile-changed"));
+          }
+        } catch { /* sem armazenamento: segue com o que veio no login */ }
         if (u?.name)
           updateUserProfile({
             name: u.name,
@@ -238,6 +267,10 @@ export function Header({
       .catch(() => {
         /* no token or API unavailable — keep fallback */
       });
+    void load();
+    // Depois de salvar o próprio perfil o nome do cabeçalho se atualiza sozinho.
+    window.addEventListener("user:profile-updated", load);
+    return () => window.removeEventListener("user:profile-updated", load);
   }, []);
 
   // Close search on outside click
@@ -704,9 +737,16 @@ export function Header({
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  // O cumprimento é para a PESSOA logada. Em conta de agência/empresa o `ctx.name` é o nome da organização ("Lamego Academy"),
+  // então usamos o nome do usuário; só cai no da organização se o perfil ainda não carregou.
+  const greetingName =
+    accountType === "agencias" || accountType === "empresas" ? userProfile.name || ctx.name : ctx.name;
   // Ignora etiquetas entre colchetes (ex.: "[TESTE] Maria") no cumprimento.
   const firstName =
-    ctx.name.replace(/\[[^\]]*\]/g, " ").trim().split(/\s+/)[0] || ctx.name.split(" ")[0];
+    greetingName.replace(/\[[^\]]*\]/g, " ").trim().split(/\s+/)[0] || greetingName.split(" ")[0];
+  // "ID 01" = a primeira agência da plataforma (vem do cadastro, não do código técnico do usuário).
+  const agencySeq = accountType === "agencias" ? agencia.profile?.sequenceNumber : undefined;
+  const agencyIdLabel = agencySeq != null ? `ID ${String(agencySeq).padStart(2, "0")}` : null;
   const today = new Date().toLocaleDateString("pt-BR", {
     weekday: "long",
     day: "numeric",
@@ -717,12 +757,14 @@ export function Header({
   // lado da busca — achado do usuário 2026-09-23: "subir lá pra do lado do
   // pesquisar", nunca remover. O cabeçalho é sempre uma linha só (60px) em
   // toda tela, sem a segunda linha que existia antes.
+  const personName = accountType === "admin" ? ctx.name : userProfile.name || ctx.name;
   const hasBottomStats = Boolean(
     ctx.points || ctx.stat || ctx.tasks || ctx.wallet,
   );
 
   return (
     <>
+      {hasWallet && <WalletTopupModal open={topupOpen} onOpenChange={setTopupOpen} onDone={() => { reloadWallet(); window.dispatchEvent(new Event("wallet:changed")); }} />}
       {/* search overlay removed — dropdown is now inline below the bar */}
 
       <header
@@ -797,6 +839,16 @@ export function Header({
                 (achado do usuário 2026-09-23: "subir lá pra do lado do
                 pesquisar", nunca remover — o cabeçalho vira sempre uma
                 linha só, ganhando altura em toda tela, não só no catálogo). */}
+            {hasWallet && walletBalance != null && (
+              <button type="button" onClick={() => setTopupOpen(true)} data-testid="header-wallet-balance" title="Saldo disponível em Allkoins (a moeda da Allka) — clique para adicionar"
+                className="hidden shrink-0 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-1.5 transition-all hover:bg-white/20 active:scale-95 md:flex">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-green-400/20"><Wallet className="h-3.5 w-3.5 text-green-400" /></div>
+                <div className="text-left">
+                  <p className="text-[10px] leading-none text-white/55">Saldo em carteira</p>
+                  <p className="text-xs font-bold leading-tight text-white" data-testid="header-wallet-amount"><AllkoinsAmount value={walletBalance} /></p>
+                </div>
+              </button>
+            )}
             {hasBottomStats && (
               <div className="hidden xl:flex flex-wrap items-center gap-x-2 gap-y-4 h-[42px] overflow-hidden min-w-0">
                 {ctx.points && (
@@ -989,88 +1041,7 @@ export function Header({
                 desatualizado (achava que Alertas também tinha virado ícone
                 flutuante; na verdade virou aba do mesmo painel do sino). */}
 
-            {/* ── Cesta de projeto ───────────────────────────────────
-                A cesta pertence ao ambiente de catálogo/loja (ata 2026-08,
-                bloco interface/usabilidade) — NÃO é um componente global. O
-                ícone só aparece nas rotas de catálogo (`isCatalogRoute`),
-                mesmo quando há itens salvos: sair do catálogo esconde o
-                ícone sem apagar a cesta; voltar mostra de novo. Oculta para
-                líder sempre (não contrata). */}
-            {accountType !== "lider" &&
-              isCatalogRoute(location.pathname) &&
-              (() => {
-                const totalItems = basket.getTotalItems();
-                const hasItems = totalItems > 0;
-                return (
-                  <div className="relative group">
-                    <button
-                      type="button"
-                      onClick={() => basket.setOpen(true)}
-                      aria-label="Cesta do projeto"
-                      className={
-                        hasItems
-                          ? "relative flex items-center gap-2 h-9 pl-3 pr-3.5 rounded-xl border transition-all duration-200 bg-white/15 border-white/30 text-white hover:bg-white/25 hover:border-white/40 shadow-[0_0_12px_rgba(99,102,241,0.35)]"
-                          : "relative flex items-center justify-center h-9 w-9 rounded-xl border transition-all duration-200 bg-white/10 border-white/15 text-white/50 hover:bg-white/20 hover:text-white/80"
-                      }
-                    >
-                      {/* pulse ring when active */}
-                      {hasItems && (
-                        <span className="absolute inset-0 rounded-xl animate-ping bg-indigo-400/20 pointer-events-none" />
-                      )}
-
-                      <Briefcase
-                        className={
-                          hasItems
-                            ? "h-4 w-4 shrink-0 text-indigo-200 drop-shadow-sm"
-                            : "h-4 w-4 shrink-0"
-                        }
-                      />
-
-                      {hasItems && (
-                        <span className="flex items-center gap-1 text-xs font-bold leading-none">
-                          <span
-                            className="inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-full text-[10px] font-extrabold leading-none"
-                            style={{
-                              background:
-                                "var(--app-brand-button, linear-gradient(135deg, #6366f1 0%, #c81a7f 100%))",
-                              color: "#fff",
-                            }}
-                          >
-                            {totalItems}
-                          </span>
-                          <span className="hidden sm:inline text-[11px] text-white/80 font-semibold">
-                            {totalItems === 1 ? "item" : "itens"}
-                          </span>
-                        </span>
-                      )}
-                    </button>
-
-                    {/* Tooltip */}
-                    <div className="pointer-events-none absolute top-full right-0 mt-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                      <div className="bg-gray-900/95 text-white text-[11px] rounded-lg px-2.5 py-1.5 shadow-xl whitespace-nowrap border border-white/10">
-                        {hasItems ? (
-                          <>
-                            <span className="font-semibold">
-                              {totalItems}{" "}
-                              {totalItems === 1 ? "produto" : "produtos"} na
-                              cesta
-                            </span>
-                            <br />
-                            <span className="text-white/60">
-                              Clique para ver e criar projeto
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-white/70">
-                            Cesta do projeto vazia
-                          </span>
-                        )}
-                      </div>
-                      <div className="absolute -top-1 right-3.5 h-2 w-2 rotate-45 bg-gray-900/95 border-l border-t border-white/10" />
-                    </div>
-                  </div>
-                );
-              })()}
+            <HeaderCatalogCart accountType={accountType} legacyCount={basket.getTotalItems()} onOpenLegacy={() => basket.setOpen(true)} />
 
             {/* Notificações — eventos em tempo real (tarefa atribuída, comentário,
                 mudança de status, convite...). Único acionador aqui no cabeçalho —
@@ -1112,11 +1083,9 @@ export function Header({
                     </AvatarFallback>
                   </Avatar>
                   <div className="hidden sm:block text-left">
-                    {accountType === "admin" && (
-                      <p className="text-sm font-bold leading-tight text-white truncate max-w-32.5">
-                        {ctx.name}
-                      </p>
-                    )}
+                    <p className="text-sm font-bold leading-tight text-white truncate max-w-32.5">
+                      {personName}
+                    </p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span
                         className={`text-[10px] font-semibold px-1.5 py-px rounded-full ${cfg.badgeBg} ${cfg.color} leading-tight`}
@@ -1158,9 +1127,12 @@ export function Header({
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                      {accountType === "admin" && (
-                        <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                          {ctx.name}
+                      <p className="text-sm font-bold text-gray-900 dark:text-white truncate" data-testid="user-card-name">
+                        {personName}
+                      </p>
+                      {isOrgAccount && ctx.name && ctx.name !== personName && (
+                        <p className="text-[11px] text-gray-500 truncate" data-testid="user-card-org">
+                          {accountType === "agencias" ? "Agência" : "Empresa"}: <span className="font-semibold">{ctx.name}</span>
                         </p>
                       )}
                       <div className="flex items-center gap-1 flex-wrap mt-0.5">
@@ -1169,6 +1141,11 @@ export function Header({
                             ? userProfile.job_title || ctx.roleLabel
                             : ctx.roleLabel}
                         </p>
+                        {agencyIdLabel && (
+                          <span title="Número desta agência na plataforma (01 = a primeira)" className="px-1.5 py-px rounded-full bg-violet-100 text-[9px] font-bold text-violet-700" data-testid="user-card-agency-id">
+                            {agencyIdLabel}
+                          </span>
+                        )}
                         {ctx.levelBadge && (
                           <span
                             className={`px-1.5 py-px rounded-full text-[9px] font-bold ${ctx.levelBadge.bg} ${ctx.levelBadge.text}`}
@@ -1182,12 +1159,12 @@ export function Header({
                           </span>
                         )}
                       </div>
-                      {ctx.email && (
+                      {(isOrgAccount ? userProfile.email || ctx.email : ctx.email) && (
                         <p className="text-[10px] text-gray-400 truncate mt-0.5">
-                          {ctx.email}
+                          {isOrgAccount ? userProfile.email || ctx.email : ctx.email}
                         </p>
                       )}
-                      {userProfile.user_code && (
+                      {userProfile.user_code && !isOrgAccount && (
                         <p className="text-[10px] text-gray-400 font-mono truncate mt-0.5">
                           {reducedUserCode(userProfile.user_code)}
                         </p>
@@ -1208,6 +1185,15 @@ export function Header({
                             >
                               {ctx.wallet.value}
                             </p>
+                          </div>
+                        </div>
+                      )}
+                      {hasWallet && walletBalance != null && (
+                        <div className="flex items-center gap-1.5">
+                          <Wallet className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                          <div>
+                            <p className="text-[9px] text-gray-400 leading-none">Saldo em carteira</p>
+                            <p className="text-xs font-bold text-green-700 leading-tight"><AllkoinsAmount value={walletBalance} /></p>
                           </div>
                         </div>
                       )}
@@ -1279,7 +1265,7 @@ export function Header({
           company-edit, para visualizar/editar OUTRA pessoa. */}
 
       {/* ── Basket drawer ─────────────────────────────────────────────── */}
-      <ProjectBasketDrawer />
+      <ProjectBasketDrawer allowOutsideCatalog={accountType === "agencias" || accountType === "empresas"} />
     </>
   );
 }

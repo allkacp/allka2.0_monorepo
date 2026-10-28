@@ -74,7 +74,8 @@ describe("Catálogo do cliente", () => {
   it("lista produtos disponíveis com preço inicial e prazo", async () => {
     renderStore();
     expect(await screen.findByText("Serviço Demo")).toBeInTheDocument();
-    expect(screen.getByText(/a partir de BRL 300\.00/)).toBeInTheDocument();
+    // Preço do produto na vitrine: em reais ("R$ 300,00"); o valor em Allkoins aparece ao passar o mouse.
+    expect(screen.getAllByText(/R\$\s300,00/).length).toBeGreaterThan(0);
     expect(screen.getByText(/5 dia\(s\)/)).toBeInTheDocument();
   });
 
@@ -95,7 +96,7 @@ describe("Catálogo do cliente", () => {
     expect(api.addClientCatalog2CartItem).not.toHaveBeenCalled();
     // preço vem do backend
     expect(screen.getByText("Preço comercial")).toBeInTheDocument();
-    expect(screen.getAllByText(/BRL 300\.00/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/R\$\s300,00/).length).toBeGreaterThan(0);
   });
 
   it("organiza a configuração em etapas e recalcula ao alterar opção ou quantidade", async () => {

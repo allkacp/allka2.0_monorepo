@@ -1,0 +1,38 @@
+/* Referência Clientes — somente a listagem de tarefas. */
+.tasks-reference { container-type: inline-size; container-name: tasks-reference; }
+.task-reference-stats { grid-template-columns: repeat(8, minmax(0, 1fr)); min-height: 65px; }
+.task-reference-stat { padding: 8px clamp(5px, .7cqw, 12px); gap: clamp(4px, .5cqw, 8px); }
+.task-reference-stat + .task-reference-stat { border-left: 1px solid #e2e8f0; }
+.task-reference-stat-icon { width: clamp(28px, 2.7cqw, 40px); height: clamp(28px, 2.7cqw, 40px); }
+.task-reference-stat-icon svg { width: 50%; height: 50%; }
+.task-reference-stat-label { font-size: clamp(9px, .75cqw, 11px); line-height: 1.25; overflow-wrap: anywhere; }
+.task-reference-stat-value { font-size: clamp(20px, 2.3cqw, 28px); line-height: 1; }
+.task-reference-stat-active { box-shadow: inset 0 -2px 0 #8238e9; }
+.tasks-reference-table { table-layout: fixed; min-width: 0 !important; }
+.tasks-reference-table th, .tasks-reference-table td { min-width: 0; padding-inline: clamp(4px, .75cqw, 16px) !important; }
+.tasks-reference-table th { padding-block: 10px; background: #f8fafc !important; color: #365a91; }
+.tasks-reference-table td { padding-block: 6px; }
+.tasks-reference-table th > div:first-child { display: flex; min-width: 0; max-width: 100%; }
+.tasks-reference-table th button { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tasks-reference-table td > div { min-width: 0; max-width: 100%; }
+.tasks-reference-table td:not(.task-reference-actions) { overflow: hidden; }
+.tasks-reference-table td[data-rotulo="Tarefa"] button { font-size: clamp(10px, 1cqw, 14px); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.tasks-reference-table .task-reference-actions { position: sticky; right: 0; z-index: 4; padding-inline: 3px !important; background: #f8fafc; }
+.tasks-reference-table tbody .task-reference-actions { background: inherit; box-shadow: -1px 0 0 #e2e8f0; }
+.tasks-reference-table .task-reference-actions button { flex-shrink: 0; }
+.dark .task-reference-stats { background: #111827; }
+.dark .task-reference-stat-label, .dark .task-reference-stat-value { color: #dbeafe; }
+.dark .task-reference-stat:hover, .dark .task-reference-stat-active { background: #1e293b; }
+.dark .tasks-reference-table th { background: #111827 !important; color: #cbd5e1; }
+@container tasks-reference (max-width: 1050px) {
+  .task-reference-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tasks-reference-table th, .tasks-reference-table th button { font-size: 9px !important; letter-spacing: 0; }
+  .tasks-reference-table td { font-size: 10px; }
+}
+@container tasks-reference (max-width: 520px) {
+  .task-reference-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .task-reference-stat { min-height: 58px; }
+}
+@media (max-width: 767px) {
+  .tasks-reference-table .task-reference-actions { position: static !important; }
+}

@@ -11,12 +11,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, AlertCircle, CheckCircle2, Clock, XCircle, ExternalLink, RefreshCw } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { Money, PriceWithAllkoins, fmtPriceBRL } from "@/components/price-with-allkoins";
 import { Button } from "@/components/ui/button";
 import { ButtonLoader } from "@/components/ui/loading";
 
-function money(v: number | null | undefined, currency = "BRL") {
+function money(v: number | null | undefined, _currency = "BRL") {
   if (v == null) return "A definir";
-  return `${currency} ${Number(v).toFixed(2)}`;
+  return fmtPriceBRL(v);
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -174,7 +175,7 @@ function ExpiredQuotesPanel({ myQuotes, onRenewed }: { myQuotes: any[]; onRenewe
             <li key={q.id} className="rounded border border-amber-300 bg-white p-2.5 text-sm dark:border-amber-800 dark:bg-neutral-900">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span>
-                  Valor congelado: <strong>{money(q.commercial_price, q.currency)}</strong>
+                  Valor congelado: <strong><Money value={q.commercial_price} /></strong>
                   {" "}— {q.commercial_deadline_days ?? "?"} dia(s)
                 </span>
                 <Button size="sm" variant="outline" disabled={renewingId === q.id} onClick={() => renew(q.id)}>
@@ -192,8 +193,8 @@ function ExpiredQuotesPanel({ myQuotes, onRenewed }: { myQuotes: any[]; onRenewe
                   <div className="flex justify-between">
                     <span>Preço</span>
                     <span>
-                      {r.changed?.price ? <span className="text-neutral-400 line-through">{money(r.previous.commercial_price, r.previous.currency)}</span> : null}{" "}
-                      <strong className={r.changed?.price ? "text-amber-700" : ""}>{money(r.quote.commercial_price, r.quote.currency)}</strong>
+                      {r.changed?.price ? <span className="text-neutral-400 line-through"><Money value={r.previous.commercial_price} /></span> : null}{" "}
+                      <strong className={r.changed?.price ? "text-amber-700" : ""}><Money value={r.quote.commercial_price} /></strong>
                     </span>
                   </div>
                   <div className="flex justify-between text-neutral-500">
@@ -303,7 +304,7 @@ function RequestAdditiveForm({ catalog2Items, myQuotes, projectId, onCreated, po
       {selectedQuote && (
         <div className="rounded bg-neutral-50 p-3 text-sm dark:bg-neutral-800/50">
           <p className="font-medium text-neutral-700 dark:text-neutral-300">Impacto desta cotação (calculado pelo servidor):</p>
-          <div className="mt-1 flex justify-between"><span>Preço</span><strong>{money(selectedQuote.commercial_price, selectedQuote.currency)}</strong></div>
+          <div className="mt-1 flex justify-between"><span>Preço</span><strong><Money value={selectedQuote.commercial_price} /></strong></div>
           <div className="flex justify-between text-neutral-500"><span>Prazo</span><span>{selectedQuote.commercial_deadline_days ?? "A definir"} dia(s)</span></div>
         </div>
       )}
@@ -394,7 +395,7 @@ function ChangeOrderRow({ co, isAdmin, portal, onChanged }: any) {
       {co.request_note && <p className="mt-1 text-xs text-neutral-500">Motivo: {co.request_note}</p>}
       {co.price_impact_snapshot != null && (
         <div className="mt-2 flex gap-4 text-xs text-neutral-500">
-          <span>Preço: <strong className="text-neutral-700 dark:text-neutral-300">{money(co.price_impact_snapshot, co.currency_snapshot)}</strong></span>
+          <span>Preço: <strong className="text-neutral-700 dark:text-neutral-300"><Money value={co.price_impact_snapshot} /></strong></span>
           {co.deadline_impact_days_snapshot != null && <span>Prazo: <strong className="text-neutral-700 dark:text-neutral-300">{co.deadline_impact_days_snapshot} dia(s)</strong></span>}
         </div>
       )}

@@ -18,6 +18,8 @@ import { runTaskReleaseSchedulerOnceGuarded } from "./lib/task-release-scheduler
 import { runCommsSchedulerOnceGuarded } from "./lib/comms";
 import { runCatalog2InactivationSchedulerOnceGuarded } from "./lib/catalog2-inactivation-scheduler";
 import { runCatalog2DeliveryCycleSchedulerOnceGuarded } from "./lib/catalog2-delivery-cycle-scheduler";
+import { avancarCiclosGuarded } from "./lib/stage-cycles";
+import { runPeriodRenewalGuarded } from "./lib/catalog2-period-renewal";
 import { runSubscriptionsTickGuarded } from "./lib/catalog2-subscriptions";
 import { runAutoTriggerTickGuarded } from "./lib/task-ai";
 import { runDependencySchedulerOnceGuarded } from "./lib/dependency-scheduler";
@@ -203,6 +205,18 @@ async function main() {
     );
   }, config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS).unref();
   console.log(`📦 Worker de ciclos de entrega do catálogo ativo (intervalo: ${config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS}ms).`);
+
+  // Etapas em ciclos (23/10): abre cada ciclo na data certa, encerra o que ficou sem resposta do cliente e fecha a etapa quando o último ciclo termina.
+  setInterval(() => {
+    avancarCiclosGuarded().catch((err) => console.error("❌ Falha no worker de ciclos das etapas:", err));
+  }, config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS).unref();
+  console.log("🔄 Worker de ciclos das etapas ativo.");
+
+  // Fim do período pago antecipado (bimestral/trimestral/semestral/anual): avisa 30 dias antes e no dia em que acaba.
+  setInterval(() => {
+    runPeriodRenewalGuarded().catch((err) => console.error("❌ Falha no worker de renovação de períodos:", err));
+  }, config.CATALOG2_DELIVERY_CYCLE_SCHEDULER_INTERVAL_MS).unref();
+  console.log("📅 Worker de renovação de períodos ativo.");
 
   // Assinaturas mensais contínuas (Pedido 3, fase 4): emite a fatura do mês, marca inadimplência e encerra cancelamentos.
   setInterval(() => {

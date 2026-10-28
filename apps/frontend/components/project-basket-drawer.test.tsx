@@ -102,7 +102,7 @@ function LocationProbe() {
   return <div data-testid="current-path">{location.pathname}</div>;
 }
 
-function renderDrawer(initialPath: string, extra?: React.ReactNode) {
+function renderDrawer(initialPath: string, extra?: React.ReactNode, allowOutsideCatalog = false) {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
@@ -112,7 +112,7 @@ function renderDrawer(initialPath: string, extra?: React.ReactNode) {
             <>
               <LocationProbe />
               {extra}
-              <ProjectBasketDrawer />
+              <ProjectBasketDrawer allowOutsideCatalog={allowOutsideCatalog} />
             </>
           }
         />
@@ -277,6 +277,14 @@ describe("ProjectBasketDrawer — só vive no contexto de catálogo/loja", () =>
     basketConfig.items = [itemFixture("prod-1"), { ...itemFixture("prod-2"), quantity: 2 }];
     basketConfig.isOpen = true;
     setTestViewportWidth(1280);
+  });
+
+  it.each(["/partner/dashboard", "/agency/dashboard", "/company/dashboard"])("conta compradora abre a cesta global em %s e preserva os itens", (path) => {
+    renderDrawer(path, undefined, true);
+    expect(screen.getByText("Cesta do projeto")).toBeInTheDocument();
+    expect(setOpenSpy).not.toHaveBeenCalledWith(false);
+    expect(clearBasketSpy).not.toHaveBeenCalled();
+    expect(screen.getByTestId("current-path").textContent).toBe(path);
   });
 
   it("fora do catálogo (dashboard) com isOpen=true e itens salvos: não renderiza, fecha em segurança, preserva itens e não navega", async () => {

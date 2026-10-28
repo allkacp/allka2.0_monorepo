@@ -1,4 +1,6 @@
 import React, { Suspense, useState, useEffect } from "react";
+import { SpecificAssigneeConfirmation } from "@/components/specific-assignee-confirmation";
+const AgencyClientPayment = React.lazy(() => import("@/components/catalog2/agency-client-payment"));
 import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { useNavigate } from "@/hooks/use-navigate";
 import { cn } from "@/lib/utils";
@@ -30,6 +32,7 @@ import { ChatWidget } from "@/components/chat-widget";
 import { OpenScreensProvider } from "@/contexts/open-screens-context";
 import { OpenScreensTray } from "@/components/open-screens-tray";
 import { HeaderFloatingTools } from "@/components/header-floating-tools";
+import { FloatingToolsRail } from "@/components/floating-tools-rail";
 import { AlertsFloatingIcon } from "@/components/alerts-floating-icon";
 import { TaskOfferPrompt } from "@/components/task-offer-prompt";
 import { MandatoryBannerGate } from "@/components/mandatory-banner-gate";
@@ -48,6 +51,7 @@ import { AgenciaProvider } from "@/contexts/agencia-context";
 import { ProjectBasketProvider } from "@/contexts/project-basket-context";
 import { NotificationsPanelProvider } from "@/contexts/notifications-panel-context";
 import { GlobalHeaderPanelProvider } from "@/contexts/global-header-panel-context";
+import { PointerEventsGuard } from "@/components/pointer-events-guard";
 
 function RedirectToAgency() {
   const location = useLocation();
@@ -582,6 +586,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       <PlatformUsersProvider>
         <SettingsProvider>
           <SidebarProvider>
+            <SpecificAssigneeConfirmation />
             <CompanyProvider>
               <PartnerProvider>
                 <EmpresaProvider>
@@ -691,6 +696,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                             {/* Chat widget flutuante */}
                             <ChatWidget />
                             {/* Bandeja de telas abertas — logo abaixo do chat */}
+                            <FloatingToolsRail>
                             <OpenScreensTray />
                             {/* Modo escuro e tamanho de fonte — logo abaixo da bandeja. */}
                             <HeaderFloatingTools />
@@ -720,6 +726,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
                                   vertical/mobile (ver iallka-floating-icon.tsx). */}
                               <IallkaFloatingIcon />
                             </OnboardingProvider>
+                            </FloatingToolsRail>
                           </IallkaContextProvider>
                           </NotificationsPanelProvider>
                           </ProjectBasketProvider>
@@ -767,7 +774,9 @@ export default function App() {
 
   return (
     <AccountTypeProvider>
+      <PointerEventsGuard />
       <Routes>
+        <Route path="/pagar/contratacao/:token" element={<Suspense fallback={<BrandPageLoader />}><AgencyClientPayment /></Suspense>} />
         {/* ─── Login pages (fora do AppLayout, públicas) ─── */}
         <Route
           path="/login"

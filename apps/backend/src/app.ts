@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import agencyPaymentLinkRouter from "./routes/agency-payment-link";
 import cors from "cors";
 
 import authRouter from "./routes/auth";
@@ -291,6 +292,7 @@ app.use("/api/admin/catalog2", catalog2AdminRouter);
 // genérico "/api/catalog2" abaixo, para o Express casar os prefixos mais
 // específicos primeiro.
 app.use("/api/catalog2/checkout", catalog2CheckoutRouter);
+app.use("/api/public/agency-payment", agencyPaymentLinkRouter);
 app.use("/api/catalog2/deliverable-files", catalog2DeliverableFilesRouter);
 app.use("/api/catalog2/change-orders", catalog2ChangeOrdersRouter);
 app.use("/api/catalog2/subscriptions", catalog2SubscriptionsRouter);

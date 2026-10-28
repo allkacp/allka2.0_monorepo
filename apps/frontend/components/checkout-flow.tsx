@@ -1,4 +1,6 @@
 ﻿import { useState, useEffect } from "react";
+import { AkBoth } from "@/components/price-with-allkoins";
+import { fmtAllkoinsBoth } from "@/lib/allkoins";
 import { useLocation } from "react-router-dom";
 import { useNavigate } from "@/hooks/use-navigate";
 import { Button } from "@/components/ui/button";
@@ -8,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiClient } from "@/lib/api-client";
+
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -1404,7 +1407,7 @@ export function CheckoutFlow({
                       { type: "pix" as const,         label: "Pix",      sublabel: "Instantâneo",                       Icon: Smartphone,  ac: "border-green-500 bg-green-50 dark:bg-green-900/25",   ic: "text-green-600 dark:text-green-400" },
                       { type: "boleto" as const,      label: "Boleto",   sublabel: "3 dias úteis",                      Icon: FileText,    ac: "border-orange-500 bg-orange-50 dark:bg-orange-900/25", ic: "text-orange-500 dark:text-orange-400" },
                       { type: "credits" as const,     label: "Créditos", sublabel: formatCurrency(userBalances.credits), Icon: Wallet,      ac: "border-purple-500 bg-purple-50 dark:bg-purple-900/25", ic: "text-purple-600 dark:text-purple-400" },
-                      { type: "allkoins" as const,    label: "Allkoins", sublabel: `${userBalances.allkoins} AK`,        Icon: Coins,       ac: "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/25", ic: "text-yellow-600 dark:text-yellow-400" },
+                      { type: "allkoins" as const,    label: "Allkoins", sublabel: fmtAllkoinsBoth(userBalances.allkoins),        Icon: Coins,       ac: "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/25", ic: "text-yellow-600 dark:text-yellow-400" },
                     ] as const).map(({ type, label, sublabel, Icon, ac, ic }) => {
                       const isActive = selectedPaymentType === type;
                       return (
@@ -1540,7 +1543,7 @@ export function CheckoutFlow({
                     <Coins className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
                     <div>
                       <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">Allkoins</p>
-                      <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">Saldo: {userBalances.allkoins} AK · Conversão: 1 AK = R$ 1,00</p>
+                      <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">Saldo: <AkBoth value={userBalances.allkoins} /> · Conversão: AK$ 1,00 = R$ 1,00</p>
                     </div>
                   </div>
                 )}
@@ -1609,7 +1612,7 @@ export function CheckoutFlow({
                       onCheckedChange={(checked) => setSplitPayments({ ...splitPayments, allkoins: { ...splitPayments.allkoins, enabled: !!checked } })}
                     />
                     <Label htmlFor="split-allkoins" className="flex items-center space-x-2 cursor-pointer flex-1">
-                      <Coins className="h-4 w-4" /><span>Allkoins ({userBalances.allkoins} AK)</span>
+                      <Coins className="h-4 w-4" /><span>Allkoins (<AkBoth value={userBalances.allkoins} />)</span>
                     </Label>
                   </div>
                   {splitPayments.allkoins.enabled && (

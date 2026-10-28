@@ -166,7 +166,7 @@ function resolveCatalogPath(pathname: string): string | null {
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
-export function ProjectBasketDrawer() {
+export function ProjectBasketDrawer({ allowOutsideCatalog = false }: { allowOutsideCatalog?: boolean } = {}) {
   const basket = useProjectBasket();
   const { sidebarWidth } = useSidebar();
   const navigate = useNavigate();
@@ -279,16 +279,14 @@ export function ProjectBasketDrawer() {
     }
   }, [location.pathname]);
 
-  // A cesta pertence ao catálogo (ata 2026-08): fora das rotas de catálogo
-  // ela NUNCA é renderizada como aberta — mesmo que `basket.isOpen` esteja
-  // com um valor antigo (atalho da bandeja, estado remanescente). Fechar
-  // aqui não apaga itens (só `clearBasket` faz isso), então voltar ao
-  // catálogo mantém a compra intacta.
+  // O cabeçalho permite abrir a cesta global para contas compradoras.
+  // Os demais usos mantêm a restrição ao catálogo, sem apagar itens.
   const onCatalog = isCatalogRoute(location.pathname);
+  const canOpen = onCatalog || allowOutsideCatalog;
   useEffect(() => {
-    if (!onCatalog && basket.isOpen) basket.setOpen(false);
-  }, [onCatalog, basket.isOpen]);
-  const drawerOpen = basket.isOpen && onCatalog;
+    if (!canOpen && basket.isOpen) basket.setOpen(false);
+  }, [canOpen, basket.isOpen]);
+  const drawerOpen = basket.isOpen && canOpen;
 
   // ── Helpers
   const getCategoryIcon = (cat: string) => CATEGORY_ICONS[cat] || Package;

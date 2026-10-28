@@ -1,3 +1,4 @@
+import { AkBoth } from "@/components/price-with-allkoins";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { BadgeColor } from "@/lib/badge-styles";
 import { useItemsPerPage } from "@/lib/use-items-per-page";
@@ -104,6 +105,7 @@ import {
 } from "lucide-react";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
 
 function fmt(value) {
   return (value || 0).toLocaleString("pt-BR", {
@@ -3841,7 +3843,7 @@ export default function AdminFinanceiroPage() {
                             {icon}
                           </div>
                           <p className="text-2xl font-bold text-white leading-none tabular-nums">
-                            {isMoney ? fmt(value) : value}
+                            {isMoney ? <AkBoth value={value} /> : value}
                           </p>
                           <p className="text-[10px] text-white/60 mt-1">
                             {sub}
@@ -4170,7 +4172,7 @@ export default function AdminFinanceiroPage() {
                           </span>
                         </div>
                         <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">
-                          {fmt(walletProjections?.futureCredits ?? 0)}
+                          <AkBoth value={walletProjections?.futureCredits ?? 0} />
                         </p>
                         <p className="text-[10px] text-slate-400 mt-1">
                           {walletProjections?.pendingInvoices?.length ?? 0}{" "}
@@ -4212,7 +4214,7 @@ export default function AdminFinanceiroPage() {
                           </span>
                         </div>
                         <p className="text-2xl font-bold text-orange-700 dark:text-orange-400 tabular-nums">
-                          {fmt(walletProjections?.futureDebits ?? 0)}
+                          <AkBoth value={walletProjections?.futureDebits ?? 0} />
                         </p>
                         <p className="text-[10px] text-slate-400 mt-1">
                           {walletProjections?.recurringProjects?.length ?? 0}{" "}
@@ -4261,7 +4263,7 @@ export default function AdminFinanceiroPage() {
                               bt.owner_type}
                           </span>
                           <span className="opacity-60">
-                            · {fmt(bt.balance)}
+                            · <AkBoth value={bt.balance} />
                           </span>
                         </button>
                       ))}
@@ -4417,7 +4419,7 @@ export default function AdminFinanceiroPage() {
                                   <p
                                     className={`font-bold tabular-nums text-sm ${w.balance > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`}
                                   >
-                                    {fmt(w.balance)}
+                                    <AkBoth value={w.balance} />
                                   </p>
                                 </td>
                                 <td
@@ -4426,7 +4428,7 @@ export default function AdminFinanceiroPage() {
                                 >
                                   {w.blocked_balance > 0 ? (
                                     <p className="text-amber-600 font-semibold text-xs tabular-nums">
-                                      {fmt(w.blocked_balance)}
+                                      <AkBoth value={w.blocked_balance} />
                                     </p>
                                   ) : (
                                     <span className="text-slate-300 dark:text-slate-600 text-xs">
@@ -6837,11 +6839,11 @@ export default function AdminFinanceiroPage() {
                     <div className="text-right">
                       <p className="text-blue-200 text-[10px]">Saldo atual</p>
                       <p className="text-white font-bold text-2xl tabular-nums">
-                        {fmt(selectedWallet?.balance ?? 0)}
+                        <AkBoth value={selectedWallet?.balance ?? 0} />
                       </p>
                       {(selectedWallet?.blocked_balance ?? 0) > 0 && (
                         <p className="text-amber-300 text-[10px] mt-0.5">
-                          {fmt(selectedWallet?.blocked_balance)} bloqueado
+                          <AkBoth value={selectedWallet?.blocked_balance} /> bloqueado
                         </p>
                       )}
                     </div>
@@ -6974,7 +6976,7 @@ export default function AdminFinanceiroPage() {
                                     className={`text-sm font-bold tabular-nums shrink-0 ${isCredit ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}
                                   >
                                     {isCredit ? "+" : "−"}
-                                    {fmt(entry.amount)}
+                                    <AkBoth value={entry.amount} />
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5">
@@ -7010,7 +7012,7 @@ export default function AdminFinanceiroPage() {
                                   <span className="text-[10px] text-slate-400">
                                     Antes:{" "}
                                     <span className="font-medium text-slate-600 dark:text-slate-300">
-                                      {fmt(entry.balance_before)}
+                                      <AkBoth value={entry.balance_before} />
                                     </span>
                                   </span>
                                   <span className="text-[10px] text-slate-400">
@@ -7019,7 +7021,7 @@ export default function AdminFinanceiroPage() {
                                   <span className="text-[10px] text-slate-400">
                                     Depois:{" "}
                                     <span className="font-medium text-slate-600 dark:text-slate-300">
-                                      {fmt(entry.balance_after)}
+                                      <AkBoth value={entry.balance_after} />
                                     </span>
                                   </span>
                                 </div>
@@ -7090,11 +7092,11 @@ export default function AdminFinanceiroPage() {
                       </p>
                       {globalLedgerDir === "debit" ? (
                         <p className="text-white font-bold text-2xl tabular-nums">
-                          {fmt(globalLedgerSummary?.debits ?? 0)}
+                          <AkBoth value={globalLedgerSummary?.debits ?? 0} />
                         </p>
                       ) : (
                         <p className="text-white font-bold text-2xl tabular-nums">
-                          {fmt(globalLedgerSummary?.credits ?? 0)}
+                          <AkBoth value={globalLedgerSummary?.credits ?? 0} />
                         </p>
                       )}
                     </div>
@@ -7129,7 +7131,7 @@ export default function AdminFinanceiroPage() {
                           <p
                             className={`text-sm font-bold tabular-nums ${color}`}
                           >
-                            {fmt(value)}
+                            <AkBoth value={value} />
                           </p>
                         </div>
                       ))}
@@ -7196,7 +7198,7 @@ export default function AdminFinanceiroPage() {
                                     className={`text-sm font-bold tabular-nums shrink-0 ${isCredit ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}
                                   >
                                     {isCredit ? "+" : "−"}
-                                    {fmt(entry.amount)}
+                                    <AkBoth value={entry.amount} />
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -7454,7 +7456,7 @@ export default function AdminFinanceiroPage() {
                         {WALLET_OWNER_LABELS[adjustWallet.owner_type]} · Saldo
                         atual:{" "}
                         <span className="font-bold text-slate-700 dark:text-slate-300">
-                          {fmt(adjustWallet.balance)}
+                          <AkBoth value={adjustWallet.balance} />
                         </span>
                       </p>
                     </div>

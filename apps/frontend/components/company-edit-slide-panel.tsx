@@ -78,7 +78,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { InsideFramedModal } from "@/components/framed-panel";
+import { CompanyReferenceFrame } from "@/components/company-reference-frame";
 import { NeonBadge } from "@/components/neon-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -136,6 +137,8 @@ interface CompanyEditSlidePanelProps {
   onClose: () => void;
   company: Company | null;
   onSave: (company: Company) => void;
+  referenceFrame?: boolean;
+  frameMode?: "panel" | "modal";
 }
 
 // Dummy interfaces for the export functions
@@ -172,6 +175,8 @@ export function CompanyEditSlidePanel({
   onClose,
   company,
   onSave,
+  referenceFrame = false,
+  frameMode = "panel",
 }: CompanyEditSlidePanelProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("company-data");
@@ -588,7 +593,7 @@ export function CompanyEditSlidePanel({
 
   if (!editedCompany) {
     return (
-      <EmbeddedSlideScreen open={open} onClose={handleClose} title="Editar Empresa">
+      <CompanyReferenceFrame enabled={referenceFrame} mode={frameMode} open={open} onClose={handleClose} title="Editar Empresa">
         <div className="flex-1 p-6 space-y-4">
           <div className="flex items-center gap-4">
             <Skeleton className="h-16 w-16 rounded-full" />
@@ -604,13 +609,16 @@ export function CompanyEditSlidePanel({
             <Skeleton className="h-4 w-1/2 rounded" />
           </div>
         </div>
-      </EmbeddedSlideScreen>
+      </CompanyReferenceFrame>
     );
   }
 
   return (
     <>
-      <EmbeddedSlideScreen
+      <CompanyReferenceFrame
+        enabled={referenceFrame}
+        mode={frameMode}
+        company={referenceFrame ? company : undefined}
         open={open}
         onClose={handleClickCancel}
         title="Editar Empresa"
@@ -2102,7 +2110,7 @@ export function CompanyEditSlidePanel({
           </div>
         </Tabs>
       </div>
-      </EmbeddedSlideScreen>
+      </CompanyReferenceFrame>
 
       {/* Dialogs de Confirmação */}
       <ConfirmationDialog
@@ -2127,7 +2135,13 @@ export function CompanyEditSlidePanel({
         destructive={true}
       />
 
-      {companyUserEditOpen && (
+      {companyUserEditOpen && (referenceFrame ? (
+        <InsideFramedModal.Provider value={true}>
+          <CompanyReferenceFrame enabled open={companyUserEditOpen} title="Editar usuário da empresa" onClose={() => { setCompanyUserEditOpen(false); setEditingCompanyUser(null); }}>
+            <UserViewSlidePanel asPage open={companyUserEditOpen} onClose={() => { setCompanyUserEditOpen(false); setEditingCompanyUser(null); }} onRefresh={() => editedCompany && fetchCompanyUsers(editedCompany)} user={editingCompanyUser} viewerRole="admin" />
+          </CompanyReferenceFrame>
+        </InsideFramedModal.Provider>
+      ) : (
         <UserViewSlidePanel
           open={companyUserEditOpen}
           onClose={() => {
@@ -2138,7 +2152,7 @@ export function CompanyEditSlidePanel({
           user={editingCompanyUser}
           viewerRole="admin"
         />
-      )}
+      ))}
 
       <AlertDialog
         open={statusChangeDialog.open}

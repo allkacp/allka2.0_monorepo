@@ -64,6 +64,9 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
+import { getCurrentUserScopedStorageKey } from "@/lib/dashboard-storage-scope";
+import { UsersColumnMenu } from "@/components/users-column-menu";
+import { USER_TYPE_OPTIONS, USER_STATUS_OPTIONS, USER_ACCESS_OPTIONS, userTypeOption, userStatusOption, matchesUserAccess, type UserAccessPreset } from "@/lib/user-table-filters";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import type { User, UserRole } from "@/types/user";
 import { UserViewSlidePanel } from "@/components/user-view-slide-panel";
@@ -402,21 +405,27 @@ export default function UsuariosPage() {
   const pageRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { userId: urlUserId } = useParams<{ userId?: string }>();
+  const [sortingStorageKey] = useState(() => getCurrentUserScopedStorageKey("allka:admin-users-sort"));
   const {
     sortKey: userSortKey,
     sortDir: userSortDir,
     handleSort: handleUserSort,
     sortData: sortUsers,
-    columnFilters,
-    toggleColumnFilter,
-    clearColumnFilter,
-  } = useSorting<User>();
+  } = useSorting<UsuarioDaLista>({ storageKey: sortingStorageKey, allowedKeys: ["user_code", "name", "account_type", "is_active", "inactivity_bucket", "user_type_label", "user_status_label", "last_login"] });
+  const sortUserColumn = (key: string, dir: "asc" | "desc") => handleUserSort(key as keyof UsuarioDaLista, dir);
+  useEffect(() => {
+    const migrated = userSortKey === "account_type" ? "user_type_label" : userSortKey === "is_active" ? "user_status_label" : userSortKey === "inactivity_bucket" ? "last_login" : null;
+    if (migrated) handleUserSort(migrated, userSortDir);
+  }, [userSortKey, userSortDir, handleUserSort]);
   /**
    * O usuário como esta tela trabalha: o User da API, mais o vínculo
    * enriquecido que /api/admin/users devolve (profile_link_*), mais dois
    * campos derivados no próprio componente a partir de last_login.
    */
   type UsuarioDaLista = User & {
+    user_type_key: string;
+    user_type_label: string;
+    user_status_label: string;
     has_profile_link?: boolean | null;
     profile_link_type?: string | null;
     profile_link_name?: string | null;
@@ -434,14 +443,17 @@ export default function UsuariosPage() {
   // inactivity_bucket/auto_paused em cada callback.
   const mapApiUserToRow = (u: any): UsuarioDaLista => {
     const bucket = computeInactivityBucket(u.last_login);
+    const autoPaused = bucket === "inactive_90" || u.reactivation_review_required === true;
     return {
       ...u,
       is_active: u.is_active ?? true,
       online_status: u.online_status ?? "offline",
       account_type: u.account_type || "empresas",
       inactivity_bucket: bucket,
-      auto_paused:
-        bucket === "inactive_90" || u.reactivation_review_required === true,
+      auto_paused: autoPaused,
+      user_type_key: userTypeOption(u).value,
+      user_type_label: userTypeOption(u).label,
+      user_status_label: userStatusOption({ ...u, auto_paused: autoPaused }).label,
     };
   };
 
@@ -488,6 +500,7 @@ export default function UsuariosPage() {
   // a 1ª só coleta o motivo e avança, a 2ª é a única que chama DELETE.
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [searchTerm, setSearchTerm] = useState("");
+  const [accessPreset, setAccessPreset] = useState<UserAccessPreset>("all");
   const usersView = "list" as "list" | "cards";
   /**
    * Funções que existem de fato na plataforma (conferido contra o banco).
@@ -788,11 +801,7 @@ export default function UsuariosPage() {
           if (t === "parceiro" || t === "partner") return "parceiro partner";
           return t;
         })();
-        const statusLabel = user.auto_paused
-          ? "pausado"
-          : user.is_active
-            ? "ativo"
-            : "bloqueado";
+        const statusLabel = userStatusOption(user).label.toLowerCase();
         const lgpdLabel = [
           user.has_lgpd_consent === false
             ? "lgpd pendente sem consentimento"
@@ -846,19 +855,7 @@ export default function UsuariosPage() {
 
       // Advanced filters — tipo de conta
       if (advancedFilters.accountTypes.length > 0) {
-        const at = (user.account_type || "").toLowerCase();
-        const match = advancedFilters.accountTypes.some((type) => {
-          if (type === "admin") return at === "admin";
-          if (type === "company")
-            return at === "empresas" || at === "empresa" || at === "company";
-          if (type === "nomad")
-            return at === "nomades" || at === "nomade" || at === "nomad";
-          if (type === "agency")
-            return at === "agencias" || at === "agencia" || at === "agency";
-          if (type === "partner") return at === "parceiro" || at === "partner";
-          if (type === "lider") return at === "lider" || at === "leader";
-          return false;
-        });
+        const match = advancedFilters.accountTypes.some(type => (type === "lider" ? "leader" : type) === userTypeOption(user).value);
         if (!match) return false;
       }
 
@@ -877,13 +874,7 @@ export default function UsuariosPage() {
 
       // Advanced filters — status
       if (advancedFilters.statuses.length > 0) {
-        const match = advancedFilters.statuses.some((status) => {
-          if (status === "active")
-            return user.is_active === true && !user.auto_paused;
-          if (status === "blocked") return user.is_active === false;
-          if (status === "pausado") return user.auto_paused === true;
-          return false;
-        });
+        const match = advancedFilters.statuses.some(status => status === "accessed_after_pause" ? !!user.accessed_after_inactivity_pause : status === userStatusOption(user).value);
         if (!match) return false;
       }
 
@@ -901,18 +892,7 @@ export default function UsuariosPage() {
         if (userDate > filterDate) return false;
       }
 
-      if (advancedFilters.lastAccessDateFrom && user.last_login) {
-        const userDate = new Date(user.last_login);
-        const filterDate = new Date(advancedFilters.lastAccessDateFrom);
-        if (userDate < filterDate) return false;
-      }
-
-      if (advancedFilters.lastAccessDateTo && user.last_login) {
-        const userDate = new Date(user.last_login);
-        const filterDate = new Date(advancedFilters.lastAccessDateTo);
-        filterDate.setHours(23, 59, 59, 999);
-        if (userDate > filterDate) return false;
-      }
+      if (!matchesUserAccess(user.last_login, accessPreset, advancedFilters.lastAccessDateFrom, advancedFilters.lastAccessDateTo)) return false;
 
       if (advancedFilters.plan !== "all") {
         // Mock plan filter - in real app would check user.plan field
@@ -927,13 +907,13 @@ export default function UsuariosPage() {
     // Reset de página fica só no efeito de baixo, disparado por mudança de
     // filtro de verdade — `users` sozinho mudar (ação localizada numa
     // linha) não deve mais voltar a página pra 1.
-  }, [users, searchTerm, statusFilter, advancedFilters]);
+  }, [users, searchTerm, statusFilter, advancedFilters, accessPreset]);
 
   // Volta pra página 1 só quando um filtro de verdade muda — nunca quando
   // `users` muda sozinho (ação localizada numa linha).
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, advancedFilters]);
+  }, [searchTerm, statusFilter, advancedFilters, accessPreset]);
 
   // Pagination effect
   useEffect(() => {
@@ -1178,6 +1158,7 @@ export default function UsuariosPage() {
   const clearFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
+    setAccessPreset("all");
     setAdvancedFilters({
       name: "",
       email: "",
@@ -1213,6 +1194,7 @@ export default function UsuariosPage() {
 
   const hasActiveFilters =
     searchTerm ||
+    accessPreset !== "all" ||
     statusFilter !== "all" ||
     advancedFilters.registrationDateFrom ||
     advancedFilters.registrationDateTo ||
@@ -2257,6 +2239,7 @@ export default function UsuariosPage() {
                           <div className="flex items-center justify-between w-full">
                             <button
                               onClick={() => {
+                                setAccessPreset("all");
                                 setAdvancedFilters({
                                   name: "",
                                   email: "",
@@ -3364,16 +3347,7 @@ export default function UsuariosPage() {
                                   />
                                 )}
                                 {col.key === "usuario" && (
-                                  <SortableHeader
-                                    label={col.label}
-                                    field="name"
-                                    type="text"
-                                    sortKey={
-                                      userSortKey ? String(userSortKey) : null
-                                    }
-                                    sortDir={userSortDir}
-                                    onSort={handleUserSort}
-                                  />
+                                  <UsersColumnMenu label={col.label} field="name" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={sortUserColumn} />
                                 )}
                                 {col.key === "contato" && (
                                   <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.04em]">
@@ -3386,67 +3360,20 @@ export default function UsuariosPage() {
                                   </span>
                                 )}
                                 {col.key === "tipo_funcao" && (
-                                  <SortableHeader
-                                    label={col.label}
-                                    field="account_type"
-                                    type="status"
-                                    sortKey={
-                                      userSortKey ? String(userSortKey) : null
-                                    }
-                                    sortDir={userSortDir}
-                                    onSort={handleUserSort}
-                                    columnFilters={columnFilters}
-                                    onFilter={toggleColumnFilter}
-                                    onClearFilter={clearColumnFilter}
-                                    filterValues={[
-                                      "admin",
-                                      "company",
-                                      "agency",
-                                      "parceiro",
-                                      "lider",
-                                      "nomad",
-                                    ]}
-                                  />
+                                  <UsersColumnMenu label={col.label} field="user_type_label" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={sortUserColumn} options={USER_TYPE_OPTIONS} selected={advancedFilters.accountTypes} onToggle={value => setAdvancedFilters(cur => ({ ...cur, accountTypes: cur.accountTypes.includes(value) ? cur.accountTypes.filter(v => v !== value) : [...cur.accountTypes, value] }))} onClear={() => setAdvancedFilters(cur => ({ ...cur, accountTypes: [] }))} />
                                 )}
                                 {col.key === "status" && (
-                                  <SortableHeader
-                                    label={col.label}
-                                    field="is_active"
-                                    type="status"
-                                    sortKey={
-                                      userSortKey ? String(userSortKey) : null
-                                    }
-                                    sortDir={userSortDir}
-                                    onSort={handleUserSort}
-                                    columnFilters={columnFilters}
-                                    onFilter={toggleColumnFilter}
-                                    onClearFilter={clearColumnFilter}
-                                    filterValues={["true", "false"]}
-                                  />
+                                  <UsersColumnMenu label={col.label} field="user_status_label" sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={sortUserColumn} options={USER_STATUS_OPTIONS} selected={advancedFilters.statuses} onToggle={value => { setStatusFilter("all"); setAdvancedFilters(cur => ({ ...cur, statuses: cur.statuses.includes(value) ? cur.statuses.filter(v => v !== value) : [...cur.statuses, value] })); }} onClear={() => setAdvancedFilters(cur => ({ ...cur, statuses: [] }))} />
                                 )}
                                 {col.key === "ultimo_acesso" && (
-                                  <SortableHeader
-                                    label={col.label}
-                                    field="inactivity_bucket"
-                                    type="status"
-                                    sortKey={
-                                      userSortKey ? String(userSortKey) : null
-                                    }
-                                    sortDir={userSortDir}
-                                    onSort={handleUserSort}
-                                    columnFilters={columnFilters}
-                                    onFilter={toggleColumnFilter}
-                                    onClearFilter={clearColumnFilter}
-                                    filterValues={[
-                                      "never",
-                                      "today",
-                                      "7days",
-                                      "30days",
-                                      "inactive_30",
-                                      "inactive_60",
-                                      "inactive_90",
-                                    ]}
-                                  />
+                                  <UsersColumnMenu label={col.label} field="last_login" date sortKey={userSortKey ? String(userSortKey) : null} sortDir={userSortDir} onSort={sortUserColumn} filterActive={accessPreset !== "all" || !!advancedFilters.lastAccessDateFrom || !!advancedFilters.lastAccessDateTo} onClear={() => { setAccessPreset("all"); setAdvancedFilters(cur => ({ ...cur, lastAccessDateFrom: "", lastAccessDateTo: "" })); }}>
+                                    <div className="space-y-2 px-2 py-2 text-xs" onKeyDown={event => event.stopPropagation()}>
+                                      <label className="block font-medium">Período<select aria-label="Período do último acesso" className="mt-1 h-8 w-full rounded-md border bg-background px-2" value={advancedFilters.lastAccessDateFrom || advancedFilters.lastAccessDateTo ? "custom" : accessPreset} onChange={event => { setAccessPreset(event.target.value as UserAccessPreset); setAdvancedFilters(cur => ({ ...cur, lastAccessDateFrom: "", lastAccessDateTo: "" })); }}>{USER_ACCESS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                                      <div className="grid grid-cols-2 gap-2"><label>De<Input type="date" aria-label="Último acesso de" className="mt-1 h-8 px-1 text-xs" value={advancedFilters.lastAccessDateFrom} onChange={event => { setAccessPreset("custom"); setAdvancedFilters(cur => ({ ...cur, lastAccessDateFrom: event.target.value })); }} /></label><label>Até<Input type="date" aria-label="Último acesso até" className="mt-1 h-8 px-1 text-xs" value={advancedFilters.lastAccessDateTo} onChange={event => { setAccessPreset("custom"); setAdvancedFilters(cur => ({ ...cur, lastAccessDateTo: event.target.value })); }} /></label></div>
+                                      {advancedFilters.lastAccessDateFrom && advancedFilters.lastAccessDateTo && advancedFilters.lastAccessDateFrom > advancedFilters.lastAccessDateTo && <p role="alert" className="text-red-600">A data inicial deve ser anterior à final.</p>}
+                                      <p className="text-[10px] text-slate-500">Usa o último login registrado. Primeiro login histórico não disponível; cadastro não é primeiro acesso.</p>
+                                    </div>
+                                  </UsersColumnMenu>
                                 )}
                                 <TooltipProvider>
                                   <Tooltip>
@@ -3479,10 +3406,6 @@ export default function UsuariosPage() {
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                         {paginatedUsers.map((user, i) => {
-                          const accountBadge = getAccountTypeBadge(
-                            user.account_type,
-                            user.role,
-                          );
                           const isSelf =
                             currentUserId !== null && user.id === currentUserId;
                           const canDelete =
@@ -3836,17 +3759,9 @@ export default function UsuariosPage() {
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <span
-                                          className={`inline-flex cursor-default items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${accountBadge.label === "Admin" ? "bg-violet-100 text-violet-700" : accountBadge.label === "Agency" ? "bg-orange-100 text-orange-700" : accountBadge.label === "Nomad" ? "bg-blue-100 text-blue-700" : accountBadge.label === "Company" ? "bg-fuchsia-100 text-fuchsia-700" : "bg-slate-100 text-slate-700"}`}
+                                          className={`inline-flex cursor-default items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${userTypeOption(user).color}`}
                                         >
-                                          {accountBadge.label === "Agency"
-                                            ? "Agência"
-                                            : accountBadge.label === "Nomad"
-                                              ? "Nômade"
-                                              : accountBadge.label === "Company"
-                                                ? "Empresa"
-                                                : accountBadge.label === "User"
-                                                  ? "Usuário"
-                                                  : accountBadge.label}
+                                          {userTypeOption(user).label}
                                         </span>
                                       </TooltipTrigger>
                                       <TooltipContent className="max-w-xs text-xs">
@@ -3925,25 +3840,7 @@ export default function UsuariosPage() {
                                   }}
                                 >
                                   <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                    {user.auto_paused ? (
-                                      <span className="allka-badge allka-badge-status-pausado">
-                                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500" />
-                                        Pausado
-                                      </span>
-                                    ) : (
-                                      <span
-                                        className={
-                                          user.is_active
-                                            ? "allka-badge allka-badge-status-ativo"
-                                            : "allka-badge allka-badge-status-bloqueado"
-                                        }
-                                      >
-                                        <span
-                                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${user.is_active ? "bg-emerald-500" : "bg-red-500"}`}
-                                        />
-                                        {user.is_active ? "Ativo" : "Bloqueado"}
-                                      </span>
-                                    )}
+                                    <span className={`allka-badge ${userStatusOption(user).color}`}><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${userStatusOption(user).value === "active" ? "bg-emerald-500" : userStatusOption(user).value === "pausado" ? "bg-amber-500" : "bg-red-500"}`} />{userStatusOption(user).label}</span>
                                     {user.accessed_after_inactivity_pause && (
                                       <NeonBadge
                                         color="amber"

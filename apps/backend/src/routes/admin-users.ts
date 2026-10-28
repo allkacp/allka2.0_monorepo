@@ -26,6 +26,7 @@ const enrichedSelect = {
   role: true,
   account_type: true,
   is_active: true,
+  status: true,
   avatar: true,
   phone: true,
   company_id: true,
@@ -58,7 +59,7 @@ const enrichedSelect = {
   // como "Sem vínculo" mesmo com agency_id corretamente preenchido no
   // banco — o mesmo bug que "empresas" já evita usando `company` (via
   // company_id) em vez de checar propriedade.
-  agency_link: { select: { id: true, name: true } },
+  agency_link: { select: { id: true, name: true, partner_profile: { select: { id: true, status: true } } } },
   nomade: { select: { id: true, name: true } },
   lider_areas: { select: { id: true, area_nome: true, ativo: true } },
   profile: {
@@ -149,6 +150,7 @@ function mapUser(u: EnrichedUser) {
     role: u.role,
     account_type: u.account_type,
     is_active: u.is_active,
+    status: u.status,
     avatar: u.avatar,
     phone: u.phone,
     company_id: u.company_id,
@@ -177,8 +179,8 @@ function mapUser(u: EnrichedUser) {
     // Partner agora é um status da própria Agency (não um account_type
     // separado) — só populado quando o usuário é dono de uma agência que
     // tem um PartnerProfile.
-    partner_profile_id: u.owned_agency?.partner_profile?.id ?? null,
-    partner_status: u.owned_agency?.partner_profile?.status ?? null,
+    partner_profile_id: u.owned_agency?.partner_profile?.id ?? u.agency_link?.partner_profile?.id ?? null,
+    partner_status: u.owned_agency?.partner_profile?.status ?? u.agency_link?.partner_profile?.status ?? null,
     nomad_id: u.nomade?.id ?? null,
     nomad_name: u.nomade?.name ?? null,
     leader_areas: activeLiderAreas.map((a) => a.area_nome),

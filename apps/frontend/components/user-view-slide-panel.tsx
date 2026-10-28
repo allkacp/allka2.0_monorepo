@@ -1,3 +1,5 @@
+import { AkBoth, AllkoinsAmount } from "@/components/price-with-allkoins";
+import { fmtAllkoinsBoth } from "@/lib/allkoins";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -608,9 +610,11 @@ export function UserViewSlidePanel({
   /** De quem e a carteira que este painel mostra. */
   const walletOwner = (() => {
     if (!user) return null;
-    if (user.account_type === "agencias" && user.agency_id)
+    // "Meu Perfil" monta o usuário com account_type "agency"/"company" (singular); o cadastro admin usa "agencias"/"empresas".
+    const acct = String(user.account_type);
+    if ((acct === "agencias" || acct === "agency") && user.agency_id)
       return { owner_type: "agency", owner_id: user.agency_id };
-    if (user.account_type === "empresas" && user.company_id)
+    if ((acct === "empresas" || acct === "company") && user.company_id)
       return { owner_type: "company", owner_id: user.company_id };
     return null;
   })();
@@ -622,6 +626,12 @@ export function UserViewSlidePanel({
     }
     setOrgWalletLoading(true);
     try {
+      // Quem não é admin só enxerga a PRÓPRIA carteira: lê o resumo dela direto (a lista de carteiras é do admin).
+      if (viewerRole !== "admin") {
+        const r: any = await apiClient.getWalletTopupSummary();
+        setOrgWallet({ id: "self", owner_type: walletOwner.owner_type, balance: Number(r?.balance_brl ?? 0) });
+        return;
+      }
       const res: any = await apiClient.getWallets({
         owner_type: walletOwner.owner_type,
         owner_id: walletOwner.owner_id,
@@ -629,11 +639,17 @@ export function UserViewSlidePanel({
       });
       setOrgWallet(res?.data?.[0] ?? null);
     } catch {
-      setOrgWallet(null);
+      // Quem não é admin (a própria agência/empresa vendo o seu perfil) não pode listar carteiras: usa o resumo da PRÓPRIA carteira.
+      try {
+        const r: any = await apiClient.getWalletTopupSummary();
+        setOrgWallet({ id: "self", owner_type: walletOwner?.owner_type ?? "", balance: Number(r?.balance_brl ?? 0) });
+      } catch {
+        setOrgWallet(null);
+      }
     } finally {
       setOrgWalletLoading(false);
     }
-  }, [walletOwner?.owner_type, walletOwner?.owner_id]);
+  }, [walletOwner?.owner_type, walletOwner?.owner_id, viewerRole]);
 
   useEffect(() => {
     if (open) carregarCarteira();
@@ -1709,7 +1725,7 @@ export function UserViewSlidePanel({
       await carregarCarteira();
       toast({
         title: "Sucesso!",
-        description: `Saldo atualizado para R$ ${newBalance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
+        description: `Saldo atualizado para ${fmtAllkoinsBoth(newBalance)}`,
       });
       setWalletAdjustValue("");
       setShowWalletConfirmDialog(false);
@@ -1843,10 +1859,13 @@ export function UserViewSlidePanel({
       // Envia somente os campos que realmente mudaram. Assim uma edição
       // pontual de nome não regrava e-mail, endereço, função ou qualquer
       // outro dado que o usuário não tocou.
-      const updated = await apiClient.updateUser(
-        String(displayUser.id),
-        changes,
-      );
+      // Admin edita qualquer usuário (PUT /users/:id). Quem NÃO é admin só edita a PRÓPRIA conta, pela rota de autoatendimento.
+      const updated =
+        viewerRole === "admin"
+          ? await apiClient.updateUser(String(displayUser.id), changes)
+          : await apiClient.updateMyUser(changes);
+      // Atualiza o cabeçalho (nome no "Boa tarde, …") sem precisar recarregar a página.
+      window.dispatchEvent(new Event("user:profile-updated"));
       setPersistedUserData((prev) => ({ ...prev, ...changes, ...updated }));
       if (onUserSaved) onUserSaved(updated);
       else onRefresh?.();
@@ -2174,6 +2193,20 @@ export function UserViewSlidePanel({
                       </p>
                       <p className={`text-[10px] ${cfg.text} opacity-60`}>
                         receita recorrente mensal
+                      </p>
+                    </div>
+                    {/* Divider */}
+                    <div className="w-px h-10 bg-white/20 shrink-0" />
+                    {/* Saldo em carteira */}
+                    <div className="shrink-0" data-testid="profile-wallet-balance">
+                      <p className={`text-[10px] font-semibold uppercase tracking-wider ${cfg.text} opacity-70`}>
+                        Saldo em carteira
+                      </p>
+                      <p className={`text-2xl font-black ${cfg.text} leading-tight`}>
+                        <AllkoinsAmount value={saldoCarteira} />
+                      </p>
+                      <p className={`text-[10px] ${cfg.text} opacity-60`}>
+                        Allkoins disponíveis
                       </p>
                     </div>
                     {/* Divider */}
@@ -2663,9 +2696,9 @@ export function UserViewSlidePanel({
                 </div>
                 <div className="space-y-2.5 text-xs">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-slate-500">ID</span>
+                    <span className="text-slate-500">{(displayUser as any).agency_id_label ? "ID da agência" : "ID"}</span>
                     <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-slate-700">
-                      {reducedUserCode(displayUser.user_code) || displayUser.id}
+                      {(displayUser as any).agency_id_label || reducedUserCode(displayUser.user_code) || displayUser.id}
                     </code>
                   </div>
                   <div className="flex items-center justify-between gap-2">
@@ -2677,7 +2710,7 @@ export function UserViewSlidePanel({
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-slate-500">Função</span>
                     <span className="font-semibold text-slate-800">
-                      Administrador
+                      {viewerRole === "agency" ? "Administrador da agência" : "Administrador"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
@@ -3045,10 +3078,10 @@ export function UserViewSlidePanel({
                         </div>
                         <div className="min-w-0">
                           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                            ID do usuário
+                            {(displayUser as any).agency_id_label ? "ID da agência" : "ID do usuário"}
                           </p>
                           <p className="font-mono text-sm font-semibold text-slate-800">
-                            {reducedUserCode(displayUser.user_code) || "—"}
+                            {(displayUser as any).agency_id_label || reducedUserCode(displayUser.user_code) || "—"}
                           </p>
                         </div>
                       </div>
@@ -5428,10 +5461,8 @@ export function UserViewSlidePanel({
               <AlertDialogTitle>Confirmar Ajuste de Saldo</AlertDialogTitle>
               <AlertDialogDescription>
                 Tem certeza que deseja{" "}
-                {walletAdjustType === "add" ? "adicionar" : "subtrair"} R${" "}
-                {parseFloat(walletAdjustValue).toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}{" "}
+                {walletAdjustType === "add" ? "adicionar" : "subtrair"}{" "}
+                <AkBoth value={parseFloat(walletAdjustValue)} />{" "}
                 do saldo?
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -5439,10 +5470,7 @@ export function UserViewSlidePanel({
               <div className="flex justify-between">
                 <span className="text-slate-600">Saldo Atual:</span>
                 <span className="font-semibold">
-                  R${" "}
-                  {saldoCarteira.toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                  })}
+                  <AkBoth value={saldoCarteira} />
                 </span>
               </div>
               <div className="flex justify-between text-xs text-slate-500">
@@ -5450,21 +5478,16 @@ export function UserViewSlidePanel({
                   {walletAdjustType === "add" ? "Adição:" : "Subtração:"}
                 </span>
                 <span>
-                  {walletAdjustType === "add" ? "+" : "-"} R${" "}
-                  {parseFloat(walletAdjustValue).toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                  })}
+                  {walletAdjustType === "add" ? "+" : "-"}{" "}
+                  <AkBoth value={parseFloat(walletAdjustValue)} />
                 </span>
               </div>
               <div className="border-t border-slate-200 pt-1 mt-1 flex justify-between font-bold">
                 <span>Novo Saldo:</span>
                 <span className="text-emerald-600">
-                  R${" "}
-                  {(
-                    (walletAdjustType === "add"
+                  <AkBoth value={(walletAdjustType === "add"
                       ? saldoCarteira + parseFloat(walletAdjustValue)
-                      : saldoCarteira - parseFloat(walletAdjustValue)) || 0
-                  ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      : saldoCarteira - parseFloat(walletAdjustValue)) || 0} />
                 </span>
               </div>
             </div>
@@ -5592,7 +5615,7 @@ export function UserViewSlidePanel({
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 block mb-2 uppercase">
-                  Valor (R$)
+                  Valor (Allkoins)
                 </label>
                 <Input
                   type="number"
@@ -5657,10 +5680,7 @@ export function UserViewSlidePanel({
               <div className="flex justify-between">
                 <span className="text-slate-600">Valor:</span>
                 <span className="font-semibold text-emerald-600">
-                  R${" "}
-                  {parseFloat(creditAmount).toLocaleString("pt-BR", {
-                    minimumFractionDigits: 2,
-                  })}
+                  <AkBoth value={parseFloat(creditAmount)} />
                 </span>
               </div>
               <div className="flex justify-between">
@@ -5670,11 +5690,9 @@ export function UserViewSlidePanel({
               <div className="border-t border-slate-200 pt-2 mt-2 flex justify-between">
                 <span className="font-semibold">Saldo após:</span>
                 <span className="text-emerald-600 font-bold">
-                  R${" "}
-                  {(creditType === "blocked"
-                    ? saldoCarteira
-                    : saldoCarteira + parseFloat(creditAmount)
-                  ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  <AkBoth value={creditType === "blocked"
+                      ? saldoCarteira
+                      : saldoCarteira + parseFloat(creditAmount)} />
                 </span>
               </div>
             </div>
@@ -5703,10 +5721,8 @@ export function UserViewSlidePanel({
             <AlertDialogHeader>
               <AlertDialogTitle>Solicitar Desbloqueio</AlertDialogTitle>
               <AlertDialogDescription>
-                Anexe a nota fiscal para solicitar o desbloqueio de R${" "}
-                {blockedBalance.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
+                Anexe a nota fiscal para solicitar o desbloqueio de{" "}
+                <AkBoth value={blockedBalance} />
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-4">
@@ -5820,10 +5836,7 @@ export function UserViewSlidePanel({
                           : stmt.type === "debit"
                             ? "-"
                             : "🔒"}{" "}
-                        R${" "}
-                        {stmt.amount.toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                        })}
+                        <AkBoth value={stmt.amount} />
                       </div>
                     </div>
                     <div className="flex justify-between text-xs text-slate-600">
@@ -5834,10 +5847,7 @@ export function UserViewSlidePanel({
                       <div>
                         Saldo após:{" "}
                         <span className="font-semibold">
-                          R${" "}
-                          {stmt.balanceAfter.toLocaleString("pt-BR", {
-                            minimumFractionDigits: 2,
-                          })}
+                          <AkBoth value={stmt.balanceAfter} />
                         </span>
                       </div>
                     </div>

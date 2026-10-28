@@ -3,8 +3,9 @@
 // Fluxo das etapas de uma tarefa (reunião 2026-10-05, A8): em sequência, em paralelo ou depois de etapas específicas,
 // e quem executa (novo/automático ou o mesmo de outra etapa). Opcional: sem configurar, a tarefa segue a sequência de sempre.
 // Todo cálculo de preço/prazo continua no backend; aqui só se monta e valida o desenho do fluxo.
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { ArrowRight, Clock, GitBranch, ListOrdered, Pencil, Play, Save, Settings2, ChevronDown, Timer, User } from "lucide-react";
+import { FramedModal, FRAMED_HEADER_CLASS } from "@/components/framed-panel";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 
@@ -127,47 +128,67 @@ export function stepFlowSentences(step: any, steps: any[], opts: { stageMode?: b
   if (opts.stageMode) {
     flags.push(step.internal_step ? "etapa interna (o cliente não vê nem aprova)" : "o cliente aprova a etapa");
     if (step.requires_qualification !== false) flags.push("passa pela qualificação do líder");
-    flags.push("libera a próxima sozinha");
+    // A última etapa é a FINAL: não há próxima para liberar; a tarefa termina nela.
+    flags.push(i === ord.length - 1 ? "etapa final: a tarefa termina aqui" : "libera a próxima sozinha");
     if (step.requires_specialist_qualification) flags.push("qualificação do especialista");
   }
   return { starts, who, flags, minutes: Math.max(0, step.estimated_minutes ?? 0) };
 }
 
-/** Visão rápida do fluxo: um cartão por fase, ligados por setas (o detalhe fica em "Configurações avançadas do fluxo"). */
+/** Visão rápida do fluxo: 3 fases por linha, ligadas por setas; ao fim da linha uma seta em "cotovelo" leva até a primeira fase da linha de baixo. */
+const COLS = 3;
 function FlowPhases({ steps, stageMode }: { steps: any[]; stageMode: boolean }) {
   const ord = sortSteps(steps);
   const sum = flowSummary(steps);
   const num = (k: string) => ord.findIndex((x) => x.key === k) + 1;
+  const rows: { wave: string[]; wi: number }[][] = [];
+  sum.waves.forEach((wave, wi) => { if (wi % COLS === 0) rows.push([]); rows[rows.length - 1].push({ wave, wi }); });
+  const LINE = "border-violet-300 dark:border-violet-700";
   return (
-    <div className="mt-3 flex flex-wrap items-stretch gap-3" data-testid="flow-phases">
-      {sum.waves.map((wave, wi) => {
-        const prev = wi === 0 ? null : sum.waves[wi - 1].map(num).sort((a, b) => a - b);
-        return (
-          <div key={wi} className="flex min-w-[20rem] flex-1 items-center gap-3">
-            {wi > 0 && <ArrowRight className="h-5 w-5 shrink-0 text-violet-500" aria-hidden="true" />}
-            <div className="min-w-0 flex-1 space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-900/40" data-testid={`flow-phase-${wi + 1}`}>
-              <span className="inline-block rounded-md bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-950/50 dark:text-violet-200">Fase {wi + 1}</span>
-              {wave.map((k) => {
-                const st = ord.find((x) => x.key === k)!;
-                const t = stepFlowSentences(st, steps, { stageMode });
-                return (
-                  <div key={k} className="flex flex-wrap items-start gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-500 text-lg font-bold text-white">{num(k)}</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{st.name}</p>
-                      <div className="mt-1.5 grid gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
-                        <span className="flex items-start gap-2"><Play className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" /><span><span className="block font-semibold text-slate-800 dark:text-slate-100">Início</span><span className="block text-slate-500">{prev ? `Após a etapa ${prev.join(" + ")}` : "Começa quando a tarefa inicia"}</span></span></span>
-                        <span className="flex items-start gap-2"><User className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" /><span><span className="block font-semibold text-slate-800 dark:text-slate-100">Executor</span><span className="block text-slate-500">{t.who}</span></span></span>
-                        <span className="flex items-start gap-2"><Clock className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" /><span><span className="block font-semibold text-slate-800 dark:text-slate-100">Duração</span><span className="block text-slate-500">{(st.estimated_minutes ?? 0) > 0 ? fmtMin(st.estimated_minutes) : "a definir"}</span></span></span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+    <div className="mt-3" data-testid="flow-phases">
+      {rows.map((row, ri) => (
+        <Fragment key={ri}>
+          {ri > 0 && (
+            <div className="hidden h-10 grid-cols-3 gap-x-10 md:grid" aria-hidden="true" data-testid="flow-row-connector">
+              <div className="relative"><span className={`absolute left-1/2 top-1/2 -right-10 border-t-2 ${LINE}`} /><span className={`absolute bottom-1 left-1/2 top-1/2 border-l-2 ${LINE}`} /><ChevronDown className="absolute -bottom-1 left-1/2 h-4 w-4 -translate-x-1/2 text-violet-500" /></div>
+              <div className="relative"><span className={`absolute -left-10 -right-10 top-1/2 border-t-2 ${LINE}`} /></div>
+              <div className="relative"><span className={`absolute -left-10 right-1/2 top-1/2 border-t-2 ${LINE}`} /><span className={`absolute left-1/2 top-0 h-1/2 border-l-2 ${LINE}`} /></div>
             </div>
+          )}
+          <div className="grid gap-x-10 gap-y-4 md:grid-cols-3">
+            {row.map(({ wave, wi }, ci) => {
+              const prev = wi === 0 ? null : sum.waves[wi - 1].map(num).sort((x, y) => x - y);
+              return (
+                <div key={wi} className="relative min-w-0">
+                  {ci < row.length - 1 && <ArrowRight className="absolute -right-[2.1rem] top-1/2 hidden h-5 w-5 -translate-y-1/2 text-violet-500 md:block" aria-hidden="true" />}
+                  <div className="h-full min-w-0 space-y-2.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-900/40" data-testid={`flow-phase-${wi + 1}`}>
+                    {wi === sum.waves.length - 1 && <span className="float-right rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200" data-testid="flow-final-badge" title="Última fase: ao terminar, a tarefa termina. Não há próxima etapa.">Etapa final</span>}
+                    <span className="inline-block rounded-md bg-violet-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:bg-violet-950/50 dark:text-violet-200">Fase {wi + 1}{wave.length > 1 ? " · em paralelo" : ""}</span>
+                    {wave.map((k) => {
+                      const st = ord.find((x) => x.key === k)!;
+                      const t = stepFlowSentences(st, steps, { stageMode });
+                      const rowCls = "flex items-start gap-1.5 leading-snug";
+                      return (
+                        <div key={k} className="space-y-1.5">
+                          <div className="flex items-start gap-2.5">
+                            <span className="section-number-badge flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white">{num(k)}</span>
+                            <p className="min-w-0 flex-1 text-sm font-bold leading-tight text-slate-900 dark:text-slate-100">{st.name}</p>
+                          </div>
+                          <div className="space-y-1 pl-[2.625rem] text-xs text-slate-600 dark:text-slate-300">
+                            <p className={rowCls}><Play className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" aria-hidden="true" /><span><strong className="text-slate-800 dark:text-slate-100">Início:</strong> {prev ? `após a etapa ${prev.join(" + ")}` : "quando a tarefa inicia"}</span></p>
+                            <p className={rowCls}><User className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" aria-hidden="true" /><span><strong className="text-slate-800 dark:text-slate-100">Executor:</strong> {t.who}</span></p>
+                            <p className={rowCls}><Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-500" aria-hidden="true" /><span><strong className="text-slate-800 dark:text-slate-100">Duração:</strong> {(st.estimated_minutes ?? 0) > 0 ? fmtMin(st.estimated_minutes) : "a definir"}</span></p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        </Fragment>
+      ))}
     </div>
   );
 }
@@ -215,6 +236,7 @@ function FlowOverview({ steps, stageMode }: { steps: any[]; stageMode: boolean }
 export function StepFlowEditor({ task, readOnly, act, startEditing = false, allowEdit = false, hoursPerDay = 8 }: { task: any; readOnly: boolean; act: Act; startEditing?: boolean; allowEdit?: boolean; hoursPerDay?: number }) {
   // O fluxo se edita direto em cada etapa (StepFlowControls); aqui só se mostra o resultado. O editor completo só abre se pedido (testes/uso interno).
   const [editing, setEditing] = useState(startEditing);
+  const [advOpen, setAdvOpen] = useState(false);
   const steps: any[] = task.steps ?? [];
   const sig = JSON.stringify(steps.map((s) => [s.key, s.sort_order, s.depends_on, s.executor_policy, s.executor_same_as_key]));
   const [rows, setRows] = useState<Row[]>(() => rowsFrom(steps));
@@ -258,10 +280,18 @@ export function StepFlowEditor({ task, readOnly, act, startEditing = false, allo
       </div>
       {!editing && <FlowPhases steps={steps} stageMode={task.stage_execution === "stage"} />}
       {!editing && (
-        <details className="group mt-2 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/60" data-testid="flow-advanced">
-          <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5 text-[13px] font-semibold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden"><Settings2 className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" /><span className="flex-1">Configurações avançadas do fluxo</span><ChevronDown className="h-4 w-4 shrink-0 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
-          <div className="border-t border-slate-100 px-3 pb-3 dark:border-slate-800"><FlowOverview steps={steps} stageMode={task.stage_execution === "stage"} /></div>
-        </details>
+        <div className="mt-3" data-testid="flow-advanced">
+          <button type="button" onClick={() => setAdvOpen(true)} className="inline-flex h-9 items-center gap-2 rounded-md border border-violet-200 bg-white px-3 text-xs font-semibold text-violet-700 transition hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="flow-advanced-btn"><Settings2 className="h-4 w-4" aria-hidden="true" />Configurações avançadas do fluxo</button>
+          {advOpen && (
+            <FramedModal open onOpenChange={setAdvOpen} testId="flow-advanced-modal" title="Configurações avançadas do fluxo">
+              <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+                <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">Configurações avançadas do fluxo</p><p className="truncate text-xs text-slate-500">Fase por fase: o que espera o quê, quem executa e as regras de cada etapa.</p></div>
+                <Button size="sm" variant="outline" className="border-violet-200 bg-white text-violet-700 hover:bg-violet-50" onClick={() => setAdvOpen(false)} data-testid="flow-advanced-close">Fechar</Button>
+              </div>
+              <div className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900"><FlowOverview steps={steps} stageMode={task.stage_execution === "stage"} /></div>
+            </FramedModal>
+          )}
+        </div>
       )}
       {!editing && !readOnly && allowEdit && <div className="mt-2"><Button type="button" size="sm" variant="outline" onClick={() => setEditing(true)} data-testid="edit-step-flow"><Pencil className="mr-1.5 h-4 w-4" />Editar fluxo</Button></div>}
       {editing && <>

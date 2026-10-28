@@ -58,6 +58,8 @@ router.get("/:taskId", async (req: Request, res: Response, next: NextFunction) =
       return {
         id: e.id, titulo: e.titulo, status: e.status, ordem: e.ordem, iniciada_em: e.iniciada_em, concluida_em: e.concluida_em, entregue_em: e.entregue_em, qualificada_em: e.qualificada_em, aprovada_em: e.aprovada_em,
         prazo_execucao: e.prazo_execucao, rodada_ajuste: e.rodada_ajuste, em_paralelo: e.depende_de_json != null,
+        // Etapa em ciclos: a tela mostra a lista de ciclos (entrega e aprovação por ciclo) em vez do botão único de aprovação.
+        em_ciclos: Array.isArray((continuityConfig as { cycles?: unknown }).cycles),
         ...(staff ? { interna: !e.visivel_ao_cliente, exige_qualificacao: e.exige_qualificacao, exige_qualificacao_especialista: e.exige_qualificacao_especialista, libera_proxima_auto: e.libera_proxima_auto, executor_type: e.executor_type } : {}),
         can_qualify_specialist: stageMode && e.status === "EM_QUALIFICACAO_ESPECIALISTA" && (kind === "admin" || e.especialista_id === req.user!.id),
         can_qualify: stageMode && e.status === "EM_QUALIFICACAO" && (kind === "admin" || isLeaderOfTask || e.lider_id === req.user!.id),

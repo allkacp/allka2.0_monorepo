@@ -229,6 +229,12 @@ export async function abrirEtapa(
     // quando houver, senão fica aguardando definição.
     // Líder específico configurado na etapa tem prioridade; senão o líder da tarefa (atribuído por área).
     liderId = stage.lider_id ?? stage.project_task.lider_responsavel_id ?? null;
+    if (liderId) {
+      const leader = await db.user.findUnique({ where: { id: liderId }, select: { is_active: true, status: true, role: true } });
+      if (!leader?.is_active || leader.status !== "ativo" || !["lider", "admin"].includes(leader.role)) {
+        throw new DependencyBlockedError(`O líder indicado para a etapa “${stage.titulo}” está indisponível. Ajuste o responsável desta execução antes de iniciar.`);
+      }
+    }
     status = liderId ? STAGE_STATUS.EM_ANDAMENTO : STAGE_STATUS.AGUARDANDO_EXECUTOR;
   } else {
     // nomad: continuidade tem prioridade sobre nova seleção.
@@ -738,7 +744,8 @@ export class EtapaDecisaoError extends Error {
   }
 }
 export type TipoDecisaoEtapa = "qualificacao" | "especialista" | "aprovacao";
-export type DecisaoEtapa = "aprovar" | "reprovar" | "comentar";
+// "encaminhar" = o líder conferiu e faltou algo que SÓ o cliente resolve (ex.: acesso errado): a etapa volta para o cliente (agência/empresa) ver e aprovar de novo.
+export type DecisaoEtapa = "aprovar" | "reprovar" | "comentar" | "encaminhar";
 
 const baseResultado = (stage: StageComTarefa): ResultadoConclusao => ({
   etapaConcluida: stage.id,
@@ -878,6 +885,18 @@ export async function decidirEtapa(
     if (!texto) throw new EtapaDecisaoError("Escreva o comentário.");
     await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: opts.tipo, decision: "comentario", round, comment: texto, actor_user_id: opts.userId } });
     return { ...base, decisao: "comentar", status: stage.status };
+  }
+
+  if (opts.decisao === "encaminhar") {
+    if (opts.tipo !== "qualificacao") throw new EtapaDecisaoError("Só o líder, ao qualificar a etapa, pode devolvê-la ao cliente.");
+    if (texto.length < 3) throw new EtapaDecisaoError("Escreva o que o cliente precisa resolver (mínimo 3 caracteres).");
+    let prazoAprovacao: Date | undefined;
+    if (stage.aprovacao_horas) { await ensureWorkCalendar(db); prazoAprovacao = addBusinessMinutes(agora, stage.aprovacao_horas * 60); }
+    // A etapa passa a ficar visível para o cliente e aguarda a decisão dele; o líder não aprova nem reprova: devolve.
+    await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.EM_APROVACAO_CLIENTE, visivel_ao_cliente: true, ...(prazoAprovacao ? { prazo_aprovacao: prazoAprovacao } : {}) } });
+    await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: "qualificacao", decision: "encaminhada", round, comment: texto, actor_user_id: opts.userId } });
+    await avisarAprovadores(db, stage.project_task_id, await nivelDoProjeto(db, stage.project_task_id), stage.titulo);
+    return { ...base, decisao: "encaminhar", status: STAGE_STATUS.EM_APROVACAO_CLIENTE, enviadaParaAprovacao: true, etapaEmConferencia: "aprovacao" };
   }
 
   if (opts.decisao === "reprovar") {

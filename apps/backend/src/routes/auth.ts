@@ -339,6 +339,8 @@ router.get("/me", verifyToken, async (req, res, next) => {
         is_active: true,
         status: true,
         created_at: true,
+        // Último acesso da própria pessoa — "Meu Perfil" mostrava "Nunca acessou" mesmo logada.
+        last_login: true,
         // admin_profile_id (FK escalar) precisa vir junto com o relacionamento
         // abaixo: a tela "Meu Perfil" (UserViewSlidePanel) lê esse campo pra
         // saber qual perfil está selecionado, não o objeto aninhado.
@@ -363,6 +365,8 @@ router.get("/me", verifyToken, async (req, res, next) => {
             email: true,
             phone: true,
             partner_level: true,
+            // Número da agência na plataforma ("ID 01" = a primeira) — o cabeçalho mostra isto no lugar do código técnico do usuário.
+            sequence_number: true,
             status: true,
             created_at: true,
             updated_at: true,

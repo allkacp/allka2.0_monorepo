@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Catalog2Thumbnail } from "@/components/catalog2-thumbnail";
 import { catalog2CategoryTone, catalog2EditorialImage } from "@/lib/catalog2-editorial";
+import { PriceWithAllkoins } from "@/components/price-with-allkoins";
 
 export type ListColumnKey = "id" | "product" | "category" | "tasks" | "pendencies" | "deadline" | "price" | "status" | "actions";
 export type ListSortDir = "asc" | "desc";
@@ -293,7 +294,7 @@ export function Catalog2ProductListRow({
         {deadlineDays != null ? `${deadlineDays} dia(s)` : "—"}
       </span>
       <span className="inline-flex items-center gap-1 text-sm font-extrabold text-violet-700">
-        {price != null ? `R$ ${price.toFixed(2)}` : "—"}
+        {price != null ? <PriceWithAllkoins value={price} /> : "—"}
         {priceExtra}
       </span>
       <span className="min-w-0">{statusBadge}</span>

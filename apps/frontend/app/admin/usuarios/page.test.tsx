@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 
@@ -123,6 +123,8 @@ vi.setConfig({ testTimeout: 15000 });
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.removeItem("allka_user");
+  const sortingKeys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index));
+  for (const key of sortingKeys) if (key?.startsWith("allka:admin-users-sort")) localStorage.removeItem(key);
 });
 
 describe("admin/usuarios — bloquear/desbloquear (ação reversível)", () => {
@@ -315,6 +317,25 @@ describe("admin/usuarios — carga inicial vs. atualização em segundo plano", 
 });
 
 describe("admin/usuarios — busca, filtro, ordenação e página são preservados", () => {
+  it("lembra ID crescente após sair e voltar, inclusive IDs 2 e 10", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "ten", user_code: "user_10", name: "Zeca" }), adminUser({ id: "two", user_code: "user_2", name: "Ana" })], total: 2 });
+    const user = userEvent.setup(); const first = renderPage(); await screen.findByText("Zeca");
+    await user.click(screen.getByRole("button", { name: "ID" }));
+    await waitFor(() => expect(screen.getByText("Ana").compareDocumentPosition(screen.getByText("Zeca")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
+    first.unmount(); renderPage(); await screen.findByText("Ana");
+    await waitFor(() => expect(screen.getByText("Ana").compareDocumentPosition(screen.getByText("Zeca")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
+  });
+
+  it("lembra outra coluna e sentido decrescente após remontar", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "a", name: "Ana" }), adminUser({ id: "z", name: "Zeca" })], total: 2 });
+    const user = userEvent.setup(); const first = renderPage(); await screen.findByText("Ana");
+    await user.click(screen.getByRole("button", { name: "Usuário" }));
+    await user.click(screen.getByRole("menuitem", { name: "Z → A" }));
+    await waitFor(() => expect(screen.getByText("Zeca").compareDocumentPosition(screen.getByText("Ana")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
+    first.unmount(); renderPage(); await screen.findByText("Zeca");
+    await waitFor(() => expect(screen.getByText("Zeca").compareDocumentPosition(screen.getByText("Ana")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
+  });
+
   it("4. a busca permanece preenchida depois de bloquear um usuário", async () => {
     apiMock.getAdminUsers.mockResolvedValue({
       data: [adminUser(), adminUser({ id: "user-2", name: "Beltrano Souza", email: "beltrano@example.com" })],
@@ -400,6 +421,55 @@ describe("admin/usuarios — busca, filtro, ordenação e página são preservad
     // Página 2 ficou vazia — a tela volta pra página 1, que ainda tem 10.
     expect(await screen.findByText("Usuário Página 00")).toBeInTheDocument();
   }, 15000);
+});
+
+describe("admin/usuarios — menus das colunas", () => {
+  it("nome abre menu explícito A–Z e Z–A", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "z", name: "Zeca" }), adminUser({ id: "a", name: "Ana" })], total: 2 });
+    const user = userEvent.setup(); renderPage(); await screen.findByText("Zeca");
+    await user.click(screen.getByRole("button", { name: "Usuário" }));
+    await user.click(screen.getByRole("menuitem", { name: "A → Z" }));
+    await waitFor(() => expect(screen.getByText("Ana").compareDocumentPosition(screen.getByText("Zeca")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
+  });
+  it("Tipo mostra badges e filtra o valor plural real da API", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "ag", name: "Pessoa Agência", account_type: "agencias" }), adminUser({ id: "co", name: "Pessoa Empresa", account_type: "empresas" }), adminUser({ id: "pa", name: "Pessoa Partner", account_type: "agencias", partner_status: "ativo" })], total: 3 });
+    const user = userEvent.setup(); renderPage(); await screen.findByText("Pessoa Agência");
+    await user.click(screen.getByRole("button", { name: "Tipo" }));
+    expect(screen.getByRole("menuitemcheckbox", { name: "Agência Partner" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemcheckbox", { name: "Nômade" })).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Agência" }));
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByText("Pessoa Empresa")).not.toBeInTheDocument());
+    expect(screen.getByText("Pessoa Agência")).toBeInTheDocument(); expect(screen.queryByText("Pessoa Partner")).not.toBeInTheDocument();
+  });
+  it("Status permite selecionar bloqueado sem conflito com o atalho Ativos", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "on", name: "Pessoa Ativa" }), adminUser({ id: "off", name: "Pessoa Bloqueada", is_active: false, status: "inativo" })], total: 2 });
+    const user = userEvent.setup(); renderPage(); await screen.findByText("Pessoa Ativa");
+    await user.click(screen.getByRole("button", { name: "Status" }));
+    expect(screen.getByRole("menuitemcheckbox", { name: "Suspenso" })).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitemcheckbox", { name: "Bloqueado" })); await user.keyboard("{Escape}");
+    expect(await screen.findByText("Pessoa Bloqueada")).toBeInTheDocument(); expect(screen.queryByText("Pessoa Ativa")).not.toBeInTheDocument();
+  });
+  it("Último acesso ordena por data real e filtra quem nunca acessou", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "never", name: "Sem Login", last_login: null }), adminUser({ id: "date", name: "Com Login", last_login: new Date().toISOString() })], total: 2 });
+    const user = userEvent.setup(); renderPage(); await screen.findByText("Sem Login");
+    await user.click(screen.getByRole("button", { name: /último acesso/i }));
+    expect(screen.getByRole("menuitem", { name: "Mais recente primeiro" })).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Mais recente primeiro" }));
+    await waitFor(() => expect(screen.getByText("Com Login").compareDocumentPosition(screen.getByText("Sem Login")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: /último acesso/i }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Período do último acesso" }), "never"); await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByText("Com Login")).not.toBeInTheDocument()); expect(screen.getByText("Sem Login")).toBeInTheDocument();
+  });
+  it("intervalo De/Até exclui Nunca e inclui o final do dia", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({ data: [adminUser({ id: "never", name: "Sem Login", last_login: null }), adminUser({ id: "in", name: "Dentro do Período", last_login: "2026-10-20T23:59:00" }), adminUser({ id: "out", name: "Fora do Período", last_login: "2026-10-21T00:00:00" })], total: 3 });
+    const user = userEvent.setup(); renderPage(); await screen.findByText("Sem Login");
+    await user.click(screen.getByRole("button", { name: /último acesso/i }));
+    fireEvent.change(screen.getByLabelText("Último acesso de"), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText("Último acesso até"), { target: { value: "2026-10-20" } }); await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByText("Fora do Período")).not.toBeInTheDocument());
+    expect(screen.queryByText("Sem Login")).not.toBeInTheDocument(); expect(screen.getByText("Dentro do Período")).toBeInTheDocument();
+  });
 });
 
 describe("admin/usuarios — exclusão só remove após confirmação do servidor, erro de rede não altera nada", () => {

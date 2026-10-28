@@ -16,6 +16,14 @@ const SKIP = "button, option, select, textarea, input, script, style, [role=tab]
 // duplicava o tooltip do "i") é retirado de tudo que não é botão só de ícone; o texto vira `data-help-title` e alimenta o "i"
 // dos campos que ainda não tinham ajuda cadastrada. Textos cortados (truncate) mantêm o title para dar para ler o conteúdo inteiro.
 const KEEP_TITLE = "button, a, summary, [role=button], .truncate, [data-keep-title]";
+/** Retira o tooltip nativo do navegador de tudo dentro de `root` e o mantém retirado (conteúdo que vive em janelas/portais fica fora da camada de ajuda e, sem isso, mostraria dois tooltips: o do ⓘ e o do navegador). */
+export function keepNativeTitlesStripped(root: Element): () => void {
+  stripNativeTitles(root);
+  const obs = new MutationObserver(() => { obs.disconnect(); stripNativeTitles(root); obs.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["title"] }); });
+  obs.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["title"] });
+  return () => obs.disconnect();
+}
+
 function stripNativeTitles(root: Element) {
   const nodes: Element[] = root.matches?.("[title]") ? [root] : [];
   nodes.push(...Array.from(root.querySelectorAll("[title]")));
@@ -52,6 +60,9 @@ function ensureIcons(root: HTMLElement, helpOf: (t: string) => string | null, st
     if (next && next.nodeType === 1 && next.classList?.contains("field-info")) continue;
     // strict (camada geral): só o texto que é o rótulo inteiro do elemento (aceita * e :), nunca um pedaço de frase como "4 empresas".
     if (strict && (el.textContent ?? "").replace(/[\s*:]+$/g, "").trim() !== v.replace(/[\s*:]+$/g, "").trim()) continue;
+    // Palavras curtas ("de", "até") só ganham o "i" quando são o rótulo inteiro do elemento. Dentro de uma frase
+    // ("3 de 4 classificações") o React cria um pedaço de texto " de " que antes ganhava o ícone por engano.
+    if (v.replace(/[\s*:]+$/g, "").trim().length <= 4 && (el.textContent ?? "").replace(/[\s*:]+$/g, "").trim() !== v.replace(/[\s*:]+$/g, "").trim()) continue;
     if (helpOf(v)) { found.push(t); continue; }
     // Sem ajuda cadastrada: usa o antigo title do rótulo, mas só quando o texto é o rótulo inteiro (nunca um pedaço de frase).
     if (v.trim().length <= 70 && (el.textContent ?? "").replace(/[\s*:]+$/g, "").trim() === v.replace(/[\s*:]+$/g, "").trim() && titleHelpFor(el)) found.push(t);

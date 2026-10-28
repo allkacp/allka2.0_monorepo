@@ -135,7 +135,10 @@ export class TestWorld {
     return this.api("/api/catalog2/quotes", { method: "POST", token, body: { product: productId, selection: o.selection ?? SEL, ...(o.period ? { period: o.period } : {}) } });
   }
   async checkoutAndPay(token: string, quoteIds: string[]) {
-    const checkout = await this.api("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: quoteIds, checkout_client_action_id: crypto.randomUUID() } });
+    const created = await this.api("/api/projects", { method: "POST", token, body: { title: `[TESTE] Contratação ${crypto.randomUUID()}`, status: "draft" } });
+    if (created.status !== 201) throw new Error(`project ${created.status}: ${JSON.stringify(created.json)}`);
+    this.projects.push(created.json.id);
+    const checkout = await this.api("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: quoteIds, checkout_client_action_id: crypto.randomUUID(), project_id: created.json.id } });
     if (checkout.status !== 201) throw new Error(`checkout ${checkout.status}: ${JSON.stringify(checkout.json)}`);
     const projectId = checkout.json.project.id as string;
     this.projects.push(projectId);

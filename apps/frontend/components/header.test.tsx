@@ -30,6 +30,7 @@ const { accountConfig, apiClientMock, notifPanelMock, basketMock } = vi.hoisted(
     getProjects: vi.fn().mockResolvedValue([]),
     getUnreadSystemAlertsCount: vi.fn().mockResolvedValue(0),
     clearToken: vi.fn(),
+    getClientCatalog2Cart: vi.fn().mockResolvedValue({ count: 0, items: [] }),
   },
 }));
 
@@ -136,7 +137,7 @@ function renderHeader(route = "/admin/dashboard") {
 
 const currentPath = () => screen.getByTestId("loc").textContent;
 
-const basketBtn = () => screen.queryByRole("button", { name: "Cesta do projeto" });
+const basketBtn = () => screen.queryByRole("button", { name: /^Cesta —/ });
 
 async function openMeuPerfil(user: ReturnType<typeof userEvent.setup>) {
   const avatarTrigger = document.querySelector(
@@ -263,62 +264,34 @@ describe("Header — só o sino de Notificações fica no cabeçalho (Alertas sa
   });
 });
 
-describe("Header — cesta só no contexto de catálogo/loja (ata 2026-08, interface/usabilidade)", () => {
+describe("Header — cesta global somente com itens e permissão de compra (28/10)", () => {
   beforeEach(() => {
-    accountConfig.accountType = "admin";
-    accountConfig.isPartnerActive = false;
-    basketMock.totalItems = 0;
-    vi.clearAllMocks();
+    accountConfig.accountType = "agencias"; accountConfig.isPartnerActive = true;
+    basketMock.totalItems = 0; vi.clearAllMocks(); localStorage.clear();
+    localStorage.setItem("allka_user", JSON.stringify({ id: "buyer", account_type: "agencias", role: "agency_admin", agency_id: "agency-1" }));
+    apiClientMock.getClientCatalog2Cart.mockResolvedValue({ count: 0, items: [] });
   });
-
-  it("cesta VAZIA fora de catálogo (dashboard) → ícone não aparece", async () => {
-    renderHeader("/admin/dashboard");
-    await screen.findByRole("menuitem", { name: /^meu perfil$/i }).catch(() => {});
-    expect(basketBtn()).not.toBeInTheDocument();
+  it("cesta vazia não aparece no dashboard nem no catálogo", async () => {
+    const first = renderHeader("/partner/dashboard"); expect(basketBtn()).not.toBeInTheDocument(); first.unmount();
+    renderHeader("/agency/catalogo-produtos"); expect(basketBtn()).not.toBeInTheDocument();
   });
-
-  it("cesta VAZIA fora de catálogo (financeiro / perfil) → ícone não aparece", async () => {
-    renderHeader("/admin/financeiro");
-    await new Promise((r) => setTimeout(r, 0));
-    expect(basketBtn()).not.toBeInTheDocument();
+  it("cesta com itens aparece no dashboard Partner, ao lado do sino", async () => {
+    apiClientMock.getClientCatalog2Cart.mockResolvedValue({ count: 2, items: [] });
+    renderHeader("/partner/dashboard");
+    expect(await screen.findByRole("button", { name: "Cesta — 2 itens" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Notificações/ })).toBeInTheDocument();
   });
-
-  it("rota de catálogo → ícone aparece mesmo com a cesta vazia", async () => {
-    renderHeader("/admin/produtos");
-    expect(basketBtn()).toBeInTheDocument();
+  it("Admin não ganha botão de compra mesmo com itens antigos", () => {
+    accountConfig.accountType = "admin"; basketMock.totalItems = 3;
+    renderHeader("/admin/cadastro-produtos"); expect(basketBtn()).not.toBeInTheDocument();
   });
-
-  it("cesta COM itens FORA do catálogo (dashboard) → ícone continua NÃO aparecendo (regra vale mesmo com itens salvos)", async () => {
-    basketMock.totalItems = 2;
-    renderHeader("/admin/dashboard");
-    expect(basketBtn()).not.toBeInTheDocument();
-  });
-
-  it("gestão de produtos (/admin/cadastro-produtos) e combos (/admin/combos) NÃO são catálogo de compra → sem cesta", async () => {
-    basketMock.totalItems = 3;
-    const { unmount } = renderHeader("/admin/cadastro-produtos");
-    expect(basketBtn()).not.toBeInTheDocument();
-    unmount();
-    renderHeader("/admin/combos");
-    expect(basketBtn()).not.toBeInTheDocument();
-  });
-
-  it("detalhe de produto dentro do catálogo pertence ao contexto → cesta aparece", async () => {
-    renderHeader("/admin/produtos/prod-123");
-    expect(basketBtn()).toBeInTheDocument();
-  });
-
-  it("catálogos de empresa, agência (e alias /agencia) exibem a cesta", async () => {
-    accountConfig.accountType = "empresas";
-    const { unmount: u1 } = renderHeader("/company/produtos");
-    expect(basketBtn()).toBeInTheDocument();
-    u1();
+  it("Company, Agency e alias preservam o atalho da cesta antiga quando tem itens", () => {
+    basketMock.totalItems = 1;
+    accountConfig.accountType = "empresas"; localStorage.removeItem("allka_user");
+    const first = renderHeader("/company/produtos"); expect(basketBtn()).toBeInTheDocument(); first.unmount();
     accountConfig.accountType = "agencias";
-    const { unmount: u2 } = renderHeader("/agency/catalogo");
-    expect(basketBtn()).toBeInTheDocument();
-    u2();
-    renderHeader("/agencia/catalogo/x");
-    expect(basketBtn()).toBeInTheDocument();
+    const second = renderHeader("/agency/catalogo"); expect(basketBtn()).toBeInTheDocument(); second.unmount();
+    renderHeader("/agencia/catalogo/x"); expect(basketBtn()).toBeInTheDocument();
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+vi.mock("@/hooks/useAppFrameMetrics", () => ({ useAppFrameMetrics: () => ({ top: 0, left: 0, width: 1000, height: 800, sidebarWidth: 72 }) }));
 import { AccessesSummary, summarizeAccesses } from "./catalog2-connections-ui";
 
 const version = {
@@ -38,6 +39,18 @@ describe("resumo dos acessos necessários", () => {
     expect(screen.getByTestId("summary-legacy").textContent).toMatch(/não vêm de nenhuma etapa/);
     expect(screen.queryByRole("button", { name: /remover|excluir|salvar/i })).toBeNull(); // somente leitura: sem botão de remover (só "Ver detalhes")
   });
+  it("cada acesso tem a bolinha numerada (1, 2…) e o Ver detalhes abre a Janela Moldura com os dados", () => {
+    render(<AccessesSummary version={version} />);
+    expect(screen.getAllByTestId("summary-access-number").map((n) => n.textContent)).toEqual(["1", "2"]);
+    expect(screen.queryByTestId("summary-access-details")).toBeNull();
+    fireEvent.click(screen.getAllByTestId("summary-access-details-btn")[0]);
+    const w = screen.getByTestId("summary-access-details");
+    expect(w.textContent).toMatch(/Google Ads/);
+    expect(w.textContent).toMatch(/Cadastrado em/);
+    expect(w.textContent).toMatch(/Liberado em/);
+    fireEvent.click(screen.getByTestId("summary-access-close"));
+    expect(screen.queryByTestId("summary-access-details")).toBeNull();
+  });
   it("com permissão, o acesso antigo pode ser removido (com confirmação)", () => {
     const act = vi.fn(async (fn: () => Promise<any>) => fn());
     const del = vi.fn(async () => ({}));
@@ -50,6 +63,6 @@ describe("resumo dos acessos necessários", () => {
   });
   it("sem acessos, explica onde cadastrar", () => {
     render(<AccessesSummary version={{ tasks: [], connection_requirements: [] }} />);
-    expect(screen.getByTestId("accesses-summary-empty").textContent).toMatch(/dentro de cada etapa/);
+    expect(screen.getByTestId("accesses-summary-empty").textContent).toMatch(/dentro de uma etapa/);
   });
 });

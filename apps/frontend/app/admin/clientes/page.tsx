@@ -53,7 +53,6 @@ import {
 } from "@/components/standard-page-shell";
 import { ExportButton } from "@/components/export-button";
 import { PinToTrayButton } from "@/components/pin-to-tray-button";
-import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import { useConsumePendingActivation } from "@/contexts/open-screens-context";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
@@ -71,6 +70,8 @@ import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { useToast } from "@/components/ui/use-toast";
 import { apiClient } from "@/lib/api-client";
 import { LegacyIdBadge } from "@/components/legacy-id-badge";
+import { ClientOwnerSearch, type ClientOwnerOption } from "@/components/client-owner-search";
+import { formatClientSequenceId } from "@/lib/client-display-id";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,6 +79,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PageLoader } from "@/components/ui/loading";
+import { FramedPanel, FramedModal, FRAMED_HEADER_CLASS, FRAMED_FOOTER_CLASS } from "@/components/framed-panel";
+import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
+import "./clientes-layout.css";
 
 // Client é uma entidade real, separada de Company — servida por
 // /api/client-records (NÃO /api/clients, que é o legado sobre Company).
@@ -90,6 +94,7 @@ interface ClientLink {
   company_id: string | null;
   partner_id: string | null;
   status: string;
+  owner?: ClientOwnerOption | null;
 }
 
 interface ClientRecord {
@@ -118,9 +123,6 @@ interface ClientRecord {
   links: ClientLink[];
 }
 
-function formatClientSequenceId(seq: number): string {
-  return `cli_${seq}`;
-}
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("pt-BR");
 }
@@ -143,6 +145,20 @@ const avatarColors = [
 const avatarColor = (index: number) =>
   avatarColors[Math.abs(index) % avatarColors.length];
 
+function ClientFormFrame({ nested, ...props }: Parameters<typeof FramedPanel>[0] & { nested: boolean }) {
+  const { sidebarWidth } = useAppFrameMetrics();
+  const sw = Number.parseInt(String(sidebarWidth), 10) || 0;
+  return nested
+    ? <FramedModal {...props} style={{ width: `calc(100vw - ${sw}px - 2rem)` }} />
+    : <FramedPanel {...props} />;
+}
+
+function clientWhatsAppHref(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  const number = !phone.trim().startsWith("+") && [10, 11].includes(digits.length) ? `55${digits}` : digits;
+  return `https://wa.me/${number}`;
+}
+
 function ClientCompactStatCard({
   label,
   value,
@@ -161,21 +177,21 @@ function ClientCompactStatCard({
     orange: "bg-orange-50 text-[#ff6a1a] ring-orange-100",
   } as const;
   return (
-    <div className="flex h-full min-w-0 items-center gap-3 px-5 first:rounded-l-xl last:rounded-r-xl">
+    <div className="client-stat flex h-full min-w-0 items-center first:rounded-l-xl last:rounded-r-xl">
       <div
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ring-1 ${palette[color]}`}
+        className={`client-stat-icon flex shrink-0 items-center justify-center rounded-full ring-1 ${palette[color]}`}
       >
-        <Icon className="h-6 w-6 stroke-[2]" />
+        <Icon className="stroke-[2]" />
       </div>
       <div className="min-w-0 leading-none">
-        <p className="truncate text-[11px] font-bold uppercase tracking-[0.02em] text-[#31578f]">
+        <p className="client-stat-label font-bold uppercase tracking-[0.02em] text-[#31578f]">
           {label}
         </p>
-        <div className="mt-1.5 flex min-w-0 items-center gap-2">
-          <span className="text-[28px] font-extrabold tracking-tight text-[#0c2455]">
+        <div className="client-stat-values mt-1 flex min-w-0 items-center gap-1">
+          <span className="client-stat-number font-extrabold tracking-tight text-[#0c2455]">
             {value}
           </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600">
+          <span className="client-stat-trend inline-flex items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-600">
             <TrendingUp className="h-3 w-3" />
             +0% <span className="font-normal text-slate-400">no mês</span>
           </span>
@@ -264,7 +280,7 @@ const ALL_COLUMNS: { key: ColKey; label: string; info: string }[] = [
   {
     key: "vinculo",
     label: "Vínculo",
-    info: "Agency, Company ou Partner responsável por este cliente.",
+    info: "Nome da empresa responsável por este cliente: Agência, Agência Partner ou Company.",
   },
   { key: "status", label: "Status", info: "Situação comercial do cliente." },
   {
@@ -423,60 +439,12 @@ export default function AdminClientesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlClientId, loading, clients]);
 
-  // ── Vínculo: opções carregadas uma vez (nomes reais pra tabela + formulário) ──
-  const [linkOptions, setLinkOptions] = useState<{
-    agency: { id: string; name: string }[];
-    company: { id: string; name: string }[];
-    partner: { id: string; name: string }[];
-  }>({ agency: [], company: [], partner: [] });
-
-  const loadLinkOptions = useCallback(async () => {
-    try {
-      const [ag, co, pa] = await Promise.all([
-        apiClient.getAgencies({ limit: "200" }),
-        apiClient.getCompanies({ limit: "200" }),
-        apiClient.getPartners({ limit: "200" }),
-      ]);
-      setLinkOptions({
-        agency: ((ag as any).data || []).map((a: any) => ({
-          id: a.id,
-          name: a.name,
-        })),
-        company: ((co as any).data || []).map((c: any) => ({
-          id: c.id,
-          name: c.name,
-        })),
-        partner: ((pa as any).data || []).map((p: any) => ({
-          id: p.id,
-          name: p.user?.name || p.user?.email || p.id,
-        })),
-      });
-    } catch (err) {
-      console.error("[AdminClientes] Failed to load link options:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadLinkOptions();
-  }, [loadLinkOptions]);
-
-  const agencyNameById = useMemo(
-    () => Object.fromEntries(linkOptions.agency.map((a) => [a.id, a.name])),
-    [linkOptions],
-  );
-  const companyNameById = useMemo(
-    () => Object.fromEntries(linkOptions.company.map((c) => [c.id, c.name])),
-    [linkOptions],
-  );
-  const partnerNameById = useMemo(
-    () => Object.fromEntries(linkOptions.partner.map((p) => [p.id, p.name])),
-    [linkOptions],
-  );
-
   // ── Criar / editar cliente ──────────────────────────────────────────────
   const [formOpen, setFormOpen] = useState(false);
+  const [formInDetails, setFormInDetails] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [selectedOwner, setSelectedOwner] = useState<ClientOwnerOption | null>(null);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
   const [clientCepLoading, setClientCepLoading] = useState(false);
@@ -612,6 +580,7 @@ export default function AdminClientesPage() {
 
   const rows = useMemo(() => sortData(clients), [clients, sortData]);
   const visibleColumns = ALL_COLUMNS.filter((c) => visibleCols.has(c.key));
+  const totalColumnWeight = visibleColumns.reduce((sum, col) => sum + columnWidths[col.key], 0);
   const totalPages = Math.ceil(total / pageSize);
 
   const getPageNumbers = () => {
@@ -657,14 +626,23 @@ export default function AdminClientesPage() {
   const totalUnlinked = clients.filter((c) => c.links.length === 0).length;
 
   function openCreate() {
+    setFormInDetails(false);
+    setSelectedOwner(null);
     setEditingId(null);
     setForm(EMPTY_FORM);
     setFormError("");
     setFormOpen(true);
   }
 
-  function openEdit(c: ClientRecord) {
+  function openEdit(c: ClientRecord, insideDetails = false) {
+    setFormInDetails(insideDetails);
     const link = c.links[0];
+    setSelectedOwner(link?.owner ?? (link ? {
+      id: link.agency_id || link.company_id || link.partner_id || "",
+      kind: link.agency_id ? "agency" : link.company_id ? "company" : "partner",
+      name: "Empresa vinculada",
+      category: link.agency_id ? "Agência" : link.company_id ? "Company" : "Agência Partner",
+    } : null));
     const linkType: LinkType = !link
       ? "none"
       : link.agency_id
@@ -722,7 +700,7 @@ export default function AdminClientesPage() {
     }
     if (form.linkType !== "none" && !form.linkId) {
       setFormError(
-        'Selecione qual Agency/Company/Partner este cliente pertence, ou marque "Sem vínculo"',
+        'Busque e selecione uma empresa cadastrada, ou remova o vínculo selecionado.',
       );
       return;
     }
@@ -915,15 +893,6 @@ export default function AdminClientesPage() {
     </TooltipProvider>
   );
 
-  const currentLinkOptions =
-    form.linkType === "agency"
-      ? linkOptions.agency
-      : form.linkType === "company"
-        ? linkOptions.company
-        : form.linkType === "partner"
-          ? linkOptions.partner
-          : [];
-
   return (
     <div className={`${STANDARD_SHELL_PANEL_CLASS} !p-1.5 sm:!p-2 lg:!p-2`}>
       <div
@@ -934,7 +903,7 @@ export default function AdminClientesPage() {
           <StandardPageBanner
             icon={Tag}
             title="Clientes"
-            description="Todos os clientes reais da plataforma — vinculados a Agency, Company, Partner ou sem vínculo"
+            description="Clientes vinculados a empresas cadastradas — Agência, Agência Partner ou Company"
             contentClassName="lg:h-[65px]"
             actions={
               <>
@@ -969,8 +938,8 @@ export default function AdminClientesPage() {
         </div>
 
         <div className="allka-users-scroll flex-1 min-h-0 overflow-y-scroll">
-          <div className="space-y-0 pr-1">
-            <div className="mt-[5px] mb-[5px] grid grid-cols-2 overflow-hidden rounded-xl border border-slate-200/80 bg-white/80 xl:h-[65px] xl:grid-cols-5 xl:divide-x xl:divide-slate-200">
+          <div className="clients-responsive space-y-0 pr-1">
+            <div data-testid="client-stats" className="client-stats mt-[5px] mb-[5px] grid overflow-hidden rounded-xl border border-slate-200/80 bg-white/80">
               <ClientCompactStatCard
                 label="Total de clientes"
                 value={total}
@@ -1153,7 +1122,11 @@ export default function AdminClientesPage() {
                   onScroll={handleTableScroll}
                   className="overflow-x-auto allka-table-scroll-body"
                 >
-                  <table className="tabela-cartao w-full min-w-[960px] text-xs">
+                  <table className="clients-table tabela-cartao w-full text-xs">
+                    <colgroup>
+                      {visibleColumns.map(col => <col key={col.key} style={{ width: `calc((100% - 96px) * ${columnWidths[col.key] / totalColumnWeight})` }} />)}
+                      <col style={{ width: 96 }} />
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                         <th
@@ -1183,8 +1156,6 @@ export default function AdminClientesPage() {
                               background: "var(--table-head)",
                               boxShadow: "0 1px 0 rgba(148,163,184,0.22)",
                               borderRight: "1px solid rgba(148,163,184,0.16)",
-                              width: columnWidths[col.key],
-                              minWidth: columnWidths[col.key],
                             }}
                           >
                             <div className="inline-flex items-center gap-1">
@@ -1242,7 +1213,7 @@ export default function AdminClientesPage() {
                             />
                           </th>
                         ))}
-                        <th className="w-24 py-2 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
+                        <th className="client-actions py-2 text-center text-[11px] font-bold uppercase tracking-[0.04em] text-slate-500">
                           Ações
                         </th>
                       </tr>
@@ -1257,14 +1228,7 @@ export default function AdminClientesPage() {
                             : link.company_id
                               ? "company"
                               : "partner";
-                        const linkName =
-                          linkType === "agency"
-                            ? agencyNameById[link!.agency_id!]
-                            : linkType === "company"
-                              ? companyNameById[link!.company_id!]
-                              : linkType === "partner"
-                                ? partnerNameById[link!.partner_id!]
-                                : undefined;
+                        const linkName = link?.owner?.name;
                         return (
                           <tr
                             key={c.id}
@@ -1562,6 +1526,7 @@ export default function AdminClientesPage() {
                                     </span>
                                   ) : (
                                     <>
+                                      <span className="max-w-[180px] truncate text-xs font-semibold" title={linkName}>{linkName || "Empresa vinculada"}</span>
                                       <NeonBadge
                                         color={
                                           linkType === "agency"
@@ -1571,17 +1536,12 @@ export default function AdminClientesPage() {
                                               : "emerald"
                                         }
                                       >
-                                        {linkType === "agency"
-                                          ? "Agency"
+                                        {link?.owner?.category ?? (linkType === "agency"
+                                          ? "Agência"
                                           : linkType === "company"
                                             ? "Company"
-                                            : "Partner"}
+                                            : "Agência Partner")}
                                       </NeonBadge>
-                                      {linkName && (
-                                        <span className="text-[11px] text-slate-400 truncate max-w-[140px]">
-                                          {linkName}
-                                        </span>
-                                      )}
                                     </>
                                   )}
                                 </div>
@@ -1617,7 +1577,7 @@ export default function AdminClientesPage() {
                               </td>
                             )}
                             <td
-                              className="py-1.5 px-2 text-center"
+                              className="client-actions py-1.5 px-2 text-center"
                               onClick={(event) => event.stopPropagation()}
                             >
                               <div className="flex items-center justify-center gap-1">
@@ -1626,6 +1586,7 @@ export default function AdminClientesPage() {
                                     <TooltipTrigger asChild>
                                       <button
                                         onClick={() => openInfoPanel(c)}
+                                        aria-label={`Ver cliente ${c.name}`}
                                         className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-[#2558FF] shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white"
                                       >
                                         <Eye className="h-3.5 w-3.5" />
@@ -1641,6 +1602,7 @@ export default function AdminClientesPage() {
                                     <TooltipTrigger asChild>
                                       <button
                                         onClick={() => openEdit(c)}
+                                        aria-label={`Editar cliente ${c.name}`}
                                         className="h-[26px] w-[26px] flex items-center justify-center rounded-[8px] border border-[#e8edf5] bg-white text-[#2558FF] shadow-[0_4px_10px_rgba(15,23,42,0.06)] transition-all hover:-translate-y-px hover:border-transparent hover:bg-gradient-to-br hover:from-[#2558FF] hover:via-[#6E2C96] hover:to-[#D92293] hover:text-white"
                                       >
                                         <Pencil className="h-3.5 w-3.5" />
@@ -1782,29 +1744,28 @@ export default function AdminClientesPage() {
         </StandardModalDialog>
 
         {/* "+" info panel */}
-        <StandardModalDialog
+        <FramedPanel
           open={infoPanelOpen}
-          onClose={closeInfoPanel}
-          maxWidthPx={1260}
-          headerClassName="min-h-[84px]"
-          title={
-            infoPanelClient ? (
-              <div className="flex items-center gap-3">
-                <ClientAvatar client={infoPanelClient} index={0} />
-                <div className="min-w-0">
-                  <p className="truncate">{infoPanelClient.name}</p>
-                </div>
-              </div>
-            ) : (
-              "Cliente"
-            )
-          }
-          subtitle={
-            infoPanelClient
-              ? `${formatClientSequenceId(infoPanelClient.sequence_number)} · ${infoPanelClient.address || "Endereço não informado"}`
-              : undefined
-          }
+          onOpenChange={(open) => { if (!open) closeInfoPanel(); }}
+          title={infoPanelClient?.name || "Cliente"}
+          testId="client-details-window"
         >
+          <header className={`${FRAMED_HEADER_CLASS} flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-white`} style={{ background: "var(--app-brand-gradient)" }}>
+            <div className="min-w-0 flex-1">
+              {infoPanelClient ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <ClientAvatar client={infoPanelClient} index={0} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold"><span className="mr-2 text-xs font-normal text-white/70">{formatClientSequenceId(infoPanelClient.sequence_number)}</span>{infoPanelClient.name}</p>
+                </div>
+                <NeonBadge color={STATUS_CONFIG[infoPanelClient.status]?.color ?? "slate"}>{STATUS_CONFIG[infoPanelClient.status]?.label ?? infoPanelClient.status}</NeonBadge>
+                {infoPanelClient.phone && infoPanelClient.phone.replace(/\D/g, "") && <a href={clientWhatsAppHref(infoPanelClient.phone)} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp do cliente" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/40 hover:bg-white/20"><MessageCircle className="h-4 w-4" /></a>}
+                {infoPanelClient.email && <a href={`mailto:${infoPanelClient.email}`} aria-label="E-mail do cliente" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/40 hover:bg-white/20"><Mail className="h-4 w-4" /></a>}
+              </div>
+              ) : "Cliente"}
+            </div>
+            <button type="button" aria-label="Fechar detalhes do cliente" onClick={closeInfoPanel} className="shrink-0 rounded-lg p-2 hover:bg-white/20"><X className="h-4 w-4" /></button>
+          </header>
           {infoPanelClient &&
             (() => {
               const link = infoPanelClient.links[0];
@@ -1815,16 +1776,9 @@ export default function AdminClientesPage() {
                   : link.company_id
                     ? "company"
                     : "partner";
-              const linkName =
-                linkType === "agency"
-                  ? agencyNameById[link!.agency_id!]
-                  : linkType === "company"
-                    ? companyNameById[link!.company_id!]
-                    : linkType === "partner"
-                      ? partnerNameById[link!.partner_id!]
-                      : undefined;
+              const linkName = link?.owner?.name;
               return (
-                <div className="flex-1 overflow-y-auto bg-white px-0 py-3">
+                <div className="min-h-0 flex-1 overflow-y-auto rounded-xl bg-white px-3 py-3">
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                       <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4 shadow-sm">
@@ -1858,16 +1812,10 @@ export default function AdminClientesPage() {
                           Vínculo
                         </p>
                         <p className="mt-1 text-base font-bold text-slate-900">
-                          {linkType === "none"
-                            ? "Sem vínculo"
-                            : linkType === "agency"
-                              ? "Agency"
-                              : linkType === "company"
-                                ? "Company"
-                                : "Partner"}
+                          {linkType === "none" ? "Sem vínculo" : linkName || "Empresa vinculada"}
                         </p>
                         <p className="mt-1 truncate text-xs text-slate-500">
-                          {linkName || "Não atribuído"}
+                          {link?.owner?.category || (linkType === "agency" ? "Agência" : linkType === "company" ? "Company" : linkType === "partner" ? "Agência Partner" : "Não atribuído")}
                         </p>
                       </div>
                       <div className="rounded-2xl border border-orange-100 bg-orange-50/70 p-4 shadow-sm">
@@ -1900,11 +1848,10 @@ export default function AdminClientesPage() {
                         </div>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="ml-auto h-8 text-xs"
+                          className="btn-brand ml-auto h-8 text-xs text-white"
+                          style={{ background: "var(--app-brand-gradient)" }}
                           onClick={() => {
-                            closeInfoPanel();
-                            openEdit(infoPanelClient);
+                            openEdit(infoPanelClient, true);
                           }}
                         >
                           <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -1959,7 +1906,7 @@ export default function AdminClientesPage() {
                             <Link2 className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
                             {linkType === "none"
                               ? "Sem vínculo"
-                              : `${linkType === "agency" ? "Agency" : linkType === "company" ? "Company" : "Partner"}${linkName ? " · " + linkName : ""}`}
+                              : `${linkName || "Empresa vinculada"} · ${link?.owner?.category || (linkType === "agency" ? "Agência" : linkType === "company" ? "Company" : "Agência Partner")}`}
                           </p>
                         </div>
                         <div className="rounded-xl border border-slate-200 p-3.5 sm:col-span-2">
@@ -2012,47 +1959,31 @@ export default function AdminClientesPage() {
                 </div>
               );
             })()}
-        </StandardModalDialog>
+        </FramedPanel>
 
         {/* Criar / editar cliente */}
-        <EmbeddedSlideScreen
+        <ClientFormFrame
+          nested={formInDetails}
           open={formOpen}
-          onClose={closeForm}
+          onOpenChange={(open) => { if (!open) closeForm(); }}
           title={editingId ? "Editar cliente" : "Criar novo cliente"}
-          subtitle={
-            editingId
-              ? "Altere os dados e/ou o vínculo deste cliente"
-              : "Defina os dados e o vínculo (opcional) deste cliente"
-          }
-          pin={{
-            id: editingId ? `clientes-edit-${editingId}` : "clientes-create",
-            label: editingId
-              ? `Editar: ${form.name || "Cliente"}`
-              : "Criar novo cliente",
-            icon: editingId ? Pencil : Plus,
-            path: "/admin/clientes",
-            activateKey: editingId ? `edit:${editingId}` : "create",
-          }}
-          footer={
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="outline" onClick={closeForm} disabled={saving}>
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="btn-brand"
-              >
-                {saving
-                  ? "Salvando..."
-                  : editingId
-                    ? "Salvar alterações"
-                    : "Salvar cliente"}
-              </Button>
-            </div>
-          }
+          testId="client-form-panel"
         >
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          <header className={`${FRAMED_HEADER_CLASS} flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-white`} style={{ background: "var(--app-brand-gradient)" }}>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-semibold">{editingId ? "Editar cliente" : "Criar novo cliente"}</h2>
+              <p className="mt-1 text-xs text-white/70">{editingId ? "Altere os dados e/ou o vínculo deste cliente" : "Defina os dados e o vínculo (opcional) deste cliente"}</p>
+            </div>
+            <PinToTrayButton
+              id={editingId ? `clientes-edit-${editingId}` : "clientes-create"}
+              label={editingId ? `Editar: ${form.name || "Cliente"}` : "Criar novo cliente"}
+              icon={editingId ? Pencil : Plus}
+              path="/admin/clientes"
+              activateKey={editingId ? `edit:${editingId}` : "create"}
+            />
+            <button type="button" aria-label="Fechar cadastro do cliente" onClick={closeForm} disabled={saving} className="shrink-0 rounded-lg p-2 hover:bg-white/20 disabled:opacity-50"><X className="h-4 w-4" /></button>
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-xl bg-white p-4 space-y-4">
             <div className="space-y-2">
               <Label>Foto de perfil (opcional)</Label>
               <div className="flex items-center gap-3">
@@ -2284,55 +2215,21 @@ export default function AdminClientesPage() {
                 Vínculo
               </h3>
               <div className="space-y-2">
-                <Label>Este cliente pertence a</Label>
-                <Select
-                  value={form.linkType}
-                  onValueChange={(v: LinkType) =>
-                    setForm({ ...form, linkType: v, linkId: "" })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem vínculo</SelectItem>
-                    <SelectItem value="agency">Agency</SelectItem>
-                    <SelectItem value="company">Company</SelectItem>
-                    <SelectItem value="partner">Partner</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Empresa vinculada</Label>
+                <ClientOwnerSearch value={selectedOwner} disabled={saving} onChange={(owner) => {
+                  setSelectedOwner(owner);
+                  setForm((current) => ({ ...current, linkType: owner?.kind ?? "none", linkId: owner?.id ?? "" }));
+                }} />
               </div>
-              {form.linkType !== "none" && (
-                <div className="space-y-2">
-                  <Label>
-                    {form.linkType === "agency"
-                      ? "Qual Agency"
-                      : form.linkType === "company"
-                        ? "Qual Company"
-                        : "Qual Partner"}
-                  </Label>
-                  <Select
-                    value={form.linkId}
-                    onValueChange={(v) => setForm({ ...form, linkId: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currentLinkOptions.map((o) => (
-                        <SelectItem key={o.id} value={o.id}>
-                          {o.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
             </div>
 
             {formError && <p className="text-xs text-red-600">{formError}</p>}
           </div>
-        </EmbeddedSlideScreen>
+          <footer className={`${FRAMED_FOOTER_CLASS} flex shrink-0 items-center justify-end gap-2 border-t border-slate-200 pt-3`}>
+            <Button variant="outline" onClick={closeForm} disabled={saving}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={saving} className="btn-brand">{saving ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar cliente"}</Button>
+          </footer>
+        </ClientFormFrame>
       </div>
     </div>
   );

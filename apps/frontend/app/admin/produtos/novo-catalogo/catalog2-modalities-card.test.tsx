@@ -24,7 +24,7 @@ describe("Cartão de modalidades · só Avulso e Assinatura mensal", () => {
     render(<ContractModesSection version={version()} readOnly={false} act={act} compact product={{ id: "p1", delivery_recurrence: null }} />);
     const card = screen.getByTestId("modalities-card");
     expect(within(card).getByText("Avulso")).toBeInTheDocument();
-    expect(within(card).getByText("Assinatura mensal")).toBeInTheDocument();
+    expect(within(card).getByText("Assinatura (renova todo mês)")).toBeInTheDocument();
     const helps = Array.from(card.querySelectorAll(".field-info")).map((i) => i.getAttribute("data-help") ?? "");
     expect(helps.some((h) => /um único ciclo, sem renovação automática/.test(h) && /primeira execução/.test(h))).toBe(true);
     expect(helps.some((h) => /novo ciclo a cada mês/.test(h) && /não são cobradas novamente/.test(h))).toBe(true);
