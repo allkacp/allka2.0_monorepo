@@ -2,6 +2,19 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
+## deploy-2026-10-28-1 — código, migrações, dados e uploads do LOCAL no QA
+
+- Autorização: pedido de deploy completo e confirmação explícita de substituir dados do QA após contagens/backup/ensaio, nesta conversa em 28/10.
+- Código publicado: 213 arquivos acumulados, commit 5f731e9 + correção de empacotamento 3df6ed8. Deploy Backend 40705414742 e Deploy Frontend 40705475398 SUCESSO; imagens 3df6ed8 conferidas no VPS. Quatro novas migrações aditivas. Builds/typechecks locais aprovados; diff migrations→schema sem divergências; 35 testes selecionados aprovados; scanner do dist sem credenciais conhecidas.
+- CI geral 40705414849: FALHOU nos testes de frontend (8 arquivos com falha / 180 aprovados). Não foi desativado nem declarado verde; inclui catálogo/detalhe, Aura, oferta e permissões/usuários, áreas com falhas já registradas. Não afirmar que todas foram reproduzidas na revisão anterior.
+- Backup QA antes de deploy: run 40704269666. Backup final pré-espelho: /opt/allka-2026/backups/mirror-20261028/qa-before.sql.gz, SHA256 a80d1c24efee8861b668a5ef021414ef8d37ff217c9079c4b84de97df0c8e55e; uploads-before.tar.gz SHA256 fe0eafdccc0dbcdae60270c74fbd73944f54c468d9e72c86d80ae8334294e969.
+- Dados: dump privado transferido por SCP direto ao VPS (NÃO release público), SHA256 84879d597f9f2d308cd0aa3d434da4498a2e18478685431a88aea3c3c36b5198, 240 tabelas, controle de migrations do servidor preservado. Ensaio restaurado em banco descartável: 264 FKs verificadas, zero vínculos quebrados; base de ensaio removida.
+- Espelho aplicado: users8/companies1/agencies1/clients2/projects3/catalog2_products37. Hashes completos das linhas coincidiram local/QA para usuários (inclusive hashes das senhas), company, agency, clientes/vínculos, projetos, produtos/versões/etapas, produtos de projeto, tarefas e cotações. Usuários/empresas/projetos extras do QA foram substituídos conforme autorização; recuperação pelos backups acima.
+- Uploads: 129 arquivos (189282414 bytes) copiados ao volume persistente, conteúdo anterior com backup; manifesto de nomes/hashes locais e QA idêntico, SHA256 8796bbf7a7a149f681e2d5daeb412263d9e9aa1164741c5fb51e582baaf295c6. Arquivo tar privado SHA256 39238d98fa320cc180a94c616dc774c3faf197e98189712425f3c620bff45133. Dados/arquivos privados fora do Git.
+- Conferência: allka.store HTTP200, API health OK, consulta autenticada de usuários HTTP200/total8. Uma tentativa de login com a senha de teste ANTIGA do README foi recusada (401); não adivinhar/resetar senhas. Login manual com senha atual ainda pendente; hashes atuais preservados. Conferência visual/compra manual também pendente.
+- Limite de ambiente: variáveis/integrações externas não são cópia do local. QA não tem META_TOKEN_ENCRYPTION_KEY configurada; 1 browser_profile com estado cifrado local foi preservado no banco mas a sessão do navegador seguro depende de configurar cofre/reautenticar no QA. Nenhum segredo de ambiente local foi publicado ou sobrescrito no servidor. Pagamento sandbox de cliente final continua proibido em NODE_ENV=production por segurança.
+- Local reativado: docker compose up -d backend frontend; localhost:8082 HTTP200 e API local health OK. Scripts auxiliares/backups estão em scratch/ e backups/, ignorados pelo Git.
+
 ## deploy-2026-10-21-1 — ata de 21/10 (R21-01…28): código no ar em allka.store / api.allka.store (commit 72c9801, autorizado pelo usuário)
 Backup do banco do servidor feito antes (DB Backup run 39693472966). Deploy Backend e Deploy Frontend verdes; API health ok, site 200, login 200. CI acusou falhas ANTIGAS de testes de tela (page.test.tsx etc.), as mesmas do CI de 20/10. Migrações aplicadas pelo deploy do backend: as 3 abaixo. **Dados locais NÃO subiram** (ver espelho de dados mais abaixo, se feito).
 
