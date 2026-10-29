@@ -4,7 +4,7 @@ Este roteiro reúne os 38 itens da reunião e a conferência manual dos ajustes 
 
 ## Antes de começar
 
-1. Abra **http://localhost:8082/** para seguir o roteiro com os preenchimentos locais. Atualização de 28/10 à noite: o código também foi publicado em **https://allka.store/** (`deploy-2026-10-28-2`), mas o novo espelho dos dados/anexos ainda aguarda confirmação. Até concluir o espelho, os cadastros do QA podem diferir do local.
+1. Abra **http://localhost:8082/** no computador ou **https://allka.store/** no QA. Código publicado em `deploy-2026-10-28-2`; espelho dos dados e 131 anexos concluído em **29/10 às 09:15, Brasília**, com sua confirmação, backup e conferência das 240 tabelas/264 vínculos. No QA, use Ctrl+F5 antes de começar. Novos preenchimentos nos dois ambientes passam a divergir novamente; não presumir sincronização automática.
 2. Navegador A: entre como **Vinicius Guardia**, administrador. Navegador B, em outro perfil ou janela anônima: entre como **Lamego Academy**, empresa Agência Partner de número 001. Use suas senhas atuais; não houve redefinição.
 3. Produto de referência: **002 — Manutenção e Alteração de Site ou Loja Virtual**, em http://localhost:8082/admin/cadastro-produtos/2. A versão publicada é V1; V2 permanece em rascunho. A compra usa a publicada, não o rascunho.
 4. Existe o consultor **Teste**, vinculado à Lamego Academy, e há dois clientes locais. Não recrie cadastros que já aparecem. Pesquise e selecione o cliente realmente vinculado à empresa.
@@ -14,7 +14,7 @@ Este roteiro reúne os 38 itens da reunião e a conferência manual dos ajustes 
 
 ## Farol completo
 
-🟢 confirmado ou decisão preservada · 🟡 implementado, falta sua validação ou decisão indicada · ⏸ depende de pessoas, informação ou autorização. Código dos ajustes publicado no QA; espelho dos preenchimentos ainda pendente.
+🟢 confirmado ou decisão preservada · 🟡 implementado, falta sua validação ou decisão indicada · ⏸ depende de pessoas, informação ou autorização. Código e espelho dos preenchimentos publicados no QA; homologação funcional/manual continua item por item.
 
 | Item | Assunto | Farol | Situação e próximo teste |
 |---|---|---|---|
@@ -50,7 +50,7 @@ Este roteiro reúne os 38 itens da reunião e a conferência manual dos ajustes 
 | 30 | Gravar o cadastro e notas maiores | ⏸ | Orientação preparada; gravação precisa ser iniciada pelos participantes. |
 | 31 | Sessão sem mediação | ⏸ | Depende de Gabriel/Rose, horário e acessos; não houve convite ou agendamento externo automático. |
 | 32 | Gerar e encaminhar tarefas | 🟡 | Testes de servidor conferem IDs novos, regras, condições, liberação e isolamento. Execução real requer completar Líder/Nômade. Teste 32. |
-| 33 | GitHub e deploy espelhado | 🟡 | Código d74183c e duas migrations publicados no QA; site/API e conteúdo das imagens conferidos. Backup e ensaio do novo espelho aprovados; substituição dos dados aguarda confirmação atual. CI amplo ainda falha nos mesmos 8 arquivos conhecidos; login por senha e teste visual pendentes. |
+| 33 | GitHub e deploy espelhado | 🟢 | Código d74183c, duas migrations e espelho aplicado com confirmação em 29/10. Site/API ok, 240 tabelas e 131 anexos iguais ao pacote; 264 vínculos íntegros e backup recuperável. CI amplo ainda falha nos mesmos 8 arquivos conhecidos; login por senha e testes manuais continuam pendentes, sem promover os demais itens a verde. |
 | 34 | Rever condições após testes | ⏸ | Fazer com os resultados de amanhã, sem mudar valores comerciais no escuro. |
 | 35 | Qualidade das entregas para Cris | ⏸ | Ação operacional: revisar a entrega, os critérios e a qualificação com a equipe. Não se resolve com aprovação automática. |
 | 36 | Créditos de Cris | ⏸ | Requer decisão sobre valor, motivo, saldo e mensalidades; nenhum crédito, estorno ou cobrança foi executado. |
@@ -281,7 +281,7 @@ Resultado: ☐ passou ☐ falhou. Observação:
 
 ### Item 33 Deploy
 
-Usuário autorizou deploy/espelho; código d74183c publicado no GitHub e QA, com duas migrations aditivas após backup. Código não transfere preenchimento do banco. Novo espelho privado ensaiado: 264 vínculos íntegros, 8 usuários/2 empresas/2 clientes/3 projetos/37 produtos, 131 anexos (QA tem 129). A confirmação atual de substituir os dados foi solicitada e ainda está pendente; não reutilizar a confirmação anterior. Depois de aplicado, comparar Produto 002/V1/V2, entregáveis, vínculo do cliente e anexos entre local e QA. CI amplo não está integralmente verde; detalhes no deploy-log. Não presumir pagamento real ou integrações configuradas pelo espelho.
+Usuário confirmou a substituição e o espelho foi aplicado em 29/10 às 09:15, Brasília. Código d74183c e duas migrations já estavam no QA. A cópia aplicada tem 8 usuários/2 empresas/2 clientes/3 projetos/37 produtos e 131 anexos; 240 tabelas e todos os anexos coincidiram com o pacote congelado, 264 vínculos íntegros. Backup anterior recuperável preservado. Abra o QA com Ctrl+F5 e confira Produto 002/V1 publicada/V2 rascunho, entregáveis, vínculo do cliente e anexos; não recrie cadastros existentes. CI amplo não está integralmente verde; detalhes no deploy-log. Não presumir pagamento real, cofre ou integrações configuradas pelo espelho. Novos preenchimentos online não voltam automaticamente ao local e só podem ser substituídos com outra autorização.
 
 ### Item 34 Condições comerciais
 
