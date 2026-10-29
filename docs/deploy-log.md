@@ -2,7 +2,20 @@
 
 Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO subiu.
 
-## Pendente de deploy somente local reunião completa de 28 de outubro
+## deploy-2026-10-28-2 — ajustes da reunião no QA; novo espelho preparado, ainda NÃO aplicado
+
+- **Ordem:** usuário pediu “terminando tudo, sobe no github e faz deploy espelho”. Código autorizado; substituição destrutiva dos dados segue a confirmação atual depois de backup/ensaio exigida pelo README. Pergunta enviada com contagens/diferenças; não reutilizar a autorização do espelho anterior.
+- **Código:** commit `d74183c` enviado ao `allka2/main`, 65 arquivos. Backend e frontend publicados por GitHub Actions: **40803923047** e **40803923066**, ambos sucesso. Containers dos dois serviços conferidos no commit `d74183c`; marcas novas encontradas no JavaScript do servidor e no bundle do editor.
+- **Áreas que subiram:** backend/prisma/API/precificação/execução (múltiplas contratações, quantidade, implantação, desconto e referência congelada de esforço/repasse, seleção correta de líderes, biblioteca de anexos); frontend/editor/catálogo/login/molduras (conferência, entregáveis, recuperação F5, retorno ao link, campos de quantidade); documentação e roteiro dos 38 itens. Detalhes históricos desta preparação abaixo. Não declarar os 38 itens concluídos: pessoas, decisões e homologação manual continuam pendentes.
+- **Banco estrutural:** migrations aditivas `20261028220000_product_multiple_contracts` e `20261028223000_quantity_rules_execution_snapshot` aplicadas e confirmadas no QA. Não houve novo espelho, limpeza, publicação de produto, crédito de carteira ou alteração comercial dos cadastros.
+- **Verificação:** site HTTP 200, API health ok; consultas autenticadas de leitura a `/auth/me`, líderes, produtos e biblioteca responderam 200. Líderes retornam zero, coerente com os dados existentes. Usou token curto criado dentro do servidor para diagnóstico; **não é teste de login por senha**, não redefiniu nem solicitou senha. Local continua HTTP 200/API ok.
+- **Testes:** typechecks e builds dos dois apps repetidos antes do push e aprovados; scanner do build frontend verificou 277 arquivos sem credenciais conhecidas. Permanecem os 267 testes direcionados de servidor e 214 de frontend documentados abaixo. **CI amplo 40803923016 falhou: 8 arquivos com falha / 189 aprovados**; os mesmos 8 arquivos já falhavam no CI 40705414849 (então 180 aprovados). Não anunciar CI integral verde nem confundir deploy verde com homologação de toda a plataforma. Avisos Google Maps/chunks do build continuam.
+- **Backup QA ANTES das migrations:** `/opt/allka-2026/backups/mirror-20261028-2/qa-before-deploy.sql.gz`, SHA256 `5b1d932b0601e328ba8782ab1e157e22c21a4872827fc89596f11280cb1c9c54`; uploads-before-deploy.tar.gz SHA256 `20648d0a3ccbc88e4b4f929f86c29c5dabeb88b5fca49256578a9692bb5159a2`. Ambos íntegros por gzip; preservados.
+- **Pacote privado local preparado:** `backups/espelho-local-qa-20261028-2/` (ignorado pelo Git), cópia também na pasta privada de backup QA acima por SCP, nunca release público. Dump sem `_prisma_migrations`: SHA256 `618f58c9dc8beb154383c856bc9bc9331ca1015bd4e6b0bb957435616d23bc91`; tar de uploads SHA256 `cfaa62207a2666780a78a4fa77860d776a3327b44e379f6eb53aee2e428fb50f`. Backend local pausado só durante captura e reativado.
+- **Ensaio:** dump restaurado em banco descartável `allka_test_mirror_20261028_2`, 264 FKs verificadas, zero referências quebradas; cópia de ensaio removida. Local e QA têm 240 tabelas de negócio, 8 usuários, 1 Agency + 1 Company, 2 clientes, 3 projetos, 37 produtos. Conteúdo diverge em entregáveis (7 local/5 QA), vínculo de cliente (2/1), preenchimentos de tarefas/etapas/clientes, histórico e atividade. Uploads: 131 local/129 QA. Comparação de hashes por tabela em arquivos privados `audit-local.json`/`audit-qa.json`; dados não publicados no Git.
+- **PENDENTE:** confirmação atual para substituir o banco/anexos do QA; antes de aplicar, conferir que o pacote e o estado não mudaram, novo backup final, preservar `_prisma_migrations`, verificar hashes/vínculos/saúde depois. Configurações de ambiente/integrações e chaves não se tornam funcionais só por espelhar dados; não copiar segredos de desenvolvimento. Sandbox de pagamento online e cofre continuam com limites já registrados no deploy anterior.
+
+### Histórico da preparação incluída neste deploy — reunião completa de 28 de outubro
 
 - Pedido: usuário autorizou percorrer a reunião até item 38 e preparar farol/testes para amanhã. Roteiro completo em docs/roteiro-reuniao-2026-10-28.md (38 itens e extras), retomada em docs/RETOMAR-AQUI.md. Ações de pessoas, valores/créditos de Cris, decisão sobre SDR, agenda e lista Dani estão explicitamente pendentes; não afirmar 38 concluídos.
 - **Backend/pricing/cadastro:** quantity_rules_json por versão, padrão sem regras novas; API com validação estruturada, clone/importadores preservam; histórico em linguagem simples. Repetir implantação a cada nova contratação (opt-in), nunca renovação; percentual por unidade no mesmo lote e override opcional na etapa; maior percentual efetivamente ativo orienta prazo comercial. Faixas de desconto não cumulativas/monotônicas, limites e custo mínimo. Custos-base/horas/tokens não são falsificados pela dedução comercial.
@@ -21,7 +34,7 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - Banco descartável foi criado/removido pelo runner, nunca allka para as fixtures. Auditoria do allka real é somente leitura. Local: frontend HTTP 200 e API /api/health ok. Verificação de produção não executada porque não houve novo deploy.
 - Reproduzir uma suíte de banco: configurar TEST_DATABASE_URL/TEST_DATABASE_ADMIN_URL para banco descartável conforme test-support/require-test-database e executar, em apps/backend, npx tsx scripts/run-db-tests.ts src/routes/catalog2-quantity-rules.integration.test.ts (trocar arquivo para outra suíte). Não apontar essas variáveis para allka. Frontend: npx vitest run com os arquivos direcionados; não confundir essas aprovações com CI integral.
 
-## Pendente de deploy (só LOCAL) — item 5: múltiplas contratações (28/10)
+### Histórico incluído no deploy-2026-10-28-2 — item 5: múltiplas contratações
 
 - Cadastro: Passo 2 → Entrega comercial → Modalidade → Permitir múltiplas contratações, ajuda oficial em field-help.ts. Flag por versão; default true mantém comportamento anterior, rascunho não altera catálogo publicado, clone preserva e publicada continua imutável. Catálogo desabilita quantidade acima de um quando false e normaliza seleção inicial.
 - Servidor: valida quantidade na seleção/cotação/cesta e bloqueia segunda contratação vigente por produto/projeto na conversão comum/aditivo. Lock no projeto + leitura corrente FOR UPDATE evitam corrida; rollback não deixa pedido parcial. Retry não duplica. Não bloqueia outros produtos/projetos. Cancelado/transferido/avulso concluído libera; assinatura vigente ou cancelada com período pago futuro continua contando.
@@ -29,13 +42,13 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - Banco: migration aditiva 20261028220000_product_multiple_contracts aplicada **apenas no allka local**, Prisma Windows/container regenerados, backend reiniciado. Sem limpeza, edição de produtos/pessoas ou compra no banco real. Nenhuma ação no QA, commit, push, deploy ou espelho.
 - Testes: 10 integrações novas aprovadas + 28 regressões de checkout/aditivo aprovadas em bancos descartáveis separados; 13 frontend aprovados (modalidades e quantidade). Testam compra+aditivo idênticos com novos IDs de tarefa/etapa, matriz e tarefas anteriores intactas, ainda PARA_LANCAMENTO. Typechecks finais e saúde do site registrados na retomada após conclusão. Homologação visual/manual pelo usuário pendente.
 
-## Pendente de deploy (só LOCAL) — teste visual de overlay escuro (28/10)
+### Histórico incluído no deploy-2026-10-28-2 — teste visual de overlay escuro
 
 - A pedido do usuário, janelas dos blocos da etapa (incluindo Entregáveis) usam o overlay escuro do Painel Moldura: slate-950/60, blur 2px. FramedModal tem opção overlayTone, padrão light preservado para os demais usos.
 - Geometria da sidebar, z-index, bloqueio do fundo, cliques e conteúdo das janelas não mudaram. Sem dado real, migração, commit, push, deploy ou espelho. É teste visual local aguardando aprovação, não mudança global definitiva de padrão.
 - Verificação: 51 testes frontend aprovados (overlay, blocos e fluxo da etapa); typecheck frontend sem erros; localhost HTTP 200. Aprovação visual fica com usuário.
 
-## Pendente de deploy (só LOCAL) — F5/Ctrl+R dentro do entregável (28/10)
+### Histórico incluído no deploy-2026-10-28-2 — F5/Ctrl+R dentro do entregável
 
 - Frontend: editor-session com recuperação por sessão da aba/usuário/path/versão/tarefa/etapa. Preserva rascunho da etapa, acessos/entregáveis locais e modal do entregável com campos/blocos/rolagem/seletor de arquivo aberto. Abrange edição dentro da etapa e pelo resumo da tarefa. Não publica nem salva na API ao recarregar.
 - Fechar sem pendência, descartar ou concluir limpa a recuperação correspondente. Não restaura editor em leitura/publicada; entregável apagado no servidor não deve ser reaberto. Novo entregável salvo como rascunho direto na tarefa passa a usar o ID retornado para não duplicar ao salvar novamente após F5.
@@ -43,20 +56,20 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - Sem mudança de backend/banco, dados reais, migração, commit, push, deploy ou espelho. Teste manual pendente.
 - Verificado: 89 testes frontend em 5 arquivos aprovados após a correção, incluindo campos/blocos/rolagem após remontar, descarte, leitura, identidade do rascunho salvo e isolamento; typecheck frontend sem erros e localhost HTTP 200. Foco automático do modal não deve puxar a rolagem recuperada para o primeiro campo.
 
-## Pendente de deploy (só LOCAL) — retorno ao link interno após login (28/10)
+### Histórico incluído no deploy-2026-10-28-2 — retorno ao link interno após login
 
 - Frontend: redirecionamento sem sessão e sessão expirada (401) levam returnTo na URL do login; preservam caminho, filtros e âncora. Login unificado usa retorno seguro no lugar do dashboard; sem retorno continua o dashboard normal. Aliases de login preservam os parâmetros.
 - Segurança: destino só relativo interno, sem origem externa, barras invertidas/controles ou loops de login/logout/primeiro acesso. Sem armazenamento global de destino (não mistura abas). Guardas de perfil e permissões de recursos na API intactos. Navegar ao recurso não concede acesso.
 - Nenhuma alteração de credenciais, cadastro, backend, banco, migração, commit, push, deploy ou espelho. Homologação manual pendente; fila de reunião mantida, item 4 ainda aguarda teste.
 - Verificado: 31 testes frontend aprovados (segurança da URL e fluxo de login com API simulada), typecheck frontend sem erros, site local HTTP 200 e diff sem erro de espaços. Teste manual de autenticação real com usuário autorizado/sem permissão ainda com usuário.
 
-## Pendente de deploy (só LOCAL) — reunião de 28/10, item 4
+### Histórico incluído no deploy-2026-10-28-2 — reunião de 28/10, item 4
 
 - Frontend: Arquivo-modelo do entregável recebe Escolher arquivo salvo com busca, nome/origem, seleção, cancelar, vazio, erro e tentar novamente; não faz upload ao escolher, nem grava até salvar o cadastro. Remover mantém arquivo compartilhado intacto. Ajuda oficial por campo atualizada.
 - Backend: GET /admin/catalog2/deliverable-files sob guarda admin master. Biblioteca derivada de entregáveis já salvos, deduplicada por template_url e filtrada por existência física; só file: válido. Não expõe uploads de cliente, órfãos ou links externos. Até 100 resultados; busca por nome. Não inclui anexos legados de resumo comercial/variações neste item.
 - Verificação: 56 testes frontend e 16 integrações backend aprovados; typechecks frontend/backend sem erros; site local HTTP 200. Integrações em banco descartável e arquivo temporário próprio removido no fim. Nenhum dado real, migração, commit, push, deploy ou espelho. Homologação visual/manual com usuário.
 
-## Pendente de deploy (só LOCAL) — reunião de 28/10, item 3
+### Histórico incluído no deploy-2026-10-28-2 — reunião de 28/10, item 3
 
 - Frontend: corrigido atalho Desativar aprovação dos entregáveis, que antes mudava a tela mas mantinha estado salvo e não persistia a mudança. Detecção de pendências e commit também reconhecem diferenças entre campos e base salva. Teste reproduziu o erro antes da correção.
 - Resumo, aprovação e pendências da etapa filtram pela etapa responsável atual: removidos/desvinculados e movidos não entram na origem. Exclusão continua pendente até salvar; desfazer permanece possível. Excluir último entregável não escolhe um novo tipo de aprovação automaticamente: usuário precisa resolver configuração por entregável sem entregável.
@@ -64,14 +77,14 @@ Mais recente primeiro. Cada entrada diz o que subiu, por pasta, e o que NÃO sub
 - Sem alteração de cadastros reais, migração, commit, push, deploy ou espelho. Homologação manual pendente.
 - Verificado: 98 testes frontend em 6 arquivos; 15 integrações backend em banco temporário descartável (incluindo proteção do histórico contratado); typechecks frontend/backend sem erros; localhost:8082 HTTP 200 e API health ok. Comparação visual manual ainda com usuário.
 
-## Pendente de deploy (só LOCAL) — reunião de 28/10, item 2
+### Histórico incluído no deploy-2026-10-28-2 — reunião de 28/10, item 2
 
 - Frontend: ficha Ver da etapa passa a chamar StepGovernance em leitura; edição do fluxo e de aprovações/SLA fica em Editar etapa. Histórico continua consulta real.
 - Conferir etapa abre uma conferência estática, escondendo sem desmontar os blocos de cadastro. Resumo ampliado: dados principais, horas/especialidade, custo estimado, frequência, visibilidade, refação, checklist, acessos, entregáveis e fluxo; informa alterações ainda não salvas. Atalhos Corrigir e pendências retornam ao bloco preservando o rascunho; navegar não grava.
 - Item 1 homologado pelo usuário antes de iniciar este item. Nenhum cadastro real, compra, publicação de produto, migração, commit, push ou deploy executado. Teste manual do item 2 pendente.
 - Verificação: 70 testes frontend aprovados em 5 arquivos (etapa universal, rascunho, ficha de leitura, governança/histórico e fluxo); typecheck frontend concluído sem erros; localhost:8082 respondeu 200. Não equivale a homologação visual pelo usuário.
 
-## Pendente de deploy (só LOCAL) — reunião de 28/10, item 1
+### Histórico incluído no deploy-2026-10-28-2 — reunião de 28/10, item 1
 
 - Responsáveis nominais versus automáticos: específico só é referência efetiva nos modos person/leader_person; líder da área ignora ID residual de qualificador, assim como rodízio. Publicação não exige pessoa quando o modo é automático. PUT da etapa limpa os campos antigos ao mudar para líder da área/nomad_pool, respeita status ativo (não só is_active) e rejeita responsável específico bloqueado.
 - Correção solicitada pelo usuário no item 1: administrador NÃO é líder. Endpoint separado GET /admin/catalog2/leaders, role=lider + is_active + status ativo; UI filtra somente kind=lider. PUT, prontidão nominal e início de etapa também não aceitam admin como líder. /qualifiers permanece separado, pois administrador pode qualificar sem ter perfil de líder. A lista de líderes local está vazia (0 ativos); não promover administradores nem criar líderes automaticamente.
