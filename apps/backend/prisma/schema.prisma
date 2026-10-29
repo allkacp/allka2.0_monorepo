@@ -5687,6 +5687,10 @@ model Catalog2ProductVersion {
   // contratada fica congelada junto com o resto da versão.
   accepts_one_time             Boolean @default(true)
   accepts_recurring            Boolean @default(false)
+  // Mais de uma contratação vigente/unidade do mesmo produto NESTE projeto.
+  // true preserva o comportamento das versões existentes; não altera renovação ou agrupamento.
+  accepts_multiple_contracts   Boolean @default(true)
+  quantity_rules_json String? @db.Text
   has_initial_implementation   Boolean @default(false)
   // Quando a implementação inicial roda: "always" (todo contrato) | "first_only"
   // (só na 1ª contratação daquele cliente) | "on_revalidation" (só se houver
@@ -6569,6 +6573,7 @@ model Catalog2Quote {
 
   // Configuracao congelada.
   selection_json           String  @db.Text // { variation_option_keys, addon_keys, quantity, answers }
+  execution_snapshot_json String? @db.LongText
   deliverables_json        String? @db.Text // entregaveis resultantes (snapshot)
   quantity                 Int     @default(1)
   commercial_deadline_days Int?

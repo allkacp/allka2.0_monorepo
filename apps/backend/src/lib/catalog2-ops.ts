@@ -193,6 +193,7 @@ export function normalizeStepCycles(raw: unknown): StepCyclesOps | null {
 }
 
 export interface StepOps {
+  multiple_units?: { deadline_extra_percent: number };
   /** Etapa em ciclos (ver StepCyclesOps). Ausente = etapa comum. */
   cycles?: StepCyclesOps;
   /** A etapa foi declarada SEM entregáveis (19/10). Ausente = não declarado (vale o que estiver ligado à etapa). */
@@ -242,6 +243,7 @@ export const taskOpsSchema = z
   .nullish();
 export const stepOpsSchema = z
   .object({
+    multiple_units: z.object({ deadline_extra_percent: z.number().finite().min(0).max(1000) }).strict().nullish(),
     checklist: z.array(z.object({ id: z.string().max(40).nullish(), text: z.string().max(CHECKLIST_TEXT_MAX), kind: z.enum(CHECKLIST_KINDS).nullish(), required: z.boolean().nullish() })).max(CHECKLIST_MAX_ITEMS).nullish(),
     evidence_owner: z.enum(EVIDENCE_OWNERS).nullish(),
     instructions: text(STEP_TEXT_MAX.instructions),
@@ -290,6 +292,8 @@ export function normalizeStepOps(raw: unknown): StepOps | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const out: StepOps = {};
+  const multiple = r.multiple_units as { deadline_extra_percent?: unknown } | undefined;
+  if (multiple && typeof multiple.deadline_extra_percent === "number" && Number.isFinite(multiple.deadline_extra_percent) && multiple.deadline_extra_percent >= 0 && multiple.deadline_extra_percent <= 1000) out.multiple_units = { deadline_extra_percent: multiple.deadline_extra_percent };
   for (const f of STEP_OPS_TEXT_FIELDS) {
     const v = typeof r[f] === "string" ? (r[f] as string).trim() : "";
     if (v) out[f] = v.slice(0, STEP_TEXT_MAX[f]);

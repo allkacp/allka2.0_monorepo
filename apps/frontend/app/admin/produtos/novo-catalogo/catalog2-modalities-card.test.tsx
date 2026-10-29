@@ -20,6 +20,25 @@ const version = (over: Record<string, any> = {}) => ({ id: "v1", accepts_one_tim
 beforeEach(() => { Object.values(api).forEach((f) => f.mockClear()); act.mockClear(); });
 
 describe("Cartão de modalidades · só Avulso e Assinatura mensal", () => {
+  it("preserva múltiplas contratações nas versões existentes e só prepara a alteração até salvar", () => {
+    render(<ContractModesSection version={version()} readOnly={false} act={act} compact product={{ id: "p1" }} />);
+    const field = screen.getByRole("checkbox", { name: "Permitir múltiplas contratações" });
+    expect(field).toBeChecked();
+    fireEvent.click(field);
+    expect(field).not.toBeChecked();
+    expect(api.updateCatalog2VersionInfo).not.toHaveBeenCalled();
+  });
+
+  it("carrega o valor salvo e impede alteração em leitura/versão publicada", () => {
+    const props = { readOnly: false, act, compact: true, product: { id: "p1" } };
+    const { rerender } = render(<ContractModesSection {...props} version={version({ accepts_multiple_contracts: false })} />);
+    expect(screen.getByRole("checkbox", { name: "Permitir múltiplas contratações" })).not.toBeChecked();
+    rerender(<ContractModesSection {...props} readOnly version={version({ accepts_multiple_contracts: true })} />);
+    const field = screen.getByRole("checkbox", { name: "Permitir múltiplas contratações" });
+    expect(field).toBeChecked();
+    expect(field).toBeDisabled();
+  });
+
   it("mostra apenas as duas modalidades, com os textos de ajuda combinados, e NENHUM controle antigo", () => {
     render(<ContractModesSection version={version()} readOnly={false} act={act} compact product={{ id: "p1", delivery_recurrence: null }} />);
     const card = screen.getByTestId("modalities-card");

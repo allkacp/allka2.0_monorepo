@@ -16,6 +16,7 @@ import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { cn } from "@/lib/utils";
 
 export const FRAMED_PANEL_MARGIN = 30;
+export const FRAMED_DARK_OVERLAY_CLASS = "bg-slate-950/60 backdrop-blur-[2px]";
 /** Um Painel Moldura aberto de dentro de uma Janela Moldura (ex.: editar um acesso dentro do bloco da etapa) precisa ficar POR CIMA dela, senão abre atrás e não dá para clicar. */
 export const InsideFramedModal = createContext(false);
 /** Cabeçalho em faixa/banner dentro do Painel Moldura: NÃO fica colado nas bordas; usa a mesma margem dos cartões de baixo (12 px em cima e dos lados). */
@@ -36,7 +37,7 @@ export function FramedPanel({ open, onOpenChange, children, testId = "framed-pan
   return (
     <Dialog modal={false} open={open} onOpenChange={onOpenChange}>
       {open && typeof document !== "undefined" && createPortal(
-        <div aria-hidden="true" className={cn("fixed inset-y-0 right-0 bg-slate-950/60 backdrop-blur-[2px]", aboveModal ? "z-[1255]" : "z-[1200]")} style={{ left: sidebarWidthPx }} data-testid={`${testId}-overlay`} />, document.body)}
+        <div aria-hidden="true" className={cn("fixed inset-y-0 right-0", FRAMED_DARK_OVERLAY_CLASS, aboveModal ? "z-[1255]" : "z-[1200]")} style={{ left: sidebarWidthPx }} data-testid={`${testId}-overlay`} />, document.body)}
       <DialogContent showCloseButton={false} onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} overlayClassName="hidden"
         className={cn(aboveModal ? "!z-[1256]" : "!z-[1201]", "flex max-w-none flex-col gap-0 overflow-hidden rounded-2xl border-2 border-violet-300 bg-[#f4f6fc] p-[10px] shadow-2xl ring-4 ring-violet-200/60 sm:!max-w-none dark:border-violet-700 dark:bg-slate-950 dark:ring-violet-900/50", className)}
         style={framedPanelStyle(sidebarWidthPx)} data-testid={testId}>
@@ -58,15 +59,16 @@ function TitleStripper({ children }: { children: React.ReactNode }) {
  * JANELA MOLDURA (padrão global, 20/10) — janela menor por cima de um Painel Moldura: centralizada na área ao lado da barra lateral,
  * com fundo CLARO (branco translúcido) que cobre tudo menos a sidebar (acompanha ela recolhendo/expandindo).
  */
-export function FramedModal({ open, onOpenChange, children, testId = "framed-modal", className, title, style }: {
+export function FramedModal({ open, onOpenChange, children, testId = "framed-modal", className, title, style, overlayTone = "light" }: {
   open: boolean; onOpenChange?: (open: boolean) => void; children: React.ReactNode; testId?: string; className?: string; title?: string; style?: React.CSSProperties;
+  /** Teste visual por opt-in; as demais janelas mantêm o padrão atual. */ overlayTone?: "light" | "dark";
 }) {
   const { sidebarWidth } = useAppFrameMetrics();
   const sw = typeof sidebarWidth === "number" ? sidebarWidth : parseInt(String(sidebarWidth)) || 0;
   return (
     <Dialog modal={false} open={open} onOpenChange={onOpenChange}>
       {open && typeof document !== "undefined" && createPortal(
-        <div aria-hidden="true" className="fixed inset-y-0 right-0 z-[1250] bg-white/55 backdrop-blur-[1px]" style={{ left: sw }} data-testid={`${testId}-overlay`} />, document.body)}
+        <div aria-hidden="true" className={cn("fixed inset-y-0 right-0 z-[1250]", overlayTone === "dark" ? FRAMED_DARK_OVERLAY_CLASS : "bg-white/55 backdrop-blur-[1px]")} style={{ left: sw }} data-testid={`${testId}-overlay`} />, document.body)}
       <DialogContent showCloseButton={false} onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} overlayClassName="hidden"
         className={cn("!z-[1251] flex max-h-[calc(100dvh-4rem)] w-[calc(100vw-2rem)] max-w-[66rem] flex-col gap-0 overflow-hidden rounded-2xl border-2 border-violet-300 bg-[#f4f6fc] p-[10px] shadow-2xl ring-4 ring-violet-200/60 sm:!max-w-[66rem] dark:border-violet-700 dark:bg-slate-950 dark:ring-violet-900/50", className)}
         style={{ left: `calc(${sw}px + (100vw - ${sw}px) / 2)`, top: "50%", transform: "translate(-50%, -50%)", translate: "none", ...style }} data-testid={testId}>

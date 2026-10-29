@@ -13,6 +13,7 @@
 //     + versão publicada + produto disponível + zero pendência obrigatória.
 
 import { clientCommercialView } from "./catalog2-commercial-fields";
+import { executionSnapshot } from "./catalog2-quantity";
 import { parseOptionExamples, parseOptionExampleFile } from "./catalog2-option-examples";
 import { prisma } from "./prisma";
 import { audienceWhere, productVisibleTo as audienceAllows, viewerFromContext } from "./catalog2-audience";
@@ -336,6 +337,7 @@ export function clientPricingView(p: PricingResult) {
     charges: clientChargesView(p),
     currency: p.currency,
     quantity: p.quantity,
+    volume: p.volume ? { discount_percent: p.volume.discount_percent, discount_amount: p.volume.discount_amount, deadline_extra_days: p.volume.deadline_extra_days, largest_group: p.volume.largest_group } : undefined,
     // Preço/prazo COMERCIAIS (nunca esforço, nunca custo).
     commercial_price: p.lines.commercial_final_price.amount,
     commercial_price_label: p.quote_requirements.length ? (REQUEST_KIND_LABEL[strongestRequirement(p.quote_requirements) ?? "custom_quote"] ?? "Sob solicitação") : p.pricing_mode === "on_request" ? "Sob consulta" : p.lines.commercial_final_price.amount == null ? "A definir" : undefined,
@@ -718,6 +720,7 @@ export async function getClientProduct(ctx: ClientContext, slugOrId: string, opt
     // Como este produto pode ser contratado (só informativo; quem decide é o servidor na cotação/cesta/checkout).
     sale_label: version.sale_modes_enforced ? saleLabelOf(version) : saleLabelOf({ accepts_one_time: true, accepts_recurring: availablePeriods.length > 0 }),
     sale_modes: {
+      multiple_contracts: version.accepts_multiple_contracts,
       one_time: !version.sale_modes_enforced || version.accepts_one_time !== false,
       recurring: !version.sale_modes_enforced || version.accepts_recurring === true || availablePeriods.length > 0,
       // "Só em pacote": campo antigo da versão OU decisão do administrador na gestão do pacote ("impedir venda separada").
@@ -843,12 +846,14 @@ export function normalizePeriod(raw: unknown): Catalog2Period | null {
 /** Valida que a seleção cobre toda variação obrigatória e respeita min/max. */
 export function validateSelection(
   version: {
+    accepts_multiple_contracts?: boolean;
     variations: Array<{ key: string; name: string; is_required: boolean; is_active?: boolean; selection_type: string | null; options: Array<{ key: string; is_active?: boolean }> }>;
     addons: Array<{ key: string; is_active: boolean }>;
   },
   sel: PricingSelection,
 ): string[] {
   const errs: string[] = [];
+  if (version.accepts_multiple_contracts === false && (sel.quantity ?? 1) > 1) errs.push("Este produto permite apenas uma unidade por contratação e uma contratação vigente por projeto.");
   const chosen = new Set(sel.variation_option_keys ?? []);
   // Item 4.1 (reunião 2026-09-14): todas as chaves de opção que EXISTEM em
   // alguma variação desta versão — usado pra detectar de verdade uma chave
@@ -1042,6 +1047,7 @@ export async function createQuote(ctx: ClientContext, productIdOrSlug: string, r
       version_id: version.id,
       selection_json: JSON.stringify(sel),
       deliverables_json: JSON.stringify(deliverablesFor(version, sel, pricing)),
+      execution_snapshot_json: executionSnapshot(pricing, version.quantity_rules_json),
       quantity: sel.quantity ?? 1,
       // Item 6: com período, o "preço/prazo comerciais" da cotação SÃO os
       // do período (total antecipado / prazo do 1º ciclo) — nunca o avulso
@@ -1455,6 +1461,7 @@ export async function renewQuote(ctx: ClientContext, id: string) {
       product_id: q.product_id,
       version_id: q.version_id, // preserva a versão CONGELADA — a fotografia não muda numa reemissão.
       selection_json: q.selection_json,
+      execution_snapshot_json: q.execution_snapshot_json,
       deliverables_json: q.deliverables_json,
       quantity: q.quantity,
       commercial_deadline_days: q.commercial_deadline_days,
@@ -1508,6 +1515,7 @@ export async function renewQuote(ctx: ClientContext, id: string) {
       user_id: ctx.user_id,
       product_id: q.product_id,
       version_id: a.pricingVersionId, // pode ser uma versão NOVA (mesmo escopo, preço diferente).
+      execution_snapshot_json: executionSnapshot(a.pricing, (await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: a.pricingVersionId }, select: { quantity_rules_json: true } })).quantity_rules_json),
       selection_json: JSON.stringify(sel),
       deliverables_json: JSON.stringify(deliverablesFor(await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: a.pricingVersionId }, include: { addons: true } }), sel, a.pricing)),
       quantity: sel.quantity ?? 1,

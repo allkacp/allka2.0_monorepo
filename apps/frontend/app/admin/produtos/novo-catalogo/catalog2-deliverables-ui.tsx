@@ -3,7 +3,7 @@
 // RESUMO dos entregáveis da tarefa (19/10): o cadastro acontece DENTRO da etapa ("Entregáveis desta etapa"); aqui só se reúne, agrupado pela
 // etapa responsável, o que já foi configurado. Editar por aqui altera o MESMO registro (nada é copiado nem duplicado) e abre o editor com o
 // contexto da tarefa/etapa e a ação "Ir para a etapa". Entregável sem etapa aparece num grupo de pendências.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileIconMenu } from "./catalog2-commercial-ui";
 import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, Copy, CopyPlus, Info, Paperclip, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
   DELIVERABLE_CYCLE_SCOPES, DELIVERABLE_MOMENTS, DELIVERABLE_RESPONSIBLES, DELIVERABLE_TYPES, FILE_PREFIX, deliverableSituation, fieldsOf, labelOf, payloadOf, shortType, type Fields,
 } from "./catalog2-deliverable-fields";
 import { DeliverableEditorModal } from "./deliverable-modal";
+import { editorSessionKey, readEditorSession, writeEditorSession, clearEditorSession } from "./editor-session";
 
 // Compatibilidade: estes nomes já eram exportados daqui.
 export { DELIVERABLE_CYCLE_SCOPES, DELIVERABLE_MOMENTS, DELIVERABLE_RESPONSIBLES, DELIVERABLE_TYPES, deliverableSituation };
@@ -69,7 +70,7 @@ export { LibraryPicker };
 const norm = (s: unknown) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /** `summaryOnly` (R21-09, reunião 21/10): só resumo — sem criar/editar/excluir/reordenar aqui; cada item leva para a etapa de origem. */
-export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnly = false }: { task: any; act: any; readOnly?: boolean; version?: any; summaryOnly?: boolean }) {
+export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnly = false, version }: { task: any; act: any; readOnly?: boolean; version?: any; summaryOnly?: boolean }) {
   const canEdit = !readOnly && !summaryOnly;
   const list: any[] = task.deliverables ?? [];
   const steps: any[] = useMemo(() => [...(task.steps ?? [])].sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)), [task.steps]);
@@ -77,6 +78,17 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnl
   const [lib, setLib] = useState(false);
   const [q, setQ] = useState("");
   const [modal, setModal] = useState<{ d: any | null } | null>(null);
+  const sessionKey = editorSessionKey(`task-deliverable:${version?.id ?? task.version_id ?? ""}:${task.id}`);
+  const restoredModal = useRef(false);
+  useEffect(() => {
+    if (!canEdit || restoredModal.current) return;
+    restoredModal.current = true;
+    const saved = readEditorSession<{ id?: string; isNew?: boolean }>(sessionKey);
+    if (saved?.isNew) setModal({ d: null });
+    else if (saved?.id) { const d = list.find((item) => item.id === saved.id); if (d) setModal({ d }); else clearEditorSession(sessionKey); }
+  }, [canEdit, sessionKey]);
+  useEffect(() => { if (modal && canEdit) writeEditorSession(sessionKey, { id: modal.d?.id, isNew: !modal.d }); }, [modal, canEdit, sessionKey]);
+  const closeModal = () => { clearEditorSession(sessionKey); setModal(null); };
   const [toDelete, setToDelete] = useState<any | null>(null);
   const [toDup, setToDup] = useState<any | null>(null);
 
@@ -90,9 +102,11 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnl
 
   const save = async (v: Fields, { draft }: { draft: boolean }) => {
     const body = { ...payloadOf(v), draft };
+    let created: any;
     if (modal?.d) await act(() => apiClient.updateCatalog2Deliverable(modal.d.id, body), draft ? "Rascunho do entregável salvo." : "Entregável salvo.", { rethrow: true });
-    else await act(() => apiClient.createCatalog2Deliverable(task.id, body), draft ? "Rascunho do entregável salvo." : "Entregável adicionado.", { rethrow: true });
-    if (!draft) setModal(null);
+    else await act(async () => { created = await apiClient.createCatalog2Deliverable(task.id, body); return created; }, draft ? "Rascunho do entregável salvo." : "Entregável adicionado.", { rethrow: true });
+    if (!draft) closeModal();
+    else if (created?.id) { clearEditorSession(`${sessionKey}:fields`); setModal({ d: created }); }
   };
   const duplicate = (d: any) => void act(() => apiClient.createCatalog2Deliverable(task.id, { ...payloadOf(fieldsOf(d)), name: `${String(d.name).slice(0, 170)} (cópia)` }), "Entregável duplicado.");
   const move = (d: any, group: any[], dir: -1 | 1) => {
@@ -224,12 +238,12 @@ export function TaskDeliverablesEditor({ task, act, readOnly = false, summaryOnl
         {list.length === 0 && <p className="rounded-lg border border-slate-200 bg-white px-3 py-3 text-xs text-neutral-400 dark:border-slate-800 dark:bg-slate-900/60">Nenhum entregável. A tarefa conclui só pelas etapas{readOnly ? "." : " — cadastre dentro da etapa (“Entregáveis desta etapa”)."}</p>}
         {list.length > 0 && filtered.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 px-3 py-3 text-center text-xs text-slate-500" data-testid="deliverable-search-empty">Nenhum entregável encontrado para “{q}”.</p>}
       </div>
-      {modal && (
+      {modal && canEdit && (
         <DeliverableEditorModal key={modal.d?.id ?? "new"} initial={cur} isNew={!modal.d} steps={steps.map((s, i) => ({ id: s.id, name: s.name, index: i + 1 }))}
           context={{ taskName: task.name ?? "", stepName: stepInfo(modal.d?.step_id)?.name, stepIndex: stepInfo(modal.d?.step_id)?.index }}
-          keyLabel={modal.d?.key} onSave={save}
-          onGoToStep={modal.d?.step_id ? () => { const id = modal.d.step_id; setModal(null); openStepEditor(id); } : undefined}
-          onClose={() => setModal(null)} />
+          sessionKey={`${sessionKey}:fields`} keyLabel={modal.d?.key} onSave={save}
+          onGoToStep={modal.d?.step_id ? () => { const id = modal.d.step_id; closeModal(); openStepEditor(id); } : undefined}
+          onClose={closeModal} />
       )}
       <ConfirmationDialog
         elevated open={!!toDelete} onClose={() => setToDelete(null)} title="Excluir entregável?" destructive confirmText="Excluir entregável"

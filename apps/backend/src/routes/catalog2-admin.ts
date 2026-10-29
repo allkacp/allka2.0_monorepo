@@ -5,6 +5,7 @@
 // servidor. Versão publicada é imutável por qualquer chamada direta.
 
 import { redactSecrets } from "../lib/redact-secrets";
+import { quantityRulesSchema } from "../lib/catalog2-quantity";
 import { AI_PROVIDERS, ON_FAILURE_ACTIONS, ON_FAILURE_LABEL, findProvider, providerConfigured, providerProblem } from "../lib/catalog2-ai-providers";
 import { runCost } from "../lib/catalog2-ai";
 import { invokeTaskAIAdapter, currentTaskAIAdapterName } from "../lib/task-ai";
@@ -1344,6 +1345,26 @@ router.patch("/products/:id/internal-name", async (req, res, next) => {
 // Anexo opcional de um item do "Resumo dos entregáveis" (modelo/exemplo do entregável). Só grava o arquivo e devolve a
 // referência; o vínculo com o item é salvo junto com a lista (PUT /versions/:id). Download: GET /api/catalog2/deliverable-files/:id.
 const deliverableFileUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_DELIVERABLE_FILE_BYTES, files: 1 } });
+// Biblioteca dos arquivos-modelo já vinculados a entregáveis. Só admin master;
+// nunca lista uploads privados de clientes, arquivos órfãos ou links externos.
+router.get("/deliverable-files", async (req, res, next) => {
+  try {
+    const q = z.string().max(200).parse(req.query.q ?? "").trim();
+    const rows = await prisma.catalog2TaskDeliverable.findMany({
+      where: { template_url: { startsWith: "file:" }, template_name: q ? { contains: q } : { not: null } },
+      orderBy: [{ updated_at: "desc" }, { id: "asc" }],
+      distinct: ["template_url"],
+      select: { template_url: true, template_name: true, name: true, task: { select: { name: true, version: { select: { product: { select: { sequence_number: true, internal_name: true } } } } } } },
+    });
+    const available = rows.flatMap((row) => {
+      const ref = normalizeFileRef({ id: row.template_url?.slice(5), name: row.template_name });
+      if (!ref || !storedFileExists(ref.id)) return [];
+      const product = row.task.version.product;
+      return [{ id: ref.id, name: ref.name, from: `Produto ${String(product.sequence_number).padStart(3, "0")} · ${product.internal_name} · ${row.task.name} · ${row.name}` }];
+    });
+    res.json({ data: available.slice(0, 100), has_more: available.length > 100 });
+  } catch (e) { handle(e, res, next); }
+});
 router.post("/deliverable-files", deliverableFileUpload.single("file"), async (req, res, next) => {
   try {
     if (!req.file) { res.status(400).json({ error: "Nenhum arquivo enviado.", code: "file_required" }); return; }
@@ -1393,6 +1414,8 @@ router.put("/versions/:id", async (req, res, next) => {
       // Modalidades de contratação (Pedido 2)
       accepts_one_time: z.boolean().optional(),
       accepts_recurring: z.boolean().optional(),
+      accepts_multiple_contracts: z.boolean().optional(),
+      quantity_rules: quantityRulesSchema.nullish(),
       has_initial_implementation: z.boolean().optional(),
       implementation_rule: z.enum(IMPLEMENTATION_RULES).optional(),
       implementation_blocks_operation: z.boolean().optional(),
@@ -1405,7 +1428,8 @@ router.put("/versions/:id", async (req, res, next) => {
     }).parse(req.body);
     const before = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: req.params.id as string } });
     const data: Record<string, unknown> = { updated_by_user_id: req.user!.id };
-    for (const k of ["title", "summary", "full_description", "change_summary", "base_commercial_deadline_days", "emergency_enabled", "emergency_mode", "emergency_product_reduction_percent", "emergency_product_extra_percent", "emergency_same_day_limit_time", "emergency_min_notice_hours", "emergency_executor_accept_required", "emergency_executor_accept_hours", "accepts_one_time", "accepts_recurring", "has_initial_implementation", "implementation_rule", "implementation_blocks_operation", "sell_mode", "show_executor_name", "pricing_mode", "manual_price", "manual_deadline_days"] as const) if (d[k] !== undefined) data[k] = d[k];
+    if (d.quantity_rules !== undefined) data.quantity_rules_json = d.quantity_rules == null ? null : JSON.stringify(d.quantity_rules);
+    for (const k of ["title", "summary", "full_description", "change_summary", "base_commercial_deadline_days", "emergency_enabled", "emergency_mode", "emergency_product_reduction_percent", "emergency_product_extra_percent", "emergency_same_day_limit_time", "emergency_min_notice_hours", "emergency_executor_accept_required", "emergency_executor_accept_hours", "accepts_one_time", "accepts_recurring", "accepts_multiple_contracts", "has_initial_implementation", "implementation_rule", "implementation_blocks_operation", "sell_mode", "show_executor_name", "pricing_mode", "manual_price", "manual_deadline_days"] as const) if (d[k] !== undefined) data[k] = d[k];
     // Prazo em horas úteis: guarda as horas e o reflexo em dias úteis (calendário da plataforma). Informar só dias zera as horas.
     if (d.base_commercial_deadline_hours !== undefined) {
       if (d.base_commercial_deadline_hours === null) { data.base_commercial_deadline_hours = null; data.base_commercial_deadline_days = null; }
@@ -1433,6 +1457,8 @@ router.put("/versions/:id", async (req, res, next) => {
     if (d.title !== undefined && d.title !== before.title) changedLabels.push(`título alterado de "${before.title}" para "${d.title}"`);
     if (d.summary !== undefined && d.summary !== before.summary) changedLabels.push("resumo atualizado");
     if (d.full_description !== undefined && d.full_description !== before.full_description) changedLabels.push("descrição completa atualizada");
+    if (d.accepts_multiple_contracts !== undefined && d.accepts_multiple_contracts !== before.accepts_multiple_contracts) changedLabels.push(d.accepts_multiple_contracts ? "múltiplas contratações permitidas" : "limitado a uma contratação vigente por projeto");
+    if (d.quantity_rules !== undefined && data.quantity_rules_json !== before.quantity_rules_json) changedLabels.push("regras de quantidade, implantação e descontos atualizadas");
     if (d.base_commercial_deadline_days !== undefined && d.base_commercial_deadline_days !== before.base_commercial_deadline_days) changedLabels.push(`prazo comercial base definido para ${d.base_commercial_deadline_days ?? "sem valor"} dia(s)`);
     if (commercial.changed.length) changedLabels.push(`campos comerciais atualizados (${commercial.changed.join(", ")})`);
     const note = changedLabels.length > 0 ? `Conteúdo editado — ${changedLabels.join("; ")}.` : "Informações gerais editadas.";
@@ -2921,10 +2947,20 @@ router.get("/specialists", async (_req, res, next) => {
   } catch (e) { handle(e, res, next); }
 });
 // Quem pode ser designado como QUALIFICADOR de uma tarefa: líderes e administradores ativos.
+// Quem recebe como líder não é a mesma lista de quem pode qualificar.
+router.get("/leaders", async (_req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { role: "lider", is_active: true, status: "ativo" },
+      select: { id: true, name: true, email: true }, orderBy: { name: "asc" }, take: 300,
+    });
+    res.json({ data: users.map(u => ({ ...u, kind: "lider" })) });
+  } catch (e) { next(e); }
+});
 router.get("/qualifiers", async (_req, res, next) => {
   try {
     const users = await prisma.user.findMany({
-      where: { is_active: true, OR: [{ role: "lider" }, { account_type: "lider" }, { role: "admin" }, { account_type: "admin" }] },
+      where: { is_active: true, status: "ativo", role: { in: ["lider", "admin"] } },
       select: { id: true, name: true, email: true, role: true, account_type: true },
       orderBy: { name: "asc" },
       take: 300,
@@ -3315,13 +3351,17 @@ router.put("/steps/:id", async (req, res, next) => {
       const err = validateEmergencyStepInput(merged);
       if (err) throw new Catalog2Error(err, 422, "invalid_emergency_step");
     }
+    if ("qualifier_kind" in d && ["leader", "nomad_pool"].includes(d.qualifier_kind!)) {
+      d.requires_specialist_qualification = false;
+      d.specialist_user_id = null;
+    }
     if ("requires_specialist_qualification" in d || "specialist_user_id" in d) {
       const requires = "requires_specialist_qualification" in d ? d.requires_specialist_qualification : before.requires_specialist_qualification;
       const who = "specialist_user_id" in d ? d.specialist_user_id : before.specialist_user_id;
       if (requires && !(draftKey === true && !who)) {
         if (!who) throw new Catalog2Error("Escolha o especialista que vai qualificar esta etapa.", 422, "specialist_required");
-        const sp = await prisma.user.findUnique({ where: { id: who }, select: { is_active: true } });
-        if (!sp || !sp.is_active) throw new Catalog2Error("O especialista escolhido não existe ou está inativo.", 422, "invalid_step_specialist");
+        const sp = await prisma.user.findUnique({ where: { id: who }, select: { is_active: true, status: true } });
+        if (!sp || !sp.is_active || sp.status !== "ativo") throw new Catalog2Error("A pessoa escolhida não existe, está inativa ou bloqueada. Escolha outra pessoa ou a qualificação automática.", 422, "invalid_step_specialist");
       } else if (!requires) { d.specialist_user_id = null; }
     }
     // Etapa "Humano ou IA": a opção IA (especialidade + tempo) só existe em etapa híbrida; nas demais fica vazia.
@@ -3349,8 +3389,8 @@ router.put("/steps/:id", async (req, res, next) => {
       const draftMissingLeader = draftKey === true && merged.executor_kind === "leader" && merged.leader_mode === "specific" && !merged.leader_user_id;
       if (err && !draftMissingLeader) throw new Catalog2Error(err, 422, "invalid_step_executor");
       if (merged.executor_kind === "leader" && merged.leader_mode === "specific" && merged.leader_user_id) {
-        const u = await prisma.user.findUnique({ where: { id: merged.leader_user_id as string }, select: { is_active: true, role: true } });
-        if (!u || !u.is_active || !["lider", "admin"].includes(u.role)) throw new Catalog2Error("O líder escolhido não existe, está inativo ou não é líder.", 422, "invalid_step_leader");
+        const u = await prisma.user.findUnique({ where: { id: merged.leader_user_id as string }, select: { is_active: true, status: true, role: true } });
+        if (!u || !u.is_active || u.status !== "ativo" || u.role !== "lider") throw new Catalog2Error("O responsável específico precisa ter perfil de Líder e estar ativo. Administradores não são líderes. Escolha um líder ou “Qualquer líder da área”.", 422, "invalid_step_leader");
       }
       d.executor_kind = merged.executor_kind as typeof d.executor_kind;
       if (merged.executor_kind !== "leader") { d.leader_mode = "auto"; d.leader_user_id = null; } else if (merged.leader_mode !== "specific") d.leader_user_id = null;

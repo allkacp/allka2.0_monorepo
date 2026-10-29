@@ -3,6 +3,8 @@ import { SpecificAssigneeConfirmation } from "@/components/specific-assignee-con
 const AgencyClientPayment = React.lazy(() => import("@/components/catalog2/agency-client-payment"));
 import { Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { useNavigate } from "@/hooks/use-navigate";
+import { LoginRedirect, LoginAliasRedirect } from "@/components/login-redirect";
+import { loginUrlFor } from "@/lib/login-return";
 import { cn } from "@/lib/utils";
 import { CookieConsentBanner } from "@/components/cookie-consent-banner";
 import {
@@ -360,21 +362,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
   const token = localStorage.getItem("allka_token");
   if (!token) {
-    const loginPath =
-      pathname.startsWith("/nomad") || pathname.startsWith("/nomades")
-        ? "/nomad/login"
-        : pathname.startsWith("/agency") ||
-            pathname.startsWith("/agencia") ||
-            pathname.startsWith("/partner") ||
-            pathname.startsWith("/parceiro")
-          ? "/agency/login"
-          : pathname.startsWith("/leader") || pathname.startsWith("/lider")
-              ? "/leader/login"
-              : pathname.startsWith("/company") ||
-                  pathname.startsWith("/empresa")
-                ? "/company/login"
-                : "/login";
-    return <Navigate to={loginPath} replace />;
+    return <LoginRedirect />;
   }
 
   // Role-based portal guard
@@ -452,7 +440,7 @@ function ProfileAwareFallback() {
   try {
     authUser = JSON.parse(localStorage.getItem("allka_user") || "null");
   } catch {}
-  if (!authUser) return <Navigate to="/login" replace />;
+  if (!authUser) return <LoginRedirect />;
   const { account_type, role } = authUser;
   const home =
     role === "admin" || account_type === "admin"
@@ -753,20 +741,7 @@ export default function App() {
   useEffect(() => {
     const handler = () => {
       const path = window.location.pathname;
-      const loginPath =
-        path.startsWith("/nomad") || path.startsWith("/nomades")
-          ? "/nomad/login"
-          : path.startsWith("/agency") ||
-              path.startsWith("/agencia") ||
-              path.startsWith("/partner") ||
-              path.startsWith("/parceiro")
-            ? "/agency/login"
-            : path.startsWith("/leader") || path.startsWith("/lider")
-              ? "/leader/login"
-              : path.startsWith("/company") || path.startsWith("/empresa")
-                ? "/company/login"
-                : "/login";
-      if (!path.includes("/login")) navigate(loginPath, { replace: true });
+      if (!path.includes("/login")) navigate(loginUrlFor(window.location), { replace: true });
     };
     window.addEventListener("allka:unauthorized", handler);
     return () => window.removeEventListener("allka:unauthorized", handler);
@@ -804,7 +779,7 @@ export default function App() {
         />
         <Route
           path="/nomades/login"
-          element={<Navigate to="/nomad/login" replace />}
+          element={<LoginAliasRedirect to="/nomad/login" />}
         />
         <Route
           path="/agency/login"
@@ -830,11 +805,11 @@ export default function App() {
             de status via convite (ver PartnerProfile). */}
         <Route
           path="/partner/login"
-          element={<Navigate to="/agency/login" replace />}
+          element={<LoginAliasRedirect to="/agency/login" />}
         />
         <Route
           path="/parceiro/login"
-          element={<Navigate to="/agency/login" replace />}
+          element={<LoginAliasRedirect to="/agency/login" />}
         />
         <Route
           path="/leader/login"
@@ -846,7 +821,7 @@ export default function App() {
         />
         <Route
           path="/lider/login"
-          element={<Navigate to="/leader/login" replace />}
+          element={<LoginAliasRedirect to="/leader/login" />}
         />
 
         {/* ─── Rota pública de share de dashboard/widget ─────────────────── */}

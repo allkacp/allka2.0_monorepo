@@ -253,12 +253,12 @@ export function Catalog2ProductDetail({
           setSel({
             variation_option_keys: res.default_selection?.variation_option_keys ?? [],
             addon_keys: res.default_selection?.addon_keys ?? [],
-            quantity: res.default_selection?.quantity ?? 1,
-            delivery_groups: res.default_selection?.delivery_groups ?? [res.default_selection?.quantity ?? 1],
+            quantity: res.sale_modes?.multiple_contracts === false ? 1 : res.default_selection?.quantity ?? 1,
+            delivery_groups: res.sale_modes?.multiple_contracts === false ? [1] : res.default_selection?.delivery_groups ?? [res.default_selection?.quantity ?? 1],
             variation_quantities: res.default_selection?.variation_quantities ?? {},
             answers: {},
           });
-          setQuantityText(String(res.default_selection?.quantity ?? 1));
+          setQuantityText(String(res.sale_modes?.multiple_contracts === false ? 1 : res.default_selection?.quantity ?? 1));
         } else {
           setData(res);
         }
@@ -1060,7 +1060,7 @@ export function Catalog2ProductDetail({
                   <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/70 bg-background p-3 text-sm">
                     <span className="font-bold text-xs uppercase tracking-wide text-muted-foreground">Quantidade</span>
                     <Input
-                      type="number" min={1} className="w-24"
+                      aria-label="Quantidade do produto" type="number" min={1} max={clientProduct?.sale_modes?.multiple_contracts === false ? 1 : undefined} disabled={clientProduct?.sale_modes?.multiple_contracts === false} className="w-24"
                       value={quantityText}
                       onChange={(e) => {
                         const value = e.target.value;
@@ -1073,7 +1073,9 @@ export function Catalog2ProductDetail({
                         setQuantityText(String(Number.isInteger(next) && next >= 1 ? next : sel.quantity));
                       }}
                     />
-                    <span className="text-xs text-muted-foreground">Unidades do mesmo serviço.</span>
+                    <span className="text-xs text-muted-foreground">{clientProduct?.sale_modes?.multiple_contracts === false ? "Uma unidade e uma contratação vigente por projeto." : "Unidades do mesmo serviço."}</span>
+                    {clientPricing?.volume?.discount_percent > 0 && <span className="rounded-full bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-700">Desconto por quantidade: {clientPricing.volume.discount_percent}%</span>}
+                    {clientPricing?.volume?.deadline_extra_days > 0 && <span className="text-xs text-muted-foreground">Prazo do lote: +{clientPricing.volume.deadline_extra_days} dia(s)</span>}
                   </div>
 
                   {clientPricing?.emergency?.available && (
@@ -1088,15 +1090,16 @@ export function Catalog2ProductDetail({
                   )}
 
                   <div className="space-y-2 rounded-xl border border-border/70 bg-background p-3">
-                    <h2 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Distribuição para os profissionais</h2>
+                    <h2 className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Como organizar as unidades</h2>
                     <div className="flex flex-wrap gap-2">
                       <button type="button" className={cn("rounded-lg border-2 px-3 py-1.5 text-xs font-semibold", (sel.delivery_groups ?? []).length === 1 ? "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300" : "border-slate-200 hover:border-violet-300 dark:border-slate-700")} onClick={() => setSel((s: any) => ({ ...s, delivery_groups: [s.quantity] }))}>
-                        Mesmo profissional
+                        Uma tarefa com todas as unidades
                       </button>
                       <button type="button" disabled={sel.quantity <= 1} className={cn("rounded-lg border-2 px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50", (sel.delivery_groups ?? []).length > 1 ? "border-violet-500 bg-violet-50 text-violet-700 dark:bg-violet-950/30 dark:text-violet-300" : "border-slate-200 hover:border-violet-300 dark:border-slate-700")} onClick={useSeparateProfessionals}>
-                        Profissionais diferentes
+                        Tarefas separadas
                       </button>
                     </div>
+                    <p className="text-[10px] leading-snug text-muted-foreground">Aqui você organiza as tarefas, não escolhe profissionais. O executor será definido no lançamento, conforme as regras das etapas.</p>
                     {(sel.delivery_groups ?? []).length > 1 && (
                       <div className="space-y-2 pt-1">
                         {(sel.delivery_groups ?? []).map((group: number, index: number) => (

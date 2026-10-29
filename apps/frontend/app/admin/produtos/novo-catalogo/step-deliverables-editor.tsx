@@ -9,6 +9,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { apiClient } from "@/lib/api-client";
 import { DELIVERABLE_RESPONSIBLES, deliverableIssues, fieldsOf, labelOf, shortType, type Fields } from "./catalog2-deliverable-fields";
 import { DeliverableEditorModal } from "./deliverable-modal";
+import { readEditorSession, writeEditorSession, clearEditorSession } from "./editor-session";
 import { activeDeliv, hasDelivPending, isStaleDraft, linkItem, newItem, syncDelivStates, unlinkedOf, type DelivItem } from "./step-deliverables";
 
 type SetItems = (u: DelivItem[] | ((cur: DelivItem[]) => DelivItem[])) => void;
@@ -21,14 +22,24 @@ const BADGE: Record<string, { text: string; cls: string }> = {
   deleted: { text: "Será excluído ao salvar a etapa", cls: "bg-rose-100 text-rose-700" },
 };
 
-export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items, setItems, declaredNone, setDeclaredNone, issues, showErrors }: {
+export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items, setItems, declaredNone, setDeclaredNone, issues, showErrors, sessionKey }: {
   task: any; step: { id: string; name: string }; stepIndex: number; readOnly: boolean;
   items: DelivItem[]; setItems: SetItems;
   /** "Esta etapa não tem entregáveis". */
   declaredNone: boolean; setDeclaredNone: (v: boolean) => void;
   issues: { field: string; message: string }[]; showErrors: boolean;
+  sessionKey?: string;
 }) {
-  const [modal, setModal] = useState<{ item: DelivItem | null } | null>(null);
+  const [modal, setModal] = useState<{ item: DelivItem | null } | null>(() => {
+    const saved = readEditorSession<{ uid?: string; id?: string; isNew?: boolean }>(sessionKey);
+    if (!saved || readOnly) return null;
+    if (saved.isNew) return { item: null };
+    const item = items.find((i) => i.uid === saved.uid || (!!saved.id && i.id === saved.id));
+    if (item && item.state !== "deleted" && item.state !== "unlinked") return { item };
+    clearEditorSession(sessionKey); return null;
+  });
+  useEffect(() => { if (modal) writeEditorSession(sessionKey, { uid: modal.item?.uid, id: modal.item?.id, isNew: !modal.item }); }, [modal, sessionKey]);
+  const closeModal = () => { clearEditorSession(sessionKey); setModal(null); };
   const [toDelete, setToDelete] = useState<DelivItem | null>(null);
   const [pickLink, setPickLink] = useState(false);
   const [libOpen, setLibOpen] = useState(false);
@@ -38,7 +49,7 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
   const steps = (task.steps ?? []) as any[];
   const stepList = [...steps].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)).map((s, i) => ({ id: s.id as string, name: s.name as string, index: i + 1 }));
   const unlinked = unlinkedOf(task.deliverables ?? []).filter((d) => !items.some((i) => i.id === d.id));
-  const act = activeDeliv(items);
+  const act = activeDeliv(items, step.id);
   const pending = hasDelivPending(items);
   useEffect(() => { setLibErr(null); }, [libOpen]);
 
@@ -48,7 +59,7 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
     const fields = { ...v };
     if (edit) setItems((cur) => syncDelivStates(cur.map((i) => (i.uid === edit.uid ? { ...i, fields, draft } : i))));
     else setItems((cur) => [...cur, newItem(step.id, fields, draft)]);
-    setModal(null);
+    closeModal();
   };
   const duplicate = (i: DelivItem) => setItems((cur) => [...cur, newItem(step.id, { ...i.fields, name: `${i.fields.name.slice(0, 170)} (cópia)` }, i.draft)]);
   const move = (uid: string, dir: -1 | 1) => setItems((cur) => {
@@ -162,7 +173,7 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
       {modal && (
         <DeliverableEditorModal key={modal.item?.uid ?? "new"} initial={modal.item ? modal.item.fields : { ...fieldsOf({}), step_id: step.id }} isNew={!modal.item || modal.item.state === "new"} steps={stepList}
           lockedStepName={modal.item ? undefined : step.name} context={{ taskName: task.name ?? "", stepName: stepList.find((s) => s.id === (modal.item?.fields.step_id || step.id))?.name, stepIndex: stepList.find((s) => s.id === (modal.item?.fields.step_id || step.id))?.index }}
-          keyLabel={modal.item?.key} onSave={saveFromModal} onClose={() => setModal(null)} />
+          sessionKey={sessionKey ? `${sessionKey}:fields` : undefined} keyLabel={modal.item?.key} onSave={saveFromModal} onClose={closeModal} />
       )}
       <ConfirmationDialog open={!!toDelete} onClose={() => setToDelete(null)} title="Excluir entregável?" destructive confirmText="Excluir entregável"
         message={<>O entregável “{toDelete?.fields.name}” será excluído da tarefa quando você salvar a etapa. Se ele já foi usado em tarefa contratada, a exclusão é recusada — nesse caso use “Remover o vínculo”.</>}

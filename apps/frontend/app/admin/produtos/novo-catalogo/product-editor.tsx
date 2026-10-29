@@ -19,6 +19,7 @@ import { ConfirmationDialog } from "@/components/confirmation-dialog";
 import { useIallkaContext } from "@/contexts/iallka-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { AccordionToggleAll, useAccordionAll } from "./accordion-toggle-all";
+import { StepLeaderSelect } from "./step-leader-select";
 import { FramedModal, FramedPanel, FRAMED_HEADER_CLASS } from "@/components/framed-panel";
 import { ModelPickerDialog, TaskModelInfoDialog, ModelScopeDialog, ModelEditCtx, type ModelScope, SimilarModelsDialog, ModelStatusChips, TaskIndicators, EXEC_LABEL, PURPOSE_LABEL, CYCLE_TYPE_LABEL, REPEAT_RULE_LABEL, IMPLEMENTATION_RULE_LABEL, CONTINUITY_LABEL, ASSET_RULE_LABEL } from "./catalog2-models-ui";
 import { TaskOpsForm } from "./catalog2-ops-ui";
@@ -26,7 +27,7 @@ import { OPEN_STEP_EVENT, TaskDeliverablesEditor } from "./catalog2-deliverables
 import { StepBlock, useBlocks, useIsNarrow } from "./step-blocks";
 import { BLOCK_IDS, blockInfo, firstIssue, stepIssues, type BlockInfo, type StepBlockId, type StepIssue } from "./step-completeness";
 import { StepDeliverablesEditor } from "./step-deliverables-editor";
-import { activeDeliv, commitDelivItems, delivIssues, hasDelivPending, isStaleDraft, itemsFromTask, type DelivItem } from "./step-deliverables";
+import { activeDeliv, commitDelivItems, delivIssues, hasDelivPending, isStaleDraft, itemsFromTask, syncDelivStates, type DelivItem } from "./step-deliverables";
 import { deliverableBrief, deliverableIssues, deliverableSituation } from "./catalog2-deliverable-fields";
 import { ClientApprovalSection, MODE_LABEL, effectiveMode } from "./client-approval";
 import { StepCyclesSection, generateCycles } from "./step-cycles";
@@ -35,6 +36,7 @@ import { DurationInput } from "./duration-input";
 import { HeaderPriceTag } from "./header-price-tag";
 import { StatusChangeDialog } from "./status-change-dialog";
 import { StepFinalSummary } from "./step-final-summary";
+import { editorSessionKey, readEditorSession, writeEditorSession, clearEditorSession } from "./editor-session";
 import { makeQuickCreate } from "./quick-variation";
 import { RevealBox, flashElement } from "./reveal";
 import { StepAccessesEditor } from "./step-accesses-editor";
@@ -63,6 +65,8 @@ import { AiFreeChangesCard } from "./catalog2-ai-free-changes";
 import { accessPatch } from "./step-access-picker";
 import { APPROVER_OPTIONS, applyApprover, approverOf, enforceApprover, type ApproverMode } from "./step-approver";
 import { FieldHelpLayer } from "./field-help-layer";
+import { helpFor } from "./field-help";
+import { QuantityRulesFields } from "./quantity-rules-fields";
 import { AccessCatalogDialog, accessCount, typeSummary } from "./catalog2-access-catalog-ui";
 import { ProductAiChatDialog, draftToVersionPatch } from "./catalog2-product-ai-chat";
 import { StepGovernance } from "./catalog2-step-governance-ui";
@@ -2193,6 +2197,8 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
   const pick = () => ({
     accepts_one_time: version.accepts_one_time ?? true,
     accepts_recurring: version.accepts_recurring ?? false,
+    accepts_multiple_contracts: version.accepts_multiple_contracts ?? true,
+    quantity_rules: version.quantity_rules ?? null,
     has_initial_implementation: version.has_initial_implementation ?? false,
     implementation_rule: version.implementation_rule ?? "first_only",
     implementation_blocks_operation: version.implementation_blocks_operation ?? true,
@@ -2251,6 +2257,11 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
             </label>
           ))}
         </div>
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-violet-200 px-2.5 py-2 text-xs dark:border-violet-800">
+          <input aria-label="Permitir múltiplas contratações" type="checkbox" className="mt-0.5 accent-violet-600" disabled={readOnly} checked={f.accepts_multiple_contracts} onChange={(e) => set({ accepts_multiple_contracts: e.target.checked })} />
+          <span><strong>Permitir múltiplas contratações</strong><span className="field-info" data-help={helpFor("Permitir múltiplas contratações") ?? undefined} aria-hidden="true">i</span><span className="mt-0.5 block text-slate-500">Mais de uma unidade ou contratação vigente do mesmo produto no mesmo projeto.</span></span>
+        </label>
+        <QuantityRulesFields value={f.quantity_rules} disabled={readOnly} onChange={(quantity_rules) => set({ quantity_rules })} />
         {f.accepts_recurring && !deliveryMonthly && (askRecurrence || !readOnly) && (
           <div className="rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100" data-testid="recurrence-prompt" role="group" aria-label="Este produto gera uma nova entrega todo mês?">
             <p className="font-semibold">Este produto gera uma nova entrega todo mês?</p>
@@ -2677,7 +2688,9 @@ function StepSetupGuide({ guide, onGo, onClose }: { guide: number; onGo: (step: 
 }
 
 export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, version, parallelWith = [] }: any) {
-  // Não é lembrado no F5: o texto digitado se perderia e a etapa voltaria "presa" no formulário. A etapa sempre abre na ficha de leitura.
+  const recoveryKey = editorSessionKey(`step:${version?.id ?? taskId}:${step.id}`);
+  const recovery = useRef(readEditorSession<any>(recoveryKey));
+  // Reabre somente no rascunho editável; a recuperação local não grava no servidor.
   const [editing, setEditing] = useState(false);
   const [rateOpen, setRateOpen] = useState(false);
   // Cada etapa é um acordeão: vem FECHADA (clicou abre, clicou fecha) e o lápis de editar fica sempre no cabeçalho.
@@ -2696,7 +2709,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
   const narrow = useIsNarrow();
   // Os 5 blocos vêm FECHADOS ao clicar em Editar; o que o usuário abrir/fechar é lembrado nesta aba (sobrevive ao F5).
   const blockFlag = (n: number) => `step-block:${step.id}:${n}`;
-  const blocks = useBlocks(BLOCK_IDS.filter((n) => readOpen(blockFlag(n), false)), narrow, (openNow) => { for (const n of BLOCK_IDS) writeOpen(blockFlag(n), openNow.includes(n)); });
+  const blocks = useBlocks(BLOCK_IDS.filter((n) => readOpen(blockFlag(n), false)), narrow, (openNow) => { for (const n of BLOCK_IDS) writeOpen(blockFlag(n), openNow.includes(n)); }, recovery.current?.list === true);
   /** Bloco "atual" do passo-a-passo (Anterior / Próximo); 7 = resumo final. */
   const [guide, setGuide] = useState<number>(1);
   const [helperOpen, setHelperOpen] = useState(false);
@@ -2707,6 +2720,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
   const [saving, setSaving] = useState<null | "draft" | "final">(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState<string | null>(null);
+  const [recoveredDraft, setRecoveredDraft] = useState(false);
   const [closeAsk, setCloseAsk] = useState(false);
   const [accessItems, setAccessItems] = useState<AccessItem[]>([]);
   const [accessOn, setAccessOn] = useState(false);
@@ -2715,14 +2729,19 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
   const baseline = useRef<{ f: string; on: boolean }>({ f: "", on: false });
   const modalRef = useRef<HTMLDivElement | null>(null);
   const [leaders, setLeaders] = useState<{ id: string; name: string; kind: string }[]>([]);
+  const [leadersLoading, setLeadersLoading] = useState(true);
+  const [leadersFailed, setLeadersFailed] = useState(false);
   const [specialists, setSpecialists] = useState<{ id: string; name: string; kind: string }[]>([]);
   useEffect(() => {
     if (!editing || specialists.length > 0) return;
     Promise.resolve(apiClient.getCatalog2Specialists?.()).then((r: any) => setSpecialists(r?.data ?? [])).catch(() => {});
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!editing || leaders.length > 0) return;
-    apiClient.getCatalog2Qualifiers().then((r) => setLeaders(r.data.filter((u) => u.kind === "lider"))).catch(() => {});
+    if (!editing) return;
+    let active = true;
+    setLeadersLoading(true); setLeadersFailed(false);
+    apiClient.getCatalog2Leaders().then((r) => { if (active) setLeaders(r.data.filter((u) => u.kind === "lider")); }).catch(() => { if (active) setLeadersFailed(true); }).finally(() => { if (active) setLeadersLoading(false); });
+    return () => { active = false; };
   }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
   const initial = () => ({ name: step.name, estimated_hours: step.estimated_minutes == null ? "" : String(step.estimated_minutes / 60), specialty_id: step.specialty_id ?? "", purpose: step.purpose ?? "execucao", execution_mode: step.execution_mode ?? "humano", completion_criteria: step.completion_criteria ?? "", first_execution_only: !!step.first_execution_only, skip_when_same_executor: !!step.skip_when_same_executor, is_conditional: !!step.is_conditional, description: step.description ?? "", ops: (step.ops ?? {}) as any, executor_kind: step.executor_kind ?? "nomad", leader_mode: step.leader_mode ?? "auto", leader_user_id: step.leader_user_id ?? "", internal_step: !!step.internal_step, requires_qualification: step.requires_qualification !== false, release_next_auto: step.release_next_auto !== false, requires_specialist_qualification: !!step.requires_specialist_qualification, specialist_user_id: step.specialist_user_id ?? "", approval_hours: step.approval_hours == null ? "" : String(step.approval_hours), rework_hours: step.rework_hours == null ? "" : String(step.rework_hours), executor_accept_hours: step.executor_accept_hours == null ? "" : String(step.executor_accept_hours), ai_free_changes: step.ai_free_changes == null ? "" : String(step.ai_free_changes), ai_specialty_id: step.ai_specialty_id ?? "", ai_estimated_hours: step.ai_estimated_minutes == null ? "" : String(step.ai_estimated_minutes / 60), ai_prompt: String(step.ops?.ai_prompt ?? ""), qual_on: step.requires_qualification !== false || !!step.requires_specialist_qualification, qualifier_kind: (step.qualifier_kind && step.qualifier_kind !== "leader" ? step.qualifier_kind : step.requires_specialist_qualification ? (step.requires_qualification !== false ? "leader_person" : "person") : "leader") as string });
   const [f, setF] = useState(initial);
@@ -2764,6 +2783,8 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
   /** Abre o painel com os valores salvos agora. Os acessos viram uma lista de RASCUNHO da tela (o servidor só muda ao salvar a etapa). */
   /** `restore`: voltando do F5 — mantém os blocos como estavam; num clique em Editar, começa com todos fechados. */
   const openEditor = (restore = false) => {
+    setRecoveredDraft(false);
+    if (!restore) clearEditorSession(recoveryKey);
     if (restore !== true) blocks.collapseAll();
     const items = itemsFromRequirements(stepReqs());
     const keys: string[] = Array.isArray(step.ops?.access_keys) ? step.ops.access_keys : [];
@@ -2773,9 +2794,21 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
     setF(fresh); setAccessItems(items); setAccessOn(on); setDelivItems(itemsFromTask(task?.deliverables ?? [], step.id)); setGuide(1);
     setShowErrors(false); setFormError(null); setDraftNote(null); setCloseAsk(false);
     baseline.current = { f: JSON.stringify(fresh), on };
+    const saved = restore ? recovery.current : null;
+    if (saved?.f && Object.entries(fresh).every(([key, value]) => typeof saved.f[key] === typeof value) && Array.isArray(saved.accessItems) && Array.isArray(saved.delivItems) && typeof saved.baseline?.f === "string") {
+      setF(saved.f); setAccessItems(saved.accessItems); setAccessOn(!!saved.accessOn);
+      const existing = new Set((task?.deliverables ?? []).map((d: any) => d.id));
+      setDelivItems(saved.delivItems.filter((d: DelivItem) => !d.id || existing.has(d.id)));
+      setGuide(typeof saved.guide === "number" ? Math.max(1, Math.min(7, saved.guide)) : 1);
+      baseline.current = saved.baseline;
+      setRecoveredDraft(true);
+    }
     setEditing(true);
   };
-  // F5 / Ctrl+R: se o painel desta etapa estava aberto, abre de novo (o texto ainda não salvo não volta: por isso o navegador avisa antes de recarregar).
+  useEffect(() => {
+    if (editing) writeEditorSession(recoveryKey, { f, accessItems, accessOn, delivItems, guide, list: blocks.list, baseline: baseline.current });
+  }, [editing, recoveryKey, f, accessItems, accessOn, delivItems, guide, blocks.list, draftNote]);
+  // F5 / Ctrl+R: recupera o painel e o rascunho local na mesma aba.
   // (a página volta travada por um instante no F5: espera destravar para reabrir, uma única vez)
   useEffect(() => { if (editRestored.current || readOnly) return; editRestored.current = true; if (readOpen(editFlag, false)) openEditor(true); }, [readOnly]); // eslint-disable-line react-hooks/exhaustive-deps
   // Sem modo de edição (só leitura), o retorno ao preço acontece quando a janela "Ver" da etapa fecha.
@@ -2801,8 +2834,8 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
   const borrowedAccessCount = (Array.isArray(f.ops?.access_keys) ? (f.ops.access_keys as string[]) : []).filter((k) => !ownAccessKeys.has(k)).length;
   const accIssues = accessIssues(accessItems, accessOn, borrowedAccessCount);
   const delivNone = !!f.ops?.no_deliverables;
-  const delivIss = delivIssues(delivItems, delivNone);
-  const approvableNames = delivNone ? [] : activeDeliv(delivItems).filter((i) => i.fields.requires_approval).map((i) => i.fields.name.trim() || "(sem nome)");
+  const delivIss = delivIssues(delivItems, delivNone, step.id);
+  const approvableNames = delivNone ? [] : activeDeliv(delivItems, step.id).filter((i) => i.fields.requires_approval).map((i) => i.fields.name.trim() || "(sem nome)");
   const issues: StepIssue[] = stepIssues(f as any, { taskSpecialtyId: task?.specialty?.id ?? null, stageExecution: task?.stage_execution === "stage", acceptHoursApplies: step.executor_policy === "prefer_same_as_step", accessIssues: accIssues, deliverableIssues: delivIss, approvableDeliverables: approvableNames.length, approvalDeliverables: approvableNames.length });
   const dirty = editing && (JSON.stringify(f) !== baseline.current.f || accessOn !== baseline.current.on || hasPending(accessItems) || hasDelivPending(delivItems));
   useEffect(() => {
@@ -2813,6 +2846,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
   }, [dirty]);
   const goToIssue = (it: StepIssue | null) => {
     if (!it) return;
+    setGuide(it.block);
     blocks.reveal(it.block as StepBlockId);
     window.setTimeout(() => {
       const root = modalRef.current; if (!root) return;
@@ -2853,7 +2887,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
       }, mode === "draft" ? "Rascunho da etapa salvo." : "Etapa concluída e salva.", { rethrow: true });
       setF((cur) => ({ ...cur, ops: newOps }));
       baseline.current = { f: JSON.stringify({ ...f, ops: newOps }), on: accessOn };
-      if (mode === "final") { setShowErrors(false); setEditing(false); setJustSaved(true); setOpen(true); /* volta para a janela "Ver" já com os dados atualizados */ }
+      if (mode === "final") { clearEditorSession(recoveryKey); setShowErrors(false); setEditing(false); setJustSaved(true); setOpen(true); /* volta para a janela "Ver" já com os dados atualizados */ }
       else setDraftNote(`Rascunho salvo às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Você pode fechar e continuar depois do mesmo ponto.`);
     } catch (e: any) {
       setFormError(e?.message ?? "Não foi possível salvar a etapa. Nada do que você preencheu foi apagado.");
@@ -2879,8 +2913,8 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
     }
     void commitStep("final").catch(() => {});
   };
-  const discardAll = () => { setF(initial()); setAccessItems([]); setDelivItems([]); setCloseAsk(false); setEditing(false); };
-  const requestClose = () => { if (saving) return; if (dirty) setCloseAsk(true); else setEditing(false); };
+  const discardAll = () => { clearEditorSession(recoveryKey); setF(initial()); setAccessItems([]); setDelivItems([]); setCloseAsk(false); setEditing(false); };
+  const requestClose = () => { if (saving) return; if (dirty) setCloseAsk(true); else { clearEditorSession(recoveryKey); setEditing(false); } };
   // Registra a etapa aberta no editor: "Salvar rascunho"/"Travar edição" sabem se há alteração não salva aqui.
   const registerOpenForm = useContext(FormsCtx);
   const inModels = useContext(ModelEditCtx).embedded;
@@ -2916,7 +2950,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
     const setOps = (patch: Record<string, unknown>) => setF({ ...f, ops: { ...(f.ops ?? {}), ...patch } });
     // Acessos da etapa: tudo fica em RASCUNHO DA TELA e só é gravado ao salvar a etapa (ver StepAccessesEditor).
     const err = (field: string): string | null => (showErrors ? issues.find((i) => i.field === field)?.message ?? null : null);
-    const delivAct = activeDeliv(delivItems);
+    const delivAct = activeDeliv(delivItems, step.id);
     // Situação REAL de cada bloco (completo / incompleto com a quantidade de pendências / não se aplica), nunca escondida no selo geral.
     const infos = Object.fromEntries(BLOCK_IDS.map((n) => [n, blockInfo(n, issues, showErrors, n === 4 ? { hasContent: draftChecklistN > 0 || !!f.ops?.instructions || !!f.ops?.evidence_required } : n === 5 ? { applies: !delivNone || delivAct.length > 0, hasContent: delivAct.length > 0 } : n === 6 ? { applies: accessOn } : {})])) as Record<StepBlockId, BlockInfo>;
     const bp = (n: StepBlockId) => ({ status: infos[n].status, count: infos[n].count, onGo: (t: StepBlockId) => blocks.reveal(t), inline: blocks.list, onSaveDraft: () => { setDraftNote(null); void commitStep("draft").catch(() => {}); }, savingDraft: saving === "draft", draftNote });
@@ -2929,6 +2963,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
     const goStep = (n: number) => {
       setGuide(n);
       if (n <= 6) blocks.reveal(n as StepBlockId);
+      else if (!blocks.list) blocks.collapseAll();
       window.setTimeout(() => { const el = modalRef.current?.querySelector<HTMLElement>(n <= 6 ? `[data-testid="step-block-${n}"]` : '[data-testid="step-final-summary"]'); el?.scrollIntoView?.({ block: "start", behavior: "smooth" }); }, 60);
     };
     const clip = (t: string, n: number) => (t.length > n ? `${t.slice(0, n).trim()}…` : t);
@@ -2968,6 +3003,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3" data-testid="step-modal-toolbar">
+          {recoveredDraft && <p role="status" className="w-full rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-900">Tela recuperada nesta aba. Confira o preenchimento; alterações locais ainda precisam ser salvas.</p>}
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {step.draft_incomplete && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800" data-testid="step-draft-badge">Rascunho incompleto</span>}
             {/* Pendências REAIS de todos os blocos, consolidadas aqui (nunca escondidas): clicar leva ao primeiro campo que falta. */}
@@ -2978,8 +3014,9 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
           </div>
           <div className="flex items-center gap-1.5">
             {SHOW_HELPER_BUTTON && <button type="button" onClick={() => setHelperOpen((value) => !value)} className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"><Lightbulb className="h-3.5 w-3.5" />Ajudante</button>}
-            <button type="button" onClick={blocks.expandAll} title="Mostra todos os blocos um embaixo do outro, na própria página" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Expandir todos</button>
-            <button type="button" onClick={blocks.collapseAll} title="Volta para os cartões; cada um abre numa janela" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Recolher todos</button>
+            <button type="button" onClick={() => goStep(7)} className="rounded-md border border-violet-200 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:text-violet-300">Conferir etapa</button>
+            <button type="button" onClick={() => { setGuide(1); blocks.expandAll(); }} title="Mostra todos os blocos um embaixo do outro, na própria página" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Expandir todos</button>
+            <button type="button" onClick={() => { setGuide(1); blocks.collapseAll(); }} title="Volta para os cartões; cada um abre numa janela" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Recolher todos</button>
           </div>
         </div>
         {showErrors && issues.length > 0 && (
@@ -2995,6 +3032,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
         {helperOpen && <StepSetupGuide guide={guide} onGo={goStep} onClose={() => setHelperOpen(false)} />}
         {/* Uma coluna só, 100% da largura: os 5 blocos empilhados (acordeões), nunca lado a lado. */}
         <div className="flex flex-col gap-3 p-4">
+          <div hidden={guide === 7} className="space-y-3" data-testid="step-edit-blocks">
           {/* 1 · O que é esta etapa */}
           <StepBlock n={1} title="O que é esta etapa" {...bp(1)} summary={sum1} open={blocks.open.has(1)} onToggle={() => blocks.toggle(1)}>
             {/* Nome e descrição lado a lado: o nome é curto, a descrição ocupa o resto. */}
@@ -3016,11 +3054,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
               </Field>
               {f.executor_kind === "leader" ? (
                 <Field field="leader" error={err("leader")} label="Qual líder">
-                  <select className={CTL} aria-label="Qual líder" value={f.leader_mode === "specific" ? f.leader_user_id : "__auto"} onChange={(e) => setF({ ...f, leader_mode: e.target.value === "__auto" ? "auto" : "specific", leader_user_id: e.target.value === "__auto" ? "" : e.target.value })}>
-                    <option value="__auto">Qualquer líder da área (o com menos tarefas abertas)</option>
-                    {f.leader_mode === "specific" && f.leader_user_id && !leaders.some(u => u.id === f.leader_user_id) && <option value={f.leader_user_id} disabled>Líder específico indisponível — escolha outro responsável</option>}
-                    {leaders.map((u) => <option key={u.id} value={u.id}>Sempre {u.name}</option>)}
-                  </select>
+                  <StepLeaderSelect className={CTL} mode={f.leader_mode} userId={f.leader_user_id} leaders={leaders} loading={leadersLoading} failed={leadersFailed} onChange={(mode, userId) => setF({ ...f, leader_mode: mode, leader_user_id: userId })} />
                 </Field>
               ) : <div className="self-end pb-2 text-[11px] text-slate-500">{f.executor_kind === "nomad" ? "A etapa vai para a fila de nômades habilitados na especialidade." : "A equipe interna executa sem passar pela fila de nômades."}</div>}
             </div>
@@ -3058,6 +3092,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
               <Field field="hours" error={err("hours")} label="Horas estimadas"><DurationInput className={CTL} ariaLabel="Horas estimadas" value={f.estimated_hours} onChange={(v) => setF({ ...f, estimated_hours: v })} /></Field>
             </div>
             )}
+            <Field field="quantity_deadline" error={err("quantity_deadline")} label="Prazo adicional por unidade extra nesta etapa (%)"><input aria-label="Prazo adicional por unidade extra nesta etapa (%)" type="number" min={0} max={1000} step="0.1" className={CTL} value={f.ops?.multiple_units?.deadline_extra_percent ?? ""} placeholder="Usar a regra do produto" onChange={(e) => setF({ ...f, ops: { ...f.ops, multiple_units: e.target.value === "" ? undefined : { deadline_extra_percent: Number(e.target.value) } } })} /><p className="text-[10px] text-slate-500">Unidades na mesma tarefa ganham este percentual de tempo por unidade extra. Vazio usa o produto; não reduz o esforço nem altera cadastros anteriores.</p></Field>
             {f.execution_mode !== "hibrido" && (f.executor_kind === "leader" || f.executor_kind === "internal") && (
               <p className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100" data-testid="internal-no-cost-note">
                 Esta etapa é feita por {f.executor_kind === "leader" ? "um líder" : "a equipe interna"}: <strong>não tem especialidade nem valor/hora</strong> e <strong>não entra no custo do produto</strong> (a equipe interna já está coberta pela margem). As horas abaixo valem só como <strong>prazo</strong>.
@@ -3184,7 +3219,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
               {qualOn && task?.stage_execution !== "stage" && <p className="text-[11px] text-slate-600 dark:text-slate-300" data-testid="qualification-task-mode-note">Esta qualificação vale para a etapa. Para ela ser cobrada a cada etapa (e não só no fim da tarefa), ligue “execução por etapa” nos dados da tarefa.</p>}
             </div>
             <ClientApprovalSection task={task} step={step} f={f} patch={(p) => setF({ ...f, ...p })} setOps={(p) => setOps(p)} readOnly={readOnly} err={err} hoursBad={hoursBad}
-              approvable={approvableNames} hasNext={index < (steps?.length ?? 0) - 1} onReveal={() => blocks.reveal(3)} onClearDeliverableApprovals={() => setDelivItems((old) => old.map((item) => item.fields.requires_approval ? { ...item, fields: { ...item.fields, requires_approval: false } } : item))} />
+              approvable={approvableNames} hasNext={index < (steps?.length ?? 0) - 1} onReveal={() => blocks.reveal(3)} onClearDeliverableApprovals={() => setDelivItems((old) => { const active = new Set(activeDeliv(old, step.id).map((item) => item.uid)); return syncDelivStates(old.map((item) => active.has(item.uid) && item.fields.requires_approval ? { ...item, fields: { ...item.fields, requires_approval: false } } : item)); })} />
             <StepCyclesSection ops={f.ops} setOps={(p) => setOps(p)} readOnly={readOnly} />
           </StepBlock>
           {/* 4 · Checklist, orientações e evidência */}
@@ -3272,7 +3307,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
           </StepBlock>
           {/* 5 · Entregáveis desta etapa (a etapa é a fonte do vínculo; o resumo da tarefa só reflete) */}
           <StepBlock n={5} title="Entregáveis desta etapa" {...bp(5)} summary={sum5} open={blocks.open.has(5)} onToggle={() => blocks.toggle(5)} help={"O que esta etapa precisa entregar. É o MESMO cadastro de entregáveis da tarefa (nada é copiado): o que você vincular, criar ou editar aqui aparece na seção Entregáveis da tarefa, e vice-versa. Só é gravado quando você salva a etapa."}>
-            <StepDeliverablesEditor task={task} step={{ id: step.id, name: f.name || step.name }} stepIndex={index + 1} readOnly={readOnly} items={delivItems} setItems={setDelivItems}
+            <StepDeliverablesEditor sessionKey={`${recoveryKey}:deliverable`} task={task} step={{ id: step.id, name: f.name || step.name }} stepIndex={index + 1} readOnly={readOnly} items={delivItems} setItems={setDelivItems}
               declaredNone={delivNone} setDeclaredNone={(v) => setOps({ no_deliverables: v ? true : undefined })} issues={delivIss} showErrors={showErrors} />
           </StepBlock>
           {/* 6 · Conexões e acessos (largura total) */}
@@ -3282,10 +3317,26 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
             stepNames={Object.fromEntries((version?.tasks ?? []).flatMap((t: any) => (t.steps ?? []).map((st: any) => [st.key, st.name])))}
             issues={accIssues} showErrors={showErrors} />
         </StepBlock>
-          {/* Resumo final: o que está completo, o que falta e como a próxima etapa é liberada. */}
+          {steps.length > 1 && <StepFlowControls step={step} steps={steps} index={index} taskId={taskId} act={act} />}
+          <StepGovernance step={step} task={task} version={version} readOnly={readOnly} act={act} />
+          </div>
+          {/* Conferência estática: nunca monta controles de cadastro dentro do resumo. */}
           <StepFinalSummary infos={infos} issues={issues} deliverables={delivNone ? [] : delivAct.map((i) => i.fields.name.trim() || "(sem nome)")} accessLine={accessLine} approvalLine={approvalLine}
             qualificationLine={qualOn ? `Sim — ${f.qualifier_kind === "person" ? "pessoa específica" : f.qualifier_kind === "leader_person" ? "líder e depois uma pessoa" : f.qualifier_kind === "nomad_pool" ? "nômades qualificadores" : "líder da área"}` : "Não precisa de qualificação"}
-            releaseLine={releaseLine} onGo={goToIssue} />
+            releaseLine={releaseLine} onGo={goToIssue} onEdit={goStep} dirty={dirty} rows={[
+              { label: "Nome", value: f.name.trim() || "Não informado" },
+              { label: "Descrição", value: f.description.trim() || "Não informada" },
+              { label: "Execução", value: `${EXEC_LABEL[f.execution_mode] ?? f.execution_mode} · ${receiverLabel}${f.executor_kind === "leader" ? f.leader_mode === "specific" ? ` · ${leaders.find((l) => l.id === f.leader_user_id)?.name ?? "Líder específico indisponível"}` : " · Qualquer líder da área" : ""}` },
+              { label: "Especialidade e esforço", value: `${specLabel(f.specialty_id)} · ${hoursLabel(f.estimated_hours)}${f.execution_mode === "hibrido" ? ` · IA: ${specLabel(f.ai_specialty_id)} · ${hoursLabel(f.ai_estimated_hours)}` : ""}` },
+              { label: "Custo estimado de execução", value: f.executor_kind !== "nomad" ? "Sem custo no produto (líder/equipe interna)" : `${draftCost == null ? "A definir" : brl2(draftCost)}${f.execution_mode === "hibrido" ? ` · IA: ${draftAiCost == null ? "a definir" : brl2(draftAiCost)}` : ""}` },
+              { label: "Critério de conclusão", value: f.completion_criteria.trim() || "Não informado" },
+              { label: "Frequência", value: f.first_execution_only ? "Só na primeira execução" : "A cada execução aplicável" },
+              { label: "Compras em quantidade", value: f.ops?.multiple_units?.deadline_extra_percent == null ? "Prazo segue a regra do produto" : `+${f.ops.multiple_units.deadline_extra_percent}% de prazo por unidade extra no mesmo lote` },
+              { label: "Visibilidade", value: f.internal_step ? "Interna — o cliente não vê nem aprova" : "Externa" },
+              { label: "Prazo de refação", value: !stageOn || f.internal_step || !["step", "deliverables"].includes(approvalMode) ? "Não se aplica à aprovação desta etapa" : f.rework_hours.trim() ? `${f.rework_hours} h úteis` : "Prazo anterior da etapa" },
+              { label: "Checklist e evidência", value: sum4 },
+              { label: "Fluxo", value: stepFlowChips(step, steps).join(" · ") || "Em sequência" },
+            ]} />
         </div>
 
         <StepChecklistDialog open={checklistOpen} title={f.name || step.name} value={draftChecklist} qualificationEnabled={qualAny} stepId={step.id} draft={{ name: f.name, description: f.description, completion_criteria: f.completion_criteria, orientations: f.ops?.instructions ?? "", execution_mode: f.execution_mode, specialty: (refs?.specialties ?? []).find((sp: any) => sp.id === f.specialty_id)?.name ?? "", qualification: qualOn, internal: !!f.internal_step, client_approval: f.ops?.client_approval?.mode ?? "" }} onClose={() => setChecklistOpen(false)} onSave={(list) => { setOps({ checklist: list }); setChecklistOpen(false); }} />
@@ -3308,7 +3359,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
             <p className="text-sm text-slate-600 dark:text-slate-300">O que você preencheu nesta etapa ainda não foi salvo. O que você prefere fazer?</p>
             <div className="flex flex-col gap-2 pt-1">
               <Button type="button" onClick={() => setCloseAsk(false)} data-testid="step-close-continue">Continuar editando</Button>
-              <Button type="button" variant="outline" disabled={saving !== null} onClick={() => { void commitStep("draft").then(() => { setCloseAsk(false); setEditing(false); }).catch(() => setCloseAsk(false)); }} data-testid="step-close-draft">Salvar como rascunho e fechar</Button>
+              <Button type="button" variant="outline" disabled={saving !== null} onClick={() => { void commitStep("draft").then(() => { clearEditorSession(recoveryKey); setCloseAsk(false); setEditing(false); }).catch(() => setCloseAsk(false)); }} data-testid="step-close-draft">Salvar como rascunho e fechar</Button>
               <Button type="button" variant="ghost" className="text-rose-600 hover:text-rose-700" onClick={discardAll} data-testid="step-close-discard">Descartar alterações</Button>
             </div>
           </DialogContent>
@@ -3383,9 +3434,9 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
           {justSaved && <p role="status" className="mt-2 shrink-0 rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800" data-testid="step-saved-banner">✓ Etapa concluída e salva. Confira o resumo abaixo e clique em “Concluir” para voltar à lista de etapas.</p>}
           <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">
           <StepDetailsSummary step={step} isLast={index === (steps?.length ?? 0) - 1} />
-          {!readOnly && steps.length > 1 && <StepFlowControls step={step} steps={steps} index={index} taskId={taskId} act={act} />}
+          <p className="text-xs text-slate-500">Conferência somente para leitura. Use “Editar etapa” para alterar o cadastro.</p>
           {(step.executor_kind === "leader" || step.executor_kind === "internal") && <div><span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800" data-testid="step-receiver-chip">{step.executor_kind === "internal" ? "Equipe interna" : step.leader_mode === "specific" ? "Líder específico" : "Líder da área"}</span></div>}
-          <StepGovernance step={step} task={task} version={version} readOnly={readOnly} act={act} />
+          <StepGovernance step={step} task={task} version={version} readOnly act={act} />
           {!readOnly && (
             <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2 dark:border-slate-800" data-testid="step-actions">
               {task?.effort_is_provisional && (

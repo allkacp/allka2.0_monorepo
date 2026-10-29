@@ -140,7 +140,7 @@ describe("Catálogo do cliente", () => {
       null,
     ));
 
-    await user.click(screen.getByRole("button", { name: "Profissionais diferentes" }));
+    await user.click(screen.getByRole("button", { name: "Tarefas separadas" }));
     await user.click(screen.getByRole("button", { name: "Adicionar tarefa" }));
     const groups = screen.getAllByRole("spinbutton", { name: /Unidades da tarefa/i });
     await user.clear(groups[1]);

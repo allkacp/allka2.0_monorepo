@@ -8,6 +8,11 @@ const full: StepFormLike = {
 };
 
 describe("Etapa · o que falta para CONCLUIR", () => {
+  it("percentual por unidade extra aponta o bloco e campo corretos, sem exigir regra ausente", () => {
+    expect(stepIssues({ ...full, ops: {} })).toEqual([]);
+    expect(stepIssues({ ...full, ops: { multiple_units: { deadline_extra_percent: 20 } } })).toEqual([]);
+    expect(stepIssues({ ...full, ops: { multiple_units: { deadline_extra_percent: -1 } } })).toEqual([expect.objectContaining({ block: 2, field: "quantity_deadline" })]);
+  });
   it("etapa completa não tem pendência", () => { expect(stepIssues(full)).toEqual([]); });
 
   it("etapa completamente vazia lista tudo, cada item no seu bloco e com o campo certo", () => {

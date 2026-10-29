@@ -9,6 +9,7 @@ import { prisma } from "../lib/prisma";
 import { config } from "../config";
 import { seedCatalog2Classifications, seedCatalog2FourFForTests } from "../lib/catalog2-classifications-seed";
 import { publishVersion } from "../lib/catalog2-service";
+import { withCheckoutProject } from "../test-support/checkout-project-fixture";
 
 // Estas provas exercitam a capacidade preparada para uma liberação futura
 // de contratos com mais de um mês. Em ambiente normal, a chave não existe e
@@ -34,6 +35,7 @@ function tokenFor(u: { id: string; email: string; role: string; account_type: st
   return jwt.sign({ id: u.id, email: u.email, role: u.role, account_type: u.account_type }, config.JWT_SECRET, { expiresIn: "1h" });
 }
 async function api(path: string, opts: { method?: string; token?: string; body?: unknown } = {}) {
+  opts = await withCheckoutProject(path, opts, projects);
   const res = await fetch(`${baseUrl}${path}`, {
     method: opts.method ?? "GET",
     headers: { "content-type": "application/json", ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}) },

@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { snapshotQuestion, parseQuestionCondition, questionConditionMet, parseQuestionSettings, questionIsActive } from "./catalog2-question-types";
 import { accessesForStep, accessesForTask } from "./catalog2-step-accesses";
 import { normalizeStepOps, normalizeTaskOps } from "./catalog2-ops";
+import { executionStepsForCycle, stageExecutionBudget, type ExecutionReference } from "./catalog2-quantity";
 import { materializeTaskDeliverables } from "./task-deliverables";
 import type { DbClient } from "./project-scope";
 import { getNextTaskCode } from "./task-code";
@@ -211,21 +212,25 @@ async function materializeTasksForProjectProduct(
   // 6.1: assim, cada ciclo usa exatamente "a versão e as condições
   // contratadas" (nunca uma versão/condição mais recente do produto).
   let activeTaskKeys: Set<string> | null = null;
+  let activeStepRefs: Set<string> | null = null;
   let quoteSelection: PricingSelection = {};
   // A divisão vem da cotação congelada, nunca do cadastro atual.
   let deliveryGroups = [1];
+  let executionReference: ExecutionReference | null = null;
   // D-2: contratação gerada de um pedido "sob consulta" — as respostas do cliente ao questionário viram o briefing das tarefas.
   const requestAnswers = new Map<string, string>();
   if (pp.origin_catalog2_quote_id) {
     const quote = await tx.catalog2Quote.findUnique({
       where: { id: pp.origin_catalog2_quote_id },
-      select: { selection_json: true },
+      select: { selection_json: true, execution_snapshot_json: true },
     });
     if (quote) {
       const sel = JSON.parse(quote.selection_json) as PricingSelection;
       quoteSelection = sel;
+      try { executionReference = quote.execution_snapshot_json ? JSON.parse(quote.execution_snapshot_json) : null; } catch { /* legado sem fotografia */ }
       const pricing = await computePricing(version.id, sel);
       activeTaskKeys = new Set(pricing.active_task_keys);
+      activeStepRefs = new Set(pricing.active_step_refs);
       const negotiated = await tx.catalog2Quote.findUnique({ where: { id: pp.origin_catalog2_quote_id }, select: { commercial_request_id: true } });
       if (negotiated?.commercial_request_id) {
         const req = await tx.catalog2CommercialRequest.findUnique({ where: { id: negotiated.commercial_request_id }, select: { answers_json: true } });
@@ -294,6 +299,11 @@ async function materializeTasksForProjectProduct(
 
   for (let idx = 0; idx < orderedTasks.length; idx++) {
     const ct = orderedTasks[idx];
+    const previouslyExecuted = !cycle.forcedFirstExecution && (opts.occurrenceIndex > 0 || !cycle.firstExecutionInProject);
+    const selectedSteps = executionStepsForCycle(ct.steps, ct.key, activeStepRefs, previouslyExecuted);
+    // Se TODAS são de implantação, não inventar uma etapa de execução
+    // substituta na renovação (o fallback antigo recriava a implantação).
+    if (ct.steps.length > 0 && selectedSteps.length === 0) { skipped++; continue; }
     for (let groupIndex = 0; groupIndex < deliveryGroups.length; groupIndex++) {
     const deliveryQuantity = deliveryGroups[groupIndex];
     const occurrenceIndex = opts.occurrenceIndex;
@@ -397,12 +407,11 @@ async function materializeTasksForProjectProduct(
     // seguinte do mesmo cliente, quando já rodaram).
     // Regra-base (16/10): 1º ciclo DESTE produto NESTE projeto = executa; ciclos seguintes ou recontratação no mesmo projeto = não repete;
     // projeto novo = nova primeira execução. O administrador pode forçar a repetição (justificativa + histórico).
-    const previouslyExecuted = !cycle.forcedFirstExecution && (opts.occurrenceIndex > 0 || !cycle.firstExecutionInProject);
-    const stepsAll = ct.steps;
+    const stepsAll = selectedSteps;
     const stepsKept = previouslyExecuted ? stepsAll.filter((st) => !(st.first_execution_only || st.step_model?.first_execution_only)) : stepsAll;
-    const steps = stepsKept.length > 0 || stepsAll.length === 0 ? stepsKept : stepsAll;
+    const steps = stepsKept;
     // Fluxo das etapas (reunião 2026-10-05): só quando o cadastro configurou dependências; senão segue a sequência de sempre.
-    const flowInput = stepsAll.map((st) => ({ key: st.key, name: st.name, sort_order: st.sort_order, depends_on_json: st.depends_on_json, executor_policy: st.executor_policy, executor_same_as_key: st.executor_same_as_key }));
+    const flowInput = ct.steps.map((st) => ({ key: st.key, name: st.name, sort_order: st.sort_order, depends_on_json: st.depends_on_json, executor_policy: st.executor_policy, executor_same_as_key: st.executor_same_as_key }));
     const graphMode = steps.length > 0 && hasConfiguredFlow(flowInput);
     // Execução por etapa: cada etapa é qualificada e aprovada; etapa interna não passa pelo cliente.
     const stageMode = ct.stage_execution === "stage";
@@ -420,6 +429,8 @@ async function materializeTasksForProjectProduct(
             ordem: sIdx + 1,
             status: graphMode ? ((depsByKey!.get(step.key) ?? []).length === 0 ? "PENDENTE" : "BLOQUEADA") : sIdx === 0 ? "PENDENTE" : "BLOQUEADA",
             obrigatoria: true,
+            horas_execucao: stageExecutionBudget(executionReference, `${ct.key}:${step.key}`, deliveryQuantity, quoteSelection.quantity ?? 1, occurrenceIndex, step.estimated_minutes, normalizeStepOps(step.ops)?.multiple_units?.deadline_extra_percent).hours,
+            valor_nomade: step.executor_kind === "leader" || step.executor_kind === "internal" || (step.execution_mode ?? "humano") === "ia" ? null : stageExecutionBudget(executionReference, `${ct.key}:${step.key}`, deliveryQuantity, quoteSelection.quantity ?? 1, occurrenceIndex, step.estimated_minutes).amount,
             // Quem recebe a etapa (fase 1 da execução por etapa): nômade (padrão), líder ou equipe interna; líder específico já nasce atribuído.
             visivel_ao_cliente: stageMode ? !step.internal_step : true,
             // P-14 (07/10): etapa feita por IA/híbrida SEMPRE tem qualificador — sem outro qualificador definido, o líder aprova.
@@ -445,6 +456,9 @@ async function materializeTasksForProjectProduct(
             // Finalidade/executor/critério de conclusão efetivos (ajuste do produto ou do modelo global).
             config_snapshot: JSON.stringify({
               step_model_id: step.step_model_id,
+              effort_minutes: stageExecutionBudget(executionReference, `${ct.key}:${step.key}`, deliveryQuantity, quoteSelection.quantity ?? 1, occurrenceIndex, step.estimated_minutes).effortMinutes,
+              volume_discount_percent: executionReference?.discount_percent ?? 0,
+              unit_hourly_rate: executionReference?.steps?.find((s) => s.ref === `${ct.key}:${step.key}`)?.rate ?? null,
               purpose: step.purpose ?? step.step_model?.purpose ?? "execucao",
               execution_mode: step.execution_mode ?? step.step_model?.execution_mode ?? "humano",
               completion_criteria: step.completion_criteria ?? step.step_model?.completion_criteria ?? null,

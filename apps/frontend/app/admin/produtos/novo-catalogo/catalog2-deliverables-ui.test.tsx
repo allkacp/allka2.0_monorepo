@@ -24,9 +24,43 @@ const full = {
 };
 const other = { ...full, id: "d2", key: "print-campanha", name: "Print da campanha", cycle_scope: "every_cycle", template_url: null, template_name: null };
 const orphan = { ...full, id: "d3", key: "sem-etapa", name: "Contrato assinado", step_id: null };
-beforeEach(() => { Object.values(api).forEach((f) => f.mockClear()); act.mockClear(); });
+beforeEach(() => { sessionStorage.clear(); localStorage.clear(); Object.values(api).forEach((f) => f.mockClear()); act.mockClear(); });
 
 describe("Entregáveis da tarefa · resumo derivado das etapas", () => {
+  it("rascunho novo já salvo retoma com ID real e não cria uma segunda cópia após F5", async () => {
+    const created = { ...full, id: "novo-salvo", name: "Rascunho salvo" };
+    api.createCatalog2Deliverable.mockResolvedValueOnce(created);
+    const first = render(<TaskDeliverablesEditor task={task([])} act={act} />);
+    fireEvent.click(screen.getByRole("button", { name: /Adicionar/ }));
+    fireEvent.change(screen.getByLabelText("Nome do entregável"), { target: { value: created.name } });
+    fireEvent.click(screen.getByTestId("deliverable-save-draft"));
+    await waitFor(() => expect(screen.getByText("Editar entregável")).toBeInTheDocument());
+    first.unmount(); render(<TaskDeliverablesEditor task={task([created])} act={act} />);
+    expect(screen.getByLabelText("Nome do entregável")).toHaveValue(created.name);
+    fireEvent.click(screen.getByTestId("deliverable-save-draft"));
+    await waitFor(() => expect(api.updateCatalog2Deliverable).toHaveBeenCalledWith(created.id, expect.anything()));
+    expect(api.createCatalog2Deliverable).toHaveBeenCalledTimes(1);
+  });
+  it("F5 reabre o entregável no mesmo bloco com dados locais sem enviar alteração", () => {
+    const first = render(<TaskDeliverablesEditor task={task([full])} act={act} />);
+    fireEvent.click(screen.getByLabelText("Editar entregável Relatório mensal"));
+    fireEvent.change(screen.getByLabelText("Nome do entregável"), { target: { value: "Nome que ainda não salvei" } });
+    fireEvent.click(screen.getByRole("button", { name: /Arquivo-modelo/ }));
+    first.unmount();
+    render(<TaskDeliverablesEditor task={task([full])} act={act} />);
+    expect(screen.getByLabelText("Nome do entregável")).toHaveValue("Nome que ainda não salvei");
+    expect(screen.getByRole("button", { name: "Escolher arquivo salvo" })).toBeVisible();
+    expect(api.updateCatalog2Deliverable).not.toHaveBeenCalled();
+  });
+  it("não reabre entregável excluído do servidor nem recupera edição no modo leitura", () => {
+    const first = render(<TaskDeliverablesEditor task={task([full])} act={act} />);
+    fireEvent.click(screen.getByLabelText("Editar entregável Relatório mensal"));
+    first.unmount();
+    const second = render(<TaskDeliverablesEditor task={task([full])} act={act} readOnly />);
+    expect(screen.queryByTestId("deliverable-modal")).not.toBeInTheDocument();
+    second.unmount(); render(<TaskDeliverablesEditor task={task([])} act={act} />);
+    expect(screen.queryByTestId("deliverable-modal")).not.toBeInTheDocument();
+  });
   it("agrupa pela etapa responsável (número + nome) e mostra tipo, recorrência, responsável, momento, obrigatoriedade, aprovação e visibilidade", () => {
     render(<TaskDeliverablesEditor task={task([full, { ...other, step_id: "s1" }])} act={act} />);
     const titles = screen.getAllByTestId("deliverable-group-title").map((t) => t.textContent);

@@ -16,7 +16,7 @@ export function specificAssignments(tasks: Task[]): SpecificAssignment[] {
     for (const s of t.steps) {
       const step = { ...base, step_id: s.id, step_name: s.name };
       if (s.executor_kind === "leader" && s.leader_mode === "specific" && s.leader_user_id) out.push({ ...step, user_id: s.leader_user_id, kind: "leader", label: "Líder específico" });
-      if (s.requires_specialist_qualification && s.specialist_user_id && s.qualifier_kind !== "nomad_pool") out.push({ ...step, user_id: s.specialist_user_id, kind: "person", label: "Especialista específico" });
+      if (s.requires_specialist_qualification && s.specialist_user_id && ["person", "leader_person"].includes(s.qualifier_kind)) out.push({ ...step, user_id: s.specialist_user_id, kind: "person", label: "Especialista específico" });
       const ops = s.ops as Record<string, unknown> | null;
       if (["ia", "hibrido"].includes(s.execution_mode ?? "") && ["person", "leader_person"].includes(String(ops?.ai_qualifier_kind)) && typeof ops?.ai_qualifier_user_id === "string" && ops.ai_qualifier_user_id) out.push({ ...step, user_id: ops.ai_qualifier_user_id, kind: "person", label: "Qualificador específico da IA" });
     }
@@ -31,8 +31,12 @@ export async function unavailableSpecificAssignments(db: Db, tasks: Task[]) {
   const byId = new Map(users.map(u => [u.id, u]));
   return refs.filter(r => {
     const u = byId.get(r.user_id);
-    return !u || !u.is_active || u.status !== "ativo" || (r.kind === "leader" && !["lider", "admin"].includes(u.role));
-  }).map(r => ({ ...r, message: `${r.label} indisponível${r.step_name ? ` na etapa “${r.step_name}”` : ` na tarefa “${r.task_name}”`}. Ajuste o responsável desta configuração.` }));
+    return !u || !u.is_active || u.status !== "ativo" || (r.kind === "leader" && u.role !== "lider");
+  }).map(r => {
+    const u = byId.get(r.user_id);
+    const reason = !u ? "o cadastro foi excluído ou não existe" : !u.is_active || u.status !== "ativo" ? "o cadastro está inativo ou bloqueado" : "o cadastro não tem mais o perfil de líder";
+    return { ...r, message: `${r.label} indisponível${r.step_name ? ` na etapa “${r.step_name}”, da tarefa “${r.task_name}”` : ` na tarefa “${r.task_name}”`}: ${reason}. Escolha outra pessoa ou altere para a distribuição automática.` };
+  });
 }
 
 export async function specificAssigneeImpact(db: Db, userId: string, action: "delete" | "deactivate") {

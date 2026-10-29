@@ -11,6 +11,7 @@
 //     "sempre" ou motivo de revalidação (mudança de escopo, acesso expirado, novo
 //     ambiente/plataforma).
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { quantityRules } from "./catalog2-quantity";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -153,7 +154,7 @@ export async function resolveCycleContext(
     first_contract: boolean | null; revalidation_reason: string | null;
     force_first_execution_next?: boolean | null;
     catalog2_product?: { delivery_recurrence: string | null } | null;
-    catalog2_version?: { has_initial_implementation: boolean; implementation_rule: string } | null;
+    catalog2_version?: { has_initial_implementation: boolean; implementation_rule: string; quantity_rules_json?: string | null } | null;
   },
   cycleIndex: number,
 ): Promise<CycleContext> {
@@ -184,7 +185,7 @@ export async function resolveCycleContext(
       where: { id: { not: pp.id }, project_id: projectId, catalog2_product_id: pp.catalog2_product_id, created_at: { lt: pp.created_at }, tasks: { some: {} } },
       select: { id: true },
     });
-    firstExecutionInProject = !priorInProject;
+    firstExecutionInProject = quantityRules(pp.catalog2_version?.quantity_rules_json).repeat_setup_per_contract || !priorInProject;
   }
 
   const completed = { modelIds: new Set<number>(), keys: new Set<string>() };

@@ -546,6 +546,8 @@ async function main() {
         emergency_enabled: (v as any).emergency_enabled ?? false,
         accepts_one_time: (v as any).accepts_one_time ?? undefined,
         accepts_recurring: (v as any).accepts_recurring ?? undefined,
+        accepts_multiple_contracts: (v as any).accepts_multiple_contracts ?? undefined,
+        quantity_rules_json: (v as any).quantity_rules_json ?? undefined,
         has_initial_implementation: (v as any).has_initial_implementation ?? undefined,
         implementation_rule: (v as any).implementation_rule ?? undefined,
         implementation_blocks_operation: (v as any).implementation_blocks_operation ?? undefined,

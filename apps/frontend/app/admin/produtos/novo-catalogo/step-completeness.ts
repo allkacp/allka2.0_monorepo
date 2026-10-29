@@ -54,6 +54,8 @@ export function stepIssues(f: StepFormLike, ctx: StepIssueCtx = {}): StepIssue[]
   if (!f.name.trim()) push(1, "name", "Informe o nome da etapa.");
   if (!f.description.trim()) push(1, "description", "Descreva o que acontece nesta etapa.");
   // 2 · Quem faz e quanto tempo leva
+  const extraUnitDeadline = f.ops?.multiple_units?.deadline_extra_percent;
+  if (extraUnitDeadline != null && (!Number.isFinite(extraUnitDeadline) || extraUnitDeadline < 0 || extraUnitDeadline > 1000)) push(2, "quantity_deadline", "Prazo por unidade extra: use um percentual de 0 a 1000, ou deixe vazio.");
   if (f.execution_mode === "hibrido") {
     if (!(f.specialty_id || ctx.taskSpecialtyId)) push(2, "specialty", "Escolha a especialidade da opção humana.");
     if (!positive(f.estimated_hours)) push(2, "hours", "Informe as horas estimadas da opção humana.");

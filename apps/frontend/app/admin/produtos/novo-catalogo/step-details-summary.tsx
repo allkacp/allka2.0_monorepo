@@ -71,6 +71,7 @@ export function stepSummaryRows(step: any, opts: { isLast?: boolean } = {}): Ste
   const acc = Array.isArray(ops.access_keys) ? ops.access_keys : [];
   if (acc.length) add("Acessos", `${acc.length} ${acc.length === 1 ? "acesso" : "acessos"} necessários`);
   add("Só na 1ª execução", step?.first_execution_only ? "Sim" : "");
+  if (ops.multiple_units?.deadline_extra_percent != null) add("Prazo por unidade extra", `+${ops.multiple_units.deadline_extra_percent}% no mesmo lote`);
   add("Dispensável com o mesmo executor", step?.skip_when_same_executor ? "Sim" : "");
   add("Ciclos", cyclesSummary(ops.cycles));
   // A última etapa é a FINAL: não existe próxima etapa para liberar, então a regra de liberação não se aplica.

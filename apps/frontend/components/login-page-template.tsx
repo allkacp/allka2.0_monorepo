@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "@/hooks/use-navigate";
+import { useLocation } from "react-router-dom";
+import { safeLoginReturnTo } from "@/lib/login-return";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiClient } from "@/lib/api-client";
@@ -209,6 +211,7 @@ interface Props {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LoginPageTemplate({ initialAccessType }: Props) {
+  const location = useLocation();
   const [locale, setLocale] = useState<Locale>(() => {
     return (localStorage.getItem("allka_login_locale") as Locale) ?? "pt";
   });
@@ -231,7 +234,9 @@ export function LoginPageTemplate({ initialAccessType }: Props) {
   const [email, setEmail] = useState(
     config.perfis?.[0]?.email ?? config.defaultEmail ?? "",
   );
-  const destino = perfil?.redirectPath ?? config.redirectPath;
+  // A rota de destino continua protegida pelos guardas de perfil e pela API.
+  // Nunca aceitar URL externa ou retorno para login (loop).
+  const destino = safeLoginReturnTo(new URLSearchParams(location.search).get("returnTo")) ?? perfil?.redirectPath ?? config.redirectPath;
   const [password, setPassword] = useState(config.defaultPassword ?? "");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);

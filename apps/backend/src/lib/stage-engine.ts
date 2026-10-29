@@ -231,7 +231,7 @@ export async function abrirEtapa(
     liderId = stage.lider_id ?? stage.project_task.lider_responsavel_id ?? null;
     if (liderId) {
       const leader = await db.user.findUnique({ where: { id: liderId }, select: { is_active: true, status: true, role: true } });
-      if (!leader?.is_active || leader.status !== "ativo" || !["lider", "admin"].includes(leader.role)) {
+      if (!leader?.is_active || leader.status !== "ativo" || leader.role !== "lider") {
         throw new DependencyBlockedError(`O líder indicado para a etapa “${stage.titulo}” está indisponível. Ajuste o responsável desta execução antes de iniciar.`);
       }
     }

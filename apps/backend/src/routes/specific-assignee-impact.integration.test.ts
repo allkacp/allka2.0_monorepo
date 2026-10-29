@@ -14,6 +14,7 @@ import { abrirEtapa } from "../lib/stage-engine";
 const uid = () => `assignee-${randomUUID()}`;
 const users: string[] = [], products: string[] = [], projects: string[] = [];
 let server: ReturnType<typeof app.listen>, base: string, adminToken: string;
+let adminProfileId: string;
 async function user(role = "lider") {
   const id = uid();
   const u = await prisma.user.create({ data: { id, email: `${id}@example.test`, name: `Teste ${role}`, password_hash: "not-a-login-password", role, account_type: role === "admin" ? "admin" : "lider", status: "ativo", is_active: true } });
@@ -36,6 +37,9 @@ describe("Responsável específico — aviso, confirmação e matriz preservada"
   before(async () => {
     requireTestDatabaseUrl();
     const admin = await user("admin");
+    const profile = await prisma.adminProfile.create({ data: { name: uid(), is_master: true, is_active: true } });
+    adminProfileId = profile.id;
+    await prisma.user.update({ where: { id: admin.id }, data: { admin_profile_id: profile.id } });
     adminToken = jwt.sign({ id: admin.id, email: admin.email, role: admin.role, account_type: admin.account_type }, config.JWT_SECRET, { expiresIn: "1h" });
     server = app.listen(0); await new Promise<void>(resolve => server.once("listening", resolve));
     base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -46,6 +50,7 @@ describe("Responsável específico — aviso, confirmação e matriz preservada"
     await prisma.catalog2ProductVersion.deleteMany({ where: { product_id: { in: products } } });
     await prisma.catalog2Product.deleteMany({ where: { id: { in: products } } });
     await prisma.user.deleteMany({ where: { id: { in: users } } });
+    await prisma.adminProfile.delete({ where: { id: adminProfileId } });
     await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve())); await prisma.$disconnect();
   });
   it("inativar exige confirmação; cancelar não altera nada; confirmar sinaliza e reativar resolve", async () => {
@@ -95,6 +100,55 @@ describe("Responsável específico — aviso, confirmação e matriz preservada"
     const stale = await request(f.person.id, "DELETE", { assignment_confirmation: impact.token });
     assert.equal(stale.status, 409); assert.notEqual(stale.body.impact.token, impact.token);
     assert.ok(await prisma.user.findUnique({ where: { id: f.person.id } }));
+  });
+  it("qualificação pelo líder da área ignora pessoa residual e não exige pessoa na publicação", async () => {
+    const f=await fixture("auto");
+    await prisma.user.update({where:{id:f.person.id},data:{is_active:false,status:"inativo"}});
+    await prisma.catalog2TaskStep.update({where:{id:f.s.id},data:{qualifier_kind:"leader",requires_specialist_qualification:true,specialist_user_id:f.person.id}});
+    assert.equal((await getProductDetail(f.p.id)).assignment_issues.length,0);
+    assert.equal((await specificAssigneeImpact(prisma,f.person.id,"delete")).matrices.length,0);
+    await prisma.catalog2TaskStep.update({where:{id:f.s.id},data:{specialist_user_id:null}});
+    assert.ok(!(await validateVersionForPublish(f.v.id)).issues.some(i=>/especialista.*escolhid|pessoa específica.*escolhid/.test(i)));
+  });
+  it("mensagem identifica tarefa, etapa e motivo para pessoa bloqueada ou excluída", async () => {
+    const f=await fixture();
+    await prisma.user.update({where:{id:f.person.id},data:{status:"bloqueado"}});
+    const tasks=await prisma.catalog2Task.findMany({where:{id:f.t.id},include:{steps:true}});
+    const issues=await unavailableSpecificAssignments(prisma,tasks);
+    assert.ok(issues.some(i=>i.message.includes("Etapa matriz")&&i.message.includes("Tarefa matriz")&&i.message.includes("bloqueado")));
+    assert.equal(issues.length,2);
+  });
+  it("lista só oferece responsáveis ativos; trocar para automático limpa referência antiga", async () => {
+    const f=await fixture(), blocked=await user(), administrator=await user("admin");
+    await prisma.user.update({where:{id:blocked.id},data:{status:"bloqueado"}});
+    const headers={"content-type":"application/json",authorization:`Bearer ${adminToken}`};
+    const options=await fetch(`${base}/api/admin/catalog2/leaders`,{headers});
+    assert.equal(options.status,200);
+    const list=await options.json() as any;
+    assert.ok(list.data.some((u:any)=>u.id===f.person.id));
+    assert.ok(!list.data.some((u:any)=>u.id===blocked.id));
+    assert.ok(!list.data.some((u:any)=>u.id===administrator.id));
+    assert.ok(list.data.every((u:any)=>u.kind==="lider"));
+    await prisma.catalog2Product.update({where:{id:f.p.id},data:{published_version_id:null}});
+    await prisma.catalog2ProductVersion.update({where:{id:f.v.id},data:{state:"rascunho"}});
+    const rejected=await fetch(`${base}/api/admin/catalog2/steps/${f.s.id}`,{method:"PUT",headers,body:JSON.stringify({draft:true,leader_mode:"specific",leader_user_id:administrator.id})});
+    assert.equal(rejected.status,422);
+    assert.equal((await rejected.json() as any).code,"invalid_step_leader");
+    assert.equal((await prisma.catalog2TaskStep.findUniqueOrThrow({where:{id:f.s.id}})).leader_user_id,f.person.id);
+    await prisma.catalog2TaskStep.update({where:{id:f.s.id},data:{qualifier_kind:"person",requires_specialist_qualification:true,specialist_user_id:blocked.id}});
+    const save=await fetch(`${base}/api/admin/catalog2/steps/${f.s.id}`,{method:"PUT",headers,body:JSON.stringify({draft:true,leader_mode:"auto",qualifier_kind:"leader"})});
+    assert.equal(save.status,200,await save.text());
+    const updated=await prisma.catalog2TaskStep.findUniqueOrThrow({where:{id:f.s.id}});
+    assert.equal(updated.leader_user_id,null);
+    assert.equal(updated.specialist_user_id,null);
+    assert.equal(updated.requires_specialist_qualification,false);
+  });
+  it("administrador não valida como líder nominal na matriz", async () => {
+    const f=await fixture("specific","admin");
+    const issues=await unavailableSpecificAssignments(prisma,await prisma.catalog2Task.findMany({where:{id:f.t.id},include:{steps:true}}));
+    assert.ok(issues.some(i=>i.kind==="leader"&&i.message.includes("perfil de líder")));
+    // Administrador ainda pode ser qualificador específico; não misturar papéis.
+    assert.equal(issues.filter(i=>i.kind==="person").length,0);
   });
   it("não altera snapshots contratados e impede iniciar com líder indisponível", async () => {
     const f = await fixture();

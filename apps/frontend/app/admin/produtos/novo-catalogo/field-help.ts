@@ -5,6 +5,11 @@ export const normalizeHelpKey = (raw: string): string =>
   raw.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").replace(/[:*]+\s*$/g, "").trim();
 
 const H: Record<string, string> = {
+  "nova contratacao inclui implantacao": "Ligue quando cada nova compra for uma demanda independente e precisar das etapas de implantação. Elas entram apenas no primeiro ciclo de CADA contratação, nunca na renovação mensal. Desligado mantém a primeira execução do produto no projeto. Não altera contratos já feitos.",
+  "desconto progressivo": "Faixas de quantidade e percentual aprovadas pelo administrador. Aplica a maior faixa atingida ao total, sem somar faixas. O mesmo percentual acompanha o repasse humano da contratação. Não reduz esforço nem altera a tarifa global. Valores que deixem a venda abaixo do custo direto são bloqueados.",
+  "prazo adicional por unidade extra nesta etapa (%)": "Percentual de tempo adicional para cada unidade extra executada na mesma tarefa. Exemplo ilustrativo, não padrão: 5 horas e 20% extra, duas unidades = 6 horas de prazo. O esforço de duas unidades continua 10 horas; o desconto não altera as horas. Vazio usa a regra do produto; zero não acrescenta prazo. Tarefas separadas usam o prazo de cada lote. O prazo comercial considera o maior percentual ativo para não prometer menos tempo.",
+  "prazo adicional por unidade extra (%)": "Percentual adicional por unidade extra no mesmo lote/tarefa. Sem regra de etapa, vale como padrão de todas as etapas. O prazo comercial usa o maior percentual ativo. Não é valor predefinido: cadastre apenas um percentual aprovado. Tarefas em lotes separados podem seguir em paralelo.",
+  "permitir multiplas contratacoes": "Ligado: permite várias unidades e contratações deste produto no mesmo projeto. Desligado: uma unidade e uma contratação vigente por projeto. Uma compra avulsa concluída, cancelada ou transferida libera nova contratação; uma assinatura ainda vigente continua contando, mesmo com a entrega concluída. Outros projetos não são bloqueados. Renovação e agrupamento de tarefas mantêm suas próprias regras. Salve e publique esta versão para valer em novas contratações; não reescreve contratos anteriores.",
   // ── Informações do produto
   "titulo comercial": "O nome do produto como o cliente vê. É também o nome do produto no sistema (não existe mais um nome interno separado).",
   "descricao curta": "Resumo de uma ou duas frases que aparece no card e na lista do catálogo. Até 500 caracteres.",
@@ -241,7 +246,7 @@ const H: Record<string, string> = {
   "quando aparece": "Quando esta pergunta aparece: sempre, ou só se uma variação/adicional for escolhido, ou conforme a resposta de outra pergunta.",
   "entregaveis": "O que precisa ser entregue na tarefa. Cada entregável tem ID permanente, etapa, momento, formato, arquivo-modelo, prova, qualificação, aprovação, recorrência e visibilidade.",
   "momento da entrega": "Quando o item deve estar pronto: ao concluir a etapa, no fim do ciclo, antes da aprovação do cliente ou sob demanda.",
-  "arquivo-modelo": "Modelo/exemplo do entregável que o executor pode baixar para entregar no formato certo.",
+  "arquivo-modelo": "Modelo/exemplo que o executor pode baixar para entregar no formato certo. Use Anexar para enviar um arquivo novo ou Escolher arquivo salvo para buscar um modelo já vinculado a outro entregável, sem reenviar. A escolha é gravada ao salvar o cadastro. Remover retira só o vínculo deste entregável, sem apagar o arquivo dos demais.",
   "etapa responsavel": "Etapa que só conclui com este item. “Tarefa toda” = o item é da tarefa e não de uma etapa.",
   "formato": "Formato esperado do entregável (ex.: PDF, planilha, link do painel).",
   "quem envia": "Quem entrega o item: executor, líder, agência, cliente ou o próprio sistema.",

@@ -22,6 +22,7 @@ import { normalizeAddonSelections, type AddonIssue, type AddonSelection, type No
 import { snapshotPricingRule, type PricingRuleSnapshot } from "./catalog2-pricing-rule";
 import { computeEmergency, type EmergencyResult } from "./catalog2-emergency";
 import { businessMinutesPerDay, ensureWorkCalendar } from "./work-calendar";
+import { applyQuantityRules, quantityRules } from "./catalog2-quantity";
 
 // Minutos úteis por dia — constante de conversão de capacidade (esforço →
 // prazo). Não é regra comercial: é aritmética explícita e configurável aqui.
@@ -72,6 +73,7 @@ export interface DeadlineResult {
 }
 
 export interface PricingResult {
+  volume?: { quantity: number; largest_group: number; discount_percent: number; discount_amount: number | null; price_before_discount: number | null; deadline_extra_days: number };
   currency: string;
   quantity: number;
   /** Entrega emergencial: disponibilidade, o que custaria/encurtaria e, se escolhida, o que foi aplicado. */
@@ -484,10 +486,15 @@ export const PRICING_MODE_LABEL: Record<PricingMode, string> = { calculated: "Ca
  */
 export async function computePricing(versionId: string, selection: PricingSelection, opts: PricingOptions = {}): Promise<PricingResult> {
   const r = await computePricingCore(versionId, selection, opts);
-  const v = await prisma.catalog2ProductVersion.findUnique({ where: { id: versionId }, select: { pricing_mode: true, manual_price: true, manual_deadline_days: true } });
+  const v = await prisma.catalog2ProductVersion.findUnique({ where: { id: versionId }, select: { pricing_mode: true, manual_price: true, manual_deadline_days: true, quantity_rules_json: true, tasks: { select: { key: true, steps: { select: { key: true, ops: true, first_execution_only: true, step_model: { select: { first_execution_only: true } } } } } } } });
+  const volumeRules = quantityRules(v?.quantity_rules_json);
+  // Percentual específico da etapa prevalece na execução. Para a promessa
+  // comercial usamos o maior percentual ativo (conservador também em paralelo).
+  const activePercentages = (v?.tasks ?? []).flatMap((t) => t.steps.filter((s) => r.active_step_refs.includes(`${t.key}:${s.key}`) && (r.split.first_execution.applies || !isFirstExecutionStep(s))).map((s) => Number((s.ops as any)?.multiple_units?.deadline_extra_percent ?? volumeRules.extra_deadline_percent_per_unit)));
+  volumeRules.extra_deadline_percent_per_unit = activePercentages.length ? Math.max(...activePercentages) : volumeRules.extra_deadline_percent_per_unit;
   const mode = ((PRICING_MODES as readonly string[]).includes(v?.pricing_mode ?? "") ? v!.pricing_mode : "calculated") as PricingMode;
   r.pricing_mode = mode;
-  if (mode === "calculated") return r;
+  if (mode === "calculated") return applyQuantityRules(r, volumeRules, selection);
   if (mode === "on_request") {
     const msg = "Produto sob consulta: não gera cotação nem contratação automática.";
     r.commercial_ready = false;
@@ -534,7 +541,7 @@ export async function computePricing(versionId: string, selection: PricingSelect
   }
   if (r.quote_requirements.length) { r.lines.commercial_final_price = { label: "Preço comercial final (fixo)", amount: null, detail: REQUEST_KIND_LABEL[r.price_status] ?? "Sob solicitação comercial" }; r.lines.final_price = r.lines.commercial_final_price; r.split.first_charge = null; r.split.renewal = null; r.split.avulso_total = null; r.split.commercial_summary = { ...r.split.commercial_summary, first_charge: null, renewal: null, avulso: null, first_cycle_recurring_price: null, implementation_price: null }; }
   r.price_status = r.quote_requirements.length ? r.price_status : "final";
-  return r;
+  return applyQuantityRules(r, volumeRules, selection);
 }
 
 async function computePricingCore(versionId: string, selection: PricingSelection, opts: PricingOptions = {}): Promise<PricingResult> {
@@ -604,7 +611,7 @@ async function computePricingCore(versionId: string, selection: PricingSelection
   // Entram na primeira cobrança e NÃO entram na renovação. Se este projeto já tem o produto (recontratação), nem executam nem cobram.
   const wholeTaskKind = (t: { cycle_type: string; repeat_rule: string }): "implementation" | "one_time" | "recurring" =>
     t.cycle_type === "implementacao" ? "implementation" : t.cycle_type === "avulso" || t.repeat_rule === "first_only" ? "one_time" : "recurring";
-  const firstExecApplies = opts.firstExecution?.applies !== false;
+  const firstExecApplies = quantityRules(version.quantity_rules_json).repeat_setup_per_contract || opts.firstExecution?.applies !== false;
   const firstOnlyRefs = new Set<string>();
   for (const t of chargedTasks) {
     if (wholeTaskKind(t) !== "recurring") continue; // tarefa inteira de uma vez/implantação: a marca na etapa é irrelevante

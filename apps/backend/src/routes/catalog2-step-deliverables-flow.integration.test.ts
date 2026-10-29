@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 import crypto from "node:crypto";
 import { prisma } from "../lib/prisma";
+import { storeDeliverableFile, DELIVERABLE_FILES_SUBPATH } from "../lib/catalog2-deliverable-files";
+import { deleteUploadedFile } from "../lib/file-storage";
 import { concluirEtapa, iniciarEtapasDaTarefa } from "../lib/stage-engine";
 import { api, byKey, checkoutAndPay, mkAdmin, mkCompanyUser, mkLeader, mkProduct, setPricingSettings, SEL, startServer, stopServer, tasksOf } from "../test-support/universal-helpers";
 
@@ -21,11 +23,12 @@ async function mkDraftProduct(name: string) {
   return { product, versionId, task, s1: task.steps[0], s2: task.steps[1] };
 }
 const rowOf = (id: string) => prisma.catalog2TaskDeliverable.findUniqueOrThrow({ where: { id } });
+const testFiles: string[] = [];
 
 describe("Entregáveis dentro da etapa · rascunho, vínculo e exclusão", () => {
   before(async () => { await startServer(); ADMIN = await mkAdmin(); CO = await mkCompanyUser("FD"); });
   beforeEach(async () => { await setPricingSettings(); });
-  after(async () => { await stopServer(); });
+  after(async () => { await stopServer(); for (const id of testFiles) deleteUploadedFile(DELIVERABLE_FILES_SUBPATH, id); });
 
   it("F01. criar já ligado à etapa; rascunho aceita incompleto (sem nome) e fica marcado; o mesmo registro vira completo ao concluir", async () => {
     const { task, s1 } = await mkDraftProduct("F01");
@@ -114,6 +117,48 @@ describe("Entregáveis dentro da etapa · rascunho, vínculo e exclusão", () =>
     const ok = await adm(`/deliverables/${dLivre.json.id}`, "DELETE");
     assert.equal(ok.status, 200, JSON.stringify(ok.json));
     assert.equal(await prisma.catalog2TaskDeliverable.findUnique({ where: { id: dLivre.json.id } }), null);
+  });
+
+  it("F08. excluir rascunho incompleto remove o bloqueio, a aprovação antiga e o resumo ao reler o produto", async () => {
+    const { product, versionId, task, s1 } = await mkDraftProduct("F08");
+    const created = await adm(`/tasks/${task.id}/deliverables`, "POST", { ...full("Entregável removido", { step_id: s1.id }), draft: true });
+    assert.equal(created.status, 201, JSON.stringify(created.json));
+    const blocked = await publish(versionId);
+    assert.notEqual(blocked.status, 200);
+    assert.match(JSON.stringify(blocked.json), /rascunho incompleto/);
+    assert.equal((await adm(`/deliverables/${created.json.id}`, "DELETE")).status, 200);
+    const saved = await adm(`/steps/${s1.id}`, "PUT", { draft: false, ops: { no_deliverables: true, client_approval: { mode: "none" } } });
+    assert.equal(saved.status, 200, JSON.stringify(saved.json));
+    const reread = await adm(`/products/${product.id}`);
+    const version = reread.json.versions.find((v: any) => v.id === versionId);
+    assert.equal(version.tasks.find((t: any) => t.id === task.id).deliverables.length, 0);
+    assert.equal(await prisma.catalog2TaskDeliverable.count({ where: { id: created.json.id } }), 0);
+    const published = await publish(versionId);
+    assert.equal(published.status, 200, JSON.stringify(published.json));
+  });
+
+  it("F09. biblioteca busca arquivo salvo, elimina duplicatas, ignora ausente/link externo e reutiliza sem apagar a origem", async () => {
+    const { task, s1, s2 } = await mkDraftProduct("F09");
+    const ref = storeDeliverableFile("Modelo-F09.pdf", Buffer.from("arquivo de teste descartável"), "application/pdf");
+    testFiles.push(ref.id);
+    const a = await adm(`/tasks/${task.id}/deliverables`, "POST", full("Original", { step_id: s1.id, template_url: `file:${ref.id}`, template_name: ref.name }));
+    assert.equal(a.status, 201, JSON.stringify(a.json));
+    await adm(`/tasks/${task.id}/deliverables`, "POST", full("Ausente", { step_id: s1.id, template_url: "file:11111111-1111-4111-8111-111111111111.pdf", template_name: "Modelo-F09-ausente.pdf" }));
+    await adm(`/tasks/${task.id}/deliverables`, "POST", full("Externo", { step_id: s1.id, template_url: "https://example.test/modelo.pdf", template_name: "Modelo-F09-externo.pdf" }));
+    const list = await adm("/deliverable-files?q=Modelo-F09");
+    assert.equal(list.status, 200, JSON.stringify(list.json));
+    assert.equal(list.json.data.length, 1);
+    assert.equal(list.json.data[0].id, ref.id);
+    assert.match(list.json.data[0].from, /F09/);
+    const b = await adm(`/tasks/${task.id}/deliverables`, "POST", full("Reutilizado", { step_id: s2.id, template_url: `file:${list.json.data[0].id}`, template_name: list.json.data[0].name }));
+    assert.equal(b.status, 201, JSON.stringify(b.json));
+    assert.equal((await adm("/deliverable-files?q=Modelo-F09")).json.data.length, 1);
+    assert.equal((await adm(`/deliverables/${b.json.id}`, "PUT", { template_url: null, template_name: null })).status, 200);
+    assert.equal((await rowOf(a.json.id)).template_url, `file:${ref.id}`);
+    assert.equal((await adm("/deliverable-files?q=Modelo-F09")).json.data.length, 1);
+    assert.equal((await adm("/deliverable-files?q=nome-inexistente-F09")).json.data.length, 0);
+    const forbidden = await api("/api/admin/catalog2/deliverable-files", { token: CO.token });
+    assert.notEqual(forbidden.status, 200);
   });
 
   it("F07. ordenar: a rota de ordem aceita os ids da tarefa e mantém os mesmos registros", async () => {

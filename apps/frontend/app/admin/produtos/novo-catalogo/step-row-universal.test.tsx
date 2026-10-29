@@ -4,6 +4,9 @@ import { act as rtlAct, fireEvent, render, screen, waitFor, within } from "@test
 // Fluxo universal (19/10): entregáveis DENTRO da etapa, aprovação do cliente explícita, campos dependentes, variação criada na condição,
 // status real dos blocos e navegação guiada. Tudo contra o StepRow real; só a API é simulada.
 const api: Record<string, any> = {
+  getCatalog2GateOptions: vi.fn(async () => ({ positions: [], approvers: [] })),
+  getCatalog2SlaOptions: vi.fn(async () => ({ units: [], anchors: [] })),
+  getCatalog2StepPerformance: vi.fn(async () => ({ product: { total: 0 }, model: null })),
   updateCatalog2Step: vi.fn(async () => ({})),
   createCatalog2Deliverable: vi.fn(async () => ({ id: "new1", key: "plano-estrategico" })),
   updateCatalog2Deliverable: vi.fn(async () => ({})),
@@ -70,7 +73,119 @@ const addDeliverable = async (name: string, desc = "Descrição completa", draft
 
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); resetOpenStoreForTests(); Object.values(api).forEach((f) => f.mockClear()); act.mockClear(); });
 
+describe("F5 dentro do entregável", () => {
+  it("reabre o mesmo entregável salvo com campos digitados, blocos e arquivo-modelo preservados sem PUT", () => {
+    const first = mount({ deliverables: [deliv()] });
+    openEditor(); expandAll();
+    fireEvent.change(modal().getByLabelText("Nome da etapa"), { target: { value: "Etapa ainda não salva" } });
+    fireEvent.click(screen.getByLabelText("Editar Plano estratégico inicial de mídia paga"));
+    fireEvent.change(screen.getByLabelText("Nome do entregável"), { target: { value: "Nome antes do F5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Arquivo-modelo/ }));
+    fireEvent.scroll(screen.getByTestId("deliverable-scroll"), { target: { scrollTop: 180 } });
+    first.unmount(); resetOpenStoreForTests();
+    mount({ deliverables: [deliv()] });
+    expect(screen.getByTestId("deliverable-modal")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nome do entregável")).toHaveValue("Nome antes do F5");
+    expect(modal().getByLabelText("Nome da etapa")).toHaveValue("Etapa ainda não salva");
+    expect(screen.getByRole("button", { name: "Escolher arquivo salvo" })).toBeVisible();
+    expect(screen.getByTestId("deliverable-scroll").scrollTop).toBe(180);
+    expect(api.updateCatalog2Deliverable).not.toHaveBeenCalled();
+    expect(api.updateCatalog2Step).not.toHaveBeenCalled();
+  });
+
+  it("novo entregável ainda não salvo também volta; descartar não faz ele reaparecer", () => {
+    const first = mount(); openEditor(); expandAll();
+    fireEvent.click(screen.getByTestId("add-step-deliverable"));
+    fireEvent.change(screen.getByLabelText("Nome do entregável"), { target: { value: "Novo ainda não enviado" } });
+    first.unmount(); resetOpenStoreForTests();
+    const second = mount();
+    expect(screen.getByLabelText("Nome do entregável")).toHaveValue("Novo ainda não enviado");
+    fireEvent.click(within(screen.getByTestId("deliverable-modal")).getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(screen.getByTestId("deliverable-close-discard"));
+    second.unmount(); resetOpenStoreForTests(); mount();
+    expect(screen.queryByTestId("deliverable-modal")).not.toBeInTheDocument();
+    expect(api.createCatalog2Deliverable).not.toHaveBeenCalled();
+  });
+
+  it("retém entregável criado no rascunho da etapa sem duplicar ao recarregar", async () => {
+    const first = mount(); openEditor(); expandAll();
+    await addDeliverable("Rascunho da etapa");
+    fireEvent.click(screen.getByLabelText("Editar Rascunho da etapa"));
+    fireEvent.change(screen.getByLabelText("Descrição do entregável"), { target: { value: "Mais detalhes ainda não salvos" } });
+    first.unmount(); resetOpenStoreForTests(); mount();
+    expect(screen.getByLabelText("Descrição do entregável")).toHaveValue("Mais detalhes ainda não salvos");
+    expect(items()).toHaveLength(1);
+    expect(api.createCatalog2Deliverable).not.toHaveBeenCalled();
+  });
+});
+
+describe("Conferência final somente leitura", () => {
+  it("mostra dados atuais, horas/custo e prazos sem campos editáveis; Corrigir preserva o rascunho sem gravar", () => {
+    mount({ step: { approval_hours: 24, rework_hours: 8 }, taskOver: { stage_execution: "stage" } });
+    openEditor(); expandAll();
+    const name = modal().getByLabelText("Nome da etapa");
+    fireEvent.change(name, { target: { value: "Nome atualizado para conferência" } });
+    fireEvent.click(screen.getByRole("button", { name: "Conferir etapa" }));
+    expect(screen.getByTestId("step-edit-blocks")).not.toBeVisible();
+    const summary = screen.getByTestId("step-final-summary");
+    expect(summary.querySelector("input,select,textarea,[contenteditable=true]")).toBeNull();
+    expect(summary).toHaveTextContent("Nome atualizado para conferência");
+    expect(summary).toHaveTextContent("24 h úteis");
+    expect(summary).toHaveTextContent("8 h úteis");
+    expect(summary).toHaveTextContent("2 h");
+    expect(summary).toHaveTextContent(/100,00/);
+    expect(summary).toHaveTextContent("alterações ainda não salvas");
+    expect(api.updateCatalog2Step).not.toHaveBeenCalled();
+    fireEvent.click(within(summary).getByRole("button", { name: "Corrigir bloco 1" }));
+    expect(screen.getByTestId("step-edit-blocks")).toBeVisible();
+    expect(modal().getByLabelText("Nome da etapa")).toHaveValue("Nome atualizado para conferência");
+    expect(api.updateCatalog2Step).not.toHaveBeenCalled();
+  });
+
+  it("abrir a ficha salva não permite adicionar/remover aprovações ou prazos nem alterar o fluxo", async () => {
+    mount({ twoSteps: true, version: { id: "v1", approval_gates: [{ id: "g1", name: "Conferência do briefing", anchor_task_key: "t1", anchor_step_key: "configurar", position: "before_step", approver_kind: "client" }], sla_rules: [{ id: "r1", name: "Prazo cadastrado", scope_kind: "step", target_key: "t1:configurar", amount: 8, unit: "business_hours", anchor: "start" }] } });
+    fireEvent.click(screen.getByTestId("step-view-btn"));
+    const governance = screen.getByTestId("step-governance");
+    (governance as HTMLDetailsElement).open = true;
+    fireEvent(governance, new Event("toggle"));
+    await screen.findByText(/Etapa nova: ainda não foi contratada/);
+    expect(governance).toHaveTextContent("Conferência do briefing");
+    expect(governance).toHaveTextContent("Prazo cadastrado");
+    expect(governance.querySelector("input,select,textarea")).toBeNull();
+    expect(within(governance).queryByRole("button", { name: /Nova aprovação|Novo prazo|Remover/ })).not.toBeInTheDocument();
+    expect(api.updateCatalog2Step).not.toHaveBeenCalled();
+  });
+});
+
 describe("Entregáveis DENTRO da etapa", () => {
+  it("desativar a aprovação de um entregável salvo precisa gravar a mudança antes de concluir a etapa", async () => {
+    mount({ taskOver: { stage_execution: "stage" }, deliverables: [deliv()], step: { ops: { client_approval: { mode: "step" } } } });
+    openEditor(); expandAll();
+    fireEvent.click(screen.getByRole("button", { name: "Desativar aprovação dos entregáveis" }));
+    expect(screen.queryByTestId("approval-deliverables-conflict")).not.toBeInTheDocument();
+    concluir();
+    await waitFor(() => expect(api.updateCatalog2Step).toHaveBeenCalledTimes(1));
+    expect(api.updateCatalog2Deliverable).toHaveBeenCalledWith("d1", expect.objectContaining({ requires_approval: false }));
+    expect(api.updateCatalog2Deliverable.mock.invocationCallOrder[0]).toBeLessThan(api.updateCatalog2Step.mock.invocationCallOrder[0]);
+  });
+
+  it("excluir o último entregável tira seu nome da aprovação e do resumo; declarar sem entregáveis salva a exclusão primeiro", async () => {
+    mount({ taskOver: { stage_execution: "stage" }, deliverables: [deliv()], step: { ops: { client_approval: { mode: "deliverables" } } } });
+    openEditor(); expandAll();
+    fireEvent.click(screen.getByLabelText("Excluir Plano estratégico inicial de mídia paga"));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Excluir entregável" }));
+    expect(screen.getByTestId("step-final-deliverables")).toHaveTextContent("nenhum");
+    expect(screen.getByTestId("approval-deliverables-box")).not.toHaveTextContent("Plano estratégico inicial de mídia paga");
+    expect(screen.getByTestId("approval-deliverables-box")).toHaveTextContent("Nenhum entregável");
+    fireEvent.click(modal().getByRole("radio", { name: "Não" }));
+    fireEvent.click(modal().getByLabelText("Esta etapa não tem entregáveis"));
+    concluir();
+    await waitFor(() => expect(api.updateCatalog2Step).toHaveBeenCalledTimes(1));
+    expect(api.deleteCatalog2Deliverable).toHaveBeenCalledWith("d1");
+    expect(api.deleteCatalog2Deliverable.mock.invocationCallOrder[0]).toBeLessThan(api.updateCatalog2Step.mock.invocationCallOrder[0]);
+    expect(lastPut().ops).toMatchObject({ no_deliverables: true, client_approval: { mode: "none" } });
+  });
+
   it("1/3/4) criar na etapa: nasce 'não salvo', nada vai ao servidor até salvar a etapa, e depois é criado JÁ ligado à etapa (antes de gravar a etapa)", async () => {
     mount();
     openEditor(); expandAll();

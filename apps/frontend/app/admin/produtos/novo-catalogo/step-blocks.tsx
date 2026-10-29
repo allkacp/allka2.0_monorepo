@@ -101,7 +101,7 @@ export function StepBlock({ n, title, status, count = 0, summary, open, onToggle
         <div ref={setCardSlot} className="min-w-0 space-y-3" />
       </div>
       {asModal && (
-        <FramedModal open onOpenChange={(o) => { if (!o) onToggle(); }} testId={`step-block-${n}-modal`} title={title}>
+        <FramedModal open overlayTone="dark" onOpenChange={(o) => { if (!o) onToggle(); }} testId={`step-block-${n}-modal`} title={title}>
           <div className="mx-[2px] mt-[2px] flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900">
             <div className="flex min-w-0 items-center gap-2">
               <span className="section-number-badge flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white">{n}</span>

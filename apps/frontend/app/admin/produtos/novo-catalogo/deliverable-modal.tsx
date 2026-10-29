@@ -2,7 +2,7 @@
 
 // Modal "Novo entregável" / "Editar entregável" (19/10): largo, cabeçalho e rodapé fixos, 8 blocos recolhíveis, nomes completos nos campos,
 // ajuda simples, aviso de alterações não salvas, "Salvar rascunho" para entregável incompleto e erro de validação que NUNCA apaga o preenchimento.
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, ChevronDown, ChevronRight, Download, Paperclip, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import {
   DELIVERABLE_CYCLE_SCOPES, DELIVERABLE_MOMENTS, DELIVERABLE_RESPONSIBLES, DELIVERABLE_TYPES, FILE_PREFIX, deliverableIssues, type DeliverableIssue, type Fields,
 } from "./catalog2-deliverable-fields";
 import { RevealBox, flashElement, focusFirst } from "./reveal";
+import { DeliverableFilePicker } from "./deliverable-file-picker";
+import { readEditorSession, writeEditorSession } from "./editor-session";
 
 type SectionId = DeliverableIssue["section"];
 const SECTIONS: { id: SectionId; title: string; hint: string }[] = [
@@ -31,7 +33,7 @@ const HELP = "text-[11px] font-normal text-slate-500 dark:text-slate-400";
 
 export interface DeliverableModalContext { taskName: string; stepName?: string; stepIndex?: number }
 
-export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, context, keyLabel, onSave, onGoToStep, onClose }: {
+export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, context, keyLabel, onSave, onGoToStep, onClose, sessionKey }: {
   initial: Fields; isNew: boolean;
   /** Etapas da tarefa (nome completo) para "Etapa responsável". */
   steps: { id: string; name: string; index: number }[];
@@ -43,16 +45,26 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
   onSave: (v: Fields, opts: { draft: boolean }) => Promise<void>;
   onGoToStep?: () => void;
   onClose: () => void;
+  sessionKey?: string;
 }) {
-  const [v, setV] = useState<Fields>(initial);
-  const [baseline, setBaseline] = useState(JSON.stringify(initial));
-  const [open, setOpen] = useState<Set<SectionId>>(new Set([1, 3, 5]));
+  const restored = useRef(readEditorSession<{ v: Fields; baseline: string; open: SectionId[]; y: number; picker: boolean }>(sessionKey));
+  const saved = restored.current;
+  const valid = saved?.v && Object.entries(initial).every(([k, value]) => typeof (saved.v as any)[k] === typeof value);
+  const [v, setV] = useState<Fields>(valid ? saved.v : initial);
+  const [baseline, setBaseline] = useState(valid && typeof saved.baseline === "string" ? saved.baseline : JSON.stringify(initial));
+  const [open, setOpen] = useState<Set<SectionId>>(new Set(valid && Array.isArray(saved.open) ? saved.open.filter((n) => n >= 1 && n <= 8) : [1, 3, 5]));
   const [showErrors, setShowErrors] = useState(false);
   const [saving, setSaving] = useState<null | "draft" | "final">(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [fileErr, setFileErr] = useState<string | null>(null);
+  const [filePickerOpen, setFilePickerOpen] = useState(valid && saved.picker === true);
   const [closeAsk, setCloseAsk] = useState(false);
   const root = useRef<HTMLDivElement | null>(null);
+  const scrollY = useRef(valid && Number.isFinite(saved.y) ? saved.y : 0);
+  // Dialog monta o portal depois do formulário: restaura quando o nó realmente existir.
+  const attachScroll = useCallback((node: HTMLDivElement | null) => { root.current = node; if (node) node.scrollTop = scrollY.current; }, []);
+  const persist = () => writeEditorSession(sessionKey, { v, baseline, open: [...open], y: scrollY.current, picker: filePickerOpen });
+  useEffect(persist, [sessionKey, v, baseline, open, filePickerOpen]);
   const set = (p: Partial<Fields>) => setV((c) => ({ ...c, ...p }));
   const issues = useMemo(() => deliverableIssues(v), [v]);
   const dirty = JSON.stringify(v) !== baseline;
@@ -99,7 +111,7 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) requestClose(); }}>
-      <DialogContent showCloseButton={false} className="flex max-h-[calc(100dvh-9rem)] w-[96vw] max-w-5xl flex-col gap-0 overflow-hidden bg-slate-50 p-0 dark:bg-slate-950 sm:max-w-5xl" data-testid="deliverable-modal">
+      <DialogContent showCloseButton={false} onOpenAutoFocus={(event) => { if (valid) { event.preventDefault(); root.current?.focus({ preventScroll: true }); } }} className="flex max-h-[calc(100dvh-9rem)] w-[96vw] max-w-5xl flex-col gap-0 overflow-hidden bg-slate-50 p-0 dark:bg-slate-950 sm:max-w-5xl" data-testid="deliverable-modal">
         <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900" data-testid="deliverable-modal-header">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
@@ -117,7 +129,7 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
           </div>
         </div>
 
-        <div ref={root} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+        <div ref={attachScroll} tabIndex={-1} data-testid="deliverable-scroll" onScroll={(e) => { scrollY.current = e.currentTarget.scrollTop; persist(); }} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 outline-none">
           {showErrors && issues.length > 0 && (
             <div role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="deliverable-error-summary">
               <p className="font-bold">O entregável ainda não pode ser concluído. Nada do que você preencheu foi apagado.</p>
@@ -220,10 +232,12 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
                       <div className="flex flex-wrap items-center gap-2">
                         {v.template_name ? <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-1 text-xs text-slate-700"><Paperclip className="h-3 w-3" />{v.template_name}</span> : <span className="text-xs text-slate-400">nenhum</span>}
                         <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"><Upload className="h-3 w-3" />Anexar<input type="file" className="sr-only" aria-label="Anexar arquivo-modelo do entregável" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.currentTarget.value = ""; }} /></label>
+                        <button type="button" className="rounded-md border border-violet-200 px-2 py-1 text-xs font-semibold text-violet-700 hover:bg-violet-50" aria-expanded={filePickerOpen} onClick={() => setFilePickerOpen((o) => !o)}>Escolher arquivo salvo</button>
                         {hasFile && <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-violet-700 underline" onClick={() => void apiClient.downloadCatalog2DeliverableFile({ id: v.template_url.slice(FILE_PREFIX.length), name: v.template_name })}><Download className="h-3 w-3" />Baixar</button>}
                         {v.template_name && <button type="button" className="text-xs text-red-600 underline" onClick={() => set({ template_url: "", template_name: "" })}>Remover</button>}
                       </div>
                       {fileErr && <p role="alert" className="text-xs text-red-600">{fileErr}</p>}
+                      {filePickerOpen && <DeliverableFilePicker onClose={() => setFilePickerOpen(false)} onChoose={(file) => { set({ template_url: `${FILE_PREFIX}${file.id}`, template_name: file.name }); setFileErr(null); setFilePickerOpen(false); }} />}
                     </div>
                   )}
                   {sec.id === 8 && (

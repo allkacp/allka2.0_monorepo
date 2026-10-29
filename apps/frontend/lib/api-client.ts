@@ -992,6 +992,7 @@ class ApiClient {
   saveAiChangePricing(body: Record<string, any>) { return this.put<any>(`/ai-usage/change-pricing`, body); }
   getCatalog2Specialists() { return this.c2<{ data: { id: string; name: string; email: string; kind: "admin" | "lider" | "nomade" }[] }>("GET", `/specialists`); }
   getCatalog2Qualifiers() { return this.c2<{ data: { id: string; name: string; email: string; kind: "admin" | "lider" }[] }>("GET", `/qualifiers`); }
+  getCatalog2Leaders() { return this.c2<{ data: { id: string; name: string; email: string; kind: "lider" }[] }>("GET", "/leaders"); }
   getCatalog2AccessTypes() { return this.c2<{ data: { key: string; label: string }[] }>("GET", `/access-types`); }
   // ── Conexões e acessos necessários (módulo universal) ──────────────────
   getConnectionVocabulary() { return this.c2<any>("GET", "/connection-vocabulary"); }
@@ -1055,6 +1056,7 @@ class ApiClient {
   async uploadCatalog2DeliverableFile(file: File): Promise<{ file: { id: string; name: string; size: number; mime: string } }> {
     return this.uploadFile("/admin/catalog2/deliverable-files", file);
   }
+  getCatalog2DeliverableFiles(q = "") { return this.c2<{ data: { id: string; name: string; from: string }[]; has_more: boolean }>("GET", `/deliverable-files?q=${encodeURIComponent(q)}`); }
   /** Baixa o anexo (com a sessão do usuário) e entrega ao navegador como arquivo. */
   // anexos das respostas do questionário (armazenamento seguro no servidor)
   async uploadBriefingFile(taskId: string, questionKey: string, file: File, description?: string): Promise<{ id: string; name: string; size: number; mime_type: string; description: string | null }> {

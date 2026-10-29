@@ -43,13 +43,13 @@ export function syncDelivStates(items: DelivItem[]): DelivItem[] {
 }
 /** Marcado como rascunho no servidor, mas com todos os campos obrigatórios preenchidos: não falta nada. A marca de rascunho só sai ao concluir a etapa. */
 export const isStaleDraft = (i: DelivItem): boolean => !!i.draft && (i.state === "saved" || i.state === "linked" || i.state === "edited") && deliverableIssues(i.fields).length === 0;
-export const activeDeliv = (items: DelivItem[]) => items.filter((i) => i.state !== "unlinked" && i.state !== "deleted");
-export const hasDelivPending = (items: DelivItem[]) => items.some((i) => i.state !== "saved");
+export const activeDeliv = (items: DelivItem[], stepId?: string) => items.filter((i) => i.state !== "unlinked" && i.state !== "deleted" && (stepId === undefined || i.fields.step_id === stepId));
+export const hasDelivPending = (items: DelivItem[]) => syncDelivStates(items).some((i) => i.state !== "saved");
 
 /** Mensagens para CONCLUIR a etapa, citando o entregável pelo nome. */
-export function delivIssues(items: DelivItem[], declaredNone: boolean): { field: string; message: string }[] {
+export function delivIssues(items: DelivItem[], declaredNone: boolean, stepId?: string): { field: string; message: string }[] {
   const out: { field: string; message: string }[] = [];
-  const act = activeDeliv(items);
+  const act = activeDeliv(items, stepId);
   if (declaredNone) {
     // Declarar "não tem entregáveis" e ainda ter entregável ligado seria contraditório: o usuário decide (remover o vínculo ou desmarcar).
     if (act.length) out.push({ field: "deliverables", message: `Você declarou que esta etapa não tem entregáveis, mas há ${act.length} ligado${act.length === 1 ? "" : "s"} a ela. Marque “tem entregáveis” ou remova o vínculo.` });
@@ -80,7 +80,8 @@ export function mergeOrder(taskOrder: string[], stepOwnedBefore: Set<string>, lo
  * (se algo falhar — ex.: exclusão recusada por referência — o que já foi gravado fica registrado e o erro sobe com a mensagem do servidor).
  */
 export async function commitDelivItems(items: DelivItem[], p: { taskId: string; stepId: string; taskDeliverableIds: string[]; onProgress?: (items: DelivItem[]) => void }): Promise<DelivCommit> {
-  let cur = items.slice();
+  // Também reconhece alterações de campos feitas por atalhos (não só pelo modal).
+  let cur = syncDelivStates(items);
   const emit = () => p.onProgress?.(cur);
   const createdIds: string[] = [];
   const removed = new Set<string>();

@@ -18,6 +18,8 @@ import { revalidateQuote, type ClientContext } from "./catalog2-client";
 import { gerarTarefasCatalog2DoProjeto } from "./generate-tasks-catalog2";
 import type { GerarTarefasResult } from "./generate-tasks";
 import { satisfyPaymentTriggersByReference } from "./task-release-service";
+import { computePricing } from "./catalog2-pricing";
+import { executionSnapshot } from "./catalog2-quantity";
 
 export class Catalog2CheckoutError extends Catalog2Error {}
 
@@ -136,6 +138,30 @@ export async function attachCatalog2QuoteToProject(tx: DbClient, params: AttachQ
     throw new Catalog2CheckoutError("Cotação não está mais válida para conversão.", 409, "quote_stale");
   }
 
+  const contractRule = await tx.catalog2ProductVersion.findUniqueOrThrow({ where: { id: quote.version_id }, select: { accepts_multiple_contracts: true } });
+  if (!contractRule.accepts_multiple_contracts) {
+    if (quote.quantity > 1) throw new Catalog2CheckoutError("Este produto não permite múltiplas unidades nesta contratação.", 422, "multiple_contracts_not_allowed");
+    // Serializa também aditivos concorrentes. Retry da MESMA cotação retornou acima.
+    await tx.$queryRaw`SELECT id FROM projects WHERE id = ${params.projectId} FOR UPDATE`;
+    const retry = await tx.projectProduct.findUnique({ where: { origin_catalog2_quote_id: quote.id } });
+    if (retry) return retry;
+    // Leitura corrente (FOR UPDATE), não a fotografia anterior da transação
+    // REPEATABLE READ: uma compra concorrente pode ter terminado enquanto
+    // aguardávamos o lock do projeto.
+    const occupied = await tx.$queryRaw<{ id: string }[]>`
+      SELECT pp.id FROM project_products pp
+      LEFT JOIN catalog2_subscriptions s ON s.project_product_id = pp.id
+      WHERE pp.project_id = ${params.projectId}
+        AND pp.catalog2_product_id = ${quote.product_id}
+        AND pp.status NOT IN ('CANCELADO', 'TRANSFERIDO')
+        AND (pp.status <> 'CONCLUIDO'
+          OR s.status NOT IN ('cancelada', 'encerrada')
+          OR (s.status = 'cancelada' AND s.current_period_end > ${new Date()}))
+      LIMIT 1 FOR UPDATE
+    `;
+    if (occupied.length) throw new Catalog2CheckoutError("Este produto já tem uma contratação vigente neste projeto e não permite outra ao mesmo tempo.", 409, "multiple_contracts_not_allowed");
+  }
+
   const product = await tx.catalog2Product.findUniqueOrThrow({
     where: { id: quote.product_id },
     include: { category: { select: { name: true } }, pillar: { select: { name: true } } },
@@ -152,6 +178,13 @@ export async function attachCatalog2QuoteToProject(tx: DbClient, params: AttachQ
   // dedicados, específicos do catalog2.
   const now = new Date();
   const periodEndsAt = quote.contract_period_months ? addMonths(now, quote.contract_period_months) : null;
+  // Cotações antigas/negociadas não possuíam referência privada de repasse.
+  // Fotografa só ao NOVO checkout; nunca regrava um contrato já criado.
+  if (!quote.execution_snapshot_json) {
+    const v = await tx.catalog2ProductVersion.findUniqueOrThrow({ where: { id: quote.version_id }, select: { quantity_rules_json: true } });
+    const pricing = await computePricing(quote.version_id, JSON.parse(quote.selection_json));
+    await tx.catalog2Quote.update({ where: { id: quote.id }, data: { execution_snapshot_json: executionSnapshot(pricing, v.quantity_rules_json) } });
+  }
 
   const pp = await tx.projectProduct.create({
     data: {

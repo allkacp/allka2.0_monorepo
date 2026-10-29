@@ -253,6 +253,8 @@ export async function newDraftVersion(productId: string, actorUserId: string) {
         manual_deadline_days: last?.manual_deadline_days ?? undefined,
         accepts_one_time: last?.accepts_one_time ?? undefined,
         accepts_recurring: last?.accepts_recurring ?? undefined,
+        accepts_multiple_contracts: last?.accepts_multiple_contracts ?? true,
+        quantity_rules_json: last?.quantity_rules_json ?? null,
         has_initial_implementation: last?.has_initial_implementation ?? undefined,
         implementation_rule: last?.implementation_rule ?? undefined,
         implementation_blocks_operation: last?.implementation_blocks_operation ?? undefined,
@@ -669,7 +671,7 @@ export async function validateVersionForPublish(versionId: string): Promise<Publ
       const e = validateStepExecutor(s);
       if (e) issues.push(`Tarefa "${t.name}": ${e}`);
     }
-    for (const s of t.steps) if (s.requires_specialist_qualification && !s.specialist_user_id) issues.push(`Tarefa "${t.name}": a etapa "${s.name}" exige qualificação do especialista, mas nenhum especialista foi escolhido.`);
+    for (const s of t.steps) if (s.requires_specialist_qualification && ["person", "leader_person"].includes(s.qualifier_kind) && !s.specialist_user_id) issues.push(`Tarefa "${t.name}": a etapa "${s.name}" exige qualificação de uma pessoa específica, mas nenhuma pessoa foi escolhida.`);
     if (t.steps.length === 0) issues.push(`A tarefa "${t.name}" precisa de ao menos uma etapa (as etapas formam o checklist da tarefa).`);
     for (const st of t.steps) {
       if (!(st.estimated_minutes && st.estimated_minutes > 0) || !(st.specialty_id ?? t.specialty_id)) {
@@ -1402,6 +1404,8 @@ export async function getProductDetail(productId: string) {
       emergency_mode: v.emergency_mode ?? "step", emergency_product_reduction_percent: v.emergency_product_reduction_percent ?? null, emergency_product_extra_percent: v.emergency_product_extra_percent ?? null, emergency_same_day_limit_time: v.emergency_same_day_limit_time ?? null, emergency_min_notice_hours: v.emergency_min_notice_hours ?? null, emergency_executor_accept_required: v.emergency_executor_accept_required ?? false, emergency_executor_accept_hours: v.emergency_executor_accept_hours ?? null,
       accepts_one_time: v.accepts_one_time,
       accepts_recurring: v.accepts_recurring,
+      accepts_multiple_contracts: v.accepts_multiple_contracts,
+      quantity_rules: v.quantity_rules_json ? JSON.parse(v.quantity_rules_json) : null,
       has_initial_implementation: v.has_initial_implementation,
       implementation_rule: v.implementation_rule,
       implementation_blocks_operation: v.implementation_blocks_operation,
