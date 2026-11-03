@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Request, Response } from "express";
 import fs from "fs";
 import multer from "multer";
 import { z } from "zod";
@@ -6,6 +7,7 @@ import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
 import { gerarTarefasDoProjeto } from "../lib/generate-tasks";
+import { AGENCY_CLIENT_LINK_PAYMENT_NOTE } from "../lib/agency-checkout";
 import { withProjectCode } from "../lib/create-project";
 import { writeAccessAudit } from "../lib/product-feedback-service";
 import { validateAdminResponsibleUserId } from "../lib/admin-responsible";
@@ -17,12 +19,24 @@ import {
   projectInScope,
   isAdminUser,
   isLeaderUser,
+  isNomadeUser,
   resolveProjectNewScope,
   newScopeToWhere,
   projectVisibleToUser,
 } from "../lib/project-scope";
 
 const router = Router();
+
+// ─── Nômade (executor) nas rotas de projeto — fechamento de 02/11 ───────────
+// O Nômade não vê projeto: ele vê só as tarefas liberadas para ele (GET /api/nomades/me/... e as rotas de
+// tarefa do executor). Antes getProjectScope devolvia "open" para ele, e ele listava, abria, alterava e
+// apagava projeto de qualquer conta. Agora a lista vem vazia e todas as outras rotas daqui respondem 403.
+// Admin, agência, empresa e Líder continuam com projectVisibleToUser, como sempre.
+function blockNomade(req: Request, res: Response): boolean {
+  if (!isNomadeUser(req.user)) return false;
+  res.status(403).json({ error: "Permissão insuficiente" });
+  return true;
+}
 
 const createSchema = z.object({
   title: z.string().min(1),
@@ -125,6 +139,7 @@ router.get("/contact-options", verifyToken, async (req, res, next) => {
 // GET /api/projects/check-name — check if a project name is already in use
 router.get("/check-name", verifyToken, async (req, res, next) => {
   try {
+    if (blockNomade(req, res)) return; // Nômade não cria projeto: não precisa sondar nome de outra conta
     const title = req.query.title as string | undefined;
     const client_id = req.query.client_id as string | undefined;
     const agency = req.query.agency as string | undefined;
@@ -154,6 +169,12 @@ router.get("/", verifyToken, async (req, res, next) => {
     const status = req.query.status as string | undefined;
     const client_id = req.query.client_id as string | undefined;
     const search = req.query.search as string | undefined;
+
+    // Nômade não vê projeto, só as tarefas liberadas para ele (fechamento de 02/11).
+    if (isNomadeUser(req.user)) {
+      res.json({ data: [], total: 0, page, limit });
+      return;
+    }
 
     const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
     const scopeWhere = scopeToWhere(scope);
@@ -226,7 +247,8 @@ router.get("/", verifyToken, async (req, res, next) => {
             orderBy: { created_at: "asc" },
           },
           _count: { select: { task_executions: true } },
-          agency_owner: { select: { id: true, name: true } },
+          // status do perfil Partner da agência: a lista mostra a categoria real (Agency · Partner), não um texto fixo
+          agency_owner: { select: { id: true, name: true, partner_profile: { select: { status: true } } } },
           company_owner: { select: { id: true, name: true } },
           partner_owner: { select: { id: true, agency: { select: { owner: { select: { name: true } } } } } },
           archived_by: { select: { id: true, name: true } },
@@ -312,6 +334,7 @@ router.get("/", verifyToken, async (req, res, next) => {
 // GET /api/projects/:id
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
+    if (blockNomade(req, res)) return;
     const idParam = req.params.id as string;
     // Aceita tanto o cuid real quanto o número amigável da URL (proj_N,
     // ex: /admin/projetos/3) — evita depender da lista já carregada no
@@ -327,7 +350,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
         client: true,
         client_record: { select: { id: true, name: true, email: true, document: true } },
         consultant_user: { select: { id: true, name: true, email: true } },
-        agency_owner: { select: { id: true, name: true } },
+        agency_owner: { select: { id: true, name: true, partner_profile: { select: { status: true } } } },
         company_owner: { select: { id: true, name: true } },
         archived_by: { select: { id: true, name: true } },
         // Admin responsável (ata 2026-08) — devolve nome/e-mail/perfil já
@@ -373,6 +396,7 @@ router.get("/:id", verifyToken, async (req, res, next) => {
 // GET /api/projects/:id/files  — all task attachments for a project, grouped
 router.get("/:id/files", verifyToken, async (req, res, next) => {
   try {
+    if (blockNomade(req, res)) return;
     const parent = await prisma.project.findUnique({
       where: { id: req.params.id as string },
       select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
@@ -468,6 +492,7 @@ router.get("/:id/files", verifyToken, async (req, res, next) => {
 // fillBriefingWithAI em lib/ai-consultor.ts).
 
 async function assertProjectAccess(req: any, res: any, projectId: string) {
+  if (blockNomade(req, res)) return null;
   const parent = await prisma.project.findUnique({
     where: { id: projectId },
     select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
@@ -618,9 +643,11 @@ async function logCredentialAction(
   });
 }
 
-// GET /api/projects/:id/credentials
+// GET /api/projects/:id/credentials — o Nômade recebe acesso pelo compartilhamento (shared_with_nomad_id) e
+// pelas Conexões, nunca a lista inteira do projeto.
 router.get("/:id/credentials", verifyToken, async (req, res, next) => {
   try {
+    if (blockNomade(req, res)) return;
     const parent = await prisma.project.findUnique({
       where: { id: req.params.id as string },
       select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
@@ -702,6 +729,7 @@ router.get("/:id/credentials", verifyToken, async (req, res, next) => {
 // POST /api/projects/:id/credentials
 router.post("/:id/credentials", verifyToken, async (req, res, next) => {
   try {
+    if (blockNomade(req, res)) return;
     const parent = await prisma.project.findUnique({
       where: { id: req.params.id as string },
       select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },
@@ -773,6 +801,7 @@ router.patch(
   verifyToken,
   async (req, res, next) => {
     try {
+      if (blockNomade(req, res)) return;
       const parent = await prisma.project.findUnique({
         where: { id: req.params.id as string },
         select: { agency: true, client_id: true },
@@ -852,6 +881,7 @@ router.delete(
   verifyToken,
   async (req, res, next) => {
     try {
+      if (blockNomade(req, res)) return;
       const parent = await prisma.project.findUnique({
         where: { id: req.params.id as string },
         select: { agency: true, client_id: true },
@@ -899,6 +929,7 @@ router.post(
   verifyToken,
   async (req, res, next) => {
     try {
+      if (blockNomade(req, res)) return;
       const parent = await prisma.project.findUnique({
         where: { id: req.params.id as string },
         select: { agency: true, client_id: true },
@@ -961,6 +992,7 @@ router.post(
   verifyToken,
   async (req, res, next) => {
     try {
+      if (blockNomade(req, res)) return;
       const parent = await prisma.project.findUnique({
         where: { id: req.params.id as string },
         select: { agency: true, client_id: true },
@@ -1014,6 +1046,7 @@ router.post(
 // GET /api/projects/:id/dashboard  — aggregated KPIs for the project modal
 router.get("/:id/dashboard", verifyToken, async (req, res, next) => {
   try {
+    if (blockNomade(req, res)) return;
     const proj = await prisma.project.findUnique({
       where: { id: req.params.id as string },
       select: {
@@ -1097,13 +1130,18 @@ router.get("/:id/dashboard", verifyToken, async (req, res, next) => {
 // GET /api/projects/:id/log  — synthesized timeline from existing data
 router.get("/:id/log", verifyToken, async (req, res, next) => {
   try {
+    if (blockNomade(req, res)) return;
     const proj = await prisma.project.findUnique({
       where: { id: req.params.id as string },
       select: {
         agency: true, client_id: true, status: true, created_at: true, updated_at: true,
+        created_by: { select: { name: true } },
         products: { select: { id: true, product_name_snapshot: true, created_at: true }, orderBy: { created_at: "asc" } },
-        project_tasks: { select: { id: true, title: true, status: true, created_at: true, updated_at: true }, orderBy: { created_at: "asc" } },
-        invoices: { select: { id: true, invoice_number: true, amount: true, status: true, paid_at: true, created_at: true }, orderBy: { created_at: "asc" } },
+        project_tasks: { select: { id: true, title: true, status: true, created_at: true, updated_at: true, origin_payment_id: true }, orderBy: { created_at: "asc" } },
+        invoices: {
+          select: { id: true, invoice_number: true, amount: true, status: true, paid_at: true, created_at: true, payment_id: true, payment: { select: { user_id: true, payment_method: true, notes: true } } },
+          orderBy: { created_at: "asc" },
+        },
         credentials: {
           select: { access_logs: { select: { id: true, action: true, actor_user_id: true, details: true, created_at: true }, orderBy: { created_at: "asc" } } },
         },
@@ -1113,33 +1151,59 @@ router.get("/:id/log", verifyToken, async (req, res, next) => {
     const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
     if (!projectInScope(scope, { agency: proj.agency, client_id: proj.client_id })) { res.status(403).json({ error: "Acesso negado" }); return; }
 
-    type LogEntry = { id: string; event: string; description: string; actor_name?: string; meta?: string; created_at: Date };
+    // Autoria de cada evento SÓ pelo que ficou registrado (auditoria T28, 01/11): usuário gravado no registro, "Sistema" quando o
+    // próprio registro prova que foi automático, cliente final quando o pagamento veio do link — senão "não registrada".
+    // Nunca usa quem está vendo a tela como substituto.
+    type LogActor = { kind: "user" | "system" | "client" | "unknown"; name?: string; detail?: string };
+    type LogEntry = { id: string; event: string; description: string; actor: LogActor; actor_name?: string; meta?: string; created_at: Date };
     const entries: LogEntry[] = [];
+    const UNKNOWN: LogActor = { kind: "unknown" };
+    const actorIds = [
+      ...proj.invoices.map((inv) => inv.payment?.user_id),
+      ...proj.credentials.flatMap((c) => c.access_logs.map((log) => log.actor_user_id)),
+    ].filter((id): id is string => !!id);
+    const actorNames = new Map(
+      (actorIds.length ? await prisma.user.findMany({ where: { id: { in: [...new Set(actorIds)] } }, select: { id: true, name: true } }) : [])
+        .map((u) => [u.id, u.name] as const),
+    );
+    const userActor = (id: string | null | undefined): LogActor => {
+      const name = id ? actorNames.get(id) : undefined;
+      return name ? { kind: "user", name } : UNKNOWN;
+    };
+    const paymentActor = (payment: { user_id: string | null; payment_method: string; notes: string | null } | null): LogActor => {
+      if (!payment) return UNKNOWN;
+      // O link do cliente grava como "solicitante" o usuário da agência dono do pedido — quem pagou foi o cliente final.
+      if (payment.notes?.startsWith(AGENCY_CLIENT_LINK_PAYMENT_NOTE)) return { kind: "client", detail: "pelo link de pagamento" };
+      if (payment.payment_method === "RECORRENCIA_AUTOMATICA") return { kind: "system", detail: "cobrança recorrente da assinatura" };
+      return userActor(payment.user_id);
+    };
 
     // 1. Projeto criado
-    entries.push({ id: `proj-created`, event: "CRIADO", description: "Projeto criado na plataforma.", created_at: proj.created_at });
+    const creator: LogActor = proj.created_by?.name ? { kind: "user", name: proj.created_by.name } : UNKNOWN;
+    entries.push({ id: `proj-created`, event: "CRIADO", description: "Projeto criado na plataforma.", actor: creator, created_at: proj.created_at });
 
-    // 2. Produtos adicionados
+    // 2. Produtos adicionados — o vínculo do produto não guarda quem o adicionou
     proj.products.forEach((pp, i) => {
-      entries.push({ id: `prod-${pp.id}`, event: "PRODUTO_ADICIONADO", description: `Produto "${pp.product_name_snapshot}" adicionado ao projeto.`, created_at: pp.created_at });
+      entries.push({ id: `prod-${pp.id}`, event: "PRODUTO_ADICIONADO", description: `Produto "${pp.product_name_snapshot}" adicionado ao projeto.`, actor: UNKNOWN, created_at: pp.created_at });
     });
 
-    // 3. Tarefas geradas (quando há tarefas)
+    // 3. Tarefas geradas (quando há tarefas) — automáticas quando todas nasceram de um pagamento
     if (proj.project_tasks.length > 0) {
-      entries.push({ id: `tasks-generated`, event: "TAREFAS_GERADAS", description: `${proj.project_tasks.length} tarefa(s) gerada(s) automaticamente para os produtos do projeto.`, created_at: proj.project_tasks[0].created_at });
+      const fromPayment = proj.project_tasks.every((t) => t.origin_payment_id);
+      entries.push({ id: `tasks-generated`, event: "TAREFAS_GERADAS", description: `${proj.project_tasks.length} tarefa(s) gerada(s) automaticamente para os produtos do projeto.`, actor: fromPayment ? { kind: "system", detail: "automático, após o pagamento" } : UNKNOWN, created_at: proj.project_tasks[0].created_at });
     }
 
     // 4. Tarefas concluídas
     const doneTasks = proj.project_tasks.filter((t) => t.status === "CONCLUIDA");
     doneTasks.slice(0, 5).forEach((t) => {
-      entries.push({ id: `task-done-${t.id}`, event: "ATUALIZADO", description: `Tarefa "${t.title}" concluída.`, created_at: t.updated_at });
+      entries.push({ id: `task-done-${t.id}`, event: "ATUALIZADO", description: `Tarefa "${t.title}" concluída.`, actor: UNKNOWN, created_at: t.updated_at });
     });
 
-    // 5. Faturas geradas + pagas
+    // 5. Faturas geradas + pagas — fatura ligada a um pagamento nasce automaticamente com ele
     proj.invoices.forEach((inv) => {
-      entries.push({ id: `inv-${inv.id}`, event: "CHECKOUT_INICIADO", description: `Fatura ${inv.invoice_number ?? inv.id.slice(-8)} de R$ ${inv.amount.toFixed(2)} gerada.`, meta: JSON.stringify({ amount: inv.amount, status: inv.status }), created_at: inv.created_at });
+      entries.push({ id: `inv-${inv.id}`, event: "CHECKOUT_INICIADO", description: `Fatura ${inv.invoice_number ?? inv.id.slice(-8)} de R$ ${inv.amount.toFixed(2)} gerada.`, meta: JSON.stringify({ amount: inv.amount, status: inv.status }), actor: inv.payment_id ? { kind: "system", detail: "gerada com o pagamento" } : UNKNOWN, created_at: inv.created_at });
       if (inv.status === "paid" && inv.paid_at) {
-        entries.push({ id: `pay-${inv.id}`, event: "PAGAMENTO_APROVADO", description: `Pagamento de R$ ${inv.amount.toFixed(2)} aprovado.`, meta: JSON.stringify({ amount: inv.amount }), created_at: inv.paid_at });
+        entries.push({ id: `pay-${inv.id}`, event: "PAGAMENTO_APROVADO", description: `Pagamento de R$ ${inv.amount.toFixed(2)} aprovado.`, meta: JSON.stringify({ amount: inv.amount }), actor: paymentActor(inv.payment), created_at: inv.paid_at });
       }
     });
 
@@ -1147,7 +1211,7 @@ router.get("/:id/log", verifyToken, async (req, res, next) => {
     proj.credentials.flatMap((c) => c.access_logs).slice(0, 10).forEach((log) => {
       const eventMap: Record<string, string> = { created: "ATUALIZADO", edited: "ATUALIZADO", shared: "ATUALIZADO", revoked: "ATUALIZADO", archived: "ATUALIZADO" };
       const descMap: Record<string, string> = { created: "Credencial adicionada ao cofre.", edited: "Credencial editada.", shared: "Credencial compartilhada com nômade.", revoked: "Compartilhamento de credencial revogado.", archived: "Credencial arquivada." };
-      entries.push({ id: `cred-log-${log.id}`, event: eventMap[log.action] ?? "ATUALIZADO", description: descMap[log.action] ?? `Ação: ${log.action}`, created_at: log.created_at });
+      entries.push({ id: `cred-log-${log.id}`, event: eventMap[log.action] ?? "ATUALIZADO", description: descMap[log.action] ?? `Ação: ${log.action}`, actor: userActor(log.actor_user_id), created_at: log.created_at });
     });
 
     // 7. Status atual (se não for draft)
@@ -1161,11 +1225,12 @@ router.get("/:id/log", verifyToken, async (req, res, next) => {
         "cancelled": "Projeto cancelado.",
       };
       const desc = statusDescMap[proj.status] ?? `Status do projeto: ${proj.status}.`;
-      entries.push({ id: `status-current`, event: "STATUS_ALTERADO", description: desc, created_at: proj.updated_at });
+      entries.push({ id: `status-current`, event: "STATUS_ALTERADO", description: desc, actor: UNKNOWN, created_at: proj.updated_at });
     }
 
     // Sort by created_at descending (newest first)
     entries.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+    for (const entry of entries) if (entry.actor.kind === "user") entry.actor_name = entry.actor.name;
 
     res.json({ total: entries.length, data: entries });
   } catch (err) { next(err); }
@@ -1174,6 +1239,7 @@ router.get("/:id/log", verifyToken, async (req, res, next) => {
 // GET /api/projects/:id/billing  — invoices + payments summary
 router.get("/:id/billing", verifyToken, async (req, res, next) => {
   try {
+    if (blockNomade(req, res)) return;
     const parent = await prisma.project.findUnique({
       where: { id: req.params.id as string },
       select: { agency: true, client_id: true },
@@ -1182,7 +1248,7 @@ router.get("/:id/billing", verifyToken, async (req, res, next) => {
     const scope = await getProjectScope(prisma, req.user!.id, req.user!.account_type);
     if (!projectInScope(scope, parent)) { res.status(403).json({ error: "Acesso negado" }); return; }
 
-    const [invoices, payments] = await Promise.all([
+    const [invoices, payments, subscriptions] = await Promise.all([
       prisma.invoice.findMany({
         where: { project_id: req.params.id as string },
         orderBy: { due_date: "desc" },
@@ -1190,6 +1256,13 @@ router.get("/:id/billing", verifyToken, async (req, res, next) => {
       prisma.payment.findMany({
         where: { project_id: req.params.id as string },
         orderBy: { created_at: "desc" },
+        // Itens congelados no pagamento — "Detalhes da Fatura" mostra o que a fatura cobrou, sem consultar o catálogo atual.
+        include: { items: { select: { product_name_snapshot: true, total_snapshot: true, recurrence_snapshot: true } } },
+      }),
+      // Agenda real das assinaturas (só leitura): o resumo do Faturamento mostra a próxima cobrança gravada, nunca uma data suposta.
+      prisma.catalog2Subscription.findMany({
+        where: { project_id: req.params.id as string },
+        select: { id: true, status: true, period_months: true, current_period_end: true, next_invoice_at: true, project_product: { select: { product_name_snapshot: true } } },
       }),
     ]);
 
@@ -1211,6 +1284,7 @@ router.get("/:id/billing", verifyToken, async (req, res, next) => {
       },
       invoices,
       payments,
+      subscriptions,
     });
   } catch (err) { next(err); }
 });
@@ -1218,6 +1292,7 @@ router.get("/:id/billing", verifyToken, async (req, res, next) => {
 // GET /api/projects/:id/tasks  — operational execution tasks (ProjectTask)
 router.get("/:id/tasks", verifyToken, async (req, res, next) => {
   try {
+    if (blockNomade(req, res)) return;
     const { page, limit, skip } = parsePagination(req.query);
     const status = req.query.status as string | undefined;
 
@@ -1358,7 +1433,8 @@ router.post(
   validate(createSchema),
   async (req, res, next) => {
     try {
-      if (isLeaderUser(req.user)) {
+      // Nômade não contrata nem é dono de projeto; antes podia criar um com o nome de outra agência.
+      if (isLeaderUser(req.user) || isNomadeUser(req.user)) {
         res.status(403).json({ error: "Permissão insuficiente" });
         return;
       }
@@ -1480,7 +1556,7 @@ router.put(
   validate(updateSchema),
   async (req, res, next) => {
     try {
-      if (isLeaderUser(req.user)) {
+      if (isLeaderUser(req.user) || isNomadeUser(req.user)) {
         res.status(403).json({ error: "Permissão insuficiente" });
         return;
       }
@@ -1618,7 +1694,7 @@ router.patch(
   validate(archiveProjectSchema),
   async (req, res, next) => {
     try {
-      if (isLeaderUser(req.user)) {
+      if (isLeaderUser(req.user) || isNomadeUser(req.user)) {
         res.status(403).json({ error: "Permissão insuficiente" });
         return;
       }
@@ -1776,8 +1852,15 @@ router.put("/:id/link", verifyToken, validate(updateProjectLinkSchema), async (r
 // projeto com tarefas executadas, faturas ou pagamentos (P2003). Antes,
 // esse caso vazava como erro 500 genérico do Prisma; agora retorna uma
 // mensagem clara, sem mudar quem pode ou não apagar.
+//
+// Fechamento de 02/11: Líder e Nômade não apagam projeto (mesma trava do PUT
+// e do arquivamento). Antes os dois passavam, porque o escopo deles é "open".
 router.delete("/:id", verifyToken, async (req, res, next) => {
   try {
+    if (isLeaderUser(req.user) || isNomadeUser(req.user)) {
+      res.status(403).json({ error: "Permissão insuficiente" });
+      return;
+    }
     const project = await prisma.project.findUnique({
       where: { id: req.params.id as string },
       select: { agency: true, client_id: true, agency_id: true, company_id: true, partner_id: true },

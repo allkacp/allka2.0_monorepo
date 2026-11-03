@@ -78,6 +78,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { PageLoader } from "@/components/ui/loading";
+import { NO_LEADER_LABEL, taskClientName, taskConsultantName, taskDisplayCode, taskLeaderName } from "@/lib/task-display";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -858,9 +859,12 @@ export function TarefaDetailDrawer({
               <div className="flex-1 min-w-0">
                 {/* Chips row */}
                 <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                  {tarefa.code_snapshot && (
-                    <span className="text-[10px] font-mono bg-white/15 text-white/90 px-2 py-0.5 rounded-md">
-                      {tarefa.code_snapshot}
+                  {taskDisplayCode(tarefa) && (
+                    <span
+                      title={tarefa.task_code ? `Código único da tarefa (original: ${tarefa.task_code})` : undefined}
+                      className="text-[10px] font-mono bg-white/15 text-white/90 px-2 py-0.5 rounded-md"
+                    >
+                      {taskDisplayCode(tarefa)}
                     </span>
                   )}
                   {tarefa.fase && (
@@ -892,10 +896,10 @@ export function TarefaDetailDrawer({
                       {tarefa.project.title}
                     </span>
                   )}
-                  {tarefa.project?.client?.name && (
+                  {taskClientName(tarefa.project) && (
                     <span className="text-[11px] text-white/60 flex items-center gap-1">
                       <Building2 className="h-3 w-3" />
-                      {tarefa.project.client.name}
+                      {taskClientName(tarefa.project)}
                     </span>
                   )}
                   {tarefa.responsavel_agencia?.name && (
@@ -1021,7 +1025,7 @@ export function TarefaDetailDrawer({
                 {
                   icon: Building2,
                   title: "Cliente",
-                  value: tarefa.project?.client?.name,
+                  value: taskClientName(tarefa.project),
                 },
                 {
                   icon: User,
@@ -1035,8 +1039,13 @@ export function TarefaDetailDrawer({
                 },
                 {
                   icon: User,
+                  title: "Consultor",
+                  value: taskConsultantName(tarefa.project),
+                },
+                {
+                  icon: User,
                   title: "Líder",
-                  value: tarefa.project?.consultant,
+                  value: taskLeaderName(tarefa) ?? NO_LEADER_LABEL,
                 },
                 {
                   icon: CalendarDays,
@@ -1245,7 +1254,7 @@ export function TarefaDetailDrawer({
                         </p>
                       </div>
                     </div>
-                    {tarefa.project?.client && (
+                    {taskClientName(tarefa.project) && (
                       <div className="flex items-start gap-3 pt-3 border-t border-slate-200 dark:border-slate-600">
                         <div className="h-9 w-9 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
                           <Building2 className="h-4 w-4 text-slate-600 dark:text-slate-400" />
@@ -1255,9 +1264,9 @@ export function TarefaDetailDrawer({
                             Cliente
                           </p>
                           <p className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                            {tarefa.project.client.name}
+                            {taskClientName(tarefa.project)}
                           </p>
-                          {tarefa.project.client.cnpj && (
+                          {tarefa.project?.client?.cnpj && (
                             <p className="text-xs text-slate-500">
                               CNPJ: {tarefa.project.client.cnpj}
                             </p>
@@ -1265,17 +1274,17 @@ export function TarefaDetailDrawer({
                         </div>
                       </div>
                     )}
-                    {tarefa.project?.consultant && (
+                    {taskConsultantName(tarefa.project) && (
                       <div className="flex items-start gap-3 pt-3 border-t border-slate-200 dark:border-slate-600">
                         <div className="h-9 w-9 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
                           <User className="h-4 w-4 text-emerald-600" />
                         </div>
                         <div className="min-w-0">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
-                            Consultor / Líder
+                            Consultor
                           </p>
                           <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                            {tarefa.project.consultant}
+                            {taskConsultantName(tarefa.project)}
                           </p>
                         </div>
                       </div>
@@ -1345,8 +1354,26 @@ export function TarefaDetailDrawer({
                           </div>
                         </div>
                       )}
+                      {taskLeaderName(tarefa) && (
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-full bg-amber-200 flex items-center justify-center shrink-0">
+                            <span className="text-[9px] font-bold text-amber-700">
+                              {initials(taskLeaderName(tarefa)!)}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wide leading-none">
+                              Líder
+                            </p>
+                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
+                              {taskLeaderName(tarefa)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       {!tarefa.responsavel_agencia &&
-                        !tarefa.nomade_responsavel && (
+                        !tarefa.nomade_responsavel &&
+                        !taskLeaderName(tarefa) && (
                           <p className="text-xs text-slate-400">
                             Nenhum responsável atribuído
                           </p>

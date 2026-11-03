@@ -81,6 +81,9 @@ export async function getProjectScope(
   // precise ser somada ao escopo "agency" acima, mas não é mais alcançado
   // por account_type — nenhum usuário tem esse valor.
 
+  // Líder e Nômade caem aqui. O Nômade não vê projeto (só as tarefas liberadas para ele) e é barrado em
+  // /api/projects (routes/projects.ts, isNomadeUser); nas outras rotas que usam projectVisibleToUser ele ainda
+  // passa — lá ele também entra como especialista/revisor de etapa, o que pede uma rodada própria.
   return { kind: "open" };
 }
 
@@ -125,6 +128,11 @@ export function isAdminUser(user?: { role?: string; account_type?: string }): bo
 }
 export function isLeaderUser(user?: { role?: string; account_type?: string }): boolean {
   return user?.role === "lider" || user?.account_type === "lider";
+}
+// Nômade executor. O Líder importado da plataforma antiga também tem account_type "nomades", mas role "lider"
+// (scripts/import-legacy-platform.ts) — esse continua sendo Líder.
+export function isNomadeUser(user?: { role?: string; account_type?: string }): boolean {
+  return user?.account_type === "nomades" && !isLeaderUser(user) && !isAdminUser(user);
 }
 
 export type NewProjectScope =
@@ -212,4 +220,12 @@ export async function combinedProjectWhere(
     where: orConditions.length > 1 ? { OR: orConditions } : orConditions[0],
     scope,
   };
+}
+
+// ─── Tarefa liberada para o Nômade ──────────────────────────────────────────
+// O Nômade não vê projeto, só a tarefa liberada para ele: a que ele responde inteira
+// (nomade_responsavel_id) ou da qual tem uma etapa (stages.nomade_id) — o mesmo critério de
+// GET /api/nomades/me/tarefas, usado pelas rotas de tarefa do executor (routes/project-tasks.ts).
+export function nomadeWorkTaskWhere(nomadeId: string) {
+  return { OR: [{ nomade_responsavel_id: nomadeId }, { stages: { some: { nomade_id: nomadeId } } }] };
 }

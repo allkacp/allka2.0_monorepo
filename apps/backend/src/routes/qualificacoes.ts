@@ -17,15 +17,18 @@ type Tipo = "qualificacao" | "especialista";
 
 const stageSelect = {
   id: true, titulo: true, descricao: true, status: true, entregue_em: true, rodada_ajuste: true, lider_id: true,
-  especialista_id: true, qualificador_pool: true, catalog_step_ref: true, project_task_id: true,
+  nomade_id: true, concluida_por: true, especialista_id: true, qualificador_pool: true, catalog_step_ref: true, project_task_id: true,
   project_task: { select: { id: true, title: true, task_code: true, project_id: true, lider_responsavel_id: true, nomade_responsavel_id: true } },
 } as const;
 
 /** Tipo de decisão que o usuário pode tomar nesta etapa (ou null). */
-function tipoPermitido(user: NonNullable<Request["user"]>, e: { status: string; lider_id: string | null; especialista_id: string | null; project_task: { lider_responsavel_id: string | null } }): Tipo | null {
+function tipoPermitido(user: NonNullable<Request["user"]>, e: { status: string; lider_id: string | null; nomade_id: string | null; concluida_por: string | null; especialista_id: string | null; project_task: { lider_responsavel_id: string | null } }): Tipo | null {
   const admin = isAdminUser(user);
+  // O nômade que executou a etapa nunca confere a própria entrega; a pessoa específica também não, se foi ela quem entregou
+  // (o motor já desvia para o líder; aqui é a trava do servidor). Líder que executa e qualifica a própria etapa não muda aqui.
+  if (!admin && e.nomade_id === user.id) return null;
   if (e.status === "EM_QUALIFICACAO" && (admin || e.project_task.lider_responsavel_id === user.id || e.lider_id === user.id)) return "qualificacao";
-  if (e.status === "EM_QUALIFICACAO_ESPECIALISTA" && (admin || (!!e.especialista_id && e.especialista_id === user.id))) return "especialista";
+  if (e.status === "EM_QUALIFICACAO_ESPECIALISTA" && (admin || (!!e.especialista_id && e.especialista_id === user.id && e.concluida_por !== user.id))) return "especialista";
   return null;
 }
 
@@ -40,6 +43,8 @@ router.get("/pendentes", async (req: Request, res: Response, next: NextFunction)
           { status: "EM_QUALIFICACAO", ...(admin ? {} : { OR: [{ lider_id: user.id }, { project_task: { lider_responsavel_id: user.id } }] }) },
           { status: "EM_QUALIFICACAO_ESPECIALISTA", ...(admin ? {} : { especialista_id: user.id }) },
         ],
+        // Etapa sem nômade (líder/equipe interna) continua na lista: "diferente" no SQL deixaria o NULL de fora.
+        ...(admin ? {} : { AND: [{ OR: [{ nomade_id: null }, { nomade_id: { not: user.id } }] }] }),
       },
       select: stageSelect,
       orderBy: { entregue_em: "asc" },

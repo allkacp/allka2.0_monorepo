@@ -19,7 +19,10 @@ export interface FrontendProject {
   client: string;
   clientCNPJ: string;
   agency: string;
+  /** Categoria real da conta do projeto (agency | company | nomad), vinda do vínculo — "" quando não há vínculo. */
   companyType: string;
+  /** A agência do projeto tem perfil Partner ativo (Partner é status de Agency, não outra categoria). */
+  companyIsPartner?: boolean;
   consultant: string;
   consultantEmail: string;
   type: string;
@@ -138,7 +141,11 @@ export function adaptApiProject(api: any): FrontendProject {
     client: api.client_record?.name || api.client?.name || "",
     clientCNPJ: api.client_record?.document || api.client?.cnpj || "",
     agency: api.agency || "",
-    companyType: api.company_type || "company",
+    // Categoria pelo vínculo real do projeto, nunca um texto fixo: antes, sem company_type gravado, todo projeto virava "company".
+    companyType:
+      api.company_type ||
+      (api.agency_id || api.agency ? "agency" : api.company_id || api.client_id ? "company" : ""),
+    companyIsPartner: api.agency_owner?.partner_profile?.status === "active",
     consultant: api.consultant || "",
     consultantEmail: api.consultant_email || "",
     type: api.type || "",

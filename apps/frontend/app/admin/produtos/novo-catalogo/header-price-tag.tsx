@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api-client";
+import { usePeriodsChanged } from "./product-periods-inline";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Preço no cabeçalho do produto: o valor da venda normal (avulsa; se só vende assinatura, o mensal) e, ao passar o mouse, o detalhe de cada plano
@@ -37,6 +38,7 @@ export function usePriceSummary(version: any, productId: string): PriceSummary |
   const [summary, setSummary] = useState<PriceSummary | null>(null);
   const [tick, setTick] = useState(0);
   useEffect(() => { const on = () => setTick((n) => n + 1); window.addEventListener("catalog2:reload-refs", on); return () => window.removeEventListener("catalog2:reload-refs", on); }, []);
+  usePeriodsChanged(productId, useCallback(() => setTick((n) => n + 1), []));
   const sig = useMemo(() => JSON.stringify([(version?.tasks ?? []).map((t: any) => [t.id, t.estimated_minutes, (t.steps ?? []).map((s: any) => [s.id, s.estimated_minutes, s.specialty_id, s.executor_kind])]), version?.accepts_one_time, version?.accepts_recurring, version?.pricing_mode, version?.manual_price]), [version]);
   useEffect(() => {
     let off = false;

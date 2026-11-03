@@ -100,4 +100,46 @@ describe("Tela única de qualificação", () => {
     const ok = await api(`/api/qualificacoes/etapas/${stage.id}/decisao`, { method: "POST", token: lTok, body: { decisao: "aprovar" } });
     assert.equal(ok.status, 200, JSON.stringify(ok.json));
   });
+
+  it("QAL03 (31/10). a pessoa específica que EXECUTOU a etapa não confere a própria entrega: some da lista dela e a decisão é recusada", async () => {
+    const doer = await mkUser("nomad");
+    const stage = await prisma.projectTaskStage.create({ data: { project_task_id: taskId, source_key: `qal:${crypto.randomBytes(3).toString("hex")}`, titulo: "Auditar SEO", ordem: 3, status: "EM_QUALIFICACAO_ESPECIALISTA", exige_qualificacao_especialista: true, especialista_id: doer.id, nomade_id: doer.id, concluida_por: doer.id, visivel_ao_cliente: false, entregue_em: new Date() } });
+    stageIds.push(stage.id);
+    const tok = tokenFor(doer);
+    assert.equal((await api("/api/qualificacoes/pendentes", { token: tok })).json.total, 0, "não aparece para quem executou");
+    assert.equal((await api(`/api/qualificacoes/etapas/${stage.id}`, { token: tok })).status, 404);
+    assert.equal((await api(`/api/qualificacoes/etapas/${stage.id}/decisao`, { method: "POST", token: tok, body: { decisao: "aprovar" } })).status, 403);
+    assert.equal((await prisma.projectTaskStage.findUniqueOrThrow({ where: { id: stage.id } })).status, "EM_QUALIFICACAO_ESPECIALISTA", "nada mudou");
+  });
+
+  it("QAL04 (31/10). na entrega, se a pessoa indicada para qualificar é o próprio executor, a conferência vai para o líder (com motivo no histórico); com líder + pessoa, depois do líder ela é dispensada", async () => {
+    const { concluirEtapa } = await import("../lib/stage-engine");
+    const leader = await mkUser("lider");
+    const doer = await mkUser("nomad");
+    await prisma.projectTask.update({ where: { id: taskId }, data: { lider_responsavel_id: leader.id } });
+
+    // Só a pessoa específica (que é o executor) → vai para o líder.
+    const s1 = await prisma.projectTaskStage.create({ data: { project_task_id: taskId, source_key: `qal:${crypto.randomBytes(3).toString("hex")}`, titulo: "Aplicar ajustes", ordem: 4, status: "EM_ANDAMENTO", exige_qualificacao_especialista: true, especialista_id: doer.id, nomade_id: doer.id, visivel_ao_cliente: false } });
+    stageIds.push(s1.id);
+    const r1 = await concluirEtapa(prisma, s1.id, { userId: doer.id });
+    assert.equal(r1.enviadaParaQualificacao, true);
+    const a1 = await prisma.projectTaskStage.findUniqueOrThrow({ where: { id: s1.id } });
+    assert.equal(a1.status, "EM_QUALIFICACAO", "foi para o líder, não para o próprio executor");
+    assert.equal(a1.exige_qualificacao_especialista, false);
+    const h1 = await prisma.projectTaskStageReview.findFirstOrThrow({ where: { stage_id: s1.id }, orderBy: { created_at: "desc" } });
+    assert.match(h1.comment ?? "", /executou esta etapa/);
+    const lTok = tokenFor(leader);
+    assert.ok((await api("/api/qualificacoes/pendentes", { token: lTok })).json.data.some((x: any) => x.id === s1.id), "o líder vê");
+    assert.equal((await api("/api/qualificacoes/pendentes", { token: tokenFor(doer) })).json.total, 0, "o executor não vê");
+
+    // Líder + pessoa (a pessoa é o executor): o líder aprova e a etapa segue sem a segunda conferência.
+    const s2 = await prisma.projectTaskStage.create({ data: { project_task_id: taskId, source_key: `qal:${crypto.randomBytes(3).toString("hex")}`, titulo: "Revisar relatório", ordem: 5, status: "EM_QUALIFICACAO", exige_qualificacao: true, exige_qualificacao_especialista: true, especialista_id: doer.id, nomade_id: doer.id, concluida_por: doer.id, visivel_ao_cliente: false, entregue_em: new Date() } });
+    stageIds.push(s2.id);
+    const ok = await api(`/api/qualificacoes/etapas/${s2.id}/decisao`, { method: "POST", token: lTok, body: { decisao: "aprovar" } });
+    assert.equal(ok.status, 200, JSON.stringify(ok.json));
+    const a2 = await prisma.projectTaskStage.findUniqueOrThrow({ where: { id: s2.id } });
+    assert.notEqual(a2.status, "EM_QUALIFICACAO_ESPECIALISTA", "não voltou para o próprio executor conferir");
+    assert.ok(await prisma.projectTaskStageReview.findFirst({ where: { stage_id: s2.id, kind: "especialista", decision: "dispensada" } }), "dispensa registrada");
+    assert.notEqual(ok.json.status, "EM_QUALIFICACAO_ESPECIALISTA", "a resposta diz o estado real");
+  });
 });

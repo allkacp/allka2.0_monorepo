@@ -11,6 +11,7 @@ import { seedCatalog2Classifications, seedCatalog2FourFForTests } from "../lib/c
 import { publishVersion } from "../lib/catalog2-service";
 import { runCatalog2DeliveryCycleSchedulerOnce } from "../lib/catalog2-delivery-cycle-scheduler";
 import { addMonths } from "../lib/catalog2-checkout";
+import { withCheckoutProject } from "../test-support/checkout-project-fixture";
 
 // Cenários de ciclos de contratos multi-mês permanecem testados atrás da
 // chave explícita de futura liberação; a operação normal oferece só mensal.
@@ -151,7 +152,9 @@ async function createQuoteViaApi(token: string, productId: string, period?: stri
   return r.json;
 }
 async function checkoutAndPay(token: string, quoteId: string) {
-  const checkout = await api("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: [quoteId], checkout_client_action_id: crypto.randomUUID() } });
+  // Desde 26/10 a compra exige projeto escolhido antes (422 project_required): o auxiliar cria um projeto da própria conta.
+  // O id volta em checkout.json.project.id e é apagado pelo purgeProject de cada teste, como antes.
+  const checkout = await api("/api/catalog2/checkout", await withCheckoutProject("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: [quoteId], checkout_client_action_id: crypto.randomUUID() } }, []));
   assert.equal(checkout.status, 201, JSON.stringify(checkout.json));
   const projectId = checkout.json.project.id;
   const pay = await api("/api/payments/fake-checkout", { method: "POST", token, body: { project_id: projectId } });

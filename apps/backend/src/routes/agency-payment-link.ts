@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { config } from "../config";
 import { prisma } from "../lib/prisma";
-import { verifyAgencyPaymentLink, roundMoney } from "../lib/agency-checkout";
+import { verifyAgencyPaymentLink, roundMoney, publicPaymentItems, AGENCY_CLIENT_LINK_PAYMENT_NOTE } from "../lib/agency-checkout";
 import { confirmPaymentAndGenerateProjectTasks, PaymentValidationError, withIdempotentRetry } from "../lib/confirm-payment";
 import { getPaymentGateway } from "../lib/payment-gateway";
 import { resolveClientContext } from "../lib/catalog2-client";
@@ -15,8 +15,7 @@ router.get("/:token", async (req, res, next) => {
   try {
     const order = await verifyAgencyPaymentLink(req.params.token as string);
     res.json({ code: order.project_code, total: roundMoney(order.products.reduce((s, p) => s + p.preco_final_cliente_snapshot, 0)),
-      items: order.products.map((p) => ({ name: p.catalog2_version?.title || p.product_name_snapshot, total: p.preco_final_cliente_snapshot,
-        modality: p.catalog2_period || "avulso" })),
+      items: await publicPaymentItems(order.products),
       paid: order.payments.length > 0, sandbox: config.NODE_ENV !== "production" && getPaymentGateway().name === "FAKE_SANDBOX" });
   } catch (e) { if (e instanceof PaymentValidationError) { res.status(e.statusCode).json({ error: e.message }); return; } next(e); }
 });
@@ -34,7 +33,7 @@ router.post("/:token/pay-sandbox", async (req, res, next) => {
     if (!ctx.can_contract || ctx.account_kind !== "agency" || ctx.account_id !== order.agency_id) throw new PaymentValidationError("Agência indisponível. Solicite um novo pedido.", 409);
     const result = await withIdempotentRetry(() => prisma.$transaction((tx) => confirmPaymentAndGenerateProjectTasks(tx, {
       projectId: order.id, requesterUser: actor, agencyClientLink: true, paymentMethod: "CARTAO_TESTE",
-      cardLastDigits: card_last_digits, cardHolder: "CLIENTE — TESTE LOCAL", notes: "Link do cliente final — pagamento sandbox, sem cobrança real.",
+      cardLastDigits: card_last_digits, cardHolder: "CLIENTE — TESTE LOCAL", notes: AGENCY_CLIENT_LINK_PAYMENT_NOTE,
     })));
     if (result.declined) { res.status(402).json({ error: result.declineReason }); return; }
     res.json({ paid: true, code: order.project_code, message: "Pagamento de teste confirmado. A agência já pode preparar o lançamento das tarefas." });

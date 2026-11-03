@@ -789,6 +789,21 @@ async function seguirParaEspecialistaOuAprovacao(db: Db, stage: StageComTarefa, 
       return { ...baseResultado(stage), enviadaParaQualificacao: true, etapaEmConferencia: "qualificacao" };
     }
   }
+  // Pessoa específica que também EXECUTOU a etapa não confere a própria entrega (31/10). Mesma saída do grupo sem ninguém
+  // elegível: se o líder ainda não conferiu, ele qualifica; se já conferiu (líder + pessoa), a segunda conferência é dispensada.
+  // Sem exige_qualificacao chegamos aqui direto da entrega, então opts.userId é quem entregou; depois do líder, é o líder.
+  const autores = new Set([stage.nomade_id, stage.concluida_por, stage.exige_qualificacao ? null : opts.userId].filter(Boolean));
+  if (stage.exige_qualificacao_especialista && stage.especialista_id && autores.has(stage.especialista_id)) {
+    const motivo = "A pessoa indicada para qualificar executou esta etapa e não confere a própria entrega.";
+    if (!stage.exige_qualificacao) {
+      await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.EM_QUALIFICACAO, entregue_em: stage.entregue_em ?? agora, exige_qualificacao: true, exige_qualificacao_especialista: false } });
+      await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: "qualificacao", decision: "solicitada", round, comment: `${motivo} A qualificação passou para o líder.`, actor_user_id: opts.userId ?? null } });
+      return { ...baseResultado(stage), enviadaParaQualificacao: true, etapaEmConferencia: "qualificacao" };
+    }
+    await db.projectTaskStage.update({ where: { id: stage.id }, data: { exige_qualificacao_especialista: false } });
+    await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: "especialista", decision: "dispensada", round, comment: `${motivo} O líder já conferiu.`, actor_user_id: opts.userId ?? null } });
+    return seguirParaAprovacaoOuConcluir(db, { ...stage, exige_qualificacao_especialista: false }, opts, agora, round);
+  }
   if (stage.exige_qualificacao_especialista) {
     await db.projectTaskStage.update({ where: { id: stage.id }, data: { status: STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA, entregue_em: stage.entregue_em ?? agora } });
     await db.projectTaskStageReview.create({ data: { stage_id: stage.id, kind: "especialista", decision: "solicitada", round, actor_user_id: opts.userId ?? null } });
@@ -914,7 +929,7 @@ export async function decidirEtapa(
   if (opts.tipo === "qualificacao") {
     await db.projectTaskStage.update({ where: { id: stage.id }, data: { qualificada_em: agora } });
     const r = await seguirParaEspecialistaOuAprovacao(db, stage, { userId: opts.userId }, agora, round);
-    return { ...r, decisao: "aprovar", status: stage.exige_qualificacao_especialista ? STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA : exigeAprovacaoDoCliente(stage) ? STAGE_STATUS.EM_APROVACAO_CLIENTE : STAGE_STATUS.CONCLUIDA };
+    return { ...r, decisao: "aprovar", status: r.etapaEmConferencia === "especialista" ? STAGE_STATUS.EM_QUALIFICACAO_ESPECIALISTA : exigeAprovacaoDoCliente(stage) ? STAGE_STATUS.EM_APROVACAO_CLIENTE : STAGE_STATUS.CONCLUIDA };
   }
   if (opts.tipo === "especialista") {
     await db.projectTaskStage.update({ where: { id: stage.id }, data: { qualificada_especialista_em: agora } });

@@ -29,7 +29,7 @@
  *     pin={{ id: "dashboard-historico", label: "Histórico", icon: History, path: "/admin/dashboard", activateKey: "historico" }}
  *   >
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pin, X, Loader2 } from "lucide-react";
 import {
   usePinEntry,
@@ -43,6 +43,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
+
+/** Telas Slide abertas, na ordem em que abriram — o Escape fecha só a última (a de cima). */
+const openSlideScreens: symbol[] = [];
 
 interface EmbeddedSlideScreenProps {
   open: boolean;
@@ -151,14 +154,29 @@ export function EmbeddedSlideScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, asPage]);
 
+  // Escape fecha só a tela de CIMA: telas abertas uma sobre a outra (ex.: detalhe da tarefa sobre o projeto)
+  // escutam a mesma tecla — antes a de baixo fechava primeiro e a de cima ficava solta sobre a lista.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (asPage || !mounted) return;
+    const id = Symbol("tela-slide");
+    openSlideScreens.push(id);
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      // Escape já consumido por uma janela por cima (ex.: Janela Moldura): fecha só ela, não esta tela.
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (openSlideScreens[openSlideScreens.length - 1] !== id) return;
+      e.preventDefault();
+      onCloseRef.current();
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [mounted, onClose, asPage]);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      const index = openSlideScreens.indexOf(id);
+      if (index >= 0) openSlideScreens.splice(index, 1);
+    };
+    // onClose fica no ref: registrar de novo a cada render tiraria esta tela da ordem de abertura.
+  }, [mounted, asPage]);
 
   // ── Modo PÁGINA: card no fluxo normal, sem overlay/animação/Escape/X ──
   // Usa STANDARD_SHELL_PANEL_CLASS (mesmo painel branco com a "margenzinha"

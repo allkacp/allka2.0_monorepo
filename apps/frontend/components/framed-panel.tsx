@@ -8,7 +8,9 @@
 //  • margem interna de 10 px em volta de TUDO que fica dentro do painel (regra global, 20/10);
 //  • cabeçalho em banner dentro do painel usa FRAMED_HEADER_CLASS (+2 px = 12 px no total, alinhada aos cartões abaixo).
 // Quando o usuário disser "transforme isso num Painel Moldura", é este componente que se usa.
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef } from "react";
+import { FramedEditorBreadcrumb, useFramedEditorSessionKey } from "./framed-editor-context";
+import { readEditorSession, writeEditorSession } from "@/app/admin/produtos/novo-catalogo/editor-session";
 import { createPortal } from "react-dom";
 import { keepNativeTitlesStripped } from "@/app/admin/produtos/novo-catalogo/field-help-layer";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -16,9 +18,10 @@ import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { cn } from "@/lib/utils";
 
 export const FRAMED_PANEL_MARGIN = 30;
-export const FRAMED_DARK_OVERLAY_CLASS = "bg-slate-950/60 backdrop-blur-[2px]";
+export const FRAMED_DARK_OVERLAY_CLASS = "bg-black/60 backdrop-blur-[2px]";
 /** Um Painel Moldura aberto de dentro de uma Janela Moldura (ex.: editar um acesso dentro do bloco da etapa) precisa ficar POR CIMA dela, senão abre atrás e não dá para clicar. */
 export const InsideFramedModal = createContext(false);
+const FramedLayer = createContext<number | null>(null);
 /** Cabeçalho em faixa/banner dentro do Painel Moldura: NÃO fica colado nas bordas; usa a mesma margem dos cartões de baixo (12 px em cima e dos lados). */
 export const FRAMED_HEADER_CLASS = "mx-[2px] mt-[2px]";
 /** Rodapé com botões: mesma margem lateral do cabeçalho (12 px) nos DOIS lados — o botão da direita alinha com a margem, e há folga embaixo. */
@@ -34,46 +37,63 @@ export function FramedPanel({ open, onOpenChange, children, testId = "framed-pan
   const { sidebarWidth } = useAppFrameMetrics();
   const sidebarWidthPx = typeof sidebarWidth === "number" ? sidebarWidth : parseInt(String(sidebarWidth)) || 0;
   const aboveModal = useContext(InsideFramedModal);
+  const parentLayer = useContext(FramedLayer);
+  const overlayLayer = Math.max(aboveModal ? 1255 : 1200, parentLayer == null ? 0 : parentLayer + 4);
+  const contentLayer = overlayLayer + 1;
   return (
     <Dialog modal={false} open={open} onOpenChange={onOpenChange}>
       {open && typeof document !== "undefined" && createPortal(
-        <div aria-hidden="true" className={cn("fixed inset-y-0 right-0", FRAMED_DARK_OVERLAY_CLASS, aboveModal ? "z-[1255]" : "z-[1200]")} style={{ left: sidebarWidthPx }} data-testid={`${testId}-overlay`} />, document.body)}
+        <div aria-hidden="true" className={cn("fixed inset-y-0 right-0", FRAMED_DARK_OVERLAY_CLASS, aboveModal ? "z-[1255]" : "z-[1200]")} style={{ left: sidebarWidthPx, zIndex: overlayLayer }} data-testid={`${testId}-overlay`} />, document.body)}
       <DialogContent showCloseButton={false} onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} overlayClassName="hidden"
-        className={cn(aboveModal ? "!z-[1256]" : "!z-[1201]", "flex max-w-none flex-col gap-0 overflow-hidden rounded-2xl border-2 border-violet-300 bg-[#f4f6fc] p-[10px] shadow-2xl ring-4 ring-violet-200/60 sm:!max-w-none dark:border-violet-700 dark:bg-slate-950 dark:ring-violet-900/50", className)}
-        style={framedPanelStyle(sidebarWidthPx)} data-testid={testId}>
+        className={cn(contentLayer === 1256 ? "!z-[1256]" : contentLayer === 1201 ? "!z-[1201]" : "z-[1201]", "flex max-w-none flex-col gap-0 overflow-hidden rounded-2xl border-2 border-violet-300 bg-[#f4f6fc] p-[10px] shadow-2xl ring-4 ring-violet-200/60 sm:!max-w-none dark:border-violet-700 dark:bg-slate-950 dark:ring-violet-900/50", className)}
+        style={{ ...framedPanelStyle(sidebarWidthPx), zIndex: contentLayer }} data-testid={testId}>
         {title && <DialogTitle className="sr-only">{title}</DialogTitle>}
-        <TitleStripper>{children}</TitleStripper>
+        <FramedEditorBreadcrumb />
+        <FramedLayer.Provider value={contentLayer}><TitleStripper recoveryId={testId}>{children}</TitleStripper></FramedLayer.Provider>
       </DialogContent>
     </Dialog>
   );
 }
 
 /** Dentro das janelas só o ⓘ mostra ajuda: o tooltip nativo do navegador (atributo title) é retirado, senão apareceria um segundo balão. */
-function TitleStripper({ children }: { children: React.ReactNode }) {
+function TitleStripper({ children, recoveryId }: { children: React.ReactNode; recoveryId?: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const key = useFramedEditorSessionKey(`scroll:${recoveryId ?? "frame"}`);
+  useLayoutEffect(() => {
+    const saved = readEditorSession<Record<number, number>>(key);
+    if (saved) ref.current?.querySelectorAll<HTMLElement>(".overflow-y-auto").forEach((node, index) => { node.scrollTop = saved[index] ?? 0; });
+  }, [key]);
   useEffect(() => (ref.current ? keepNativeTitlesStripped(ref.current) : undefined), []);
-  return <div ref={ref} className="contents">{children}</div>;
+  return <div ref={ref} className="contents" onScrollCapture={e => {
+    const node = e.target as HTMLElement;
+    if (!key || !ref.current?.contains(node)) return;
+    const index = Array.from(ref.current.querySelectorAll(".overflow-y-auto")).indexOf(node);
+    if (index >= 0) writeEditorSession(key, { ...readEditorSession<Record<number, number>>(key), [index]: node.scrollTop });
+  }}>{children}</div>;
 }
 
 /**
  * JANELA MOLDURA (padrão global, 20/10) — janela menor por cima de um Painel Moldura: centralizada na área ao lado da barra lateral,
- * com fundo CLARO (branco translúcido) que cobre tudo menos a sidebar (acompanha ela recolhendo/expandindo).
+ * com o mesmo fundo PRETO translúcido do Painel Moldura, cobrindo tudo menos a sidebar.
  */
-export function FramedModal({ open, onOpenChange, children, testId = "framed-modal", className, title, style, overlayTone = "light" }: {
+export function FramedModal({ open, onOpenChange, children, testId = "framed-modal", className, title, style }: {
   open: boolean; onOpenChange?: (open: boolean) => void; children: React.ReactNode; testId?: string; className?: string; title?: string; style?: React.CSSProperties;
-  /** Teste visual por opt-in; as demais janelas mantêm o padrão atual. */ overlayTone?: "light" | "dark";
 }) {
   const { sidebarWidth } = useAppFrameMetrics();
   const sw = typeof sidebarWidth === "number" ? sidebarWidth : parseInt(String(sidebarWidth)) || 0;
+  const parentLayer = useContext(FramedLayer);
+  const overlayLayer = Math.max(1250, parentLayer == null ? 0 : parentLayer + 4);
+  const contentLayer = overlayLayer + 1;
   return (
     <Dialog modal={false} open={open} onOpenChange={onOpenChange}>
       {open && typeof document !== "undefined" && createPortal(
-        <div aria-hidden="true" className={cn("fixed inset-y-0 right-0 z-[1250]", overlayTone === "dark" ? FRAMED_DARK_OVERLAY_CLASS : "bg-white/55 backdrop-blur-[1px]")} style={{ left: sw }} data-testid={`${testId}-overlay`} />, document.body)}
+        <div aria-hidden="true" className={cn("fixed inset-y-0 right-0 z-[1250]", FRAMED_DARK_OVERLAY_CLASS)} style={{ left: sw, zIndex: overlayLayer }} data-testid={`${testId}-overlay`} />, document.body)}
       <DialogContent showCloseButton={false} onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} overlayClassName="hidden"
-        className={cn("!z-[1251] flex max-h-[calc(100dvh-4rem)] w-[calc(100vw-2rem)] max-w-[66rem] flex-col gap-0 overflow-hidden rounded-2xl border-2 border-violet-300 bg-[#f4f6fc] p-[10px] shadow-2xl ring-4 ring-violet-200/60 sm:!max-w-[66rem] dark:border-violet-700 dark:bg-slate-950 dark:ring-violet-900/50", className)}
-        style={{ left: `calc(${sw}px + (100vw - ${sw}px) / 2)`, top: "50%", transform: "translate(-50%, -50%)", translate: "none", ...style }} data-testid={testId}>
+        className={cn(contentLayer === 1251 ? "!z-[1251]" : "z-[1251]", "flex max-h-[calc(100dvh-4rem)] w-[calc(100vw-2rem)] max-w-[66rem] flex-col gap-0 overflow-hidden rounded-2xl border-2 border-violet-300 bg-[#f4f6fc] p-[10px] shadow-2xl ring-4 ring-violet-200/60 sm:!max-w-[66rem] dark:border-violet-700 dark:bg-slate-950 dark:ring-violet-900/50", className)}
+        style={{ left: `calc(${sw}px + (100vw - ${sw}px) / 2)`, top: "50%", transform: "translate(-50%, -50%)", translate: "none", ...style, zIndex: contentLayer }} data-testid={testId}>
         {title && <DialogTitle className="sr-only">{title}</DialogTitle>}
-        <InsideFramedModal.Provider value={true}><TitleStripper>{children}</TitleStripper></InsideFramedModal.Provider>
+        <FramedEditorBreadcrumb />
+        <FramedLayer.Provider value={contentLayer}><InsideFramedModal.Provider value={true}><TitleStripper recoveryId={testId}>{children}</TitleStripper></InsideFramedModal.Provider></FramedLayer.Provider>
       </DialogContent>
     </Dialog>
   );

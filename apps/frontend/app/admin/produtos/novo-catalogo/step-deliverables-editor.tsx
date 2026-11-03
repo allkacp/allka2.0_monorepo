@@ -22,13 +22,18 @@ const BADGE: Record<string, { text: string; cls: string }> = {
   deleted: { text: "Será excluído ao salvar a etapa", cls: "bg-rose-100 text-rose-700" },
 };
 
-export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items, setItems, declaredNone, setDeclaredNone, issues, showErrors, sessionKey }: {
+export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items, setItems, declaredNone, setDeclaredNone, issues, showErrors, sessionKey, inline = false, approvalBlock = null, onUseDeliverableApproval }: {
   task: any; step: { id: string; name: string }; stepIndex: number; readOnly: boolean;
   items: DelivItem[]; setItems: SetItems;
   /** "Esta etapa não tem entregáveis". */
   declaredNone: boolean; setDeclaredNone: (v: boolean) => void;
   issues: { field: string; message: string }[]; showErrors: boolean;
   sessionKey?: string;
+  inline?: boolean;
+  /** Item 5: por que um entregável desta etapa NÃO pode pedir aprovação do cliente (mesma regra do servidor). null = pode. */
+  approvalBlock?: { text: string; hard: boolean } | null;
+  /** Item 5: troca o tipo de aprovação da etapa para "por entregáveis" (só quando a tarefa executa por etapa). */
+  onUseDeliverableApproval?: () => void;
 }) {
   const [modal, setModal] = useState<{ item: DelivItem | null } | null>(() => {
     const saved = readEditorSession<{ uid?: string; id?: string; isNew?: boolean }>(sessionKey);
@@ -40,6 +45,20 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
   });
   useEffect(() => { if (modal) writeEditorSession(sessionKey, { uid: modal.item?.uid, id: modal.item?.id, isNew: !modal.item }); }, [modal, sessionKey]);
   const closeModal = () => { clearEditorSession(sessionKey); setModal(null); };
+  // Item 5 (31/10): entregável NOVO nasce pedindo aprovação do cliente só quando a etapa permite (aprovação "por entregáveis").
+  // Antes nascia sempre marcado e, em etapa/tarefa que não aprova por entregável, o servidor recusava ao concluir a etapa.
+  const blankFields = () => ({ ...fieldsOf({}), step_id: step.id, requires_approval: !approvalBlock });
+  const startNew = () => {
+    if (!inline) { setModal({ item: null }); return; }
+    const item = newItem(step.id, blankFields(), true);
+    setItems(cur => [...cur, item]);
+    setModal({ item });
+  };
+  const keepInlineDraft = (fields: Fields) => {
+    const uid = modal?.item?.uid;
+    if (!uid) return;
+    setItems(cur => syncDelivStates(cur.map(item => item.uid === uid ? { ...item, fields, draft: true } : item)));
+  };
   const [toDelete, setToDelete] = useState<DelivItem | null>(null);
   const [pickLink, setPickLink] = useState(false);
   const [libOpen, setLibOpen] = useState(false);
@@ -70,6 +89,9 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
   const unlink = (i: DelivItem) => setItems((cur) => (i.state === "new" || i.state === "linked" ? cur.filter((x) => x.uid !== i.uid) : cur.map((x) => (x.uid === i.uid ? { ...x, state: "unlinked" as const } : x))));
   const del = (i: DelivItem) => setItems((cur) => (i.state === "new" ? cur.filter((x) => x.uid !== i.uid) : cur.map((x) => (x.uid === i.uid ? { ...x, state: "deleted" as const } : x))));
   const undo = (uid: string) => setItems((cur) => syncDelivStates(cur.map((i) => (i.uid === uid ? { ...i, state: "saved" as const } : i))));
+  // Item 5: entregáveis que pedem aprovação mas a etapa/tarefa não permite — aviso já na tela (antes de salvar), com o nome de cada um.
+  const approvalConflicts = approvalBlock && !declaredNone ? act.filter((i) => i.fields.requires_approval) : [];
+  const clearApprovals = () => setItems((cur) => syncDelivStates(cur.map((i) => (approvalConflicts.some((c) => c.uid === i.uid) ? { ...i, fields: { ...i.fields, requires_approval: false } } : i))));
   const searchLib = async () => { setLibErr(null); try { const r: any = await apiClient.searchCatalog2DeliverableLibrary(q); setRows(r.data ?? []); } catch (e: any) { setLibErr(e?.message ?? "Não foi possível buscar."); } };
   const reuse = (r: any) => { setItems((cur) => [...cur, newItem(step.id, fieldsOf({ ...r, step_id: step.id }))]); setLibOpen(false); };
 
@@ -77,7 +99,7 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
     <section className="space-y-2.5" data-testid="step-deliverables">
       <fieldset className="flex flex-wrap items-center gap-4 text-sm" disabled={readOnly}>
         <legend className="sr-only">Esta etapa possui entregáveis?</legend>
-        <label className="inline-flex cursor-pointer items-center gap-2"><input type="radio" name={`deliv-has-${step.id}`} checked={!declaredNone} onChange={() => setDeclaredNone(false)} /> Esta etapa <strong>tem</strong> entregáveis</label>
+        <label className="inline-flex cursor-pointer items-center gap-2"><input type="radio" name={`deliv-has-${step.id}`} checked={!declaredNone} onChange={() => { setDeclaredNone(false); if (inline && act.length === 0) startNew(); }} /> Esta etapa <strong>tem</strong> entregáveis</label>
         <label className="inline-flex cursor-pointer items-center gap-2"><input type="radio" name={`deliv-has-${step.id}`} checked={declaredNone} onChange={() => setDeclaredNone(true)} aria-label="Esta etapa não tem entregáveis" /> Esta etapa <strong>não tem</strong> entregáveis</label>
       </fieldset>
       {declaredNone ? (
@@ -91,6 +113,18 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
             {pending && <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 font-semibold text-amber-800">há alterações ainda não salvas</span>}
           </div>
           {showErrors && issues.filter((x) => x.field === "deliverables").map((x) => <p key={x.message} role="alert" className="text-[11px] font-semibold text-rose-600">{x.message}</p>)}
+          {approvalConflicts.length > 0 && approvalBlock && (
+            <div role="alert" data-field="deliverables_approval" data-testid="deliverables-approval-conflict" className={`rounded-lg border px-3 py-2 text-[11px] ${approvalBlock.hard ? "border-rose-300 bg-rose-50 text-rose-900" : "border-amber-300 bg-amber-50 text-amber-900"}`}>
+              <p><strong>Aprovação do cliente não se aplica aqui.</strong> {approvalBlock.text}</p>
+              <p className="mt-0.5">Pedem aprovação: {approvalConflicts.map((c) => `“${c.fields.name.trim() || "(sem nome)"}”`).join(", ")}. A etapa não conclui enquanto isso não for resolvido; o restante do que você preencheu fica guardado.</p>
+              {!readOnly && (
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {!approvalBlock.hard && onUseDeliverableApproval && <Button type="button" size="sm" className="h-7 text-[11px]" onClick={onUseDeliverableApproval} data-testid="use-deliverable-approval">Usar aprovação por entregáveis nesta etapa</Button>}
+                  <Button type="button" size="sm" variant="outline" className="h-7 bg-white text-[11px]" onClick={clearApprovals} data-testid="clear-deliverable-approvals">Desmarcar a aprovação do cliente {approvalConflicts.length === 1 ? "neste entregável" : `nesses ${approvalConflicts.length} entregáveis`}</Button>
+                </div>
+              )}
+            </div>
+          )}
           {items.length === 0 && <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 dark:border-slate-700" data-testid="deliverables-empty">Nenhum entregável ligado a esta etapa ainda. Clique em “Novo entregável”, vincule um da tarefa ou reutilize um existente — ou declare que a etapa não tem entregáveis.</p>}
           <ul className="space-y-2">
             {items.map((i) => {
@@ -145,7 +179,7 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
           </ul>
           {!readOnly && (
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" variant="outline" className="h-9" onClick={() => setModal({ item: null })} data-testid="add-step-deliverable"><Plus className="mr-1.5 h-4 w-4" />Novo entregável</Button>
+              <Button type="button" variant="outline" className="h-9" disabled={inline && !!modal} onClick={startNew} data-testid="add-step-deliverable"><Plus className="mr-1.5 h-4 w-4" />Novo entregável</Button>
               <Button type="button" variant="outline" className="h-9" disabled={unlinked.length === 0} title={unlinked.length ? "Vincular um entregável da tarefa que está sem etapa" : "Não há entregável da tarefa sem etapa"} onClick={() => setPickLink((v) => !v)} data-testid="link-step-deliverable"><Link2 className="mr-1.5 h-4 w-4" />Vincular da tarefa{unlinked.length ? ` (${unlinked.length})` : ""}</Button>
               <Button type="button" variant="outline" className="h-9" onClick={() => setLibOpen((v) => !v)} data-testid="reuse-step-deliverable"><Copy className="mr-1.5 h-4 w-4" />Reutilizar de outro produto</Button>
             </div>
@@ -171,9 +205,9 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
         </div>
       )}
       {modal && (
-        <DeliverableEditorModal key={modal.item?.uid ?? "new"} initial={modal.item ? modal.item.fields : { ...fieldsOf({}), step_id: step.id }} isNew={!modal.item || modal.item.state === "new"} steps={stepList}
+        <DeliverableEditorModal inline={inline} onDraftChange={inline ? keepInlineDraft : undefined} key={modal.item?.uid ?? "new"} initial={modal.item ? modal.item.fields : blankFields()} isNew={!modal.item || modal.item.state === "new"} steps={stepList}
           lockedStepName={modal.item ? undefined : step.name} context={{ taskName: task.name ?? "", stepName: stepList.find((s) => s.id === (modal.item?.fields.step_id || step.id))?.name, stepIndex: stepList.find((s) => s.id === (modal.item?.fields.step_id || step.id))?.index }}
-          sessionKey={sessionKey ? `${sessionKey}:fields` : undefined} keyLabel={modal.item?.key} onSave={saveFromModal} onClose={closeModal} />
+          sessionKey={sessionKey ? `${sessionKey}:fields` : undefined} keyLabel={modal.item?.key} onSave={saveFromModal} onClose={closeModal} approvalBlock={approvalBlock} />
       )}
       <ConfirmationDialog open={!!toDelete} onClose={() => setToDelete(null)} title="Excluir entregável?" destructive confirmText="Excluir entregável"
         message={<>O entregável “{toDelete?.fields.name}” será excluído da tarefa quando você salvar a etapa. Se ele já foi usado em tarefa contratada, a exclusão é recusada — nesse caso use “Remover o vínculo”.</>}

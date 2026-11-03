@@ -459,11 +459,11 @@ describe("Layout e modais · questionário e etapas", () => {
     expect(src.slice(modal - 200, modal)).toMatch(/<FramedModal open onOpenChange=\{setOpen\}/);
     expect(src).toMatch(/section-number-badge[^"]*"[^>]*data-testid="step-number"|data-testid="step-number"/);
   });
-  it("modal da etapa: os 5 blocos são acordeões (StepBlock) e o rodapé tem Cancelar, Salvar rascunho da etapa e Concluir e salvar etapa", () => {
-    const edit = src.indexOf('data-testid="step-edit-form"');
+  it("modal da etapa preserva seis formulários e ações de salvar, com ordem alternativa no teste", () => {
+    const edit = src.indexOf('const blockForms: Record<StepBlockId, React.ReactNode>');
     const form = src.slice(edit, edit + 60000);
     for (const t of ["O que é esta etapa", "Quem faz e quanto tempo leva", "Quando a etapa termina", "Checklist, orientações e evidência", "Conexões e acessos desta etapa"]) expect(form).toContain(t);
-    for (const n of [1, 2, 3, 4, 5]) expect(form).toContain("<StepBlock n={" + n + "}");
+    for (const n of [1, 2, 3, 4, 5, 6]) expect(form).toContain("<StepBlock key={" + n + "} n={" + n + "}");
     expect(form).toContain("Salvar rascunho da etapa");
     expect(form).toContain("Concluir e salvar etapa");
   });

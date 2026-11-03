@@ -17,6 +17,7 @@ import { iniciarEtapasDaTarefa } from "../lib/stage-engine";
 import { startTaskRotation } from "../lib/task-rotation-engine";
 import { reopenAccessValidationOnExecutorChange } from "../lib/client-assets";
 import { setTaskAIAdapter, resetTaskAIAdapter } from "../lib/task-ai";
+import { withCheckoutProject } from "../test-support/checkout-project-fixture";
 
 // Estrutura universal v2 · ciclo financeiro: implantação × recorrente, primeira cobrança, renovações e escopo de cobrança.
 
@@ -128,8 +129,11 @@ async function quote(token: string, productId: string, o: { period?: string; sel
   assert.equal(r.status, 201, JSON.stringify(r.json));
   return r.json;
 }
-async function checkoutAndPay(token: string, quoteIds: string[]) {
-  const checkout = await api("/api/catalog2/checkout", { method: "POST", token, body: { quote_ids: quoteIds, checkout_client_action_id: crypto.randomUUID() } });
+async function checkoutAndPay(token: string, quoteIds: string[], withProject = true) {
+  const req = { method: "POST", token, body: { quote_ids: quoteIds, checkout_client_action_id: crypto.randomUUID() } };
+  // Desde 26/10 a compra exige projeto escolhido antes (422 project_required). 31/10 (tarde): todos os cenários passam a
+  // escolher o projeto pelo auxiliar — antes só o 3b; os outros 8 falhavam só por isso. withProject=false = compra sem projeto.
+  const checkout = await api("/api/catalog2/checkout", withProject ? await withCheckoutProject("/api/catalog2/checkout", req, projects) : req);
   assert.equal(checkout.status, 201, JSON.stringify(checkout.json));
   const projectId = checkout.json.project.id as string;
   projects.push(projectId);
@@ -285,6 +289,55 @@ describe("Estrutura universal · implantação, primeira cobrança e renovação
     const view = await api(`/api/catalog2/subscriptions/by-product/${pps[0].id}`, { token: CO_A.token });
     near(view.json.next_renewal_amount, P);
     near(view.json.implementation_amount, P);
+  });
+
+  // Caso relatado na revisão de 31/10: desconto de 5% no Mensal. Persistência REAL em banco descartável (nunca o Produto 2 real):
+  // configurar pela rota do admin → recarregar → o que o servidor calcula/mostra ao cliente → primeira cobrança → renovação.
+  it("3b. Mensal com 5%: implantação fora da base, desconto uma vez só na mensalidade, 1ª cobrança e renovação coerentes", async () => {
+    const { product, versionId } = await mkImplProduct();
+    const P = priceP(await simulate(versionId));
+    const sp0 = (await simulate(versionId)).split;
+    near(sp0.implementation.price, P);
+    const put = await api(`/api/admin/catalog2/products/${product.id}/periods/mensal`, { method: "PUT", token: ADMIN.token, body: { discount_percent: 5, is_active: true } });
+    assert.equal(put.status, 200, JSON.stringify(put.json));
+    // recarga: o admin lê de volta o que ficou gravado
+    const list = await api(`/api/admin/catalog2/products/${product.id}/periods`, { token: ADMIN.token });
+    const row = list.json.data.find((r: any) => r.period === "mensal");
+    assert.equal(row.discount_percent, 5); assert.equal(row.is_active, true);
+    assert.equal((await prisma.catalog2ProductPeriod.findUniqueOrThrow({ where: { product_id_period: { product_id: product.id, period: "mensal" } } })).discount_percent, 5);
+    const monthly = r2(P * 0.95);
+    // o que o cliente vê na página do produto
+    const detail = await api(`/api/catalog2/products/${product.slug}`, { token: CO_A.token });
+    assert.equal(detail.status, 200, JSON.stringify(detail.json));
+    const pm = detail.json.available_periods.find((p: any) => p.period === "mensal");
+    assert.equal(pm.discount_percent, 5);
+    near(pm.reference_monthly_price, P, "base sem desconto = mensalidade sem implantação");
+    near(pm.implementation_price, P, "implantação aparece separada e sem desconto");
+    near(pm.renewal_price, monthly, "mensalidade com 5%");
+    near(pm.first_charge_price, r2(P + monthly), "1ª cobrança = implantação cheia + mensalidade com 5%");
+    assert.ok(Math.abs(pm.first_charge_price - r2(P + r2(monthly * 0.95))) > 0.03, "desconto não aplicado duas vezes");
+    assert.ok(Math.abs(pm.first_charge_price - r2((P + P) * 0.95)) > 0.03, "implantação não entra na base do desconto");
+    // cotação do cliente e contratação no banco descartável
+    const q = await postQuote(product.id, "mensal");
+    assert.equal(q.status, 201, JSON.stringify(q.json));
+    near(q.json.first_charge_price, pm.first_charge_price, "cotação = página do produto");
+    near(q.json.recurring_price, monthly);
+    near(q.json.implementation_price, P);
+    assert.equal(q.json.contract_period_discount_percent, 5);
+    const { projectId, pps } = await checkoutAndPay(CO_A.token, [q.json.id], true);
+    const pay = await prisma.payment.findFirstOrThrow({ where: { project_id: projectId } });
+    near(pay.amount, q.json.first_charge_price, "cobrado agora = 1ª cobrança da cotação");
+    const sub = await prisma.catalog2Subscription.findUniqueOrThrow({ where: { project_product_id: pps[0].id } });
+    near(sub.monthly_amount, monthly, "mensalidade congelada já com 5%");
+    near(sub.implementation_amount, P);
+    await prisma.catalog2Subscription.update({ where: { id: sub.id }, data: { next_invoice_at: new Date(Date.now() - 1000) } });
+    await runSubscriptionsTick();
+    const inv = await prisma.invoice.findMany({ where: { project_id: projectId }, orderBy: { created_at: "asc" } });
+    assert.equal(inv.length, 2);
+    near(inv[0].amount, q.json.first_charge_price);
+    near(inv[1].amount, monthly, "renovação = mensalidade com 5%, sem implantação e sem desconto duplo");
+    const view = await api(`/api/catalog2/subscriptions/by-product/${pps[0].id}`, { token: CO_A.token });
+    near(view.json.next_renewal_amount, monthly);
   });
 
   it("4. implantação 'always': é cobrada de novo em toda nova contratação", async () => {

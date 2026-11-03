@@ -820,7 +820,7 @@ export default function AdminRelatoriosPage() {
             {/* ── Tab switcher — mesmo padrão do Financeiro, gradiente da sidebar ── */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 flex-wrap">
-                <div className="inline-flex rounded-lg bg-muted p-1 shrink-0">
+                <div className="inline-flex rounded-lg bg-muted p-1 shrink-0 max-sm:flex-wrap max-sm:shrink max-sm:max-w-full">
                   {(
                     [
                       { id: "overview", label: "Visão Geral", icon: BarChart3 },

@@ -10,7 +10,8 @@ describe("Impactos da opção de variação: nomenclatura de etapa", () => {
   const adjust = read("option-step-adjust-ui.tsx");
 
   it("o resumo dos impactos fala em Etapas (não em Tarefas)", () => {
-    expect(editor).toContain('<Item icon={ListChecks} label="Etapas" value={s.tasks} />');
+    // 31/10: o item virou atalho (type="steps") que abre o campo certo; o rótulo continua sendo "Etapas".
+    expect(editor).toContain('<Item icon={ListChecks} label="Etapas" type="steps" value={s.tasks} />');
     expect(editor).not.toContain('label="Tarefas" value={s.tasks}');
   });
 

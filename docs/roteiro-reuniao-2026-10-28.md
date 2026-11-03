@@ -14,6 +14,16 @@ Este roteiro reúne os 38 itens da reunião e a conferência manual dos ajustes 
 
 ## Farol completo
 
+### Rodada manual iniciada em 29/10 — um teste por vez
+
+- Controle combinado: **38 itens da reunião + 3 extras (login, F5, overlay) = 41 conferências**. Alguns itens são decisões/ações operacionais, não botões para testar. Não promover o restante a concluído por causa do deploy ou dos testes automáticos.
+- **0 aprovados nesta rodada; Teste 1 em andamento; 40 na fila após ele.** O usuário parou no item 6 porque não havia uma tarefa para abrir.
+- **Ajustes adicionais locais de 29/10 antes de continuar:** Entrega comercial/Acessos em Painel Moldura, overlay preto como padrão de molduras, contexto com produto/versão/tarefa/etapa nos cabeçalhos e retomada F5 dos painéis/campos revisados. Testados automaticamente; validação visual nova impedida pelo navegador Work desativado. Conferir com o usuário e manter o mesmo número do teste. Nada disso foi enviado ao QA.
+- Em 29/10 o usuário abriu o painel local e pediu compactação: implementada e conferida tecnicamente. Resumo é somente leitura, com valores derivados das etapas; configurações separadas; etapas/questionário/entregáveis menores. A aprovação manual continua pendente, no MESMO Teste 1/item 6. Nada publicado no QA.
+- Correção: “Tarefa 1 — nome” + Ver tarefa abre o cadastro completo em Painel Moldura, com as etapas dentro. Implementada **só no LOCAL**, por escolha explícita do usuário. O QA espelhado não recebeu esta alteração; continuar agora em http://localhost:8082/admin/cadastro-produtos/2, V2 Rascunho, Editar, Entrega.
+- Retomar do item 6: Ver tarefa → na lista interna, Editar da etapa Análise de Briefing e Acessos → Quem faz e quanto tempo leva → Líder → Qual líder. Vinicius/Eron não aparecem como líderes; automático não exige nome; ausência de líder ativo é esperada e explicada. Não salvar/publicar/cadastrar pessoas só para conferir este passo.
+- Se houver erro, ajustar e repetir **o mesmo teste**, sem avançar ou diminuir a contagem. Só enviar o próximo quando o usuário confirmar que funcionou. O farol abaixo é o histórico técnico; não substitui este controle manual.
+
 🟢 confirmado ou decisão preservada · 🟡 implementado, falta sua validação ou decisão indicada · ⏸ depende de pessoas, informação ou autorização. Código e espelho dos preenchimentos publicados no QA; homologação funcional/manual continua item por item.
 
 | Item | Assunto | Farol | Situação e próximo teste |

@@ -25,6 +25,7 @@ import {
   Search,
   Filter,
   EyeOff,
+  FlaskConical,
   Settings2,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
@@ -293,6 +294,10 @@ function ReadinessPendingBadge({ rp }: { rp: any }) {
   return <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><span className="inline-flex cursor-help">{items.length === 0 ? <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-label="Sem pendências" /> : <Badge className={`min-w-7 justify-center rounded-full border-0 px-2 py-1 text-xs font-bold ${tone.badge}`}>{items.length}</Badge>}</span></TooltipTrigger><PendingDetailsTooltip items={items} /></Tooltip></TooltipProvider>;
 }
 
+function ProductTestButton({ onClick }: { onClick: () => void }) {
+  return <TooltipProvider delayDuration={150}><Tooltip><TooltipTrigger asChild><button type="button" aria-label="Produto teste" onClick={onClick} className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200"><FlaskConical className="h-3.5 w-3.5" /></button></TooltipTrigger><TooltipContent>Produto teste · layout alternativo, mesmos dados</TooltipContent></Tooltip></TooltipProvider>;
+}
+
 export default function AdminProdutosPage() {
   const isAdminMaster = useIsAdminMaster();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -314,6 +319,7 @@ export default function AdminProdutosPage() {
     searchParams.get("produto") ??
     (routeProductId && !/^\d+$/.test(routeProductId) ? routeProductId : null),
   );
+  const editorLayout = searchParams.get("editor") === "teste" ? "test" : "current";
   // ?ver=<id> abre o DETALHE completo (só leitura) — ação separada do
   // construtor (?produto=<id>). Ícone de olho → detalhe; ícone de lápis →
   // construtor (reparo 2026-09, "não abra o construtor quando a ação
@@ -323,16 +329,23 @@ export default function AdminProdutosPage() {
   );
 
   const openProduct = useCallback(
-    (id: string | null) => {
+    (id: string | null, layout: "current" | "test" = "current") => {
       // Ctrl/Cmd + clique: abre o editor em outra aba (deep link ?produto=<id>).
       if (id && isModifierClick()) {
-        window.open(`/admin/cadastro-produtos?produto=${encodeURIComponent(id)}`, "_blank", "noopener");
+        window.open(`/admin/cadastro-produtos?produto=${encodeURIComponent(id)}${layout === "test" ? "&editor=teste" : ""}`, "_blank", "noopener");
         return;
       }
       setOpenProductId(id);
+      setOpenProductNumber(null);
+      if (id) setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        next.set("produto", id);
+        if (layout === "test") next.set("editor", "teste"); else next.delete("editor");
+        return next;
+      }, { replace: true });
       if (!id) navigate({ pathname: "/admin/cadastro-produtos", search: "" }, { replace: true });
     },
-    [navigate],
+    [navigate, setSearchParams],
   );
 
   // Número do produto (sequence_number) do editor aberto — vira o final da URL.
@@ -360,10 +373,10 @@ export default function AdminProdutosPage() {
   }, [openProductId]);
   useEffect(() => {
     if (!openProductId || openProductNumber == null) return;
-    if (routeProductId === String(openProductNumber) && !searchParams.get("produto")) return;
+    if (routeProductId === String(openProductNumber) && !searchParams.get("produto") && (searchParams.get("editor") === "teste") === (editorLayout === "test")) return;
     resolvedRouteRef.current = String(openProductNumber);
-    navigate({ pathname: `/admin/cadastro-produtos/${openProductNumber}`, search: "" }, { replace: true });
-  }, [openProductId, openProductNumber, routeProductId, searchParams, navigate]);
+    navigate({ pathname: `/admin/cadastro-produtos/${openProductNumber}`, search: editorLayout === "test" ? "?editor=teste" : "" }, { replace: true });
+  }, [openProductId, openProductNumber, routeProductId, searchParams, navigate, editorLayout]);
 
   const viewProduct = useCallback(
     (id: string | null) => {
@@ -984,7 +997,10 @@ export default function AdminProdutosPage() {
 
             <div className={`flex min-h-0 flex-1 flex-col ${STANDARD_SHELL_TABLE_CARD_CLASS}`}>
               {/* Row 1 — busca + filtros + ordenar */}
-              <div className="relative z-20 flex min-h-[58px] shrink-0 flex-nowrap items-center gap-1.5 overflow-hidden border-b border-slate-200/70 bg-[#f8f9fe] px-3 py-1.5 shadow-sm [&>*]:-translate-y-px dark:border-slate-700/60 dark:bg-slate-900">
+              {/* Abaixo de 1024 px a barra quebra em linhas: antes filtros, ordenar, colunas, visualização e paginação
+                  ficavam cortados no celular (e a paginação no tablet). Desktop igual. */}
+              <div className="relative z-20 flex min-h-[58px] shrink-0 flex-nowrap items-center gap-1.5 overflow-hidden border-b border-slate-200/70 bg-[#f8f9fe] px-3 py-1.5 shadow-sm [&>*]:-translate-y-px dark:border-slate-700/60 dark:bg-slate-900 max-lg:flex-wrap max-lg:overflow-visible">
+
                 <TooltipProvider delayDuration={350}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1124,7 +1140,8 @@ export default function AdminProdutosPage() {
                   onChange={setGridMode}
                   compact
                 />
-                <div className="ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1.5 border-l border-slate-200 pl-2 dark:border-slate-700">
+                <div className="ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1.5 border-l border-slate-200 pl-2 dark:border-slate-700 max-lg:shrink max-lg:flex-wrap max-lg:max-w-full max-md:ml-0 max-md:border-l-0 max-md:pl-0">
+
                   <ItemsPerPageSelect
                     compact
                     value={pageSize.toString()}
@@ -1483,11 +1500,16 @@ export default function AdminProdutosPage() {
                           ...(rp?.functional_for_test ? ["Especialidade e tempo provisórios para teste."] : []),
                         ];
                         return (
+                          // No celular (tabela-cartao) cada produto vira UM cartão: toda célula de dado leva a legenda
+                          // (data-rotulo) e só as ações ficam sem — sem legenda, o padrão joga a célula para o fim com
+                          // uma divisória, e cada campo virava um bloco solto (reteste Codex de 02/11). A altura fixa
+                          // da linha vale só no desktop.
                           <tr
                             key={p.id}
-                            className="group h-12 odd:bg-[#e5e9f7] even:bg-[#d9def1] transition-colors hover:bg-[#cdd5f5] dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
+                            className="group h-12 max-md:h-auto odd:bg-[#e5e9f7] even:bg-[#d9def1] transition-colors hover:bg-[#cdd5f5] dark:odd:bg-slate-950 dark:even:bg-slate-900/70 dark:hover:bg-slate-800/70"
                           >
                             <td
+                              data-rotulo="ID"
                               className="px-2 py-1 text-center"
                               style={{ boxShadow: `inset 4px 0 0 ${categoryStripeColor(p.category?.name)}` }}
                             >
@@ -1495,7 +1517,7 @@ export default function AdminProdutosPage() {
                                 {p.sequence_number != null ? String(p.sequence_number).padStart(2, "0") : "—"}
                               </span>
                             </td>
-                            <td className="px-2 py-1">
+                            <td data-rotulo="Imagem" className="px-2 py-1">
                               <Catalog2Thumbnail
                                 productId={p.id}
                                 imagePath={catalog2EditorialImage(
@@ -1506,11 +1528,11 @@ export default function AdminProdutosPage() {
                                 showBadge={false}
                               />
                             </td>
-                            <td className="px-2 py-1">
+                            <td data-rotulo="Produto" className="px-2 py-1">
                               <div className="flex min-w-0 items-center gap-1.5">
                                 <ProductHealthIcon rp={rp} provisionalReasons={provisionalReasons} />
                                 <button
-                                  className="block min-w-0 flex-1 truncate whitespace-nowrap text-left text-[13px] font-semibold leading-tight hover:underline"
+                                  className="block min-w-0 flex-1 truncate whitespace-nowrap max-md:whitespace-normal text-left text-[13px] font-semibold leading-tight hover:underline"
                                   onClick={() => viewProduct(p.id)}
                                   title={p.internal_name}
                                 >
@@ -1518,14 +1540,14 @@ export default function AdminProdutosPage() {
                                 </button>
                               </div>
                             </td>
-                            <td className="px-2 py-1">
+                            <td data-rotulo="Categoria" className="px-2 py-1">
                               <Badge
                                 className={`whitespace-nowrap border-0 shadow-none ring-1 ${catalog2CategoryTone(p.category?.name)}`}
                               >
                                 {p.category?.name ?? "Sem categoria"}
                               </Badge>
                             </td>
-                            <td className="px-2 py-1">
+                            <td data-rotulo="Tarefas" className="px-2 py-1">
                               <div className="flex items-center gap-1 whitespace-nowrap text-[11px] text-slate-600 dark:text-slate-300">
                                 {realTaskCount != null && realTaskCount > 0 ? (
                                   <span>{realTaskCount} tarefa(s)</span>
@@ -1536,7 +1558,7 @@ export default function AdminProdutosPage() {
                                 )}
                               </div>
                             </td>
-                            <td className="px-2 py-1 text-left">
+                            <td data-rotulo="Preço" className="px-2 py-1 text-left">
                               {realPrice != null ? (
                                 <div className="flex items-center justify-start gap-1">
                                   <span className="shrink-0 whitespace-nowrap text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
@@ -1561,10 +1583,10 @@ export default function AdminProdutosPage() {
                                 <span className="text-[12px] font-medium text-slate-400">A definir</span>
                               )}
                             </td>
-                            <td className="px-2 py-1 text-center">
+                            <td data-rotulo="Pendências" className="px-2 py-1 text-center">
                               <ReadinessPendingBadge rp={rp} />
                             </td>
-                            <td className="px-2 py-1">
+                            <td data-rotulo="Status" className="px-2 py-1">
                               <div className="flex min-w-0 items-center gap-1.5 whitespace-nowrap">
                                 <ProductStatusBadge
                                   product={p}
@@ -1596,6 +1618,7 @@ export default function AdminProdutosPage() {
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
+                                <ProductTestButton onClick={() => openProduct(p.id, "test")} />
                                 <ProductRowActionsMenu
                                   p={p}
                                   rowAction={rowAction}
@@ -1719,6 +1742,7 @@ export default function AdminProdutosPage() {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                            <ProductTestButton onClick={() => openProduct(p.id, "test")} />
                             <ProductRowActionsMenu
                               p={p}
                               rowAction={rowAction}
@@ -1847,11 +1871,12 @@ export default function AdminProdutosPage() {
             }
           }}
           testId="product-editor-panel"
-          title="Editar produto"
+          title={editorLayout === "test" ? "Produto teste" : "Editar produto"}
           className="!bg-[#d6daf0] dark:!bg-violet-950"
         >
           {openProductId && (
             <ProductEditor
+              layout={editorLayout}
               productId={openProductId}
               openInEditMode={String(openProductId) === newlyCreatedId}
               onBack={() => {
@@ -1860,10 +1885,10 @@ export default function AdminProdutosPage() {
                 void bootstrap();
               }}
               pin={{
-                id: `catalog2-produto-${openProductId}`,
-                label: "Editor de produto",
+                id: `catalog2-produto-${openProductId}${editorLayout === "test" ? "-teste" : ""}`,
+                label: editorLayout === "test" ? "Produto teste" : "Editor de produto",
                 icon: Package,
-                path: openProductNumber != null ? `/admin/cadastro-produtos/${openProductNumber}` : `/admin/cadastro-produtos/${openProductId}`,
+                path: `/admin/cadastro-produtos/${openProductNumber ?? openProductId}${editorLayout === "test" ? "?editor=teste" : ""}`,
               }}
             />
           )}

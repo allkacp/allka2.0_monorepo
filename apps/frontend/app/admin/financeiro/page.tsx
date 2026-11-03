@@ -46,7 +46,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useSorting, SortableHeader } from "@/hooks/useSorting";
 import { useTableScrollSync } from "@/hooks/useTableScrollSync";
 import { IconToolbarButton } from "@/components/icon-toolbar-button";
-import { SlidePanel } from "@/components/slide-panel";
+import { WalletWindow } from "./wallet-window";
 import { StandardModalDialog } from "@/components/standard-modal-dialog";
 import type { DateRange } from "react-day-picker";
 import {
@@ -1511,6 +1511,140 @@ export default function AdminFinanceiroPage() {
     );
   };
 
+  // Ajuste manual de saldo — Janela Moldura. Aberto pela lista de carteiras (fica na página) ou de dentro do
+  // Extrato (vai dentro dele, para abrir POR CIMA da janela do extrato). O formulário e a ação são os mesmos.
+  const adjustWindow = (
+    <WalletWindow
+      open={adjustOpen}
+      onOpenChange={setAdjustOpen}
+      testId="wallet-adjust-window"
+      title="Ajuste Manual de Saldo"
+      className="max-w-xl sm:!max-w-xl"
+      fitContent
+      header={
+        <h2 className="text-white font-bold text-lg leading-tight">
+          Ajuste Manual de Saldo
+        </h2>
+      }
+      footer={
+        <div className="shrink-0 border-t border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-800/50">
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setAdjustOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="btn-brand border-0"
+              disabled={actionLoading === "adj"}
+              onClick={handleAdjustment}
+            >
+              {actionLoading === "adj" ? "Salvando…" : "Confirmar Ajuste"}
+            </Button>
+          </div>
+        </div>
+      }
+    >
+      <div className="p-6">
+        <div className="max-w-3xl mx-auto space-y-4">
+          {adjustWallet && (
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                {adjustWallet.owner_name}
+              </p>
+              <p className="text-[11px] text-slate-400">
+                {WALLET_OWNER_LABELS[adjustWallet.owner_type]} · Saldo
+                atual:{" "}
+                <span className="font-bold text-slate-700 dark:text-slate-300">
+                  <AkBoth value={adjustWallet.balance} />
+                </span>
+              </p>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tipo de Ajuste</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                {
+                  value: "credit",
+                  label: "Crédito (+)",
+                  icon: ArrowUpCircle,
+                  color:
+                    "text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30",
+                },
+                {
+                  value: "debit",
+                  label: "Débito (−)",
+                  icon: ArrowDownCircle,
+                  color:
+                    "text-red-600 border-red-300 bg-red-50 dark:bg-red-950/30",
+                },
+              ].map(({ value, label, icon: Icon, color }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    setAdjustForm((f) => ({ ...f, direction: value }))
+                  }
+                  className={cn(
+                    "flex items-center justify-center gap-2 h-10 rounded-lg border-2 text-xs font-semibold transition-colors",
+                    adjustForm.direction === value
+                      ? color
+                      : "border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300",
+                  )}
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">
+              Valor <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              type="number"
+              placeholder="0.00"
+              className="h-9 text-sm"
+              value={adjustForm.amount}
+              onChange={(e) =>
+                setAdjustForm((f) => ({ ...f, amount: e.target.value }))
+              }
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">
+              Descrição <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              placeholder="Ex: Crédito bônus campanha, Estorno pagamento…"
+              className="h-9 text-sm"
+              value={adjustForm.description}
+              onChange={(e) =>
+                setAdjustForm((f) => ({
+                  ...f,
+                  description: e.target.value,
+                }))
+              }
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Observação interna</Label>
+            <Input
+              placeholder="Motivo, referência, contexto…"
+              className="h-9 text-sm"
+              value={adjustForm.notes}
+              onChange={(e) =>
+                setAdjustForm((f) => ({ ...f, notes: e.target.value }))
+              }
+            />
+          </div>
+        </div>
+      </div>
+    </WalletWindow>
+  );
+
   return (
     <div className={STANDARD_SHELL_PANEL_CLASS}>
       <div className="h-full min-h-0 flex flex-col" ref={pageRef}>
@@ -1834,7 +1968,9 @@ export default function AdminFinanceiroPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Tab switcher — mesmo visual que Lista / Kanban / Planejador */}
-                <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 rounded-lg p-0.5 border border-slate-200 dark:border-slate-700 flex-shrink-0">
+                {/* no celular as abas do Financeiro quebram em linhas (antes 586 px exigiam rolagem lateral) */}
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800/80 rounded-lg p-0.5 border border-slate-200 dark:border-slate-700 flex-shrink-0 max-md:flex-shrink max-md:flex-wrap max-md:max-w-full">
+
                   <Button
                     size="sm"
                     variant={activeTab === "faturas" ? "default" : "ghost"}
@@ -6808,11 +6944,14 @@ export default function AdminFinanceiroPage() {
               onConfirm={handleDeleteExpense}
             />
 
-            {/* ── Sheet Extrato de Carteira ──────────────────────────────── */}
-            <Sheet open={ledgerOpen} onOpenChange={setLedgerOpen}>
-              <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0 flex flex-col">
-                {/* Header com gradiente */}
-                <div className="app-brand-header px-6 py-4 shrink-0">
+            {/* ── Janela Moldura: Extrato da Carteira ─────────────────────── */}
+            <WalletWindow
+              open={ledgerOpen}
+              onOpenChange={setLedgerOpen}
+              testId="wallet-ledger-window"
+              title="Extrato da Carteira"
+              header={
+                <>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-blue-200 text-[10px] font-semibold uppercase tracking-wider mb-0.5">
@@ -6886,9 +7025,9 @@ export default function AdminFinanceiroPage() {
                       ))}
                     </div>
                   )}
-                </div>
-
-                {/* Filtros do extrato */}
+                </>
+              }
+              toolbar={
                 <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap shrink-0 bg-slate-50 dark:bg-slate-800/50">
                   {[
                     { value: "all", label: "Todos" },
@@ -6936,110 +7075,8 @@ export default function AdminFinanceiroPage() {
                     </button>
                   </div>
                 </div>
-
-                {/* Lista de movimentações */}
-                <div className="flex-1 overflow-y-auto">
-                  {ledgerLoading ? (
-                    <InlineLoader text="Carregando extrato…" />
-                  ) : ledger.length === 0 ? (
-                    <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
-                      <BarChart3 className="h-8 w-8 opacity-30" />
-                      <p>Nenhuma movimentação encontrada</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {ledger.map((entry: any) => {
-                        const isCredit = entry.direction === "credit";
-                        return (
-                          <div
-                            key={entry.id}
-                            className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-                          >
-                            <div className="flex items-start gap-3">
-                              {/* Icon */}
-                              <div
-                                className={`mt-0.5 rounded-full p-1.5 shrink-0 ${isCredit ? "bg-emerald-50 dark:bg-emerald-950/30" : "bg-red-50 dark:bg-red-950/30"}`}
-                              >
-                                {isCredit ? (
-                                  <ArrowUpCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                ) : (
-                                  <ArrowDownCircle className="h-4 w-4 text-red-500 dark:text-red-400" />
-                                )}
-                              </div>
-                              {/* Content */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                                    {entry.description}
-                                  </p>
-                                  <p
-                                    className={`text-sm font-bold tabular-nums shrink-0 ${isCredit ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}
-                                  >
-                                    {isCredit ? "+" : "−"}
-                                    <AkBoth value={entry.amount} />
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="text-[10px] text-slate-400">
-                                    {fmtDateTime(entry.created_at)}
-                                  </span>
-                                  {entry.category && (
-                                    <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded">
-                                      {entry.category}
-                                    </span>
-                                  )}
-                                  {entry.type &&
-                                    entry.type !== entry.direction && (
-                                      <span className="text-[10px] text-slate-400">
-                                        {LEDGER_TYPE_LABELS[entry.type] ||
-                                          entry.type}
-                                      </span>
-                                    )}
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[9px] py-0 px-1 ${entry.status === "confirmed" ? "text-emerald-600 border-emerald-200" : entry.status === "pending" ? "text-amber-600 border-amber-200" : "text-slate-400 border-slate-200"}`}
-                                  >
-                                    {entry.status === "confirmed"
-                                      ? "Confirmado"
-                                      : entry.status === "pending"
-                                        ? "Pendente"
-                                        : entry.status === "reversed"
-                                          ? "Estornado"
-                                          : entry.status}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center gap-3 mt-1">
-                                  <span className="text-[10px] text-slate-400">
-                                    Antes:{" "}
-                                    <span className="font-medium text-slate-600 dark:text-slate-300">
-                                      <AkBoth value={entry.balance_before} />
-                                    </span>
-                                  </span>
-                                  <span className="text-[10px] text-slate-400">
-                                    →
-                                  </span>
-                                  <span className="text-[10px] text-slate-400">
-                                    Depois:{" "}
-                                    <span className="font-medium text-slate-600 dark:text-slate-300">
-                                      <AkBoth value={entry.balance_after} />
-                                    </span>
-                                  </span>
-                                </div>
-                                {entry.notes && (
-                                  <p className="text-[10px] text-slate-400 mt-0.5 italic">
-                                    {entry.notes}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer paginação */}
+              }
+              footer={
                 <div className="shrink-0 px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
                   <p className="text-xs text-slate-400">
                     {ledgerTotal} movimentação{ledgerTotal !== 1 ? "ões" : ""}
@@ -7066,13 +7103,118 @@ export default function AdminFinanceiroPage() {
                     </button>
                   </div>
                 </div>
-              </SheetContent>
-            </Sheet>
+              }
+            >
+              {ledgerLoading ? (
+                <InlineLoader text="Carregando extrato…" />
+              ) : ledger.length === 0 ? (
+                <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
+                  <BarChart3 className="h-8 w-8 opacity-30" />
+                  <p>Nenhuma movimentação encontrada</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {ledger.map((entry: any) => {
+                    const isCredit = entry.direction === "credit";
+                    return (
+                      <div
+                        key={entry.id}
+                        className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          {/* Icon */}
+                          <div
+                            className={`mt-0.5 rounded-full p-1.5 shrink-0 ${isCredit ? "bg-emerald-50 dark:bg-emerald-950/30" : "bg-red-50 dark:bg-red-950/30"}`}
+                          >
+                            {isCredit ? (
+                              <ArrowUpCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                              <ArrowDownCircle className="h-4 w-4 text-red-500 dark:text-red-400" />
+                            )}
+                          </div>
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
+                                {entry.description}
+                              </p>
+                              <p
+                                className={`text-sm font-bold tabular-nums shrink-0 ${isCredit ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}
+                              >
+                                {isCredit ? "+" : "−"}
+                                <AkBoth value={entry.amount} />
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[10px] text-slate-400">
+                                {fmtDateTime(entry.created_at)}
+                              </span>
+                              {entry.category && (
+                                <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded">
+                                  {entry.category}
+                                </span>
+                              )}
+                              {entry.type &&
+                                entry.type !== entry.direction && (
+                                  <span className="text-[10px] text-slate-400">
+                                    {LEDGER_TYPE_LABELS[entry.type] ||
+                                      entry.type}
+                                  </span>
+                                )}
+                              <Badge
+                                variant="outline"
+                                className={`text-[9px] py-0 px-1 ${entry.status === "confirmed" ? "text-emerald-600 border-emerald-200" : entry.status === "pending" ? "text-amber-600 border-amber-200" : "text-slate-400 border-slate-200"}`}
+                              >
+                                {entry.status === "confirmed"
+                                  ? "Confirmado"
+                                  : entry.status === "pending"
+                                    ? "Pendente"
+                                    : entry.status === "reversed"
+                                      ? "Estornado"
+                                      : entry.status}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1">
+                              <span className="text-[10px] text-slate-400">
+                                Antes:{" "}
+                                <span className="font-medium text-slate-600 dark:text-slate-300">
+                                  <AkBoth value={entry.balance_before} />
+                                </span>
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                →
+                              </span>
+                              <span className="text-[10px] text-slate-400">
+                                Depois:{" "}
+                                <span className="font-medium text-slate-600 dark:text-slate-300">
+                                  <AkBoth value={entry.balance_after} />
+                                </span>
+                              </span>
+                            </div>
+                            {entry.notes && (
+                              <p className="text-[10px] text-slate-400 mt-0.5 italic">
+                                {entry.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* Ajuste aberto de dentro do extrato: fica POR CIMA desta janela */}
+              {ledgerOpen && adjustWindow}
+            </WalletWindow>
 
-            {/* ── Sheet Ledger Global (drilldown de widgets) ────────────── */}
-            <Sheet open={globalLedgerOpen} onOpenChange={setGlobalLedgerOpen}>
-              <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0 flex flex-col">
-                <div className="app-brand-header px-6 py-4 shrink-0">
+            {/* ── Janela Moldura: Movimentações de todas as carteiras (Comissões e demais cartões) ── */}
+            <WalletWindow
+              open={globalLedgerOpen}
+              onOpenChange={setGlobalLedgerOpen}
+              testId="wallet-global-ledger-window"
+              title={globalLedgerTitle || "Extrato Global"}
+              header={
+                <>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-blue-200 text-[10px] font-semibold uppercase tracking-wider mb-0.5">
@@ -7137,8 +7279,9 @@ export default function AdminFinanceiroPage() {
                       ))}
                     </div>
                   )}
-                </div>
-
+                </>
+              }
+              toolbar={
                 <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 flex-wrap shrink-0 bg-slate-50 dark:bg-slate-800/50">
                   <span className="text-[11px] text-slate-500">
                     {globalLedgerTotal} movimentação
@@ -7152,99 +7295,8 @@ export default function AdminFinanceiroPage() {
                     <RefreshCw className="h-3.5 w-3.5" />
                   </button>
                 </div>
-
-                <div className="flex-1 overflow-y-auto">
-                  {globalLedgerLoading ? (
-                    <InlineLoader text="Carregando movimentações…" />
-                  ) : globalLedger.length === 0 ? (
-                    <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
-                      <BarChart3 className="h-8 w-8 opacity-30" />
-                      <p>Nenhuma movimentação encontrada</p>
-                      <p className="text-[11px]">
-                        Tente ajustar os filtros ou o período
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {globalLedger.map((entry: any) => {
-                        const isCredit = entry.direction === "credit";
-                        const ownerLabel =
-                          WALLET_OWNER_LABELS[entry.wallet?.owner_type] ||
-                          entry.wallet?.owner_type ||
-                          "—";
-                        const ownerColor =
-                          WALLET_OWNER_COLORS[entry.wallet?.owner_type] || "";
-                        return (
-                          <div
-                            key={entry.id}
-                            className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-                          >
-                            <div className="flex items-start gap-3">
-                              <div
-                                className={`mt-0.5 rounded-full p-1.5 shrink-0 ${isCredit ? "bg-emerald-50 dark:bg-emerald-950/30" : "bg-red-50 dark:bg-red-950/30"}`}
-                              >
-                                {isCredit ? (
-                                  <ArrowUpCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                ) : (
-                                  <ArrowDownCircle className="h-4 w-4 text-red-500 dark:text-red-400" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between gap-2">
-                                  <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                                    {entry.description}
-                                  </p>
-                                  <p
-                                    className={`text-sm font-bold tabular-nums shrink-0 ${isCredit ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}
-                                  >
-                                    {isCredit ? "+" : "−"}
-                                    <AkBoth value={entry.amount} />
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                  <span className="text-[10px] text-slate-400">
-                                    {fmtDateTime(entry.created_at)}
-                                  </span>
-                                  {entry.wallet?.owner_name && (
-                                    <span
-                                      className={`text-[10px] px-1.5 py-0.5 rounded border ${ownerColor}`}
-                                    >
-                                      {ownerLabel}: {entry.wallet.owner_name}
-                                    </span>
-                                  )}
-                                  {entry.category && (
-                                    <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded">
-                                      {entry.category}
-                                    </span>
-                                  )}
-                                  {entry.type && (
-                                    <span className="text-[10px] text-slate-400">
-                                      {LEDGER_TYPE_LABELS[entry.type] ||
-                                        entry.type}
-                                    </span>
-                                  )}
-                                  <Badge
-                                    variant="outline"
-                                    className={`text-[9px] py-0 px-1 ${entry.status === "confirmed" ? "text-emerald-600 border-emerald-200" : entry.status === "pending" ? "text-amber-600 border-amber-200" : "text-slate-400 border-slate-200"}`}
-                                  >
-                                    {entry.status === "confirmed"
-                                      ? "Confirmado"
-                                      : entry.status === "pending"
-                                        ? "Pendente"
-                                        : entry.status === "reversed"
-                                          ? "Estornado"
-                                          : entry.status}
-                                  </Badge>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
+              }
+              footer={
                 <div className="shrink-0 px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
                   <p className="text-xs text-slate-400">
                     {globalLedgerTotal} mov.
@@ -7275,13 +7327,108 @@ export default function AdminFinanceiroPage() {
                     </button>
                   </div>
                 </div>
-              </SheetContent>
-            </Sheet>
+              }
+            >
+              {globalLedgerLoading ? (
+                <InlineLoader text="Carregando movimentações…" />
+              ) : globalLedger.length === 0 ? (
+                <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
+                  <BarChart3 className="h-8 w-8 opacity-30" />
+                  <p>Nenhuma movimentação encontrada</p>
+                  <p className="text-[11px]">
+                    Tente ajustar os filtros ou o período
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {globalLedger.map((entry: any) => {
+                    const isCredit = entry.direction === "credit";
+                    const ownerLabel =
+                      WALLET_OWNER_LABELS[entry.wallet?.owner_type] ||
+                      entry.wallet?.owner_type ||
+                      "—";
+                    const ownerColor =
+                      WALLET_OWNER_COLORS[entry.wallet?.owner_type] || "";
+                    return (
+                      <div
+                        key={entry.id}
+                        className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`mt-0.5 rounded-full p-1.5 shrink-0 ${isCredit ? "bg-emerald-50 dark:bg-emerald-950/30" : "bg-red-50 dark:bg-red-950/30"}`}
+                          >
+                            {isCredit ? (
+                              <ArrowUpCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                              <ArrowDownCircle className="h-4 w-4 text-red-500 dark:text-red-400" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
+                                {entry.description}
+                              </p>
+                              <p
+                                className={`text-sm font-bold tabular-nums shrink-0 ${isCredit ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}
+                              >
+                                {isCredit ? "+" : "−"}
+                                <AkBoth value={entry.amount} />
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-[10px] text-slate-400">
+                                {fmtDateTime(entry.created_at)}
+                              </span>
+                              {entry.wallet?.owner_name && (
+                                <span
+                                  className={`text-[10px] px-1.5 py-0.5 rounded border ${ownerColor}`}
+                                >
+                                  {ownerLabel}: {entry.wallet.owner_name}
+                                </span>
+                              )}
+                              {entry.category && (
+                                <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded">
+                                  {entry.category}
+                                </span>
+                              )}
+                              {entry.type && (
+                                <span className="text-[10px] text-slate-400">
+                                  {LEDGER_TYPE_LABELS[entry.type] ||
+                                    entry.type}
+                                </span>
+                              )}
+                              <Badge
+                                variant="outline"
+                                className={`text-[9px] py-0 px-1 ${entry.status === "confirmed" ? "text-emerald-600 border-emerald-200" : entry.status === "pending" ? "text-amber-600 border-amber-200" : "text-slate-400 border-slate-200"}`}
+                              >
+                                {entry.status === "confirmed"
+                                  ? "Confirmado"
+                                  : entry.status === "pending"
+                                    ? "Pendente"
+                                    : entry.status === "reversed"
+                                      ? "Estornado"
+                                      : entry.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </WalletWindow>
 
-            {/* ── Sheet Projeções Futuras ────────────────────────────────── */}
-            <Sheet open={projectionsOpen} onOpenChange={setProjectionsOpen}>
-              <SheetContent className="w-full sm:max-w-xl overflow-y-auto p-0 flex flex-col">
-                <div className="app-brand-header px-6 py-4 shrink-0">
+            {/* ── Janela Moldura: Projeções futuras ─────────────────────────── */}
+            <WalletWindow
+              open={projectionsOpen}
+              onOpenChange={setProjectionsOpen}
+              testId="wallet-projections-window"
+              title={projectionsMode === "credits" ? "Créditos futuros previstos" : "Débitos futuros previstos"}
+              className="max-w-xl sm:!max-w-xl"
+              header={
+                <>
                   <p className="text-blue-200 text-[10px] font-semibold uppercase tracking-wider mb-0.5">
                     Projeções — próximos {walletHorizon} dias
                   </p>
@@ -7299,110 +7446,9 @@ export default function AdminFinanceiroPage() {
                         : (walletProjections?.futureDebits ?? 0),
                     )}
                   </p>
-                </div>
-
-                <div className="flex-1 overflow-y-auto">
-                  {projectionsMode === "credits" ? (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(walletProjections?.pendingInvoices || []).length ===
-                      0 ? (
-                        <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
-                          <CalendarClock className="h-8 w-8 opacity-30" />
-                          <p>
-                            Nenhuma fatura pendente nos próximos {walletHorizon}{" "}
-                            dias
-                          </p>
-                        </div>
-                      ) : (
-                        (walletProjections?.pendingInvoices || []).map(
-                          (inv: any) => (
-                            <div
-                              key={inv.id}
-                              className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-                            >
-                              <div className="flex items-start gap-3">
-                                <div className="mt-0.5 rounded-full p-1.5 shrink-0 bg-emerald-50 dark:bg-emerald-950/30">
-                                  <ArrowUpCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                                      {inv.description || "Fatura pendente"}
-                                    </p>
-                                    <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
-                                      +{fmt(inv.amount)}
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px] text-slate-400">
-                                      {inv.company_name}
-                                    </span>
-                                    {inv.invoice_number && (
-                                      <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded">
-                                        {inv.invoice_number}
-                                      </span>
-                                    )}
-                                    <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
-                                      <Clock className="h-3 w-3" /> Vence{" "}
-                                      {fmtDate(inv.due_date)}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ),
-                        )
-                      )}
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(walletProjections?.recurringProjects || []).length ===
-                      0 ? (
-                        <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
-                          <Repeat2 className="h-8 w-8 opacity-30" />
-                          <p>Nenhum projeto recorrente ativo</p>
-                        </div>
-                      ) : (
-                        (walletProjections?.recurringProjects || []).map(
-                          (proj: any) => (
-                            <div
-                              key={proj.id}
-                              className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
-                            >
-                              <div className="flex items-start gap-3">
-                                <div className="mt-0.5 rounded-full p-1.5 shrink-0 bg-orange-50 dark:bg-orange-950/30">
-                                  <Repeat2 className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                                      {proj.title}
-                                    </p>
-                                    <p className="text-sm font-bold text-orange-600 dark:text-orange-400 tabular-nums shrink-0">
-                                      −{fmt(proj.value)}
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px] text-slate-400">
-                                      {proj.client_name}
-                                    </span>
-                                    <Badge
-                                      variant="outline"
-                                      className="text-[9px] py-0 px-1 text-emerald-600 border-emerald-200"
-                                    >
-                                      recorrente
-                                    </Badge>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ),
-                        )
-                      )}
-                    </div>
-                  )}
-                </div>
-
+                </>
+              }
+              footer={
                 <div className="shrink-0 px-4 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex gap-2">
                   <button
                     onClick={() =>
@@ -7418,130 +7464,111 @@ export default function AdminFinanceiroPage() {
                       : "créditos futuros"}
                   </button>
                 </div>
-              </SheetContent>
-            </Sheet>
-
-            {/* ── Sheet Lançar Ajuste Manual ─────────────────────────────── */}
-            <SlidePanel
-              open={adjustOpen}
-              onClose={() => setAdjustOpen(false)}
-              title="Ajuste Manual de Saldo"
-              widthMode="full"
-              footer={
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setAdjustOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    className="btn-brand border-0"
-                    disabled={actionLoading === "adj"}
-                    onClick={handleAdjustment}
-                  >
-                    {actionLoading === "adj" ? "Salvando…" : "Confirmar Ajuste"}
-                  </Button>
-                </div>
               }
             >
-              <div className="flex-1 overflow-y-auto p-6">
-                <div className="max-w-3xl mx-auto space-y-4">
-                  {adjustWallet && (
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        {adjustWallet.owner_name}
-                      </p>
-                      <p className="text-[11px] text-slate-400">
-                        {WALLET_OWNER_LABELS[adjustWallet.owner_type]} · Saldo
-                        atual:{" "}
-                        <span className="font-bold text-slate-700 dark:text-slate-300">
-                          <AkBoth value={adjustWallet.balance} />
-                        </span>
+              {projectionsMode === "credits" ? (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {(walletProjections?.pendingInvoices || []).length ===
+                  0 ? (
+                    <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
+                      <CalendarClock className="h-8 w-8 opacity-30" />
+                      <p>
+                        Nenhuma fatura pendente nos próximos {walletHorizon}{" "}
+                        dias
                       </p>
                     </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Tipo de Ajuste</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        {
-                          value: "credit",
-                          label: "Crédito (+)",
-                          icon: ArrowUpCircle,
-                          color:
-                            "text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30",
-                        },
-                        {
-                          value: "debit",
-                          label: "Débito (−)",
-                          icon: ArrowDownCircle,
-                          color:
-                            "text-red-600 border-red-300 bg-red-50 dark:bg-red-950/30",
-                        },
-                      ].map(({ value, label, icon: Icon, color }) => (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() =>
-                            setAdjustForm((f) => ({ ...f, direction: value }))
-                          }
-                          className={cn(
-                            "flex items-center justify-center gap-2 h-10 rounded-lg border-2 text-xs font-semibold transition-colors",
-                            adjustForm.direction === value
-                              ? color
-                              : "border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300",
-                          )}
+                  ) : (
+                    (walletProjections?.pendingInvoices || []).map(
+                      (inv: any) => (
+                        <div
+                          key={inv.id}
+                          className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
                         >
-                          <Icon className="h-4 w-4" /> {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      Valor <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="number"
-                      placeholder="0.00"
-                      className="h-9 text-sm"
-                      value={adjustForm.amount}
-                      onChange={(e) =>
-                        setAdjustForm((f) => ({ ...f, amount: e.target.value }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">
-                      Descrição <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      placeholder="Ex: Crédito bônus campanha, Estorno pagamento…"
-                      className="h-9 text-sm"
-                      value={adjustForm.description}
-                      onChange={(e) =>
-                        setAdjustForm((f) => ({
-                          ...f,
-                          description: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Observação interna</Label>
-                    <Input
-                      placeholder="Motivo, referência, contexto…"
-                      className="h-9 text-sm"
-                      value={adjustForm.notes}
-                      onChange={(e) =>
-                        setAdjustForm((f) => ({ ...f, notes: e.target.value }))
-                      }
-                    />
-                  </div>
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 rounded-full p-1.5 shrink-0 bg-emerald-50 dark:bg-emerald-950/30">
+                              <ArrowUpCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
+                                  {inv.description || "Fatura pendente"}
+                                </p>
+                                <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
+                                  +{fmt(inv.amount)}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] text-slate-400">
+                                  {inv.company_name}
+                                </span>
+                                {inv.invoice_number && (
+                                  <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded">
+                                    {inv.invoice_number}
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-0.5">
+                                  <Clock className="h-3 w-3" /> Vence{" "}
+                                  {fmtDate(inv.due_date)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ),
+                    )
+                  )}
                 </div>
-              </div>
-            </SlidePanel>
+              ) : (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {(walletProjections?.recurringProjects || []).length ===
+                  0 ? (
+                    <div className="py-16 text-center text-sm text-slate-400 flex flex-col items-center gap-2">
+                      <Repeat2 className="h-8 w-8 opacity-30" />
+                      <p>Nenhum projeto recorrente ativo</p>
+                    </div>
+                  ) : (
+                    (walletProjections?.recurringProjects || []).map(
+                      (proj: any) => (
+                        <div
+                          key={proj.id}
+                          className="px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 rounded-full p-1.5 shrink-0 bg-orange-50 dark:bg-orange-950/30">
+                              <Repeat2 className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
+                                  {proj.title}
+                                </p>
+                                <p className="text-sm font-bold text-orange-600 dark:text-orange-400 tabular-nums shrink-0">
+                                  −{fmt(proj.value)}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[10px] text-slate-400">
+                                  {proj.client_name}
+                                </span>
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] py-0 px-1 text-emerald-600 border-emerald-200"
+                                >
+                                  recorrente
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ),
+                    )
+                  )}
+                </div>
+              )}
+            </WalletWindow>
+
+            {/* ── Janela Moldura: Ajuste Manual de Saldo (aberta pela lista de carteiras) ── */}
+            {!ledgerOpen && adjustWindow}
           </div>
         </div>
       </div>

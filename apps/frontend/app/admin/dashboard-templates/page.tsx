@@ -258,7 +258,8 @@ export default function DashboardTemplatesPage() {
                       key={t.id}
                       className="rounded-[20px] border border-[#e6ebf3] dark:border-slate-700/60 shadow-[0_12px_32px_rgba(15,23,42,0.06)] hover:shadow-[0_16px_40px_rgba(15,23,42,0.09)] transition-shadow"
                     >
-                      <CardContent className="flex items-center gap-3 px-4 py-3.5">
+                      {/* no celular as ações descem para uma linha própria (antes passavam da tela) */}
+                      <CardContent className="flex items-center gap-3 px-4 py-3.5 max-sm:flex-wrap">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                           <LayoutTemplate className="h-5 w-5" />
                         </div>
@@ -279,7 +280,7 @@ export default function DashboardTemplatesPage() {
                             {t.creator ? ` · criado por ${t.creator.name}` : ""}
                           </p>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0 max-sm:basis-full max-sm:justify-end">
                           <Switch
                             checked={t.is_active}
                             disabled={busyId === t.id}

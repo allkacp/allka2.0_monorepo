@@ -24,6 +24,7 @@ vi.mock("@/lib/api-client", () => {
       if (name === "getCatalog2Product") return async () => JSON.parse(JSON.stringify(product));
       if (name === "getCatalog2ModelImpact") return async (...a: any[]) => { rec("impact", a); return { instances: 3, editable: 2, locked: 1, products: 2, model_id: 77, kind: "step" }; };
       if (name === "updateCatalog2Step") return async (...a: any[]) => { rec("updateStep", a); return {}; };
+      if (name === "updateCatalog2VersionInfo") return async (...a: any[]) => { rec("updateVersion", a); return {}; };
       if (name === "getCatalog2Specialties") return async () => ({ data: [{ id: "sp1", name: "Gestor", execution_kind: "humano", max_hourly_rate: 50, is_active: true }] });
       return async () => ({ data: [], items: [], versions: [] });
     },
@@ -46,6 +47,68 @@ beforeEach(() => {
   product = { id: "p1", internal_name: "Gestão de Tráfego", status: "em_preparacao", published_version_id: null, versions: [version], pillar: null, category: null, four_f: [], header: {}, task_structure: "single" };
 });
 
+describe("Entrega comercial e acessos no editor normal", () => {
+  it("migra a navegação da sessão antiga para a sessão por usuário sem perder a aba aberta", async () => {
+    sessionStorage.setItem("allka:product-editor:p1", JSON.stringify({ tab: "entrega", ver: "v1", edit: true }));
+    render(<ProductEditor productId="p1" onBack={() => {}} />);
+    expect(await screen.findByTestId("commercial-overview-open")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Travar edição" })).toBeInTheDocument();
+    expect(sessionStorage.getItem("allka:product-editor:p1")).toBeNull();
+    expect(calls.updateVersion).toBeUndefined();
+  });
+  it("Salvar rascunho também grava o prazo comercial recuperado após F5, sem precisar focar/sair do campo", async () => {
+    product.versions[0].base_commercial_deadline_hours = 72;
+    product.versions[0].tasks = [task()];
+    const view = () => <ProductEditor productId="p1" openInEditMode onBack={() => {}} />;
+    const first = render(view());
+    fireEvent.click(await screen.findByRole("button", { name: /Entrega: tarefas, etapas e prazos/ }));
+    fireEvent.click(screen.getByTestId("commercial-overview-open"));
+    fireEvent.change(screen.getByLabelText("Prazo comercial base em horas"), { target: { value: "96" } });
+    first.unmount(); render(view());
+    const field = await screen.findByLabelText("Prazo comercial base em horas");
+    await waitFor(() => expect(field).toBeEnabled());
+    expect(field).toHaveValue(96);
+    expect(calls.updateVersion).toBeUndefined();
+    fireEvent.click(screen.getByTestId("commercial-overview-save"));
+    await waitFor(() => expect(calls.updateVersion).toContainEqual(["v1", { base_commercial_deadline_hours: 96 }]));
+  });
+  it("F5 recupera Acessos necessários com o produto certo; fechar explicitamente não reabre", async () => {
+    product.sequence_number = 2;
+    product.versions[0].tasks = [task()];
+    const view = () => <ProductEditor productId="p1" onBack={() => {}} />;
+    const first = render(view());
+    fireEvent.click(await screen.findByRole("button", { name: /Entrega: tarefas, etapas e prazos/ }));
+    fireEvent.click(within(document.getElementById("sec-connections")!).getByTestId("panel-card-open"));
+    expect(await screen.findByTestId("framed-editor-context")).toHaveTextContent("Produto ID 02 · Gestão de Tráfego");
+    first.unmount();
+    const second = render(view());
+    const panel = await screen.findByTestId("panel-card-panel");
+    expect(panel).toHaveTextContent("Acessos necessários");
+    fireEvent.click(within(panel).getByTestId("panel-card-close"));
+    await waitFor(() => expect(screen.queryByTestId("panel-card-panel")).not.toBeInTheDocument());
+    second.unmount(); render(view());
+    await screen.findByRole("button", { name: /Entrega: tarefas, etapas e prazos/ });
+    expect(screen.queryByTestId("panel-card-panel")).not.toBeInTheDocument();
+    expect(calls.updateStep).toBeUndefined();
+  });
+
+  it("Acessos necessários abre um Painel Moldura com fundo preto, sem mudar de tela", async () => {
+    render(<ProductEditor productId="p1" onBack={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /Entrega: tarefas, etapas e prazos/ }));
+    const card = document.getElementById("sec-connections")!;
+    fireEvent.click(within(card).getByTestId("panel-card-open"));
+    const panel = await screen.findByTestId("panel-card-panel");
+    expect(panel).toHaveTextContent("Acessos necessários");
+    expect(panel.style.top).toBe("30px");
+    expect(panel.style.height).toBe("calc(100dvh - 60px)");
+    expect(screen.getByTestId("panel-card-panel-overlay")).toHaveClass("bg-black/60");
+    fireEvent.click(within(panel).getByTestId("panel-card-close"));
+    await waitFor(() => expect(screen.queryByTestId("panel-card-panel")).not.toBeInTheDocument());
+    expect(document.getElementById("sec-connections")).toBeInTheDocument();
+    expect(calls.updateStep).toBeUndefined();
+  });
+});
+
 describe("Editor de modelo global = o MESMO editor do produto, embutido", () => {
   it("mostra o banner do modelo, só a tarefa do modelo (sem as abas e sem a publicação do produto) e já libera a edição do rascunho", async () => {
     mountEmbedded({ kind: "task", modelId: 121, stepId: undefined, modelName: "Gestão de anúncios" });
@@ -57,7 +120,7 @@ describe("Editor de modelo global = o MESMO editor do produto, embutido", () => 
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();           // sem as abas do produto
     expect(screen.queryByText("Publicar")).not.toBeInTheDocument();
     // as etapas vêm do próprio editor de tarefa do produto (com Editar liberado)
-    fireEvent.click(await screen.findByTestId("steps-open")); // 20/10: as etapas abrem no Painel Moldura ("Ver etapas")
+    fireEvent.click(await screen.findByTestId("task-summary-open")); // 29/10: a tarefa abre completa, com as etapas já dentro do Painel Moldura.
     expect(await screen.findByTestId("step-card-1")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("step-edit-btn")).toBeInTheDocument());
   });

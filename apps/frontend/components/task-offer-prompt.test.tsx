@@ -86,7 +86,8 @@ it("5. aceitar chama a API e leva para Minhas Tarefas", async () => {
   renderPrompt()
   await user.click(await screen.findByRole("button", { name: /aceitar tarefa/i }))
   await waitFor(() => expect(api.acceptTaskOffer).toHaveBeenCalledWith("of1"))
-  await waitFor(() => expect(navigate).toHaveBeenCalledWith("/nomades/minhastarefas"))
+  // O componente usa o wrapper "@/hooks/use-navigate", que repassa (destino, opções); só o destino importa aqui.
+  await waitFor(() => expect(navigate.mock.calls.at(-1)?.[0]).toBe("/nomades/minhastarefas"))
 })
 
 it("6. recusar chama a API e some a oferta (será oferecida a outro)", async () => {

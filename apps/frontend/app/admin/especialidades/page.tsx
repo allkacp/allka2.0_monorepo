@@ -866,10 +866,10 @@ export default function AdminEspecialidadesPage() {
 
                     {visibleCols.has("nome") && (
                       <td data-rotulo="Especialidade" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
-                        <div className="flex items-center gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
                           <SpecialtyAvatar index={i} />
                           <div className="min-w-0 flex-1">
-                            <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">{s.name}</p>
+                            <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate max-md:whitespace-normal max-md:break-words">{s.name}</p>
                           </div>
                         </div>
                       </td>

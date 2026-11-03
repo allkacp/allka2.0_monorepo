@@ -13,8 +13,9 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 // header.tsx (com o bug real "/admin/dashboard" pro Admin) nunca era lido
 // em lugar nenhum: dado morto, removido neste lote por ser enganoso.
 
-const { accountConfig, apiClientMock, notifPanelMock, basketMock } = vi.hoisted(() => ({
+const { accountConfig, apiClientMock, notifPanelMock, basketMock, sidebarMock } = vi.hoisted(() => ({
   accountConfig: { accountType: "admin" as string, isPartnerActive: false },
+  sidebarMock: { updateUserProfile: vi.fn() },
   notifPanelMock: { open: false, setOpen: vi.fn(), tab: "prefs" as string, setTab: vi.fn() },
   basketMock: { totalItems: 0, setOpen: vi.fn() },
   apiClientMock: {
@@ -48,7 +49,7 @@ vi.mock("@/contexts/account-type-context", () => ({
 vi.mock("@/contexts/sidebar-context", () => ({
   useSidebar: () => ({
     userProfile: { name: "", email: "", job_title: "" },
-    updateUserProfile: vi.fn(),
+    updateUserProfile: sidebarMock.updateUserProfile,
   }),
 }));
 
@@ -315,5 +316,27 @@ describe("Header — busca por Enter", () => {
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(currentPath()).toBe("/admin/projetos"));
+  });
+});
+
+describe("Header — repassa a identidade do cartão para o menu Mais (reteste Codex 02/11)", () => {
+  beforeEach(() => {
+    accountConfig.accountType = "admin";
+    accountConfig.isPartnerActive = false;
+    vi.clearAllMocks();
+  });
+
+  it("agência Partner: sigla da agência e papel 'Agência · Partner' — nunca AT/Administrador", async () => {
+    accountConfig.accountType = "agencias";
+    accountConfig.isPartnerActive = true;
+    renderHeader("/agency/projetos");
+    await waitFor(() =>
+      expect(sidebarMock.updateUserProfile).toHaveBeenCalledWith({ avatar: "GF", role: "Agência · Partner" }),
+    );
+  });
+
+  it("admin: sigla do nome e papel Administrador", async () => {
+    renderHeader("/admin/dashboard");
+    await waitFor(() => expect(sidebarMock.updateUserProfile).toHaveBeenCalledWith({ avatar: "AS", role: "Administrador" }));
   });
 });

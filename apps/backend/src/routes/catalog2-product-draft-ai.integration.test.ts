@@ -18,7 +18,8 @@ describe("IA que preenche o produto inteiro por conversa (P-8)", () => {
       title: "  Gestão de Tráfego ".padEnd(300, "x"), summary: "a".repeat(900), full_description: "b".repeat(5000),
       included_items: ["Plano de mídia", "Plano de mídia", "ab", ...Array.from({ length: 80 }, (_, i) => `Entrega número ${i + 1}`)],
       suggested_tasks: [{ name: "Configurar contas", objective: "x", steps: [{ name: "Instalar pixel", description: "d", completion_criteria: "c" }, { name: "x" }] }, { name: "ab" }],
-      reply: "Pronto.",
+      reply: "Pronto.", target_audience: "p".repeat(1500), scope: "s".repeat(4500),
+      change_policy: "Sem inventar quantidade de revisões.",
     });
     assert.equal(r.draft.title.length, 200);
     assert.equal(r.draft.summary.length, 500);
@@ -28,6 +29,25 @@ describe("IA que preenche o produto inteiro por conversa (P-8)", () => {
     assert.ok(!r.draft.included_items.includes("ab"));
     assert.deepEqual(r.draft.suggested_tasks.map((t) => [t.name, t.steps.length]), [["Configurar contas", 1]], "etapa/tarefa curta demais sai");
     assert.equal(r.reply, "Pronto.");
+    assert.equal(r.draft.target_audience?.length, 1000);
+    assert.equal(r.draft.scope?.length, 4000);
+    assert.equal(r.draft.change_policy, "Sem inventar quantidade de revisões.");
+  });
+
+  it("PDA: textos comerciais novos são apenas proposta e mantêm o rascunho anterior", async () => {
+    const p = await mkProduct({ name: "Proposta textual", tasks: [{ key: "t" }] });
+    const before = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: p.versionId } });
+    __setDraftGeneratorForTests(async input => {
+      assert.equal(input.current?.scope, "Escopo que o usuário já informou");
+      return { reply: "Revise o objetivo.", commercial_objective: "Apresentar o serviço com clareza." };
+    });
+    const result = await chat(p.product.id, { messages: [{ role: "user", text: "Complete os textos vazios sem inventar valores." }], current: { title: "Proposta textual", scope: "Escopo que o usuário já informou", target_audience: "" } });
+    assert.equal(result.status, 200);
+    assert.equal(result.json.draft.scope, "Escopo que o usuário já informou");
+    assert.equal(result.json.draft.commercial_objective, "Apresentar o serviço com clareza.");
+    const after = await prisma.catalog2ProductVersion.findUniqueOrThrow({ where: { id: p.versionId } });
+    assert.equal(after.scope, before.scope);
+    assert.equal(after.commercial_objective, before.commercial_objective);
   });
 
   it("PDA02. conversa em rodadas: o rascunho anterior segue junto, o ajuste pedido muda só o que foi pedido; nada é salvo", async () => {

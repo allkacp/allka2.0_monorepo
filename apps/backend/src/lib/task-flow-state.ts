@@ -24,6 +24,7 @@ export const FLOW_STATES = [
   "concluida",
   "dispensada_por_regra",
   "cancelada",
+  "aguardando_lancamento",
   "em_lancamento",
 ] as const;
 export type FlowState = (typeof FLOW_STATES)[number];
@@ -45,6 +46,7 @@ export const FLOW_STATE_LABEL: Record<FlowState, string> = {
   concluida: "Concluída",
   dispensada_por_regra: "Dispensada por regra",
   cancelada: "Cancelada",
+  aguardando_lancamento: "Aguardando lançamento",
   em_lancamento: "Em lançamento",
 };
 
@@ -136,9 +138,10 @@ export async function computeFlowState(db: Db, taskId: string): Promise<TaskFlow
   if (t.status === "AGUARDANDO_NOMADE" || (t.status === "LIBERADA_PARA_EXECUCAO" && !t.nomade_responsavel_id)) return make("aguardando_executor", "Aguardando um executor assumir a tarefa.");
   if (t.status === "EM_EXECUCAO" || t.status === "LIBERADA_PARA_EXECUCAO") return make("em_execucao", "Em execução.");
   if (["PARA_LANCAMENTO", "EM_LANCAMENTO", "AGUARDANDO_INFORMACOES", "LANCAMENTO_EM_REVISAO", "RASCUNHO_OPERACIONAL"].includes(t.status)) {
-    return t.occurrence_index > 0
-      ? make("aguardando_inicio_ciclo", "Ciclo novo: aguardando o lançamento/início da tarefa.")
-      : make("em_lancamento", "Tarefa em lançamento (briefing e informações).");
+    if (t.occurrence_index > 0) return make("aguardando_inicio_ciclo", "Ciclo novo: aguardando o lançamento/início da tarefa.");
+    // Contratada e ainda não lançada: o lançamento não começou (comprar não lança a tarefa).
+    if (t.status === "PARA_LANCAMENTO") return make("aguardando_lancamento", "Contratada e aguardando o lançamento. Nada foi distribuído ainda.");
+    return make("em_lancamento", "Tarefa em lançamento (briefing e informações).");
   }
   return make("em_execucao", t.status.replace(/_/g, " ").toLowerCase());
 }

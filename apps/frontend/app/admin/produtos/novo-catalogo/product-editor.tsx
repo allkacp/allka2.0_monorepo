@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, Suspense, lazy, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, Suspense, lazy, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Loader2, Plus, Trash2, ChevronUp, ChevronDown, ChevronRight, Copy, RefreshCw, Search, Link2, Unlink, FileText, Settings2, Clock, Save, CheckCircle2, MoreVertical, X, Pin, Tag, Layers, ListChecks, CheckSquare, ListOrdered, DollarSign, CalendarClock, Info, Sparkles, UploadCloud, Undo2, Pencil, Lock, Eye, Check, Globe2, AlertCircle, Lightbulb, ExternalLink, User, AlertTriangle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { usePinEntry, type PinnedEntry } from "@/contexts/open-screens-context";
@@ -21,17 +21,19 @@ import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
 import { AccordionToggleAll, useAccordionAll } from "./accordion-toggle-all";
 import { StepLeaderSelect } from "./step-leader-select";
 import { FramedModal, FramedPanel, FRAMED_HEADER_CLASS } from "@/components/framed-panel";
+import { FramedEditorScope, useFramedEditorOpen, useFramedEditorDraft, clearFramedEditorDrafts } from "@/components/framed-editor-context";
+import { ProductEditorLayoutProvider, ProductTestNotice, TaskEditorSurface, TaskEditorPane, useTestProductLayout, ProductFlowProvider, ProductFlowField, ProductFlowTarget, ProductFlowWorkspace, PRODUCT_FLOW_STEPS, flowDestination, type ProductEditorLayout } from "./editor-layout-test";
 import { ModelPickerDialog, TaskModelInfoDialog, ModelScopeDialog, ModelEditCtx, type ModelScope, SimilarModelsDialog, ModelStatusChips, TaskIndicators, EXEC_LABEL, PURPOSE_LABEL, CYCLE_TYPE_LABEL, REPEAT_RULE_LABEL, IMPLEMENTATION_RULE_LABEL, CONTINUITY_LABEL, ASSET_RULE_LABEL } from "./catalog2-models-ui";
 import { TaskOpsForm } from "./catalog2-ops-ui";
 import { OPEN_STEP_EVENT, TaskDeliverablesEditor } from "./catalog2-deliverables-ui";
 import { StepBlock, useBlocks, useIsNarrow } from "./step-blocks";
-import { BLOCK_IDS, blockInfo, firstIssue, stepIssues, type BlockInfo, type StepBlockId, type StepIssue } from "./step-completeness";
+import { BLOCK_IDS, blockInfo, deliverableApprovalBlock, firstIssue, stepIssues, type BlockInfo, type StepBlockId, type StepIssue } from "./step-completeness";
 import { StepDeliverablesEditor } from "./step-deliverables-editor";
 import { activeDeliv, commitDelivItems, delivIssues, hasDelivPending, isStaleDraft, itemsFromTask, syncDelivStates, type DelivItem } from "./step-deliverables";
 import { deliverableBrief, deliverableIssues, deliverableSituation } from "./catalog2-deliverable-fields";
 import { ClientApprovalSection, MODE_LABEL, effectiveMode } from "./client-approval";
 import { StepCyclesSection, generateCycles } from "./step-cycles";
-import { ProductPeriodsInline } from "./product-periods-inline";
+import { ProductPeriodsInline, notifyPeriodsChanged, usePeriodsChanged } from "./product-periods-inline";
 import { DurationInput } from "./duration-input";
 import { HeaderPriceTag } from "./header-price-tag";
 import { StatusChangeDialog } from "./status-change-dialog";
@@ -69,6 +71,7 @@ import { helpFor } from "./field-help";
 import { QuantityRulesFields } from "./quantity-rules-fields";
 import { AccessCatalogDialog, accessCount, typeSummary } from "./catalog2-access-catalog-ui";
 import { ProductAiChatDialog, draftToVersionPatch } from "./catalog2-product-ai-chat";
+import { ProductAiInputsProvider, aiTasksContext, useProductAiInputs, useProductAiSource } from "./product-ai-inventory";
 import { StepGovernance } from "./catalog2-step-governance-ui";
 import { EmergencyCard } from "./catalog2-emergency-ui";
 import { StepFlowEditor, StepFlowControls, stepFlowChips, stepStartMode, startChangePayload, flowSummary } from "./catalog2-step-flow-ui";
@@ -112,20 +115,28 @@ const EXEC_MODES = [["humano", "Humano"], ["ia", "IA"], ["hibrido", "Humano ou I
 /** Edição de um MODELO GLOBAL dentro de "Modelos globais": o mesmo editor do produto, focado na tarefa/etapa onde o modelo é usado. */
 export interface EmbeddedModel { kind: "task" | "step"; modelId: number; taskId: string; stepId?: string; modelName: string; onClose: () => void }
 
-export function ProductEditor({ productId, onBack, pin, notice, embedded, openInEditMode = false }: { productId: string; onBack: () => void; pin?: PinnedEntry; notice?: React.ReactNode; embedded?: EmbeddedModel | null; /** Produto recém-criado: já abre com os campos editáveis (sem o botão Editar). */ openInEditMode?: boolean }) {
+type ProductEditorProps = { productId: string; onBack: () => void; pin?: PinnedEntry; notice?: React.ReactNode; embedded?: EmbeddedModel | null; openInEditMode?: boolean; layout?: ProductEditorLayout };
+export function ProductEditor(props: ProductEditorProps) {
+  return <ProductEditorLayoutProvider value={props.layout ?? "current"}><ProductAiInputsProvider key={`${props.productId}:${props.layout ?? "current"}`}><ProductEditorContent {...props} /></ProductAiInputsProvider></ProductEditorLayoutProvider>;
+}
+function ProductEditorContent({ productId, onBack, pin, notice, embedded, openInEditMode = false }: ProductEditorProps) {
+  const testLayout = useTestProductLayout();
   const [product, setProduct] = useState<any>(null);
   const [refs, setRefs] = useState<{ pillars: any[]; fourF: any[]; categories: any[]; specialties: any[]; questionnaires: any[]; qualifierPercent: number | null }>({ pillars: [], fourF: [], categories: [], specialties: [], questionnaires: [], qualifierPercent: null });
   // Posição na tela: ao dar F5 (ou Ctrl+R) a pessoa volta exatamente para o passo, a sub-aba, a versão, o modo de edição
   // e a rolagem onde estava. Guardado na sessão da aba (some ao fechar a aba) — não vai para o servidor.
-  const stateKey = `allka:product-editor:${productId}`;
+  const stateKey = editorSessionKey(`product-editor:${productId}${testLayout ? ":test" : ""}`);
+  const legacyStateKey = `allka:product-editor:${productId}`; // migra somente navegação antiga, nunca campos de outro usuário
   const restored = useRef<{ tab?: string; sub?: Record<string, string>; ver?: string; edit?: boolean; y?: number; win?: number } | null>(null);
   if (restored.current === null) {
     let s: any = null;
-    try { s = JSON.parse(typeof window !== "undefined" ? window.sessionStorage.getItem(stateKey) ?? "null" : "null"); } catch { s = null; }
+    try { s = JSON.parse(typeof window !== "undefined" ? window.sessionStorage.getItem(stateKey) ?? (!testLayout ? window.sessionStorage.getItem(legacyStateKey) : null) ?? "null" : "null"); } catch { s = null; }
     restored.current = s && typeof s === "object" ? s : {};
   }
   const [selectedVersionId, setSelectedVersionId] = useState<string>(restored.current?.ver ?? "");
-  const [editorTab, setEditorTab] = useState(restored.current?.tab && ["info", "entrega", "opcoes", "precos", "revisao"].includes(restored.current.tab) ? restored.current.tab : "info");
+  const [editorTab, setEditorTabRaw] = useState(restored.current?.tab && ["info", "entrega", "opcoes", "precos", "questionario", "revisao"].includes(restored.current.tab) ? (testLayout ? flowDestination(restored.current.tab) : restored.current.tab) : "info");
+  const setEditorTab = (tab: string) => setEditorTabRaw(testLayout ? flowDestination(tab) : tab);
+  const editorSteps = testLayout ? PRODUCT_FLOW_STEPS : EDITOR_STEPS;
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
   const [highlightTaskIds, setHighlightTaskIds] = useState<string[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
@@ -152,7 +163,7 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
     window.addEventListener("catalog2:manage-access-types", open);
     return () => window.removeEventListener("catalog2:manage-access-types", open);
   }, []);
-  const [subTabs, setSubTabs] = useState<{ opcoes: string; entrega: string; revisao: string }>({ opcoes: "class", entrega: "tarefas", revisao: "preview", ...(restored.current?.sub ?? {}) });
+  const [subTabs, setSubTabs] = useState<{ opcoes: string; entrega: string; revisao: string }>({ opcoes: testLayout ? "var" : "class", entrega: "tarefas", revisao: "preview", ...(restored.current?.sub ?? {}), ...(testLayout && restored.current?.sub?.opcoes === "class" ? { opcoes: "var" } : {}) });
   const entregaInfo = {
     tarefas: {
       title: "Tarefas e etapas",
@@ -236,6 +247,18 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
   const flushers = useRef(new Set<() => Promise<void>>());
   const registerFlusher = useCallback((fn: () => Promise<void>) => { flushers.current.add(fn); return () => { flushers.current.delete(fn); }; }, []);
   async function flushPending() { for (const fn of [...flushers.current]) await fn(); }
+  const navigatingRef = useRef(false);
+  async function selectEditorStep(tab: string) {
+    if (navigatingRef.current) return;
+    navigatingRef.current = true;
+    try {
+      await flushPending();
+      setEditorTab(tab);
+      document.getElementById("catalog2-editor-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error: any) {
+      setMsg(error?.message ?? "Não foi possível salvar. Continue neste passo e tente novamente; o preenchimento foi mantido.");
+    } finally { navigatingRef.current = false; }
+  }
   // A janela "Entrega comercial" pede para salvar o rascunho (ou só gravar o que está pendente ao fechar) sem sair dela.
   const saveDraftRef = useRef<() => Promise<boolean>>(async () => false);
   useEffect(() => {
@@ -337,6 +360,7 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
   const persistState = useCallback(() => {
     try {
       window.sessionStorage.setItem(stateKey, JSON.stringify({ tab: editorTab, sub: subTabs, ver: selectedVersionId, edit: editMode, y: scrollPos.current.y, win: scrollPos.current.win }));
+      if (!testLayout) window.sessionStorage.removeItem(legacyStateKey);
     } catch { /* sessão indisponível: segue sem restaurar */ }
   }, [stateKey, editorTab, subTabs, selectedVersionId, editMode]);
   useEffect(() => { if (!loading) persistState(); }, [loading, persistState]);
@@ -414,7 +438,7 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
     const level = readinessItems?.[key]?.level;
     const cur = product?.versions.find((v: any) => v.id === selectedVersionId);
     const ids = level === "pronto" ? [] : readinessPendingIds(key, product, cur, level, readinessItems?.[key]?.note);
-    setEditorTab(dest.tab);
+    setEditorTab(testLayout && key === "classificacao" ? "info" : testLayout ? flowDestination(dest.tab, dest.target) : dest.tab);
     if (dest.sub) setSubTabs((cur2) => ({ ...cur2, ...dest.sub }));
     setHighlightTarget(null);
     setHighlightTaskIds([]);
@@ -433,7 +457,7 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
         : targetId === "catalog2-price-pending"
           ? { tab: "precos", target: targetId }
           : { ...base, target: targetId };
-    setEditorTab(dest.tab);
+    setEditorTab(testLayout && key === "classificacao" ? "info" : testLayout ? flowDestination(dest.tab, dest.target) : dest.tab);
     if (dest.sub) setSubTabs((cur2) => ({ ...cur2, ...dest.sub }));
     setHighlightTarget(null);
     setHighlightTaskIds([]);
@@ -448,6 +472,17 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
   const secRing = (id: string) => ringOf(id).replace("rounded-lg", "rounded-2xl").replace("p-2", "p-3");
 
   const version = useMemo(() => product?.versions.find((v: any) => v.id === selectedVersionId) ?? null, [product, selectedVersionId]);
+  const migratedTestNavigation = useRef(false);
+  useEffect(() => {
+    if (!testLayout || !version || migratedTestNavigation.current) return;
+    migratedTestNavigation.current = true;
+    const oldTab = restored.current?.tab;
+    if (oldTab !== "opcoes" && oldTab !== "questionario") return;
+    const taskId = version.tasks?.[0]?.id;
+    if (!taskId) return;
+    const target = oldTab === "questionario" ? `catalog2-questionnaire:${taskId}` : restored.current?.sub?.opcoes === "add" ? "sec-add" : restored.current?.sub?.opcoes === "cond" ? "sec-conditions" : "sec-var";
+    revealTargets([`catalog2-task-${taskId}`, target]);
+  }, [testLayout, version]);
   // "Ajustar" no preço → abre a etapa no bloco de horas/valor/hora; ao sair dela, volta para a Composição do preço.
   useEffect(() => {
     const go = (e: Event) => {
@@ -469,6 +504,14 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
     return () => { window.removeEventListener(GOTO_STEP_PRICE_EVENT, go); window.removeEventListener(RETURN_TO_PRICE_EVENT, back); };
   }, [version]);
   const readOnly = version?.state === "publicada" || !editMode;
+  useLayoutEffect(() => {
+    const recovered = (event: Event) => {
+      const d = (event as CustomEvent).detail;
+      if (!readOnly && d?.productId === product?.id && d?.versionId === version?.id) markDirty();
+    };
+    window.addEventListener("catalog2:recovered-unsaved", recovered);
+    return () => window.removeEventListener("catalog2:recovered-unsaved", recovered);
+  }, [product?.id, version?.id, readOnly, markDirty]);
   // Modo "Modelos globais": usa a versão onde a tarefa/etapa está cadastrada e libera a edição (só se for rascunho; publicada nunca muda).
   const embeddedOpened = useRef(false);
   useEffect(() => {
@@ -581,7 +624,7 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
           ? { tab: "entrega", target: "catalog2-tasks" }
           : { tab: "precos", target: "catalog2-costs" };
 
-    setEditorTab(destination.tab);
+    setEditorTab(testLayout && ["catalog2-field-pillar", "catalog2-field-category", "catalog2-field-four-f"].includes(destination.target) ? "info" : testLayout ? flowDestination(destination.tab, destination.target) : destination.tab);
     setHighlightTarget(destination.target);
     setHighlightTaskIds(detail?.task_ids ?? []);
     if (destination.target === "catalog2-delivery-recurrence") { revealDeliveryRecurrenceField(); window.setTimeout(() => setHighlightTarget((c) => (c === destination.target ? null : c)), 8000); return; }
@@ -693,6 +736,7 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
     const mode = unsavedDlg; setUnsavedBusy(true);
     try {
       for (const f of dirtyForms()) f.discard();
+      clearFramedEditorDrafts(product?.id ?? productId, version?.id, testLayout ? "test" : undefined);
       setUnsavedDlg(null);
       const hadNewVersion = !!autoDraftRef.current.draftId;
       if (hadNewVersion) await discardUnsavedDraft();
@@ -732,10 +776,15 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
   if (loading) return <PageLoader text="Carregando produto…" compact />;
   if (!product) return <div className="flex flex-1 flex-col items-start gap-3 p-10 text-sm text-red-600">Produto não encontrado.<Button size="sm" variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4" /> Voltar</Button></div>;
 
+  const frameProduct = { id: product.id, number: product.sequence_number, name: product.internal_name };
+  const frameVersion = version ? { id: version.id, number: version.version_number, state: version.state } : null;
+  const onlyTask = version?.tasks?.length === 1 ? version.tasks[0] : null;
+  const frameTask = onlyTask ? { id: onlyTask.id, number: onlyTask.model?.number ?? onlyTask.task_model_id, name: onlyTask.name } : null;
   // "Modelos globais": o MESMO editor da tarefa/etapa (as mesmas peças do produto), sem a casca do produto (abas, publicação, preço).
   if (embedded) {
     const focusTask = version ? { ...version, tasks: (version.tasks ?? []).filter((t: any) => t.id === embedded.taskId) } : null;
     return (
+      <FramedEditorScope product={frameProduct} version={frameVersion} task={frameTask} step={null}>
       <ModelEditCtx.Provider value={{ embedded: true }}>
       <RingCtx.Provider value={ringOf}>
       <FlushCtx.Provider value={registerFlusher}>
@@ -772,16 +821,19 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
       </FlushCtx.Provider>
       </RingCtx.Provider>
       </ModelEditCtx.Provider>
+      </FramedEditorScope>
     );
   }
 
   return (
+    <FramedEditorScope product={frameProduct} version={frameVersion} task={frameTask} step={null} workspace={testLayout ? "test" : undefined}>
     <RingCtx.Provider value={ringOf}>
     <FlushCtx.Provider value={registerFlusher}>
     <FormsCtx.Provider value={registerForm}>
     <RefsCtx.Provider value={refs}>
     <FieldHelpLayer>
-    <div key={resetKey} className="product-editor relative flex min-h-0 min-w-0 flex-1 flex-col gap-2"
+    <ProductFlowProvider value={editorTab}>
+    <div key={resetKey} data-editor-layout={testLayout ? "test" : "current"} className="product-editor relative flex min-h-0 min-w-0 flex-1 flex-col gap-2"
       onChangeCapture={() => { if (editMode) markDirty(); }} onInputCapture={() => { if (editMode) markDirty(); }}>
       {/* Aviso de salvamento: no CENTRO da tela e por cima de tudo (fora do editor, direto no <body>, para nenhuma camada cobrir). */}
       {toast && typeof document !== "undefined" && createPortal(
@@ -821,7 +873,8 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
         pin={pin}
         readiness={<ProductReadinessPanel taskName={(version?.tasks ?? [])[0]?.name} productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onGoDetail={goToReadinessAdjustment} onItems={setReadinessItems} onData={setReadinessData} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} detailTargetFor={(key: string, index: number) => readinessDetailTargets(key, product, version, readinessItems?.[key]?.note)[index]} />}
       /></div>}
-      {!previewOpen && (product.assignment_issues ?? []).some((i: any) => i.version_id === selectedVersionId) && <div role="alert" className="mx-3 my-2 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="specific-assignee-warning"><p className="font-semibold">Responsável específico indisponível — ajuste a configuração</p><ul className="mt-1 space-y-1">{(product.assignment_issues ?? []).filter((i: any) => i.version_id === selectedVersionId).map((i: any) => <li key={`${i.task_id}:${i.step_id}:${i.label}`}>{i.message}</li>)}</ul><button type="button" className="mt-1 font-semibold text-violet-700" onClick={() => { setEditorTab("entrega"); setSubTabs(cur => ({ ...cur, entrega: "tarefas" })); }}>Revisar tarefas e etapas</button></div>}
+      {!previewOpen && testLayout && <ProductTestNotice />}
+      {!previewOpen && <AssignmentWarning issues={(product.assignment_issues ?? []).filter((issue: any) => issue.version_id === selectedVersionId)} onReview={() => { setEditorTab("entrega"); setSubTabs(cur => ({ ...cur, entrega: "tarefas" })); }} />}
       <ConfirmationDialog
         open={leaveDlg !== null}
         onClose={() => setLeaveDlg(null)}
@@ -852,25 +905,35 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
         <Tabs value={editorTab} onValueChange={setEditorTab} className="!mt-[7px]" /* cabeçalho → abas = 15 px (8 do editor + 7) */>
           {/* Etapas de trabalho (reunião 10/09). As 10 seções originais
               continuam todas aqui — reagrupadas, nada removido. */}
-          <Stepper current={editorTab} onSelect={(t: string) => { void flushPending().then(() => setEditorTab(t)); }} items={readinessItems} />
+          <Stepper steps={editorSteps} current={editorTab} onSelect={(t: string) => { void selectEditorStep(t); }} items={testLayout && readinessItems ? { ...readinessItems, produto_base: { level: version.title?.trim() && version.summary?.trim() ? "pronto" : "pendente", note: "Nome e descrição curta do produto." } } : readinessItems} />
 
           <KeepTabsContent value="info" className="mt-2">
-            <div className="mb-3 space-y-2"><div className="flex flex-wrap items-center justify-between gap-2"><ProductCounts version={version} /><AccordionToggleAll /></div>
+            <div className={testLayout ? "contents" : "mb-3 space-y-2"}><div className="flex flex-wrap items-center justify-between gap-2"><ProductFlowField slot="final-summary"><ProductCounts version={version} /></ProductFlowField>{!testLayout && <AccordionToggleAll />}</div>
             </div>
-            <GeneralTab afterMain={<>
+            <GeneralTab onAiApplied={markDirty} afterMain={<>
+              {testLayout && <ClassTab readOnly={readOnly} product={product} refs={refs} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} />}
               {/* Itens 2 e 3 da tela (o 1 é Dados principais): acordeão fechado por padrão (mesmo layout dos demais cartões desta tela). */}
               <SectionCard number={2} icon={AudienceIcon} title="Quem pode ver este produto" subtitle={`Quem enxerga e contrata: ${audienceSummary(product?.visibility_mode)}`} help="Define para quais públicos o produto aparece e pode ser contratado. Vale na lista, no detalhe, na cotação, na cesta e nas recomendações da IA." collapsible defaultOpen={false} keepMounted>
                 <AudienceCard bare product={product} readOnly={!product || readOnly} registerFlush={registerFlusher} onDone={() => void load()} />
-              </SectionCard><SectionCard number={3} icon={Clock} title="Alterações por IA grátis neste produto" subtitle={`Total: ${aiFreeTotal(version)} — definido em cada etapa`} help="Soma das alterações por IA grátis definidas em cada etapa. Para mudar, edite o campo na própria etapa." collapsible defaultOpen={false}><AiFreeChangesCard bare version={version} /></SectionCard>
+              </SectionCard><ProductFlowField slot="final-summary"><SectionCard number={3} icon={Clock} title="Alterações por IA grátis neste produto" subtitle={`Total: ${aiFreeTotal(version)} — definido em cada etapa`} help="Soma das alterações por IA grátis definidas em cada etapa. Para mudar, edite o campo na própria etapa." collapsible defaultOpen={false}><AiFreeChangesCard bare version={version} /></SectionCard></ProductFlowField>
 </>} version={version} readOnly={readOnly} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2VersionInfo(version.id, b), "Informações salvas.", { rethrow: true })} product={product} />
+            {testLayout && <ProductFlowField slot="initial-modalities"><section className="rounded-xl border border-slate-200 bg-white p-3 dark:bg-slate-900"><ContractModesSection version={version} readOnly={readOnly} act={act} compact product={product} onGoToRecurrence={goToDeliveryRecurrence} /></section></ProductFlowField>}
+            {testLayout && <div data-flow-slot="presentation" className="mt-2 space-y-2" />}
           </KeepTabsContent>
 
-          <KeepTabsContent value="opcoes" className={TAB_CARD}>
+          {testLayout && <KeepTabsContent value="questionario" aria-hidden="true" className="mt-2 space-y-2">
+            {(version.tasks ?? []).map((task: any) => <FramedEditorScope key={task.id} task={{ id: task.id, name: task.name, number: task.public_number ?? task.model_public_number }}>
+              <ProductFlowField slot={"questionnaire:" + task.id}><section className="rounded-xl border border-slate-200 bg-white p-3 dark:bg-slate-900"><h3 className="mb-2 text-xs font-bold">Questionário · {task.name}</h3><QuestionnaireSection task={task} refs={refs} act={act} version={version} readOnly={readOnly} /></section></ProductFlowField>
+            </FramedEditorScope>)}
+            {!(version.tasks ?? []).length && <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">Cadastre uma tarefa no passo 2 para vincular o questionário.</p>}
+          </KeepTabsContent>}
+
+          <KeepTabsContent value="opcoes" aria-hidden={testLayout || undefined} className={TAB_CARD}>
             <Tabs value={subTabs.opcoes} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, opcoes: v }))} className="!mt-0 !gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <TabsList className={SUB_TABS_LIST}>
-                    <TabsTrigger value="class" className={SUB_TAB}><Tag className="h-3.5 w-3.5" />Classificação<span className="field-info" data-help="Define a base comercial e as classificações do produto (categoria, tags e tipo) usadas para organizar e encontrar o produto." aria-hidden="true">i</span></TabsTrigger>
+                    {!testLayout && <TabsTrigger value="class" className={SUB_TAB}><Tag className="h-3.5 w-3.5" />Classificação<span className="field-info" data-help="Define a base comercial e as classificações do produto (categoria, tags e tipo) usadas para organizar e encontrar o produto." aria-hidden="true">i</span></TabsTrigger>}
                     <TabsTrigger value="var" className={SUB_TAB}><Layers className="h-3.5 w-3.5" />Variações<span className="field-info" data-help="Variações: escolhas que o cliente faz ao contratar e que DEFINEM o produto principal (ex.: número de campanhas ou plataforma). As opções de uma variação são exclusivas entre si. Cada opção pode mudar preço, prazo, etapas e entregáveis." aria-hidden="true">i</span></TabsTrigger>
                     <TabsTrigger value="add" className={SUB_TAB}><Plus className="h-3.5 w-3.5" />Adicionais<span className="field-info" data-help="Adicionais: funcionalidades e entregáveis OPCIONAIS e complementares que o cliente pode adicionar ao carrinho (ex.: relatório extra, peças complementares), cada um com seu preço e seus impactos." aria-hidden="true">i</span></TabsTrigger>
                     <TabsTrigger value="cond" className={SUB_TAB}><Clock className="h-3.5 w-3.5" />Prazos e condições<span className="field-info" data-help="Condições: alterações GLOBAIS de execução (ex.: entrega expressa/full ou prazo de aprovação ampliado). Ao ativar uma condição, o prazo e o custo de TODAS as etapas do produto mudam (prazo somado e percentual sobre o custo). Aqui também ficam as regras de prazo." aria-hidden="true">i</span></TabsTrigger>
@@ -878,11 +941,11 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
                 </div>
                 <AccordionToggleAll />
               </div>
-              <KeepTabsContent value="class"><ClassTab readOnly={readOnly} product={product} refs={refs}highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} /></KeepTabsContent>
-              <KeepTabsContent value="var"><div id="sec-var" className={secRing("sec-var")}><VariationsTab version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
-              <KeepTabsContent value="add"><div id="sec-add" className={secRing("sec-add")}><AddonsTab version={version} readOnly={readOnly} act={act} /></div></KeepTabsContent>
+              <KeepTabsContent value="class">{testLayout ? <div className="rounded-xl border border-violet-200 bg-white p-3 text-xs dark:bg-slate-900"><p>Pilar, categoria e classificações 4F ficam junto aos dados do produto neste layout.</p><Button size="sm" variant="outline" className="mt-2" onClick={() => { void flushPending().then(() => { setEditorTab("info"); window.setTimeout(() => document.getElementById("catalog2-classification")?.scrollIntoView({ block: "center" }), 0); }); }}>Editar classificação nas informações do produto</Button></div> : <ClassTab readOnly={readOnly} product={product} refs={refs}highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} onSave={(b) => act(() => apiClient.updateCatalog2Classifications(productId, b), "Classificações salvas.")} />}</KeepTabsContent>
+              <KeepTabsContent value="var"><ProductFlowField slot="product-variations"><div id="sec-var" className={secRing("sec-var")}><VariationsTab version={version} readOnly={readOnly} act={act} /></div></ProductFlowField></KeepTabsContent>
+              <KeepTabsContent value="add"><ProductFlowField slot="product-addons"><div id="sec-add" className={secRing("sec-add")}><AddonsTab version={version} readOnly={readOnly} act={act} /></div></ProductFlowField></KeepTabsContent>
               <KeepTabsContent value="cond">
-                <div className="space-y-3" data-testid="deadline-rows">
+                <ProductFlowField slot="product-conditions"><div id="sec-conditions" className="space-y-3" data-testid="deadline-rows">
                   <PanelCard allowEdit readOnly={readOnly} icon={Clock} title="Entrega emergencial" summary={version.emergency_enabled ? "oferecida ao cliente" : "não oferecida"} help="O cliente pode pedir prazo menor pagando um adicional. Cada etapa diz quantas horas encurta e quanto cobra a mais; o sistema recalcula o prazo total e o preço final.">
                     <EmergencyCard version={version} readOnly={readOnly} act={act} />
                   </PanelCard>
@@ -895,7 +958,7 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
                   <PanelCard allowEdit readOnly={readOnly} icon={CalendarClock} title="Prazos gerais (SLA)" summary={`${(version.sla_rules ?? []).length} regra(s)`} help="Prazos GERAIS do produto (implantação, ciclo recorrente, relatório…). O prazo de cada etapa se configura dentro da própria etapa.">
                     <SlaRulesSection version={version} readOnly={readOnly} act={act} />
                   </PanelCard>
-                </div>
+                </div></ProductFlowField>
               </KeepTabsContent>
             </Tabs>
           </KeepTabsContent>
@@ -914,17 +977,25 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
               <div className="space-y-3">
                 <AccessCatalogDialog open={accessCatalogOpen} onOpenChange={setAccessCatalogOpen} version={version} readOnly={readOnly} act={act} mode={accessCatalogMode} />
               </div>
-              <KeepTabsContent value="tarefas"><TasksTab leading={(n: number) => <DeliveryCommercialOverview number={n} version={version} readOnly={readOnly} act={act} ringOf={ringOf} locked={!editMode} product={product} onGoToRecurrence={goToDeliveryRecurrence} />} trailing={(n: number) => (<div id="sec-connections" className="h-full"><PanelCard number={n} forceOpen={highlightTarget === "sec-connections"} readOnly={readOnly} icon={Lock} title="Acessos necessários" summary={accessCount(version) > 0 ? `${accessCount(version)} configurado${accessCount(version) === 1 ? "" : "s"}` : "nenhum acesso cadastrado nas etapas"} help="Aqui você NÃO cadastra acessos: esta lista é só um resumo. Os acessos aparecem aqui depois de cadastrados dentro de uma etapa (em “Conexões e acessos desta etapa”). Se nenhuma etapa pedir acesso, nada aparece aqui — e tudo bem."><div className="min-w-0 space-y-2"><p className="text-[11px] text-slate-500">Resumo, só leitura: os acessos de cada etapa. Para pedir um acesso, abra a etapa e use “Conexões e acessos desta etapa”.</p><AccessesSummary version={version} act={act} readOnly={readOnly} /></div></PanelCard></div>)} taskStructure={product?.task_structure ?? "multiple"} version={version} productId={productId} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} editTaskId={taskEditRequest} onOpenPricing={openPricingFromTask} /></KeepTabsContent>
+              <KeepTabsContent value="tarefas"><ProductFlowField slot="tasks"><TasksTab leading={testLayout ? undefined : (n: number) => <DeliveryCommercialOverview number={n} version={version} readOnly={readOnly} act={act} ringOf={ringOf} locked={!editMode} product={product} onGoToRecurrence={goToDeliveryRecurrence} />} trailing={(n: number) => (<ProductFlowField slot="final-summary"><div id="sec-connections" className="h-full"><PanelCard number={n} forceOpen={highlightTarget === "sec-connections"} readOnly={readOnly} icon={Lock} title="Acessos necessários" summary={accessCount(version) > 0 ? `${accessCount(version)} configurado${accessCount(version) === 1 ? "" : "s"}` : "nenhum acesso cadastrado nas etapas"} help="Aqui você NÃO cadastra acessos: esta lista é só um resumo. Os acessos aparecem aqui depois de cadastrados dentro de uma etapa (em “Conexões e acessos desta etapa”). Se nenhuma etapa pedir acesso, nada aparece aqui — e tudo bem."><div className="min-w-0 space-y-2"><p className="text-[11px] text-slate-500">Resumo, só leitura: os acessos de cada etapa. Para pedir um acesso, abra a etapa e use “Conexões e acessos desta etapa”.</p><AccessesSummary version={version} act={act} readOnly={readOnly} /></div></PanelCard></div></ProductFlowField>)} taskStructure={product?.task_structure ?? "multiple"} version={version} productId={productId} readOnly={readOnly} refs={refs} act={act} highlightTarget={highlightTarget} highlightTaskIds={highlightTaskIds} clearHighlight={clearPublishHighlight} editTaskId={taskEditRequest} onOpenPricing={openPricingFromTask} /></ProductFlowField></KeepTabsContent>
             </Tabs>
             {/* Acessos necessários: fica DEPOIS das tarefas. Os acessos são cadastrados dentro de cada etapa; aqui é o resumo de tudo o que foi pedido. */}
           </KeepTabsContent>
 
-          <KeepTabsContent value="precos" className={TAB_CARD}>
+          {!testLayout && <KeepTabsContent value="precos" className={TAB_CARD}>
             <StepIntro noToggle>Taxas, margens e valor/hora das especialidades. O preço e o prazo são sempre calculados no servidor.</StepIntro>
             <CostTab version={version} refs={refs} act={act} onReloadRefs={load} productId={productId} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} />
-          </KeepTabsContent>
+          </KeepTabsContent>}
 
-          <TabsContent value="revisao" className={TAB_CARD}>
+          <KeepTabsContent value="revisao" className={TAB_CARD}>
+            {testLayout && <div className="mb-3 space-y-2">
+              <StepIntro noToggle>Confira o fluxo e os custos antes de publicar. Os valores são recalculados no servidor; esta conferência não lança tarefas nem publica automaticamente.</StepIntro>
+              <ProductFlowWorkspace slot="tasks" label="Conferir ou ajustar o fluxo e as etapas aqui" />
+              <div data-flow-slot="final-summary" className="space-y-2" />
+              <div data-flow-slot="pricing" className="space-y-2" />
+              <DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={!editMode} compact />
+              <CostTab version={version} refs={refs} act={act} onReloadRefs={load} productId={productId} highlightTarget={highlightTarget} clearHighlight={clearPublishHighlight} />
+            </div>}
             <Tabs value={subTabs.revisao} onValueChange={(v) => setSubTabs((cur) => ({ ...cur, revisao: v }))} className="!mt-0 !gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -940,27 +1011,33 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
               <TabsContent value="hist"><div id="sec-publicacao" className={secRing("sec-publicacao")}><HistoryTab version={version} product={product} readOnly={readOnly} act={act} onResolveIssue={goToPublishIssue} /></div></TabsContent>
               <TabsContent value="historico"><ReviewHistoryTab productId={productId} version={version} /></TabsContent>
             </Tabs>
-          </TabsContent>
+          </KeepTabsContent>
         </Tabs>
       )}
       </div>
       {version && (() => {
-        const idx = Math.max(0, EDITOR_STEPS.findIndex((st) => st.id === editorTab));
-        const prev = EDITOR_STEPS[idx - 1];
-        const next = EDITOR_STEPS[idx + 1];
-        const go = (id: string) => { setEditorTab(id); document.getElementById("catalog2-editor-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+        const idx = Math.max(0, editorSteps.findIndex((st) => st.id === editorTab));
+        const prev = editorSteps[idx - 1];
+        const next = editorSteps[idx + 1];
+        const go = (id: string) => { void selectEditorStep(id); };
         const requestPublish = async () => {
           if (version.state === "publicada") { setPubDlg({ val: { ok: true, restore: true } }); return; }
           await flushPending();
           apiClient.validateCatalog2Version(version.id).then((val: any) => setPubDlg({ val })).catch((e: any) => setMsg(e?.message ?? "Não foi possível validar a versão."));
         };
         const canPublish = editMode && (version.state === "rascunho" || !version.is_published_current);
+        // Item 3 (31/10) — Produto teste: UMA ação principal por contexto. Em edição, avançar já grava o pendente (selectEditorStep →
+        // flushPending; erro mantém o passo e o texto), então o botão diz isso: "Salvar e continuar". No último passo a principal é Publicar.
+        // "Salvar rascunho" (grava e fica) e "Travar edição" continuam como ações secundárias com responsabilidades próprias.
+        const testFooter = testLayout;
+        const nextText = next ? (testFooter && editMode ? `Salvar e continuar: ${next.label.split(":")[0]}` : `Passo ${idx + 2}: ${next.label.split(":")[0]}`) : "Fim";
+        const publishIsPrimary = !testFooter || !next;
         return (
           <div className="flex h-[52px] shrink-0 items-center gap-2 border-t border-white/70 bg-[#dfe5f6] px-1 pt-2 dark:border-slate-700/60 dark:bg-slate-950">
             <div className="flex min-w-0 items-center gap-1.5">
               {/* Navegação direta: "Início" só aparece no passo 2; do passo 3 em diante volta para o passo anterior; no passo 1 só há o "próximo". */}
               {prev && <Button variant="outline" className="h-8 gap-1 px-2.5 text-xs" onClick={() => go(prev.id)}><ArrowLeft className="h-3.5 w-3.5" /> {idx === 1 ? "Início" : `Passo ${idx}: ${prev.label.split(":")[0]}`}</Button>}
-              <Button style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="h-8 gap-1 px-2.5 text-xs text-white shadow-md hover:brightness-110 disabled:opacity-55" disabled={!next} onClick={() => next && go(next.id)}>{next ? `Passo ${idx + 2}: ${next.label.split(":")[0]}` : "Fim"} <ChevronRight className="h-3.5 w-3.5" /></Button>
+              {!(testFooter && !next) && <Button data-testid="footer-next" title={testFooter && editMode && next ? "Grava o que está pendente neste passo e abre o próximo. Se der erro, você continua aqui com tudo preenchido." : undefined} style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="h-8 gap-1 px-2.5 text-xs text-white shadow-md hover:brightness-110 disabled:opacity-55" disabled={!next} onClick={() => next && go(next.id)}>{nextText} <ChevronRight className="h-3.5 w-3.5" /></Button>}
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-1.5">
               <Button variant="outline" onClick={() => setScreenNotificationsOpen((open) => !open)} className="relative h-8 gap-1.5 px-2.5 text-xs" title="Avisos desta tela"><ListChecks className="h-3.5 w-3.5" /> Avisos{screenNotifications.length > 0 && <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold text-white">{screenNotifications.length}</span>}</Button>
@@ -970,8 +1047,8 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
               ) : (
                 <>
                   <Button variant="outline" onClick={() => void stopEditing()} className="h-8 gap-1.5 px-2.5 text-xs"><Lock className="h-3.5 w-3.5" /> Travar edição</Button>
-                  {version.state !== "publicada" && <Button onClick={() => void saveDraft()} disabled={!dirty} title={dirty ? "Salvar as alterações como rascunho" : "Já está salvo — nenhuma alteração desde o último salvamento"} className="h-8 gap-1.5 bg-[#1b2559] px-3 text-xs text-white hover:bg-[#253277] disabled:opacity-50"><Save className="h-3.5 w-3.5" /> {dirty ? "Salvar rascunho" : "Rascunho salvo"}</Button>}
-                  {canPublish && <Button onClick={() => void requestPublish()} style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="h-8 gap-1.5 px-3 text-xs text-white shadow-md hover:brightness-110"><UploadCloud className="h-3.5 w-3.5" /> Publicar</Button>}
+                  {version.state !== "publicada" && <Button data-testid="footer-save-draft" onClick={() => void saveDraft()} disabled={!dirty} title={dirty ? (testFooter ? "Grava as alterações como rascunho e continua neste passo" : "Salvar as alterações como rascunho") : "Já está salvo — nenhuma alteração desde o último salvamento"} variant={testFooter ? "outline" : "default"} className={testFooter ? "h-8 gap-1.5 px-3 text-xs disabled:opacity-50" : "h-8 gap-1.5 bg-[#1b2559] px-3 text-xs text-white hover:bg-[#253277] disabled:opacity-50"}><Save className="h-3.5 w-3.5" /> {dirty ? "Salvar rascunho" : "Rascunho salvo"}</Button>}
+                  {canPublish && <Button data-testid="footer-publish" data-primary={publishIsPrimary ? "true" : "false"} title={testFooter ? "Publica a versão (pede confirmação). Publicar não é o mesmo que salvar rascunho." : undefined} onClick={() => void requestPublish()} variant={publishIsPrimary ? "default" : "outline"} style={publishIsPrimary ? { background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" } : undefined} className={publishIsPrimary ? "h-8 gap-1.5 px-3 text-xs text-white shadow-md hover:brightness-110" : "h-8 gap-1.5 px-3 text-xs"}><UploadCloud className="h-3.5 w-3.5" /> Publicar</Button>}
                 </>
               )}
             </div>
@@ -1044,11 +1121,13 @@ export function ProductEditor({ productId, onBack, pin, notice, embedded, openIn
           />
         );
       })()}
+    </ProductFlowProvider>
     </FieldHelpLayer>
     </RefsCtx.Provider>
     </FormsCtx.Provider>
     </FlushCtx.Provider>
     </RingCtx.Provider>
+    </FramedEditorScope>
   );
 }
 
@@ -1283,12 +1362,12 @@ const EDITOR_STEPS: { id: string; label: string; keys: string[] }[] = [
   { id: "revisao", label: "Revisão e publicação", keys: ["validacao"] },
 ];
 
-function Stepper({ current, onSelect, items }: { current: string; onSelect: (id: string) => void; items: Record<string, { level: string; note: string }> | null }) {
+function Stepper({ current, onSelect, items, steps = EDITOR_STEPS }: { current: string; onSelect: (id: string) => void; items: Record<string, { level: string; note: string }> | null; steps?: typeof EDITOR_STEPS }) {
   return (
-    <nav id="catalog2-editor-tabs" data-tour-id="catalog2-editor-tabs" aria-label="Passos do produto" className="grid grid-cols-5 items-stretch gap-1 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      {EDITOR_STEPS.map((st, i) => {
+    <nav id="catalog2-editor-tabs" data-tour-id="catalog2-editor-tabs" aria-label="Passos do produto" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }} className="grid items-stretch gap-1 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      {steps.map((st, i) => {
         const levels = st.keys.map((k) => items?.[k]?.level).filter(Boolean) as string[];
-        const state = !items || st.keys.length === 0 ? "neutral" : levels.includes("bloqueador") ? "blocked" : levels.includes("pendente") ? "pending" : "ok";
+        const state = !items || levels.length === 0 ? "neutral" : levels.includes("bloqueador") ? "blocked" : levels.includes("pendente") ? "pending" : levels.length < st.keys.length ? "neutral" : "ok";
         const active = current === st.id;
         const dot = state === "blocked" ? "bg-red-400" : state === "pending" ? "bg-amber-400" : state === "ok" ? "bg-emerald-400" : "bg-slate-300";
         const circle = active ? "bg-white/25 text-white" : state === "ok" ? "bg-emerald-100 text-emerald-700" : state === "pending" ? "bg-amber-100 text-amber-700" : state === "blocked" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600";
@@ -1326,29 +1405,36 @@ const FormsCtx = createContext<(id: string, api: OpenFormApi) => () => void>(() 
 // Cadastros de apoio (especialidades etc.) para componentes fundos que só precisam consultar.
 const RefsCtx = createContext<any>(null);
 
-function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clearHighlight, afterMain }: any) {
+function AssignmentWarning({ issues, onReview }: { issues: any[]; onReview: () => void }) {
+  const testLayout = useTestProductLayout();
+  if (!issues.length) return null;
+  const messages = <ul className="mt-1 space-y-1">{issues.map((issue: any) => <li key={`${issue.task_id}:${issue.step_id}:${issue.label}`}>{issue.message}</li>)}</ul>;
+  return <div role="alert" className="mx-3 my-2 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="specific-assignee-warning">
+    {testLayout ? <div className="flex items-start gap-3"><details className="min-w-0 flex-1"><summary className="cursor-pointer font-semibold">Responsável específico indisponível · {issues.length} configuração(ões) para revisar</summary>{messages}</details><button type="button" className="shrink-0 font-semibold text-violet-700" onClick={onReview}>Revisar tarefas e etapas</button></div> : <><p className="font-semibold">Responsável específico indisponível — ajuste a configuração</p>{messages}<button type="button" className="mt-1 font-semibold text-violet-700" onClick={onReview}>Revisar tarefas e etapas</button></>}
+  </div>;
+}
+
+function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clearHighlight, afterMain, onAiApplied }: any) {
+  const testLayout = useTestProductLayout();
+  const aiInputs = useProductAiInputs();
   const ringOf = useContext(RingCtx);
-  const [f, setF] = useState({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" });
+  const initialInfo = { title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" };
+  const [f, setF] = useFramedEditorDraft(`general-info:${version.id}`, initialInfo, !readOnly);
   const [savingInfo, setSavingInfo] = useState(false);
   const [infoSaved, setInfoSaved] = useState(false);
   const saveCommercialRef = useRef<() => Promise<void>>(async () => {});
   // Digitou e ainda não clicou em "Salvar informações"? O editor grava sozinho antes de salvar rascunho/prévia/sair.
   const registerFlusher = useContext(FlushCtx);
   const dirtyRef = useRef(false);
+  dirtyRef.current = JSON.stringify(f) !== JSON.stringify(initialInfo);
   const fRef = useRef(f);
   fRef.current = f;
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
-  // Uma atualização recebida do servidor deve aparecer após Recarregar, mas
-  // nunca pode substituir texto ainda não salvo no formulário atual.
-  useEffect(() => {
-    if (dirtyRef.current) return;
-    setF({ title: version.title ?? "", summary: version.summary ?? "", full_description: version.full_description ?? "", change_summary: version.change_summary ?? "" });
-  }, [version.id, version.updated_at]);
   useEffect(() => registerFlusher(async () => {
     if (!dirtyRef.current || readOnly) return;
     dirtyRef.current = false;
-    try { await onSaveRef.current(fRef.current); } catch { dirtyRef.current = true; }
+    try { await onSaveRef.current(fRef.current); } catch (error) { dirtyRef.current = true; throw error; }
   }), [registerFlusher, readOnly]);
   async function saveInfo() {
     setSavingInfo(true);
@@ -1378,8 +1464,17 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
   const [aiChatOpen, setAiChatOpen] = useState(false);
   // P-8: aplica o rascunho da IA (textos + listas) e salva; listas vazias não apagam o que já existe.
   async function applyAiDraft(d: any, opts?: { onlyEmpty: boolean }) {
-    const patch = draftToVersionPatch(d, f, !!opts?.onlyEmpty, version ?? {});
+    const patch = draftToVersionPatch(d, f, !!opts?.onlyEmpty, { ...version, ...(testLayout ? aiInputs.read() : {}) });
     const next = { ...f, title: patch.title, summary: patch.summary, full_description: patch.full_description };
+    if (testLayout) {
+      if ((aiInputs.read().deliverables_files as any[] | undefined)?.some(Boolean)) delete patch.deliverables_summary;
+      setF(next);
+      aiInputs.apply(patch);
+      dirtyRef.current = true;
+      setInfoSaved(false);
+      onAiApplied?.();
+      return;
+    }
     await onSave({ ...next, ...(patch.included_items ? { included_items: patch.included_items } : {}), ...(patch.excluded_items ? { excluded_items: patch.excluded_items } : {}), ...(patch.client_requirements ? { client_requirements: patch.client_requirements } : {}), ...(patch.deliverables_summary ? { deliverables_summary: patch.deliverables_summary } : {}) } as any);
     setF(next);
     dirtyRef.current = false;
@@ -1402,13 +1497,16 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
         </div>
       </SectionCard>
 
+      {testLayout && <div data-flow-slot="initial-modalities" />}
       {afterMain}
+      {testLayout && <section className="rounded-xl border border-slate-200 bg-white p-3 dark:bg-slate-900"><h3 className="mb-2 text-xs font-bold">Público, objetivo e escopo</h3><div data-flow-slot="product-scope" className="grid items-start gap-2 lg:grid-cols-2" /></section>}
 
+      <ProductFlowField slot="presentation"><div className="space-y-2">
       <SectionCard number={4} icon={FileText} title="Descrição completa" subtitle="Detalhe o produto com informações completas, benefícios e diferenciais." help="Apresente como o produto funciona, seus benefícios, limites e diferenciais de forma clara." collapsible defaultOpen={false} forceOpen={ringOf("catalog2-field-full-description") !== ""}>
         <div id="catalog2-field-full-description" className={ringOf("catalog2-field-full-description")}><FieldAccordion title={<span>Descrição <Req /></span>} help="Explicação completa do produto, com benefícios, funcionamento e diferenciais." forceOpen={ringOf("catalog2-field-full-description") !== ""}><div className="space-y-1"><div className="relative"><Textarea aria-label="Descrição" rows={5} className="pr-16" disabled={readOnly} value={f.full_description} onChange={(e) => updateInfo({ full_description: e.target.value })} /><span className="absolute right-2 top-2"><AiFieldButton compact label="Descrição completa" value={f.full_description} context={{ name: f.title, category: product.category?.name, other_fields: { "Descrição curta": f.summary, "Descrição completa": f.full_description } }} disabled={readOnly} fieldMaxChars={4000} onResult={(v) => updateInfo({ full_description: v })} /></span></div><CharCount value={f.full_description} max={4000} /></div></FieldAccordion></div>
       </SectionCard>
 
-      <CommercialFieldsCard version={version} readOnly={readOnly} registerFlush={registerFlusher} registerSave={(fn) => { saveCommercialRef.current = fn; return () => { if (saveCommercialRef.current === fn) saveCommercialRef.current = async () => {}; }; }} onSave={(b) => onSave(b)} />
+      <CommercialFieldsCard placeTextField={testLayout ? (key, content) => <ProductFlowField key={key} slot={["target_audience", "commercial_objective", "scope"].includes(key) ? "product-scope" : "presentation-texts"}>{content}</ProductFlowField> : undefined} expanded={testLayout} version={version} readOnly={readOnly} registerFlush={registerFlusher} registerSave={(fn) => { saveCommercialRef.current = fn; return () => { if (saveCommercialRef.current === fn) saveCommercialRef.current = async () => {}; }; }} onSave={(b) => onSave(b)} />
 
       <SectionCard number={8} tone="soft" icon={Clock} title="Resumo da mudança" subtitle="Escrito pela IA a partir do que foi alterado — você pode editar." collapsible defaultOpen={false}>
         <div className="space-y-1">
@@ -1416,14 +1514,15 @@ function GeneralTab({ version, readOnly, onSave, product, highlightTarget, clear
           <CharCount value={f.change_summary} max={500} />
         </div>
       </SectionCard>
+      </div></ProductFlowField>
 
       {!readOnly && (
-        <div className="flex flex-wrap items-center gap-3 pt-1">
-          <button type="button" data-testid="open-ai-chat" onClick={() => setAiChatOpen(true)} title="A IA conversa com você e preenche o produto inteiro a partir de uma explicação" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] px-3 text-xs font-semibold text-white shadow-sm transition hover:brightness-110"><Sparkles className="h-3.5 w-3.5" />Preencher o produto com IA</button>
+        <div className={testLayout ? "contents" : "flex flex-wrap items-center gap-3 py-2"}>
+          <ProductFlowField slot="header-ai">{testLayout ? <HeaderIconBtn testId="open-ai-chat" label="Preencher produto com IA" onClick={() => setAiChatOpen(true)} className="grid h-8 w-8 shrink-0 place-items-center !p-0"><Sparkles className="h-4 w-4" /></HeaderIconBtn> : <button type="button" data-testid="open-ai-chat" onClick={() => setAiChatOpen(true)} title="A IA conversa com você e preenche o produto inteiro a partir de uma explicação" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-[image:var(--app-brand-button,linear-gradient(to_right,#7c3aed,#c026d3))] px-3 text-xs font-semibold text-white shadow-sm transition hover:brightness-110"><Sparkles className="h-3.5 w-3.5" />Preencher o produto com IA</button>}</ProductFlowField>
           {/* Sem botão "Salvar informações": o texto é gravado junto com "Salvar rascunho" (rodapé), publicar ou ao trocar de passo. */}
           {savingInfo && <span role="status" className="text-xs text-slate-500">Salvando…</span>}
-          {fmtUpdatedAt(version?.updated_at) && <span className="text-xs text-slate-500 dark:text-slate-400">Última atualização: {fmtUpdatedAt(version.updated_at)}</span>}
-          <ProductAiChatDialog open={aiChatOpen} onOpenChange={setAiChatOpen} productId={product.id} readOnly={readOnly} onApply={applyAiDraft} />
+          {!testLayout && fmtUpdatedAt(version?.updated_at) && <span className="text-xs text-slate-500 dark:text-slate-400">Última atualização: {fmtUpdatedAt(version.updated_at)}</span>}
+          <ProductAiChatDialog currentValues={testLayout ? { ...version, ...aiInputs.read(), ...f, tasks_context: aiTasksContext(version) } : undefined} open={aiChatOpen} onOpenChange={setAiChatOpen} productId={product.id} readOnly={readOnly} onApply={applyAiDraft} />
           {infoSaved && <p role="status" className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">✓ Informações salvas.</p>}
         </div>
       )}
@@ -1458,11 +1557,19 @@ function ChangeSummaryAiButton({ versionId, onResult, disabled, compact = false 
 
 // ── 2. Classificações ─────────────────────────────────────────────────
 function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight, readOnly }: any) {
+  const testLayout = useTestProductLayout();
   const ringOf = useContext(RingCtx);
   const registerFlusher = useContext(FlushCtx);
-  const [pillar, setPillar] = useState(product.pillar?.id ?? "");
-  const [category, setCategory] = useState(product.category?.id ?? "");
-  const [fourF, setFourF] = useState<string[]>(product.four_f.map((f: any) => f.id));
+  const [currentPillar, setCurrentPillar] = useState(product.pillar?.id ?? "");
+  const [currentCategory, setCurrentCategory] = useState(product.category?.id ?? "");
+  const [currentFourF, setCurrentFourF] = useState<string[]>(product.four_f.map((f: any) => f.id));
+  const [draftClass, setDraftClass] = useFramedEditorDraft("test-classification", { pillar: product.pillar?.id ?? "", category: product.category?.id ?? "", fourF: product.four_f.map((f: any) => f.id) as string[] }, testLayout && !readOnly);
+  const pillar = testLayout ? draftClass.pillar : currentPillar;
+  const category = testLayout ? draftClass.category : currentCategory;
+  const fourF = testLayout ? draftClass.fourF : currentFourF;
+  const setPillar = (value: string) => testLayout ? setDraftClass(cur => ({ ...cur, pillar: value })) : setCurrentPillar(value);
+  const setCategory = (value: string) => testLayout ? setDraftClass(cur => ({ ...cur, category: value })) : setCurrentCategory(value);
+  const setFourF = (value: string[]) => testLayout ? setDraftClass(cur => ({ ...cur, fourF: value })) : setCurrentFourF(value);
   const saveClassifications = () => onSave({ pillar_id: pillar || null, category_id: category || null, four_f_ids: fourF }).then(() => {
     if (pillar) clearHighlight("catalog2-field-pillar");
     if (category) clearHighlight("catalog2-field-category");
@@ -1471,6 +1578,7 @@ function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight, read
   // Sem botão "Salvar classificação": grava junto com "Salvar rascunho", publicar ou ao trocar de passo (como os outros campos).
   const savedKey = JSON.stringify([product.pillar?.id ?? "", product.category?.id ?? "", [...product.four_f.map((f: any) => f.id)].sort()]);
   const currentKey = JSON.stringify([pillar, category, [...fourF].sort()]);
+  useProductAiSource("classification", { pillar: refs.pillars?.find((item: any) => item.id === pillar)?.name ?? "", category: refs.categories?.find((item: any) => item.id === category)?.name ?? "", four_f: refs.fourF.filter((item: any) => fourF.includes(item.id)).map((item: any) => item.name) });
   const stateRef = useRef({ dirty: false, save: saveClassifications, readOnly: !!readOnly });
   stateRef.current = { dirty: currentKey !== savedKey, save: saveClassifications, readOnly: !!readOnly };
   useEffect(() => registerFlusher(async () => {
@@ -1515,7 +1623,7 @@ function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight, read
         </div>
       </section>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-800/40" data-testid="class-summary">
+      {!testLayout && <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-800/40" data-testid="class-summary">
         <span className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100">
           <span className={"flex h-7 w-7 items-center justify-center rounded-full text-white " + (fourF.length > 0 ? "bg-emerald-500" : "bg-slate-300")}><Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" /></span>
           {fourF.length} de {refs.fourF.length} classificações selecionadas
@@ -1533,7 +1641,8 @@ function ClassTab({ product, refs, onSave, highlightTarget, clearHighlight, read
             {currentKey !== savedKey ? "Alteração pendente — vale ao clicar em “Salvar rascunho”." : <><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />Alterações salvas</>}
           </span>
         )}
-      </div>
+      </div>}
+      {testLayout && currentKey !== savedKey && <p role="status" className="mt-1 text-[11px] text-amber-700">Alterações de classificação pendentes — salve o rascunho.</p>}
       </SectionCard>
     </div>
   );
@@ -1568,7 +1677,7 @@ function VariationsTab({ version, readOnly, act }: any) {
 
 /** Variação em UMA linha (número, nome, resumo) com botão Ver; tudo é editado num PAINEL MOLDURA. */
 function VariationRow({ va, vi, version, readOnly, act }: any) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFramedEditorOpen(`variation:${va.id}`);
   useOpenOn((k, id) => k === "option" && (va.options ?? []).some((o: any) => o.id === id), () => setOpen(true));
   const def = va.options.find((o: any) => o.is_default);
   const configured = va.options.some((o: any) => (o.effects ?? []).length > 0);
@@ -1633,13 +1742,17 @@ function VariationEditor({ va, index, list, version, readOnly, act }: any) {
   </div>;
 }
 
-function VariationOptionRow({ option, variation, index, list, version, readOnly, act }: any) {
+export function VariationOptionRow({ option, variation, index, list, version, readOnly, act }: any) {
   const refsCtx = useContext(RefsCtx);
   const requested = useImpactsRequested("option", option.id);
-  const [detailOpen, setDetailOpen] = useState(requested);
+  const [detailOpen, setDetailOpen] = useFramedEditorOpen(`option-impacts:${option.id}`, requested);
   useOpenOn((k, id) => k === "option" && id === option.id, () => setDetailOpen(true));
   const [label, setLabel] = useState(option.label);
   const [message, setMessage] = useState(option.availability_note ?? "");
+  // Item 6: atalhos do resumo abrem a sanfona de impactos com o tipo já escolhido (preço informado, prazo, etapa, entregável).
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [impactPreset, setImpactPreset] = useState("add_deadline_days");
+  const moreRef = useRef<HTMLDetailsElement | null>(null);
   const put = (body: any, ok: string) => act(() => apiClient.updateCatalog2Option(option.id, body), ok);
   const customQuote = option.availability === "custom_quote";
   const saveImage = (file: File) => {
@@ -1691,14 +1804,18 @@ function VariationOptionRow({ option, variation, index, list, version, readOnly,
         </div>
         <div className="min-w-0 space-y-2 border-t border-slate-100 pt-4 dark:border-slate-800">
           <p className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-slate-100"><Layers className="h-4 w-4 text-violet-600" aria-hidden="true" />Impactos da opção</p>
-          <OptionImpactSummary effects={option.effects ?? []} />
+          <OptionImpactSummary effects={option.effects ?? []} onPick={readOnly ? undefined : (type) => {
+            const preset = type === "price" ? "add_fixed_amount" : type === "steps" ? "add_step" : type === "deliverables" ? "add_deliverable" : "add_deadline_days";
+            setImpactPreset(preset); setMoreOpen(true);
+            window.setTimeout(() => moreRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 30);
+          }} />
           <details open className="group rounded-xl border border-slate-200 dark:border-slate-700" data-testid="option-hours-accordion">
             <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[13px] font-bold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden"><Clock className="h-4 w-4 text-violet-600" aria-hidden="true" /><span className="flex-1">Horas extras</span><ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
             <div className="border-t border-slate-100 px-3 pb-3 dark:border-slate-800"><OptionStepAdjustments option={option} version={version} specialties={refsCtx?.specialties ?? []} readOnly={readOnly} act={act} /></div>
           </details>
-          <details className="group rounded-xl border border-slate-200 dark:border-slate-700" data-testid="option-deadline-accordion">
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[13px] font-bold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden"><CalendarClock className="h-4 w-4 text-violet-600" aria-hidden="true" /><span className="flex-1">Prazo e outros impactos desta opção</span><span className="text-xs font-normal text-slate-500">{impactSummary(option.effects ?? []).deadline}</span><ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
-            <div className="border-t border-slate-100 px-3 pb-3 pt-2 dark:border-slate-800"><div><EffectList version={version} effects={option.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2OptionEffect(option.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2OptionEffect(id), "Impacto removido.")} /></div></div>
+          <details ref={moreRef} open={moreOpen} onToggle={(ev) => setMoreOpen((ev.currentTarget as HTMLDetailsElement).open)} className="group rounded-xl border border-slate-200 dark:border-slate-700" data-testid="option-deadline-accordion">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[13px] font-bold text-slate-800 dark:text-slate-100 [&::-webkit-details-marker]:hidden"><CalendarClock className="h-4 w-4 text-violet-600" aria-hidden="true" /><span className="flex-1">Preço informado, prazo e outros impactos desta opção</span><span className="text-xs font-normal text-slate-500">{impactSummary(option.effects ?? []).deadline}</span><ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
+            <div className="border-t border-slate-100 px-3 pb-3 pt-2 dark:border-slate-800"><div><EffectList key={impactPreset} initialType={impactPreset} version={version} effects={option.effects} readOnly={readOnly} onAdd={(b: any) => act(() => apiClient.addCatalog2OptionEffect(option.id, b), "Impacto adicionado.")} onDel={(id: string) => act(() => apiClient.deleteCatalog2OptionEffect(id), "Impacto removido.")} /></div></div>
           </details>
         </div>
       </div>
@@ -1727,17 +1844,26 @@ function impactSummary(effects: any[]) {
     configured: effects.length,
   };
 }
-function OptionImpactSummary({ effects }: { effects: any[] }) {
+// Item 6 (31/10): o resumo parecia um formulário mas não editava. Agora cada item é um atalho que abre o campo certo logo abaixo
+// (com o tipo de impacto já escolhido). Sem `onPick` (leitura) continua sendo só o resumo.
+function OptionImpactSummary({ effects, onPick }: { effects: any[]; onPick?: (type: string) => void }) {
   const s = impactSummary(effects);
-  const Item = ({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) => (
-    <span className="flex min-w-0 flex-1 items-center gap-2 px-2 first:pl-0"><Icon className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" /><span className="min-w-0"><span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span><span className="block truncate text-[11px] text-slate-500">{value}</span></span></span>
-  );
+  const effortCount = s.effort;
+  const Item = ({ icon: Icon, label, value, type }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; type: string }) => {
+    const body = <><Icon className="h-4 w-4 shrink-0 text-violet-600" aria-hidden="true" /><span className="min-w-0 text-left"><span className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200">{label}</span><span className="block truncate text-[11px] text-slate-500">{value}</span></span></>;
+    return onPick
+      ? <button type="button" data-testid={`impact-pick-${type}`} title={`Configurar ${label.toLowerCase()} desta opção`} onClick={() => onPick(type)} className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-0.5 hover:bg-violet-50 first:pl-0 dark:hover:bg-violet-950/30">{body}<Pencil className="ml-auto h-3 w-3 shrink-0 text-violet-500" aria-hidden="true" /></button>
+      : <span className="flex min-w-0 flex-1 items-center gap-2 px-2 first:pl-0">{body}</span>;
+  };
   return (
-    <div className="flex divide-x divide-slate-200 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900" data-testid="option-impact-summary">
-      <Item icon={DollarSign} label="Preço" value={s.price} />
-      <Item icon={CalendarClock} label="Prazo" value={s.deadline === "Sem alteração de prazo" ? "Sem alteração" : s.deadline} />
-      <Item icon={ListChecks} label="Etapas" value={s.tasks} />
-      <Item icon={Layers} label="Entregáveis" value={s.deliverables} />
+    <div className="space-y-1">
+      <div className="flex divide-x divide-slate-200 rounded-xl border border-slate-200 bg-white px-3 py-2 dark:divide-slate-700 dark:border-slate-700 dark:bg-slate-900" data-testid="option-impact-summary">
+        <Item icon={DollarSign} label="Preço" type="price" value={effortCount > 0 && s.price === "Sem alteração" ? "Calculado pelas horas extras" : s.price} />
+        <Item icon={CalendarClock} label="Prazo" type="deadline" value={s.deadline === "Sem alteração de prazo" ? "Sem alteração" : s.deadline} />
+        <Item icon={ListChecks} label="Etapas" type="steps" value={s.tasks} />
+        <Item icon={Layers} label="Entregáveis" type="deliverables" value={s.deliverables} />
+      </div>
+      {onPick && <p className="text-[11px] text-slate-500" data-testid="option-impact-hint">Clique em um item para configurar. <strong>Calculado</strong>: horas extras × valor/hora (com taxas e margem). <strong>Informado</strong>: valor fixo, percentual ou dias que você digita.</p>}
     </div>
   );
 }
@@ -1832,16 +1958,33 @@ export function UnlinkedStepsBanner({ version }: { version: any }) {
     </div>
   );
 }
-function EffectList({ effects, readOnly, onAdd, onDel, version }: any) {
-  const [e, setE] = useState<any>(() => (pendingLinkStepRef ? { effect_type: "add_step", effect_value: pendingLinkStepRef, charge_scope: "recurring" } : { effect_type: "add_deadline_days", effect_value: "", charge_scope: "recurring" }));
+/** Item 6 (31/10): impacto em português ("Prazo: +2 dia(s)") em vez do nome interno ("add_deadline_days = 2"). Só apresentação. */
+export function effectHumanLabel(ef: { effect_type: string; effect_value: any }): string {
+  const v = String(ef.effect_value ?? "").trim();
+  const num = Number(v.replace(",", "."));
+  switch (ef.effect_type) {
+    case "add_deadline_days": return `Prazo: +${v} dia(s)`;
+    case "add_fixed_amount": return `Preço informado: + ${Number.isFinite(num) ? `R$ ${num.toFixed(2).replace(".", ",")}` : v}`;
+    case "add_percent": return `Preço informado: + ${v}%`;
+    case "require_info": return `Pede ao cliente: ${v}`;
+    case "add_deliverable": return `Entregável extra: ${v}`;
+    case "add_task": return `Inclui a tarefa: ${v}`;
+    case "remove_task": return `Remove a tarefa: ${v}`;
+    default: return `${ef.effect_type}: ${v}`;
+  }
+}
+
+function EffectList({ effects, readOnly, onAdd, onDel, version, initialType }: any) {
+  const [e, setE] = useState<any>(() => (pendingLinkStepRef ? { effect_type: "add_step", effect_value: pendingLinkStepRef, charge_scope: "recurring" } : { effect_type: initialType ?? "add_deadline_days", effect_value: "", charge_scope: "recurring" }));
   useEffect(() => { pendingLinkStepRef = null; }, []);
   const money = e.effect_type === "add_fixed_amount" || e.effect_type === "add_percent";
   const effort = isEffortType(e.effect_type);
+  const hasEffort = (effects ?? []).some((ef: any) => isEffortType(ef.effect_type));
   return (
     <div className="mt-1 ml-2 border-l-2 border-neutral-200 pl-2 dark:border-neutral-700">
       {(effects ?? []).map((ef: any) => (
-        <div key={ef.id} className="flex items-center justify-between text-xs text-neutral-500">
-          <span>{isEffortType(ef.effect_type) ? effortEffectSummary(ef, version) : ef.effect_type === "add_step" ? <>Inclui a etapa “{stepNameOfRef(version, ef.effect_value)}”</> : <>{ef.effect_type} = {ef.effect_value}</>}{(ef.effect_type === "add_fixed_amount" || ef.effect_type === "add_percent") && ef.charge_scope ? <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-600">{chargeScopeLabel(ef.charge_scope)}{ef.charge_scope === "per_cycle" ? ` (ciclo ${ef.charge_start_cycle}${ef.charge_end_cycle != null ? ` a ${ef.charge_end_cycle}` : "+"})` : ef.charge_scope === "per_quantity" && ef.charge_quantity ? ` ×${ef.charge_quantity}` : ""}</span> : null}</span>
+        <div key={ef.id} className="flex items-center justify-between text-xs text-neutral-500" data-testid="effect-item">
+          <span>{isEffortType(ef.effect_type) ? effortEffectSummary(ef, version) : ef.effect_type === "add_step" ? <>Inclui a etapa “{stepNameOfRef(version, ef.effect_value)}”</> : <>{effectHumanLabel(ef)}</>}{(ef.effect_type === "add_fixed_amount" || ef.effect_type === "add_percent") && ef.charge_scope ? <span className="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-600">{chargeScopeLabel(ef.charge_scope)}{ef.charge_scope === "per_cycle" ? ` (ciclo ${ef.charge_start_cycle}${ef.charge_end_cycle != null ? ` a ${ef.charge_end_cycle}` : "+"})` : ef.charge_scope === "per_quantity" && ef.charge_quantity ? ` ×${ef.charge_quantity}` : ""}</span> : null}</span>
           {!readOnly && <button className="text-red-500" onClick={() => onDel(ef.id)}>×</button>}
         </div>
       ))}
@@ -1855,13 +1998,20 @@ function EffectList({ effects, readOnly, onAdd, onDel, version }: any) {
               ? <select aria-label="Etapa que esta opção inclui" data-testid="add-step-select" className="h-6 min-w-[10rem] flex-1 rounded border border-neutral-300 bg-transparent px-1 text-xs dark:border-neutral-700" value={e.effect_value} onChange={(ev) => setE({ ...e, effect_value: ev.target.value })}><option value="">Escolha a etapa…</option>{conditionalStepOptions(version).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
               : <span className="text-[11px] text-amber-700" data-testid="add-step-empty">Nenhuma etapa marcada como “Depende de uma variação ou adicional”. Marque a etapa em Entrega → Ver etapas → Editar.</span>)
             : <Input className="h-6 text-xs" value={e.effect_value} onChange={(ev) => setE({ ...e, effect_value: ev.target.value })} placeholder="valor" />}
-          <Button size="sm" variant="ghost" className="h-6" onClick={() => e.effect_value && (!effort || e.source_task_key) && (onAdd(effort ? { effect_type: e.effect_type, effect_value: e.effect_value, charge_scope: e.charge_scope ?? "recurring", charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, source_task_key: e.source_task_key, source_step_key: e.source_step_key ?? null, effort_scale_by_quantity: !!e.effort_scale_by_quantity } : money ? e : { effect_type: e.effect_type, effect_value: e.effect_value }), setE({ ...e, effect_value: "" }))}><Plus className="h-3 w-3" /></Button>
+          <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-[11px]" aria-label="Adicionar impacto" title="Adicionar este impacto à opção" onClick={() => e.effect_value && (!effort || e.source_task_key) && (onAdd(effort ? { effect_type: e.effect_type, effect_value: e.effect_value, charge_scope: e.charge_scope ?? "recurring", charge_start_cycle: e.charge_start_cycle, charge_end_cycle: e.charge_end_cycle, source_task_key: e.source_task_key, source_step_key: e.source_step_key ?? null, effort_scale_by_quantity: !!e.effort_scale_by_quantity } : money ? e : { effect_type: e.effect_type, effect_value: e.effect_value }), setE({ ...e, effect_value: "" }))}><Plus className="h-3 w-3" />Adicionar</Button>
         </div>
       )}
       {!readOnly && money && (
         <div className="mt-1"><ChargeScopeFields value={e} onChange={(v) => setE({ ...e, ...v })} /></div>
       )}
+      {!readOnly && money && (
+        <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-300" data-testid="price-informed-help">
+          <strong>Preço informado</strong> soma {e.effect_type === "add_percent" ? "um percentual" : "um valor fixo"} ao preço desta opção. Se o custo vem de trabalho a mais, prefira <strong>Horas extras</strong>: aí o preço é <strong>calculado</strong> (horas × valor/hora da especialidade, com taxas e margem). Não use os dois para o mesmo trabalho.
+        </p>
+      )}
+      {!readOnly && money && hasEffort && <p className="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800" data-testid="price-double-charge-warning">Esta opção já soma horas extras (preço calculado). Um preço informado aqui é cobrado ALÉM das horas.</p>}
       {!readOnly && effort && <EffortEffectForm value={e} onChange={setE} version={version} />}
+      {!readOnly && e.effect_type === "add_step" && <ProductFlowWorkspace slot="tasks" label="Cadastrar ou completar a etapa aqui" />}
     </div>
   );
 }
@@ -1893,7 +2043,7 @@ function AddonsTab({ version, readOnly, act }: any) {
 
 /** Adicional em UMA linha (nome, preço, impactos) com botão Ver; tudo é editado num PAINEL MOLDURA. */
 function AddonRow({ a, ai, version, readOnly, act }: any) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFramedEditorOpen(`addon:${a.id}`);
   useOpenOn((k, id) => k === "addon" && id === a.id, () => setOpen(true));
   return (
     <section className="rounded-[14px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60" data-testid="addon-row">
@@ -1925,7 +2075,7 @@ function AddonRow({ a, ai, version, readOnly, act }: any) {
 /** Impactos do adicional: resumo + botão "Configurar impactos" que abre uma JANELA MOLDURA (padrão global). */
 function AddonImpactsBox({ addon, readOnly, children }: { addon: any; readOnly: boolean; children: React.ReactNode }) {
   const requested = useImpactsRequested("addon", addon.id);
-  const [open, setOpen] = useState(requested);
+  const [open, setOpen] = useFramedEditorOpen(`addon-impacts:${addon.id}`, requested);
   useOpenOn((k, id) => k === "addon" && id === addon.id, () => setOpen(true));
   const n = (addon.effects ?? []).length;
   return (
@@ -2013,16 +2163,16 @@ const CLOSE_STEPS_PANELS_EVENT = "catalog2:close-steps-panels";
 const priceReturn: { stepId: string | null } = { stepId: null };
 
 /** Cartão das etapas em UMA linha: "Ver etapas" (lista + cadastro, num PAINEL MOLDURA) e "Ver fluxo das etapas". Sem acordeão. */
-function StepsPanelCard({ task, number, help, readOnly, act, hoursPerDay, forceOpen, children }: any) {
-  const [open, setOpen] = useState(false);
+function StepsPanelCard({ task, number, help, readOnly, act, hoursPerDay, forceOpen, children, inline = false, compact = false }: any) {
+  const [open, setOpen] = useFramedEditorOpen(`steps:${task.id}`);
   const openRef = useRef(false);
   openRef.current = open;
-  useEffect(() => { if (forceOpen) setOpen(true); }, [forceOpen]);
+  useEffect(() => { if (forceOpen && !inline) setOpen(true); }, [forceOpen, inline]);
   useEffect(() => {
     const on = (e: Event) => {
       const ids: string[] = (e as CustomEvent).detail?.ids ?? [];
       const hit = ids.find((id) => id === "catalog2-task-effort" || id.startsWith("task-effort:") || id === "catalog2-step-add:" + task.id);
-      if (!hit) return;
+      if (!hit || inline) return;
       setOpen(true);
       window.setTimeout(() => document.getElementById(hit)?.scrollIntoView({ behavior: "smooth", block: "center" }), 700);
     };
@@ -2032,7 +2182,7 @@ function StepsPanelCard({ task, number, help, readOnly, act, hoursPerDay, forceO
   useEffect(() => {
     const on = (e: Event) => {
       const id = (e as CustomEvent).detail?.stepId;
-      if (!id || openRef.current || !(task.steps ?? []).some((s: any) => s.id === id)) return;
+      if (!id || inline || openRef.current || !(task.steps ?? []).some((s: any) => s.id === id)) return;
       pendingOpenStep.id = id;
       pendingOpenStep.block = Number((e as CustomEvent).detail?.block) || undefined;
       setOpen(true);
@@ -2047,16 +2197,17 @@ function StepsPanelCard({ task, number, help, readOnly, act, hoursPerDay, forceO
   }, []);
   const n = (task.steps ?? []).length;
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-slate-800 dark:bg-slate-900/60" data-testid="steps-card">
+    <section className={`rounded-xl border border-slate-200 bg-white py-2 dark:border-slate-800 dark:bg-slate-900/60 ${compact ? "px-2.5 [&>div>span[data-testid=section-number]]:h-6 [&>div>span[data-testid=section-number]]:w-6" : "px-3 shadow-sm"}`} data-testid="steps-card">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="section-number-badge flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" data-testid="section-number">{number}</span>
-        <div className="min-w-0 flex-1"><h3 className="text-[13px] font-bold leading-tight text-slate-900 dark:text-slate-100">Etapas da tarefa<span className="field-info" data-help={help} aria-hidden="true">i</span></h3><p className="truncate text-[11px] text-slate-500 dark:text-slate-400">{n} etapa(s){n === 0 ? " · cadastre ao menos uma etapa" : ""}</p></div>
+        <div className={`min-w-0 flex-1 ${compact ? "flex flex-wrap items-center gap-x-2" : ""}`}><h3 className="text-[13px] font-bold leading-tight text-slate-900 dark:text-slate-100">Etapas da tarefa<span className="field-info" data-help={help} aria-hidden="true">i</span></h3><p className="truncate text-[11px] text-slate-500 dark:text-slate-400">{n} etapa(s){n === 0 ? " · cadastre ao menos uma etapa" : ""}</p></div>
         <span className="flex shrink-0 items-center gap-1.5">
           {n >= 2 && <FlowPanelButton task={task} readOnly={readOnly} act={act} hoursPerDay={hoursPerDay} />}
-          <button type="button" onClick={() => { for (const st of task.steps ?? []) writeOpen(`step-editing:${st.id}`, false); setOpen(true); }} className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="steps-open"><Eye className="h-3.5 w-3.5" />Ver etapas</button>
+          {!inline && <button type="button" onClick={() => { for (const st of task.steps ?? []) writeOpen(`step-editing:${st.id}`, false); setOpen(true); }} className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="steps-open"><Eye className="h-3.5 w-3.5" />Ver etapas</button>}
         </span>
       </div>
-      {open && (
+      {inline && <div data-testid="task-inline-steps">{children}</div>}
+      {!inline && open && (
         <FramedPanel open onOpenChange={setOpen} testId="steps-panel" title="Etapas da tarefa">
           <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
             <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">Etapas da tarefa · {task.name}</p><p className="truncate text-xs text-slate-500">{n} etapa(s). Cada etapa se edita pelo botão Editar dela.</p></div>
@@ -2071,7 +2222,7 @@ function StepsPanelCard({ task, number, help, readOnly, act, hoursPerDay, forceO
 
 /** Botão "Ver fluxo" (no cartão das etapas): abre o fluxo das etapas num PAINEL MOLDURA. É só uma visão do cadastro das etapas. */
 function FlowPanelButton({ task, readOnly, act, hoursPerDay }: { task: any; readOnly: boolean; act: any; hoursPerDay: number }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useFramedEditorOpen(`step-flow:${task.id}`);
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="inline-flex h-7 items-center gap-1 rounded-md border border-violet-200 bg-white px-2 text-[11px] font-semibold text-violet-700 hover:bg-violet-50" data-testid="open-step-flow"><RefreshCw className="h-3.5 w-3.5" />Ver fluxo das etapas</button>
@@ -2089,17 +2240,19 @@ function FlowPanelButton({ task, readOnly, act, hoursPerDay }: { task: any; read
 }
 
 /** Cartão em UMA linha (ícone, título, resumo) com botão "Ver / editar" que abre o conteúdo num PAINEL MOLDURA (padrão global; ver docs/padroes-globais.md). */
-function PanelCard({ icon: Icon, title, summary, help, children, readOnly = false, allowEdit = false, number, forceOpen = false }: { forceOpen?: boolean; number?: number; allowEdit?: boolean; icon: React.ComponentType<{ className?: string }>; title: string; summary?: React.ReactNode; help?: string; children: React.ReactNode; readOnly?: boolean }) {
-  const [open, setOpen] = useState(false);
+function PanelCard({ icon: Icon, title, summary, help, children, readOnly = false, allowEdit = false, number, forceOpen = false, compact = false }: { compact?: boolean; forceOpen?: boolean; number?: number; allowEdit?: boolean; icon: React.ComponentType<{ className?: string }>; title: string; summary?: React.ReactNode; help?: string; children: React.ReactNode; readOnly?: boolean }) {
+  const testLayout = useTestProductLayout();
+  const [open, setOpen] = useFramedEditorOpen(`panel-card:${title}`);
   useEffect(() => { if (forceOpen) setOpen(true); }, [forceOpen]);
+  if (testLayout) return <section className="min-w-0 space-y-2 py-2" data-testid="test-inline-section"><header className="flex flex-wrap items-center gap-2 border-b border-slate-100 pb-2 dark:border-slate-800"><Icon className="h-4 w-4 text-violet-600" /><h3 className="text-[13px] font-bold">{title}</h3>{help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}<span className="text-xs text-slate-500">{summary}</span></header>{children}</section>;
   return (
-    <div className="h-full min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/60" data-testid="panel-card">
-      <div className="flex items-center gap-2 px-3 py-2">
+    <div className={`h-full min-w-0 rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900/60 ${compact ? "[&>div>span[data-testid=section-number]]:h-6 [&>div>span[data-testid=section-number]]:w-6" : "shadow-sm"}`} data-testid="panel-card">
+      <div className={`flex items-center gap-2 ${compact ? "px-2.5 py-1.5" : "px-3 py-2"}`}>
         {number != null ? <span className="section-number-badge flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" data-testid="section-number">{number}</span> : <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200"><Icon className="h-3.5 w-3.5" /></span>}
         <span data-no-info={help ? "" : undefined} className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">{title}</span>
         {help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}
         {summary != null && <span title={typeof summary === "string" ? summary : undefined} className="min-w-0 flex-1 truncate text-xs text-slate-500 dark:text-slate-400">{summary}</span>}
-        <button type="button" onClick={() => setOpen(true)} className="ml-auto inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="panel-card-open"><Pencil className="h-3.5 w-3.5" />Ver</button>
+        <button type="button" onClick={() => setOpen(true)} className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200 ${compact ? "h-7" : "h-8"}`} data-testid="panel-card-open"><Eye className="h-3.5 w-3.5" />Ver</button>
       </div>
       {open && (
         <FramedPanel open onOpenChange={setOpen} testId="panel-card-panel" title={title}>
@@ -2208,9 +2361,9 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
     manual_price: version.manual_price ?? null,
     manual_deadline_days: version.manual_deadline_days ?? null,
   });
-  const [f, setF] = useState<any>(pick);
+  const [f, setF] = useFramedEditorDraft<any>(`contract-modes:${version.id}`, pick(), !readOnly && version.state !== "publicada");
+  useProductAiSource("modalities", { modalities: [f.accepts_one_time && "Avulso", f.accepts_recurring && "Assinatura mensal"].filter(Boolean) });
   const sig = JSON.stringify(pick());
-  useEffect(() => { setF(pick()); }, [version.id, sig]); // eslint-disable-line react-hooks/exhaustive-deps
   // Marcou e não clicou em "Salvar modalidades"? O editor grava antes de salvar rascunho/prévia/sair.
   const registerFlusher = useContext(FlushCtx);
   const fRef = useRef(f); fRef.current = f;
@@ -2218,11 +2371,11 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
   const actRef = useRef(act); actRef.current = act;
   useEffect(() => registerFlusher(async () => {
     if (readOnly || JSON.stringify(fRef.current) === sigRef.current) return;
-    await actRef.current(() => apiClient.updateCatalog2VersionInfo(version.id, fRef.current));
+    await actRef.current(() => apiClient.updateCatalog2VersionInfo(version.id, fRef.current), undefined, { rethrow: true });
   }), [registerFlusher, readOnly, version.id]);
   const set = (patch: Partial<typeof f>) => setF((cur: any) => ({ ...cur, ...patch }));
   if (compact) {
-    const CARD = "flex h-full min-w-0 flex-col gap-2.5 px-1 md:border-l md:border-slate-200 md:pl-5 dark:md:border-slate-700";
+    const CARD = "flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 px-1 py-2.5 dark:border-slate-800";
     const ICON = "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300";
     const FIELD = "h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100";
     const priceHint = f.pricing_mode === "calculated" ? "Custo humano, de IA, taxas e prazo vêm das tarefas e etapas." : f.pricing_mode === "manual_fixed" ? "Vale como avulso, primeira cobrança e renovação. Exige preço e prazo." : "Sem compra automática nem cotação pública.";
@@ -2231,24 +2384,24 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
       { key: "accepts_recurring", label: "Assinatura (renova todo mês)", hint: "Abre um novo ciclo a cada mês. O cliente pode pagar mês a mês ou antecipado (bimestral, trimestral, semestral ou anual, com o desconto que você definir); as tarefas continuam abrindo todo mês. Atividades exclusivas da primeira execução não são cobradas novamente nas renovações." },
     ] as const;
     return <div id="catalog2-contract-modes" className="contents">
-      <div className={CARD} data-testid="price-type-card">
-        <div className="flex items-start gap-2.5"><span className={ICON}><DollarSign className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100">Preço desta versão<span className="field-info" data-help="Como o preço desta versão é definido: calculado pelas tarefas (custo + taxas), preço fixo informado ou sob consulta (sem compra automática nem cotação pública)." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Como o preço desta versão é definido</span></span></div>
-        <select aria-label="Tipo de preço" disabled={readOnly} className={FIELD} value={f.pricing_mode} onChange={(e) => set({ pricing_mode: e.target.value })}>
+      <ProductFlowField slot="pricing"><div className={CARD} data-testid="price-type-card">
+        <div className="flex min-w-0 flex-1 basis-[13rem] items-start gap-2.5"><span className={ICON}><DollarSign className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100">Preço desta versão<span className="field-info" data-help="Como o preço desta versão é definido: calculado pelas tarefas (custo + taxas), preço fixo informado ou sob consulta (sem compra automática nem cotação pública)." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Como o preço desta versão é definido</span></span></div>
+        <select aria-label="Tipo de preço" disabled={readOnly} className={`${FIELD} min-w-0 sm:w-auto sm:flex-[2]`} value={f.pricing_mode} onChange={(e) => set({ pricing_mode: e.target.value })}>
           <option value="calculated">Calculado pelas tarefas (custo + taxas)</option>
           <option value="manual_fixed">Preço fixo informado</option>
           <option value="on_request">Sob consulta</option>
         </select>
         {f.pricing_mode === "manual_fixed" && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
             <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Preço (R$)</span><input disabled={readOnly} type="number" min={0} step="0.01" aria-label="Preço fixo" className={FIELD} value={f.manual_price ?? ""} onChange={(e) => set({ manual_price: e.target.value === "" ? null : Number(e.target.value) })} /></label>
             <label className="block"><span className="mb-0.5 block text-[11px] font-semibold text-slate-600 dark:text-slate-300">Prazo (dias)</span><input disabled={readOnly} type="number" min={1} aria-label="Prazo fixo em dias" className={FIELD} value={f.manual_deadline_days ?? ""} onChange={(e) => set({ manual_deadline_days: e.target.value === "" ? null : Number(e.target.value) })} /></label>
           </div>
         )}
-        <p className="text-[11px] leading-snug text-slate-500">{priceHint}</p>
+        <p className="w-full text-[11px] leading-snug text-slate-500">{priceHint}</p>
       </div>
-      <div className={CARD} data-testid="modalities-card">
-        <div className="flex items-start gap-2.5"><span className={ICON}><Settings2 className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100">Modalidade<span className="field-info" data-help="Como o cliente pode contratar: Avulso (compra única, sem renovação) e/ou Assinatura mensal (renova todo mês). Pode marcar as duas; pelo menos uma precisa estar marcada." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Escolha como o cliente pode contratar</span></span></div>
-        <div className="grid gap-2">
+      </ProductFlowField><div className={CARD} data-testid="modalities-card">
+        <div className="flex min-w-0 flex-1 basis-[13rem] items-start gap-2.5"><span className={ICON}><Settings2 className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100">Modalidade<span className="field-info" data-help="Como o cliente pode contratar: Avulso (compra única, sem renovação) e/ou Assinatura mensal (renova todo mês). Pode marcar as duas; pelo menos uma precisa estar marcada." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Escolha como o cliente pode contratar</span></span></div>
+        <div className="grid w-full min-w-0 gap-2 sm:w-auto sm:flex-[2] sm:grid-cols-2">
           {modes.map((mode) => (
             <label key={mode.key} className={`relative flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border-2 px-3 py-2 transition ${f[mode.key] ? "border-violet-500 bg-violet-50/70 dark:border-violet-600 dark:bg-violet-950/30" : "border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900"} ${readOnly ? "cursor-default opacity-80" : ""}`}>
               <input type="checkbox" disabled={readOnly} checked={!!f[mode.key]} onChange={(e) => { set({ [mode.key]: e.target.checked }); if (mode.key === "accepts_recurring" && e.target.checked && !deliveryMonthly) setAskRecurrence(true); if (mode.key === "accepts_recurring" && !e.target.checked) setAskRecurrence(false); }} className="sr-only" />
@@ -2257,13 +2410,13 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
             </label>
           ))}
         </div>
-        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-violet-200 px-2.5 py-2 text-xs dark:border-violet-800">
+        <label className="flex w-full cursor-pointer items-start gap-2 rounded-lg border border-violet-200 px-2.5 py-2 text-xs dark:border-violet-800">
           <input aria-label="Permitir múltiplas contratações" type="checkbox" className="mt-0.5 accent-violet-600" disabled={readOnly} checked={f.accepts_multiple_contracts} onChange={(e) => set({ accepts_multiple_contracts: e.target.checked })} />
           <span><strong>Permitir múltiplas contratações</strong><span className="field-info" data-help={helpFor("Permitir múltiplas contratações") ?? undefined} aria-hidden="true">i</span><span className="mt-0.5 block text-slate-500">Mais de uma unidade ou contratação vigente do mesmo produto no mesmo projeto.</span></span>
         </label>
-        <QuantityRulesFields value={f.quantity_rules} disabled={readOnly} onChange={(quantity_rules) => set({ quantity_rules })} />
+        <ProductFlowField slot="pricing"><div className="w-full min-w-0"><QuantityRulesFields value={f.quantity_rules} disabled={readOnly} onChange={(quantity_rules) => set({ quantity_rules })} /></div></ProductFlowField>
         {f.accepts_recurring && !deliveryMonthly && (askRecurrence || !readOnly) && (
-          <div className="rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100" data-testid="recurrence-prompt" role="group" aria-label="Este produto gera uma nova entrega todo mês?">
+          <div className="w-full rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100" data-testid="recurrence-prompt" role="group" aria-label="Este produto gera uma nova entrega todo mês?">
             <p className="font-semibold">Este produto gera uma nova entrega todo mês?</p>
             <p className="mt-0.5 leading-snug"><strong>Cobrança mensal</strong> é como o cliente paga (todo mês). <strong>Nova entrega mensal</strong> é abrir, a cada mês pago, um novo ciclo de tarefas. Para serviço recorrente (ex.: gestão mensal), o normal é <em>sim</em>. Sem isso a assinatura não pode ser publicada.</p>
             {recurrenceErr && <p role="alert" className="mt-1 font-semibold text-red-700">{recurrenceErr}</p>}
@@ -2273,9 +2426,9 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
             </div>}
           </div>
         )}
-        {!readOnly && <p className={`flex items-center justify-end gap-1.5 text-xs ${JSON.stringify(f) === sig ? "text-slate-500" : "text-amber-700"}`}>{JSON.stringify(f) === sig ? <><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />Alterações salvas</> : "Alteração pendente — vale ao clicar em “Salvar rascunho”."}</p>}
+        {!readOnly && <p className={`flex w-full items-center justify-end gap-1.5 text-xs ${JSON.stringify(f) === sig ? "text-slate-500" : "text-amber-700"}`}>{JSON.stringify(f) === sig ? <><CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />Alterações salvas</> : "Alteração pendente — vale ao clicar em “Salvar rascunho”."}</p>}
       </div>
-      {f.accepts_recurring && product?.id && <div className="md:col-span-3" data-testid="periods-row"><ProductPeriodsInline productId={product.id} versionId={version?.id} readOnly={readOnly} /></div>}
+      <ProductFlowField slot="pricing">{f.accepts_recurring && product?.id && <div className="min-w-0 w-full" data-testid="periods-row"><ProductPeriodsInline productId={product.id} versionId={version?.id} readOnly={readOnly} /></div>}</ProductFlowField>
     </div>;
   }
   // O cartão de modalidades só existe na versão compacta do Passo 2 (Avulso e Assinatura mensal). Os controles antigos de
@@ -2288,7 +2441,7 @@ export function ContractModesSection({ version, readOnly, act, compact = false, 
 export const taskNumberLabel = (n: number | null | undefined) => (n == null ? "—" : String(n).padStart(2, "0"));
 
 export function DeliveryCommercialOverview({ version, readOnly, act, ringOf, locked, product, onGoToRecurrence, number }: any) {
-  const [open, setOpen] = usePersistedFlag(`commercial-overview:${product?.id ?? version?.id ?? "x"}`, false); // F5 reabre a janela se ela estava aberta
+  const [open, setOpen] = useFramedEditorOpen(`commercial-overview:${version.id}`);
   const [guideOpen, setGuideOpen] = useState(false);
   useEffect(() => {
     const on = (e: Event) => {
@@ -2330,14 +2483,14 @@ export function DeliveryCommercialOverview({ version, readOnly, act, ringOf, loc
       <button type="button" onClick={() => setOpen(true)} className="inline-flex h-8 shrink-0 items-center gap-1 self-center rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="commercial-overview-open"><Eye className="h-3.5 w-3.5" />Ver</button>
       {SHOW_HELPER_BUTTON && <button type="button" onClick={() => setGuideOpen(true)} title="Abrir ajudante de cadastro" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-2.5 text-xs font-semibold text-violet-700 transition hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-200"><Lightbulb className="h-3.5 w-3.5" />Ajudante</button>}
     </div>
-    {open && <FramedModal open onOpenChange={setOpen} testId="commercial-overview-modal" title="Entrega comercial">
+    {open && <FramedPanel open onOpenChange={setOpen} testId="commercial-overview-modal" title="Entrega comercial">
       <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
         <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">Entrega comercial</p><p className="truncate text-xs text-slate-500">Prazo, preço, modalidades de contratação e prontidão da entrega.</p></div>
         <div className="flex items-center gap-2">{readOnly && <Button size="sm" onClick={() => window.dispatchEvent(new Event("catalog2:start-editing"))} data-testid="commercial-overview-edit"><Pencil className="mr-1 h-3.5 w-3.5" />Editar</Button>}{!readOnly && <Button size="sm" style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="text-white shadow-md hover:brightness-110" data-testid="commercial-overview-save" title="Salva tudo o que você configurou nesta janela (modalidades, prazo, preço) no rascunho" onClick={() => window.dispatchEvent(new Event("catalog2:save-draft"))}><Save className="mr-1 h-3.5 w-3.5" />Salvar rascunho</Button>}<Button size="sm" variant="outline" className="border-violet-200 bg-white text-violet-700 hover:bg-violet-50" data-testid="commercial-overview-close" onClick={() => { window.dispatchEvent(new Event("catalog2:flush-pending")); setOpen(false); }}>Fechar</Button></div>
       </div>
       <div className="mt-2 min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">
       <CommercialConsistencyBanner version={version} readOnly={readOnly} act={act} />
-      <div className="grid items-start gap-4 md:grid-cols-3"><DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={locked} compact /><ContractModesSection version={version} readOnly={readOnly} act={act} compact product={product} onGoToRecurrence={onGoToRecurrence} /></div>
+      <div className="flex min-w-0 flex-col gap-1" data-testid="commercial-fields-stack"><DeadlineBaseField version={version} act={act} ringOf={ringOf} locked={locked} compact /><ContractModesSection version={version} readOnly={readOnly} act={act} compact product={product} onGoToRecurrence={onGoToRecurrence} /></div>
       <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-900/40" data-testid="charge-summary-card"><p className="mb-2 flex items-center gap-1 text-sm font-bold text-slate-900 dark:text-slate-100" data-no-info="">Cobrança estimada<span className="field-info" data-help="Implantação/primeira execução (etapas “Só na primeira execução”), ciclo recorrente, primeira cobrança, renovação mensal e compra avulsa — calculados pelo servidor com as opções padrão. A implantação nasce sozinha das etapas marcadas; não há botão de “Implementação inicial”." aria-hidden="true">i</span></p><ChargeSummaryLoader version={version} refreshKey={String(version.updated_at ?? "")} /></section>
       <section id="delivery-readiness" className="grid gap-3 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-900/50 dark:bg-emerald-950/20 lg:grid-cols-[auto_minmax(9rem,1fr)_repeat(3,minmax(0,1fr))] lg:items-center">
         <div className="flex items-center gap-2"><span className="flex h-12 w-12 items-center justify-center rounded-full border-[5px] border-emerald-500 bg-white text-sm font-extrabold text-slate-900 dark:bg-slate-900 dark:text-slate-100">{percent}%</span><span><span className="block text-sm font-bold text-slate-900 dark:text-slate-100">Prontidão da entrega</span><span className="block text-[10px] text-slate-500" data-testid="readiness-subtitle">Verifica se a estrutura para <strong>executar</strong> o produto está configurada.</span></span></div>
@@ -2355,7 +2508,7 @@ export function DeliveryCommercialOverview({ version, readOnly, act, ringOf, loc
         </details>
       </section>
       </div>
-    </FramedModal>}
+    </FramedPanel>}
     <DeliverySetupGuide open={guideOpen} onOpenChange={setGuideOpen} />
   </section>;
 }
@@ -2446,11 +2599,14 @@ function stepQualifierCost(step: any, task: any, refs: any): { human: number; qu
 }
 const brl2 = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-function taskStagesPrice(task: any, refs: any) {
+export function taskStagesPrice(task: any, refs: any) {
   const steps = task.steps ?? [];
   if (steps.length === 0) return null;
   let total = 0;
   for (const step of steps) {
+    // 31/10: etapa de Líder ou equipe interna não entra no custo (igual ao servidor e ao custo de cada etapa). Antes o resumo somava
+    // essa hora e mostrava mais que a composição cobrada (SEO: R$595 no resumo × R$510 cobrados = 1h de Líder a R$85).
+    if (step.executor_kind === "leader" || step.executor_kind === "internal") continue;
     const rate = (refs?.specialties ?? []).find((item: any) => item.id === (step.specialty_id ?? task.specialty?.id))?.max_hourly_rate;
     if ((step.estimated_minutes ?? 0) <= 0 || rate == null) return null;
     total += (step.estimated_minutes / 60) * Number(rate);
@@ -2477,10 +2633,23 @@ function taskStagesPriceAi(task: any, refs: any) {
   return total;
 }
 
-function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, highlightTaskIds, clearHighlight, editTaskId, onOpenPricing, taskStructure, leading, trailing }: any) {
-  // Numeração dos cartões: 1 Resumo da tarefa, 2 Entrega comercial, 3 Etapas, 4 Questionário, 5 Entregáveis, 6 Acessos (com mais tarefas, continua).
-  const nb = (i: number) => (i === 0 ? { r: 1, e: 3, q: 4, d: 5 } : { r: 4 * i + 2, e: 4 * i + 3, q: 4 * i + 4, d: 4 * i + 5 });
-  const [summaryOpen, setSummaryOpen] = useState<string | null>(null);
+export function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, highlightTaskIds = [], clearHighlight, editTaskId, onOpenPricing, taskStructure, leading, trailing }: any) {
+  const testLayout = useTestProductLayout();
+  // A página lista tarefas; os cartões do cadastro pertencem ao painel de cada tarefa.
+  const nb = (_i: number) => ({ r: 1, e: 2, q: 3, d: 4 });
+  const panelKey = editorSessionKey(`task-panel:${version.id}${testLayout ? ":test" : ""}`);
+  const [summaryOpen, setSummaryOpenState] = useState<string | null>(() => {
+    const saved = readEditorSession<string>(panelKey);
+    return version.tasks.some((t: any) => t.id === saved) ? saved : null;
+  });
+  const setSummaryOpen = useCallback((id: string | null) => {
+    setSummaryOpenState(id);
+    if (id) writeEditorSession(panelKey, id); else clearEditorSession(panelKey);
+  }, [panelKey]);
+  useEffect(() => {
+    const saved = readEditorSession<string>(panelKey);
+    setSummaryOpenState(version.tasks.some((t: any) => t.id === saved) ? saved : null);
+  }, [panelKey]); // a troca de versão nunca abre a tarefa de outra versão
   const ringOf = useContext(RingCtx);
   // Reunião 2026-10-05: produto individual = UMA tarefa principal (o resto são etapas); só combos/compostos têm várias.
   const single = taskStructure === "single";
@@ -2498,48 +2667,49 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
   const [guidedTaskId, setGuidedTaskId] = useState<string | null>(null);
   const tasks = version.tasks;
   const [advancedTask, setAdvancedTask] = useState<string | null>(null);
-  // Acordeão: cada tarefa pode ser recolhida; abre sozinha quando a prontidão aponta para ela.
-  const [closed, setClosed] = useState<Set<string>>(() => new Set(tasks.map((task: any) => task.id)));
-  const toggleTask = (id: string) => setClosed((cur) => {
-    if (!cur.has(id)) return new Set([...tasks.map((task: any) => task.id), id]);
-    const next = new Set(tasks.map((task: any) => task.id)); next.delete(id); return next;
-  });
   const toggleAdvancedTask = (id: string) => {
-    // No segundo clique fecha de verdade. Ao abrir, revela a tarefa para que
-    // o painel não fique ativo, porém invisível, dentro do acordeão fechado.
-    if (advancedTask === id) {
-      setAdvancedTask(null);
-      return;
-    }
-    setClosed((cur) => {
-      const next = new Set(cur);
-      next.delete(id);
-      return next;
-    });
-    setAdvancedTask(id);
+    setAdvancedTask((current) => current === id ? null : id);
   };
   useEffect(() => {
-    const collapse = () => setClosed(new Set(tasks.map((task: any) => task.id)));
-    const expand = () => setClosed(new Set());
-    window.addEventListener("catalog2:collapse-tasks", collapse);
-    window.addEventListener("catalog2:expand-tasks", expand);
-    return () => { window.removeEventListener("catalog2:collapse-tasks", collapse); window.removeEventListener("catalog2:expand-tasks", expand); };
-  }, [tasks]);
+    const onStep = (e: Event) => {
+      const { stepId, block } = (e as CustomEvent).detail ?? {};
+      const task = tasks.find((t: any) => t.steps?.some((s: any) => s.id === stepId));
+      if (!task || summaryOpen === task.id) return;
+      pendingOpenStep.id = stepId; pendingOpenStep.block = block;
+      setSummaryOpen(task.id);
+    };
+    const onReveal = (e: Event) => {
+      const ids: string[] = (e as CustomEvent).detail?.ids ?? [];
+      const task = tasks.find((t: any) => ids.some(id => id === `catalog2-task-${t.id}` || id.endsWith(`:${t.id}`)))
+        ?? (ids.includes("catalog2-task-effort") || (testLayout && ids.some(id => /sec-var|sec-add|sec-conditions|catalog2-variation|catalog2-addon/.test(id))) ? tasks[0] : null);
+      if (task) setSummaryOpen(task.id);
+      if (task && testLayout) window.setTimeout(() => window.dispatchEvent(new CustomEvent("catalog2:task-pane-reveal", { detail: { ids } })), 0);
+    };
+    const close = () => setSummaryOpen(null);
+    window.addEventListener(OPEN_STEP_EVENT, onStep);
+    window.addEventListener(REVEAL_EVENT, onReveal);
+    window.addEventListener(CLOSE_STEPS_PANELS_EVENT, close);
+    return () => { window.removeEventListener(OPEN_STEP_EVENT, onStep); window.removeEventListener(REVEAL_EVENT, onReveal); window.removeEventListener(CLOSE_STEPS_PANELS_EVENT, close); };
+  }, [tasks, summaryOpen, setSummaryOpen, testLayout]);
   useEffect(() => {
     if (!editTaskId || !tasks.some((task: any) => task.id === editTaskId)) return;
-    setClosed((cur) => { const next = new Set(cur); next.delete(editTaskId); return next; });
+    setSummaryOpen(editTaskId);
     setAdvancedTask(editTaskId);
-  }, [editTaskId, tasks]);
+  }, [editTaskId, setSummaryOpen]);
+  useEffect(() => {
+    const id = highlightTaskIds.find((id: string) => tasks.some((t: any) => t.id === id));
+    if (id) setSummaryOpen(id);
+  }, [highlightTaskIds, setSummaryOpen]);
   return (
-    <div id="catalog2-tasks" className="grid scroll-mt-6 items-stretch gap-3 md:grid-cols-2 [&>*]:h-full">
-      {tasks.length === 0 && leading?.(1)}
+    <div id="catalog2-tasks" className="grid min-w-0 scroll-mt-6 gap-2">
+      {leading?.(1)}
       {tasks.map((t: any, i: number) => (
-        <Fragment key={t.id}>
+        <FramedEditorScope key={t.id} task={{ id: t.id, number: t.model?.number ?? t.task_model_id, name: t.name }} step={null}>
 
         <div id={`catalog2-task-${t.id}`} className="scroll-mt-8 rounded-xl border border-violet-200 border-l-4 border-l-violet-500 bg-white p-2 shadow-sm dark:border-violet-900/60 dark:border-l-violet-500 dark:bg-slate-900/60" data-testid="task-summary-row">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="section-number-badge flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-xs font-bold text-white" data-testid="section-number">{nb(i).r}</span>
-            <div className="min-w-0"><p className="text-[10px] font-bold uppercase leading-none tracking-wide text-violet-700 dark:text-violet-300" data-testid="task-summary-label">Resumo da tarefa</p><span className="text-sm font-semibold text-slate-900 dark:text-slate-50">{t.name}</span></div>
+            <span className="section-number-badge flex h-7 min-w-7 shrink-0 items-center justify-center rounded-full px-1 text-xs font-bold text-white" data-testid="section-number">{i + 1}</span>
+            <div className="min-w-0 flex-1"><p className="text-[10px] font-bold uppercase leading-none tracking-wide text-violet-700 dark:text-violet-300" data-testid="task-summary-label">Tarefa {i + 1}</p><button type="button" onClick={() => setSummaryOpen(t.id)} className="block max-w-full truncate text-left text-sm font-semibold text-slate-900 hover:text-violet-700 dark:text-slate-50" aria-label={`Ver tarefa ${i + 1}: ${t.name}`}>{t.name}</button><p className="text-[11px] text-slate-500">{t.steps.length} etapa(s) · {formatStageHours((t.steps ?? []).reduce((sum: number, step: any) => sum + (step.estimated_minutes ?? 0), 0))}</p></div>
             {t.task_model_id != null && <button type="button" title="Ver o modelo global desta tarefa" onClick={() => setViewModel(t.task_model_id)} className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700 hover:bg-violet-200 dark:bg-violet-900/40 dark:text-violet-200" data-testid="task-number">Tarefa ID {taskNumberLabel(t.model?.number ?? t.task_model_id)}</button>}
             <ModelStatusChips model={t.model} readOnly={readOnly} onSync={() => act(() => apiClient.syncCatalog2TaskModel(t.id), "Tarefa atualizada para a revisão atual do modelo global.")} />
             <span className="ml-auto flex items-center gap-1">
@@ -2552,26 +2722,35 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
                 <ClearTaskButton task={t} act={act} />
               </div>
               )}
-              <button type="button" onClick={() => setSummaryOpen(t.id)} className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="task-summary-open"><Eye className="h-3.5 w-3.5" />Ver</button>
+              <button type="button" onClick={() => setSummaryOpen(t.id)} className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200" data-testid="task-summary-open"><Eye className="h-3.5 w-3.5" />Ver tarefa</button>
             </span>
           </div>
+        </div>
           {summaryOpen === t.id && (
-            <FramedModal open onOpenChange={(o) => { if (!o) setSummaryOpen(null); }} testId="task-summary-modal" title={`Resumo da tarefa — ${t.name}`}>
-              <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
-                <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">Resumo da tarefa · {t.name}</p><p className="truncate text-xs text-slate-500">Tudo vem das etapas cadastradas: quem executa, especialidades, horas, prazo e custo.</p></div>
-                <div className="flex items-center gap-2">{readOnly && <Button size="sm" onClick={() => window.dispatchEvent(new Event("catalog2:start-editing"))} data-testid="task-summary-edit"><Pencil className="mr-1 h-3.5 w-3.5" />Editar</Button>}<Button size="sm" variant="outline" onClick={() => setSummaryOpen(null)}>Fechar</Button></div>
+            <TaskEditorSurface onClose={() => setSummaryOpen(null)} title={`Tarefa ${i + 1} — ${t.name}`}>
+              <div className={`flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
+                <div className="min-w-0 flex-1"><p className="break-words text-sm font-bold text-slate-900 dark:text-slate-100">Tarefa {i + 1} · {t.name}</p><p className="text-[11px] text-slate-500">Resumo, etapas, questionário e entregáveis.</p></div>
+                <div className="flex items-center gap-2">{readOnly && version.state === "rascunho" && <Button size="sm" onClick={() => window.dispatchEvent(new Event("catalog2:start-editing"))} data-testid="task-summary-edit"><Pencil className="mr-1 h-3.5 w-3.5" />Editar</Button>}<button type="button" aria-label="Fechar tarefa" onClick={() => setSummaryOpen(null)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-violet-50 hover:text-violet-700"><X className="h-4 w-4" /></button></div>
               </div>
-          <div className="mt-2 min-h-0 flex-1 space-y-2 overflow-y-auto rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900">
-          <div className="mt-2">
-          <TaskSummaryCard task={t} specialties={refs?.specialties ?? []} metrics={[
-            { label: "Etapas", value: `${t.steps.length} etapa${t.steps.length === 1 ? "" : "s"}${t.stage_execution === "stage" ? " · execução por etapa" : ""}`, help: t.stage_execution === "stage" ? "Cada etapa é qualificada e aprovada antes de liberar a próxima." : "Qualificação e aprovação acontecem no fim da tarefa." },
+          <div className={testLayout ? "mt-1.5 min-w-0 space-y-2 p-1" : "mt-1.5 min-h-0 flex-1 space-y-2 overflow-y-auto p-1"} data-testid="task-panel-content"
+            ref={(node) => { const y = readEditorSession<number>(`${panelKey}:scroll:${t.id}`); if (node && typeof y === "number" && y >= 0) node.scrollTop = y; }}
+            onScroll={(e) => writeEditorSession(`${panelKey}:scroll:${t.id}`, e.currentTarget.scrollTop)}>
+          <section aria-label="Resumo da tarefa" data-testid="task-readonly-summary" className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900">
+          <div className="mb-1 flex flex-wrap items-center gap-x-2"><h3 className="text-xs font-semibold">Resumo da tarefa</h3><span className="text-[11px] text-slate-500">Calculado pelas etapas · somente leitura</span></div>
+          <TaskSummaryCard compact task={t} specialties={refs?.specialties ?? []} metrics={[
+            { label: "Etapas", value: `${t.steps.length} etapa${t.steps.length === 1 ? "" : "s"}`, help: t.stage_execution === "stage" ? "Cada etapa é qualificada e aprovada antes de liberar a próxima." : "Qualificação e aprovação acontecem no fim da tarefa." },
             { label: "Horas das etapas", value: formatStageHours((t.steps ?? []).reduce((sum: number, step: any) => sum + (step.estimated_minutes ?? 0), 0)), help: "Soma do tempo estimado de todas as etapas." },
-            { label: "Prazo pelas etapas", value: flowSummary(t.steps ?? []).criticalMinutes > 0 ? `${fmtBusinessMinutes(flowSummary(t.steps).criticalMinutes)} úteis (≈ ${businessDaysOf(flowSummary(t.steps).criticalMinutes, wc.business_hours_per_day).toLocaleString("pt-BR")} dia(s))` : "a definir", help: "Prazo calculado pelas etapas, em horas úteis do calendário da plataforma. Etapas em paralelo contam só a mais longa." },
+            { label: "Prazo pelas etapas", value: flowSummary(t.steps ?? []).criticalMinutes > 0 ? `${fmtBusinessMinutes(flowSummary(t.steps).criticalMinutes)} úteis` : "a definir", help: `Prazo calculado pelas etapas, em horas úteis do calendário da plataforma. Etapas em paralelo contam só a mais longa. Equivale a aproximadamente ${businessDaysOf(flowSummary(t.steps ?? []).criticalMinutes, wc.business_hours_per_day).toLocaleString("pt-BR")} dia(s) úteis.` },
             (t.steps ?? []).some((s: any) => s.execution_mode === "hibrido")
               ? { label: "Custo total estimado", value: `Humano ${taskStagesPrice(t, refs) == null ? "a definir" : brl2(taskStagesPrice(t, refs)!)} · IA ${taskStagesPriceAi(t, refs) == null ? "a definir" : brl2(taskStagesPriceAi(t, refs)!)}`, help: "Há etapa “Humano ou IA”: o total aparece com as duas opções (as etapas híbridas feitas por humano ou por IA). O cliente escolhe na contratação. Horas × valor/hora, sem taxas e margem." }
-              : { label: "Custo total estimado", value: taskStagesPrice(t, refs) == null ? "a definir" : brl2(taskStagesPrice(t, refs)!), help: "Soma do custo estimado de todas as etapas (horas × valor/hora, sem taxas e margem)." },
-          ]}>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
+              : { label: "Custo total estimado", value: taskStagesPrice(t, refs) == null ? "a definir" : brl2(taskStagesPrice(t, refs)!), help: "Soma do custo estimado das etapas (horas × valor/hora, sem taxas e margem). Etapas de Líder ou da equipe interna não entram no custo: as horas delas valem só como prazo." },
+          ]} />
+          </section>
+          <TaskEditorPane name="dados">
+                {guidedTaskId === t.id && <TaskSetupGuide task={t} onClose={() => setGuidedTaskId(null)} />}
+                {!readOnly && <RestoreTaskPanel task={t} act={act} />}
+                <ContinuityCard compact task={t} readOnly={readOnly} act={act} />
+            <div className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
               <TaskIndicators task={t} />
               {!readOnly && ["ia", "hibrido"].includes(t.execution_mode) && (
                 <button type="button" aria-expanded={advancedTask === t.id} onClick={() => toggleAdvancedTask(t.id)} className="inline-flex h-7 items-center gap-1 rounded-lg border border-violet-300 bg-white px-2 text-[11px] font-semibold text-violet-700 hover:bg-violet-50">
@@ -2579,48 +2758,49 @@ function TasksTab({ version, productId, readOnly, refs, act, highlightTarget, hi
                 </button>
               )}
             </div>
-          </TaskSummaryCard>
-          </div>
-                {guidedTaskId === t.id && <TaskSetupGuide task={t} onClose={() => setGuidedTaskId(null)} />}
-                {!readOnly && <RestoreTaskPanel task={t} act={act} />}
-                <ContinuityCard task={t} readOnly={readOnly} act={act} />
                 {!readOnly && advancedTask === t.id && ["ia", "hibrido"].includes(t.execution_mode) && <section className="mt-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2.5 py-2 text-xs dark:border-slate-800 dark:bg-slate-800/30"><AiConfig task={t} act={act} onOpenPricing={() => void onOpenPricing?.(t.id)} /></section>}
-              </div>
-            </FramedModal>
-          )}
-        </div>
-        {i === 0 && leading?.(2)}
-        {/* Etapas, entregáveis e fluxo: cada um no SEU cartão, abaixo do cartão da tarefa (pedido 20/10). */}
-        <StepsPanelCard task={t} number={nb(i).e} help="Tudo o que você cadastra nas etapas abaixo (quem executa, especialidade, horas, prazo e custo) é somado automaticamente no resumo, em cima. O resumo é atualizado sozinho." readOnly={readOnly} act={act} hoursPerDay={wc.business_hours_per_day} forceOpen={highlightTaskIds.includes(t.id)}>
+          </TaskEditorPane>
+          <TaskEditorPane name="etapas">
+        {/* As etapas já aparecem dentro da tarefa; não exigem outro painel para encontrar o cadastro. */}
+        <StepsPanelCard inline compact task={t} number={nb(i).e} help="Tudo o que você cadastra nas etapas abaixo (quem executa, especialidade, horas, prazo e custo) é somado automaticamente no resumo, em cima. O resumo é atualizado sozinho." readOnly={readOnly} act={act} hoursPerDay={wc.business_hours_per_day}>
           {(() => {
             const together = flowSummary(t.steps ?? []).waves.filter((w) => w.length > 1);
             if (together.length === 0) return null;
             const numberOf = (k: string) => (t.steps ?? []).findIndex((s: any) => s.key === k) + 1;
             return <p className="ml-2 mt-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300" data-testid="parallel-legend">⇄ Ao mesmo tempo: {together.map((w) => `etapas ${w.map(numberOf).sort((a, b) => a - b).join(" + ")}`).join(" · ")}</p>;
           })()}
-          <ul className="mt-2 ml-2 space-y-2.5 border-l-2 border-sky-200 pl-5 dark:border-sky-900/60">
+          <ul className="mt-1.5 ml-1.5 space-y-1.5 border-l-2 border-violet-200 pl-3 dark:border-violet-900/60">
             {t.steps.map((st: any, si: number) => {
               const wave = flowSummary(t.steps ?? []).waves.find((w) => w.length > 1 && w.includes(st.key));
               const parallelWith = wave ? wave.filter((k) => k !== st.key).map((k) => (t.steps ?? []).findIndex((s: any) => s.key === k) + 1).sort((a, b) => a - b) : [];
-              return <StepRow key={st.id} version={version} step={st} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} parallelWith={parallelWith} />;
+              return <FramedEditorScope key={st.id} step={{ id: st.id, number: st.step_model_id, name: st.name }}><StepRow compact version={version} step={st} index={si} steps={t.steps} taskId={t.id} readOnly={readOnly} act={act} refs={refs} task={t} parallelWith={parallelWith} /></FramedEditorScope>;
             })}
             {!readOnly && <AddStepControl ringClass={ringOf("catalog2-step-add:" + t.id)} domId={"catalog2-step-add:" + t.id} refs={refs} task={t} act={act} />}
           </ul>
         </StepsPanelCard>
+        </TaskEditorPane>
+        <TaskEditorPane name="questionario">
         {/* O questionário vem DEPOIS da tarefa e das etapas: a IA monta as perguntas a partir delas. */}
         <div className="flex w-full min-w-0 flex-col" data-testid="task-cards-stack">
-          <PanelCard number={nb(i).q} allowEdit readOnly={readOnly} icon={ListChecks} title="Questionário de contratação" summary={t.questionnaire ? `${t.questionnaire.name} · ${t.questionnaire.questions.length} pergunta(s)` : "nenhum questionário"} help="Perguntas que o cliente responde ao contratar. As respostas orientam a equipe e a IA. Pode ser um questionário já existente (busque pelo nome ou pelo ID) ou um novo.">
-            <QuestionnaireSection task={t} refs={refs} act={act} version={version} readOnly={readOnly} />
+          <PanelCard number={nb(i).q} compact allowEdit readOnly={readOnly} icon={ListChecks} title="Questionário de contratação" summary={t.questionnaire ? `${t.questionnaire.name} · ${t.questionnaire.questions.length} pergunta(s)` : "nenhum questionário"} help="Perguntas que o cliente responde ao contratar. As respostas orientam a equipe e a IA. Pode ser um questionário já existente (busque pelo nome ou pelo ID) ou um novo.">
+            {testLayout ? <ProductFlowTarget slot={"questionnaire:" + t.id} /> : <QuestionnaireSection task={t} refs={refs} act={act} version={version} readOnly={readOnly} />}
           </PanelCard>
         </div>
-        <div data-testid="task-deliverables-after-steps"><PanelCard number={nb(i).d} icon={UploadCloud} title="Entregáveis da tarefa" summary={`${(t.deliverables ?? []).length} entregável(is)${(t.deliverables ?? []).some((d: any) => !d.step_id) ? " · há entregável sem etapa responsável" : ""}`} help="Vistos por etapa: cada entregável pertence a uma etapa (a etapa responsável). Para criar ou ligar um entregável, abra a etapa e use o bloco “Entregáveis desta etapa”; aqui você acompanha, filtra, edita e vê o que ficou sem etapa. É sempre o mesmo cadastro: o que muda em um lugar muda no outro." readOnly={readOnly}>
+        </TaskEditorPane>
+        <TaskEditorPane name="entregaveis">
+        <div data-testid="task-deliverables-after-steps"><PanelCard number={nb(i).d} icon={UploadCloud} title="Entregáveis da tarefa" compact summary={`${(t.deliverables ?? []).length} entregável(is)${(t.deliverables ?? []).some((d: any) => !d.step_id) ? " · há entregável sem etapa responsável" : ""}`} help="Vistos por etapa: cada entregável pertence a uma etapa (a etapa responsável). Para criar ou ligar um entregável, abra a etapa e use o bloco “Entregáveis desta etapa”; aqui você acompanha, filtra, edita e vê o que ficou sem etapa. É sempre o mesmo cadastro: o que muda em um lugar muda no outro." readOnly={readOnly}>
         <TaskDeliverablesEditor summaryOnly task={t} act={act} readOnly={readOnly} version={version} />
         </PanelCard></div>
-        </Fragment>
+        </TaskEditorPane>
+              </div>
+              <div className="flex shrink-0 items-center justify-end border-t border-slate-200 px-1 pt-2 dark:border-slate-800"><Button size="sm" variant="outline" onClick={() => setSummaryOpen(null)}>Voltar às tarefas</Button></div>
+            </TaskEditorSurface>
+          )}
+        </FramedEditorScope>
       ))}
-      {trailing?.(tasks.length === 0 ? 2 : 4 * tasks.length + 2)}
+      {trailing?.(tasks.length + 2)}
       {!readOnly && !(single && hasBaseTask) && (
-        <div id="catalog2-task-create" className={`space-y-2 md:col-span-2 rounded-xl border-2 border-dashed border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900/60 dark:bg-violet-950/10 ${ringOf("catalog2-task-create")}`}>
+        <div id="catalog2-task-create" className={`min-w-0 space-y-2 rounded-xl border-2 border-dashed border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900/60 dark:bg-violet-950/10 ${ringOf("catalog2-task-create")}`}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button type="button" style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="inline-flex h-9 items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white shadow-[0_6px_16px_rgba(110,44,150,0.3)] ring-1 ring-white/20 transition hover:brightness-110 active:scale-[0.98]"><span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/25"><Plus className="h-3 w-3" strokeWidth={3} /></span> {single ? "Cadastrar a tarefa principal" : "Adicionar tarefa"} <ChevronDown className="h-3.5 w-3.5 opacity-80" /></button>
@@ -2687,12 +2867,13 @@ function StepSetupGuide({ guide, onGo, onClose }: { guide: number; onGo: (step: 
   return <aside className="mx-4 mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3" data-testid="step-setup-guide"><div className="flex items-start justify-between gap-2"><div><p className="flex items-center gap-1.5 text-sm font-bold text-sky-950"><Lightbulb className="h-4 w-4 text-sky-700" />Ajudante da etapa</p><p className="mt-0.5 text-[11px] text-sky-700">Passo {current} de {steps.length} · o bloco indicado foi aberto para você.</p></div><button type="button" aria-label="Fechar ajudante da etapa" onClick={onClose} className="rounded-md p-1 text-sky-700 hover:bg-sky-100"><X className="h-4 w-4" /></button></div><div className="mt-2 flex gap-1" aria-hidden="true">{steps.map((_, index) => <span key={index} className={`h-1.5 flex-1 rounded-full ${index < current ? "bg-sky-500" : "bg-sky-200"}`} />)}</div><h3 className="mt-3 text-sm font-bold text-slate-900">{item.title}</h3><p className="mt-1 text-sm leading-relaxed text-slate-700">{item.text}</p><div className="mt-3 flex justify-between"><Button type="button" size="sm" variant="outline" disabled={current === 1} onClick={() => onGo(current - 1)}>Anterior</Button>{current === steps.length ? <Button type="button" size="sm" onClick={onClose}>Terminar ajuda</Button> : <Button type="button" size="sm" onClick={() => onGo(current + 1)}>Próximo campo<ChevronRight className="h-4 w-4" /></Button>}</div></aside>;
 }
 
-export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, version, parallelWith = [] }: any) {
-  const recoveryKey = editorSessionKey(`step:${version?.id ?? taskId}:${step.id}`);
+export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task, version, parallelWith = [], compact = false }: any) {
+  const testLayout = useTestProductLayout();
+  const layoutSuffix = testLayout ? ":test" : "";
+  const recoveryKey = editorSessionKey(`step:${version?.id ?? taskId}:${step.id}${layoutSuffix}`);
   const recovery = useRef(readEditorSession<any>(recoveryKey));
   // Reabre somente no rascunho editável; a recuperação local não grava no servidor.
   const [editing, setEditing] = useState(false);
-  const [rateOpen, setRateOpen] = useState(false);
   // Cada etapa é um acordeão: vem FECHADA (clicou abre, clicou fecha) e o lápis de editar fica sempre no cabeçalho.
   // Mover para cima/baixo sempre pergunta antes.
   // "Ver" abre a Janela Moldura com os detalhes da etapa (sem acordeão); não é lembrado entre aberturas.
@@ -2708,12 +2889,12 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
   // Rascunho da etapa (18/10): blocos em acordeão, erros sem perder nada, acessos em rascunho da tela, confirmação ao fechar.
   const narrow = useIsNarrow();
   // Os 5 blocos vêm FECHADOS ao clicar em Editar; o que o usuário abrir/fechar é lembrado nesta aba (sobrevive ao F5).
-  const blockFlag = (n: number) => `step-block:${step.id}:${n}`;
-  const blocks = useBlocks(BLOCK_IDS.filter((n) => readOpen(blockFlag(n), false)), narrow, (openNow) => { for (const n of BLOCK_IDS) writeOpen(blockFlag(n), openNow.includes(n)); }, recovery.current?.list === true);
+  const blockFlag = (n: number) => `step-block:${step.id}:${n}${layoutSuffix}`;
+  const blocks = useBlocks(BLOCK_IDS.filter((n) => readOpen(blockFlag(n), testLayout)), narrow, (openNow) => { for (const n of BLOCK_IDS) writeOpen(blockFlag(n), openNow.includes(n)); }, recovery.current?.list ?? testLayout);
   /** Bloco "atual" do passo-a-passo (Anterior / Próximo); 7 = resumo final. */
   const [guide, setGuide] = useState<number>(1);
   const [helperOpen, setHelperOpen] = useState(false);
-  const editFlag = `step-editing:${step.id}`;
+  const editFlag = `step-editing:${step.id}${layoutSuffix}`;
   const editRestored = useRef(false);
   const editPrev = useRef(false);
   const [showErrors, setShowErrors] = useState(false);
@@ -2785,7 +2966,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
   const openEditor = (restore = false) => {
     setRecoveredDraft(false);
     if (!restore) clearEditorSession(recoveryKey);
-    if (restore !== true) blocks.collapseAll();
+    if (restore !== true) { if (testLayout) blocks.expandAll(); else blocks.collapseAll(); }
     const items = itemsFromRequirements(stepReqs());
     const keys: string[] = Array.isArray(step.ops?.access_keys) ? step.ops.access_keys : [];
     const borrowed = ((version?.connection_requirements ?? []) as any[]).some((r) => !r.draft_incomplete && r.when_step_key && r.when_step_key !== step.key && r.shared_with_steps && keys.includes(r.key));
@@ -2836,7 +3017,9 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
   const delivNone = !!f.ops?.no_deliverables;
   const delivIss = delivIssues(delivItems, delivNone, step.id);
   const approvableNames = delivNone ? [] : activeDeliv(delivItems, step.id).filter((i) => i.fields.requires_approval).map((i) => i.fields.name.trim() || "(sem nome)");
-  const issues: StepIssue[] = stepIssues(f as any, { taskSpecialtyId: task?.specialty?.id ?? null, stageExecution: task?.stage_execution === "stage", acceptHoursApplies: step.executor_policy === "prefer_same_as_step", accessIssues: accIssues, deliverableIssues: delivIss, approvableDeliverables: approvableNames.length, approvalDeliverables: approvableNames.length });
+  const issues: StepIssue[] = stepIssues(f as any, { taskSpecialtyId: task?.specialty?.id ?? null, stageExecution: task?.stage_execution === "stage", acceptHoursApplies: step.executor_policy === "prefer_same_as_step", accessIssues: accIssues, deliverableIssues: delivIss, approvableDeliverables: approvableNames.length, approvalDeliverables: approvableNames.length, approvalDeliverableNames: approvableNames });
+  // Item 5: se os entregáveis desta etapa podem pedir aprovação individual (mesma regra do servidor) — vai para o bloco de entregáveis e o modal.
+  const delivApprovalBlock = deliverableApprovalBlock({ stageExecution: task?.stage_execution === "stage", internal: !!f.internal_step, mode: f.ops?.client_approval?.mode });
   const dirty = editing && (JSON.stringify(f) !== baseline.current.f || accessOn !== baseline.current.on || hasPending(accessItems) || hasDelivPending(delivItems));
   useEffect(() => {
     if (!dirty) return;
@@ -2953,13 +3136,17 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
     const delivAct = activeDeliv(delivItems, step.id);
     // Situação REAL de cada bloco (completo / incompleto com a quantidade de pendências / não se aplica), nunca escondida no selo geral.
     const infos = Object.fromEntries(BLOCK_IDS.map((n) => [n, blockInfo(n, issues, showErrors, n === 4 ? { hasContent: draftChecklistN > 0 || !!f.ops?.instructions || !!f.ops?.evidence_required } : n === 5 ? { applies: !delivNone || delivAct.length > 0, hasContent: delivAct.length > 0 } : n === 6 ? { applies: accessOn } : {})])) as Record<StepBlockId, BlockInfo>;
-    const bp = (n: StepBlockId) => ({ status: infos[n].status, count: infos[n].count, onGo: (t: StepBlockId) => blocks.reveal(t), inline: blocks.list, onSaveDraft: () => { setDraftNote(null); void commitStep("draft").catch(() => {}); }, savingDraft: saving === "draft", draftNote });
+    const bp = (n: StepBlockId) => ({ status: infos[n].status, count: infos[n].count, onGo: (t: StepBlockId) => blocks.reveal(t), inline: blocks.list, flat: testLayout, onSaveDraft: () => { setDraftNote(null); void commitStep("draft").catch(() => {}); }, savingDraft: saving === "draft", draftNote });
     const approvalMode = effectiveMode(f.ops, !!f.internal_step);
     const stageOn = task?.stage_execution === "stage";
     const approvalLine = !stageOn ? "Não se aplica: a tarefa não executa por etapa (a aprovação acontece no fim da tarefa)." : f.internal_step ? "Etapa interna: o cliente não vê nem aprova." : `${MODE_LABEL[approvalMode]}${approvalMode === "deliverables" ? ` (${approvableNames.length ? approvableNames.join(", ") : "nenhum entregável marcado"})` : ""}${approvalMode === "step" || approvalMode === "deliverables" ? ` · prazo do cliente: ${f.approval_hours.trim() ? `${f.approval_hours} h úteis` : "padrão da plataforma"}` : ""}`;
     const hasNext = index < (steps?.length ?? 0) - 1;
     const releaseLine = (stageOn && !f.internal_step && (approvalMode === "step" || approvalMode === "deliverables")) ? (hasNext ? "Liberada só depois da aprovação do cliente." : "Última etapa: a tarefa só encerra depois da aprovação do cliente.") : qualOn && stageOn ? (hasNext ? "Liberada depois da qualificação desta etapa." : "Última etapa da tarefa.") : (hasNext ? (stageOn ? "Liberada assim que esta etapa for concluída." : "Segue o fluxo da tarefa (qualificação e aprovação no fim da tarefa).") : "Última etapa da tarefa.");
-    const accessLine = !accessOn ? "Esta etapa não precisa de acesso." : activeItems(accessItems).length === 0 ? "Nenhum acesso configurado ainda." : activeItems(accessItems).map((a) => accessName(a)).join(" · ");
+    const accessSummaryParts = [
+      ...activeItems(accessItems).map((a) => accessName(a)),
+      ...(borrowedAccessCount > 0 ? [`${borrowedAccessCount} acesso(s) reutilizado(s) de outra etapa`] : []),
+    ];
+    const accessLine = !accessOn ? "Esta etapa não precisa de acesso." : accessSummaryParts.join(" · ") || "Nenhum acesso configurado ainda.";
     const goStep = (n: number) => {
       setGuide(n);
       if (n <= 6) blocks.reveal(n as StepBlockId);
@@ -2978,71 +3165,19 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
     const sum6 = !accessOn ?"Esta etapa não precisa de acesso" : `${configuredCount(accessItems)} acesso${configuredCount(accessItems) === 1 ? "" : "s"} configurado${configuredCount(accessItems) === 1 ? "" : "s"}${incompleteCount(accessItems) ? ` · ${incompleteCount(accessItems)} incompleto${incompleteCount(accessItems) === 1 ? "" : "s"}` : ""}`;
     // Formulário COMPACTO: campos baixos (h-8), espaçamentos curtos e cabeçalho fixo com o custo, para enxergar tudo ao configurar.
     const CTL = "h-9 w-full min-w-0 max-w-full truncate rounded-md border border-slate-300 bg-white px-2.5 text-sm dark:border-slate-600 dark:bg-slate-900";
-    editModal = (
-      <FramedPanel open onOpenChange={(o) => { if (!o) requestClose(); }} testId="step-edit-panel" title="Editar etapa">
-      <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="relative rounded-xl [&_label>span:first-child]:text-xs [&_label>span:first-child]:font-semibold [&_label>span:first-child]:text-slate-600" data-testid="step-edit-form" ref={modalRef}>
-        <fieldset disabled={readOnly} className="contents">
-        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-sky-500 px-2 text-sm font-bold text-white">{index + 1}</span>
-            <span className="min-w-0">
-              <span className="block text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">Editar etapa {index + 1}</span>
-              <span className="block truncate text-base font-bold leading-tight text-slate-900 dark:text-slate-100">{f.name || step.name}</span>
-            </span>
-          </div>
-          {f.execution_mode === "hibrido" ? (
-            // Humano ou IA: os DOIS custos aparecem sempre, lado a lado.
-            <span className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="step-header-costs">
-              <span className="rounded-md bg-sky-50 px-2 py-0.5 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200">Custo estimado com humano: <strong>{draftCost == null ? "a definir" : brl2(draftCost)}</strong></span>
-              <span className="rounded-md bg-violet-50 px-2 py-0.5 text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">Custo estimado com IA: <strong>{draftAiCost == null ? "a definir" : brl2(draftAiCost)}</strong></span>
-            </span>
-          ) : (
-            <span className="text-xs text-slate-500">{draftCost == null ? "Custo estimado desta etapa: a definir" : <>Custo estimado desta etapa: <strong className="text-slate-800 dark:text-slate-100">{brl2(draftCost)}</strong></>}</span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3" data-testid="step-modal-toolbar">
-          {recoveredDraft && <p role="status" className="w-full rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-900">Tela recuperada nesta aba. Confira o preenchimento; alterações locais ainda precisam ser salvas.</p>}
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {step.draft_incomplete && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800" data-testid="step-draft-badge">Rascunho incompleto</span>}
-            {/* Pendências REAIS de todos os blocos, consolidadas aqui (nunca escondidas): clicar leva ao primeiro campo que falta. */}
-            {issues.length > 0
-              ? <button type="button" onClick={() => goToIssue(firstIssue(issues))} className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-200" data-testid="step-pending-chip" title="Clique para ir ao primeiro campo que falta">{issues.length} {issues.length === 1 ? "pendência" : "pendências"} para concluir</button>
-              : <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800" data-testid="step-pending-chip">Rascunho pronto para concluir</span>}
-            {draftNote && <span role="status" className="text-[11px] font-semibold text-emerald-700" data-testid="step-draft-note">{draftNote}</span>}
-          </div>
-          <div className="flex items-center gap-1.5">
-            {SHOW_HELPER_BUTTON && <button type="button" onClick={() => setHelperOpen((value) => !value)} className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"><Lightbulb className="h-3.5 w-3.5" />Ajudante</button>}
-            <button type="button" onClick={() => goStep(7)} className="rounded-md border border-violet-200 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:text-violet-300">Conferir etapa</button>
-            <button type="button" onClick={() => { setGuide(1); blocks.expandAll(); }} title="Mostra todos os blocos um embaixo do outro, na própria página" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Expandir todos</button>
-            <button type="button" onClick={() => { setGuide(1); blocks.collapseAll(); }} title="Volta para os cartões; cada um abre numa janela" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Recolher todos</button>
-          </div>
-        </div>
-        {showErrors && issues.length > 0 && (
-          <div role="alert" className="mx-4 mt-3 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="step-error-summary">
-            <p className="font-bold">A etapa ainda não pode ser concluída ({issues.length} {issues.length === 1 ? "pendência" : "pendências"}). Nada do que você preencheu foi apagado.</p>
-            <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
-              {issues.map((it, i) => <li key={`${it.field}-${i}`}><button type="button" className="text-left underline decoration-dotted hover:text-rose-700" onClick={() => goToIssue(it)}>{it.message}</button></li>)}
-            </ul>
-            <p className="mt-1.5">Corrija e clique em “Concluir e salvar etapa”, ou use “Salvar rascunho da etapa” para guardar assim mesmo e continuar depois.</p>
-          </div>
-        )}
-        {formError && <p role="alert" className="mx-4 mt-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="step-save-error">Não foi possível salvar: {formError} Nada do que você preencheu foi apagado.</p>}
-        {helperOpen && <StepSetupGuide guide={guide} onGo={goStep} onClose={() => setHelperOpen(false)} />}
-        {/* Uma coluna só, 100% da largura: os 5 blocos empilhados (acordeões), nunca lado a lado. */}
-        <div className="flex flex-col gap-3 p-4">
-          <div hidden={guide === 7} className="space-y-3" data-testid="step-edit-blocks">
-          {/* 1 · O que é esta etapa */}
-          <StepBlock n={1} title="O que é esta etapa" {...bp(1)} summary={sum1} open={blocks.open.has(1)} onToggle={() => blocks.toggle(1)}>
+    // The same six forms, in dependency order only in the experimental flow.
+    const blockForms: Record<StepBlockId, React.ReactNode> = {
+      1: (
+          <StepBlock key={1} n={1} title="O que é esta etapa" {...bp(1)} summary={sum1} open={blocks.open.has(1)} onToggle={() => blocks.toggle(1)}>
             {/* Nome e descrição lado a lado: o nome é curto, a descrição ocupa o resto. */}
             <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,2.2fr)]">
               <Field field="name" error={err("name")} label="Nome da etapa"><input className={CTL} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
               <Field field="description" error={err("description")} label={<span className="inline-flex items-center gap-2">Descrição (o que acontece nesta etapa)<AiFieldButton compact label="Descrição (o que acontece nesta etapa)" value={f.description} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Critério de conclusão": f.completion_criteria } }} disabled={readOnly} fieldMaxChars={8000} onResult={(v) => setF({ ...f, description: v })} /></span>}><Textarea rows={1} maxLength={8000} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} className="min-h-[32px] py-1.5 text-[13px]" /></Field>
             </div>
           </StepBlock>
-          {/* 2 · Quem faz e quanto tempo leva */}
-          <StepBlock n={2} title="Quem faz e quanto tempo leva" {...bp(2)} summary={sum2} open={blocks.open.has(2)} onToggle={() => blocks.toggle(2)}>
+      ),
+      2: (
+          <StepBlock key={2} n={2} title="Quem faz e quanto tempo leva" {...bp(2)} summary={sum2} open={blocks.open.has(2)} onToggle={() => blocks.toggle(2)}>
             {/* Primeiro: quem recebe a etapa. Líder / equipe interna → sem especialidade e sem custo no produto. */}
             <div className="grid grid-cols-1 gap-x-2 gap-y-1.5 sm:grid-cols-2" data-testid="step-receiver">
               <Field label="Quem recebe a etapa">
@@ -3103,24 +3238,19 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
               if (!sp || f.execution_mode === "ia" || f.executor_kind === "leader" || f.executor_kind === "internal") return null;
               const money = (n: number) => `R$ ${Number(n).toFixed(2).replace(".", ",")}`;
               return (
+                // Valor/hora é REFERÊNCIA somente leitura (31/10): a tarifa é global da especialidade e só se altera na área de Precificação,
+                // com as permissões dela. Aqui só mostramos o valor usado no cálculo; o link abre a Precificação em outra aba (não perde o cadastro).
                 <p className="flex flex-wrap items-center gap-x-2 rounded-md bg-slate-50 px-2.5 py-1.5 text-[11px] text-slate-600 dark:bg-slate-800/40 dark:text-slate-300" data-testid="step-hourly-rate">
-                  <span>Valor da hora de <strong>{sp.name}</strong>: <strong>{sp.max_hourly_rate != null ? `${money(sp.max_hourly_rate)} por hora` : "ainda não definido"}</strong></span>
-                  {!readOnly && <button type="button" className="font-semibold text-violet-700 underline" onClick={() => setRateOpen(true)} data-testid="step-hourly-rate-edit">Editar valor/hora</button>}
-                  {rateOpen && (
-                    <FramedModal open onOpenChange={setRateOpen} testId="step-hourly-rate-modal" title="Valor/hora da especialidade">
-                      <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
-                        <div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">Valor/hora · {sp.name}</p><p className="text-xs text-slate-500">Vale para todos os produtos que usam esta especialidade.</p></div>
-                        <Button size="sm" variant="outline" className="border-violet-200 bg-white text-violet-700 hover:bg-violet-50" onClick={() => setRateOpen(false)}>Fechar</Button>
-                      </div>
-                      <div className="mt-2 rounded-2xl bg-white p-4 shadow-sm dark:bg-slate-900"><SpecialtyRateRow specialty={sp} act={act} onReloadRefs={() => { window.dispatchEvent(new Event("catalog2:reload-refs")); }} /></div>
-                    </FramedModal>
-                  )}
+                  <span>Valor de referência da hora de <strong>{sp.name}</strong>: <strong data-testid="step-hourly-rate-value">{sp.max_hourly_rate != null ? `${money(sp.max_hourly_rate)} por hora` : "ainda não definido"}</strong></span>
+                  <span className="text-slate-500">· padrão da especialidade, usado no cálculo; não muda por aqui.</span>
+                  {!readOnly && <a href="/admin/precificacao" target="_blank" rel="noopener noreferrer" className="font-semibold text-violet-700 underline" data-testid="step-hourly-rate-link" title="Abre a área de Precificação em outra aba. Alterar o valor/hora lá vale para todos os produtos que usam esta especialidade.">Ver na Precificação</a>}
                 </p>
               );
             })()}
           </StepBlock>
-          {/* 3 · Quando a etapa termina */}
-          <StepBlock n={3} title="Quando a etapa termina" {...bp(3)} summary={sum3} open={blocks.open.has(3)} onToggle={() => blocks.toggle(3)} help={"Aqui você define:\n• quando a etapa é considerada PRONTA (critério de conclusão);\n• se ela se repete nos meses seguintes, em produtos mensais;\n• e, em tarefas com execução por etapa, quem aprova e em quanto tempo."}>
+      ),
+      3: (
+          <StepBlock key={3} n={3} title="Quando a etapa termina" {...bp(3)} summary={sum3} open={blocks.open.has(3)} onToggle={() => blocks.toggle(3)} help={"Aqui você define:\n• quando a etapa é considerada PRONTA (critério de conclusão);\n• se ela se repete nos meses seguintes, em produtos mensais;\n• e, em tarefas com execução por etapa, quem aprova e em quanto tempo."}>
             <Field field="completion_criteria" error={err("completion_criteria")} label={<span className="inline-flex items-center gap-2">Critério de conclusão<AiFieldButton compact label="Critério de conclusão" value={f.completion_criteria} context={{ name: f.name, other_fields: { "Tarefa": String(task?.name ?? ""), "Descrição da etapa": f.description } }} disabled={readOnly} fieldMaxChars={4000} onResult={(v) => setF({ ...f, completion_criteria: v.replace(/\n/g, " ") })} /></span>}><input className={CTL} value={f.completion_criteria} onChange={(e) => setF({ ...f, completion_criteria: e.target.value })} placeholder="Quando esta etapa pode ser considerada concluída?" /></Field>
             <div className="grid gap-2 sm:grid-cols-2" data-testid="repeat-options">
               <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-800/40" title="Nunca se repete nos ciclos seguintes"><input type="checkbox" className="h-4 w-4" checked={f.first_execution_only} onChange={(e) => setF({ ...f, first_execution_only: e.target.checked })} /> <span data-no-info="">Só na primeira execução</span><span className="field-info" data-help={"Marque quando a etapa só precisa acontecer UMA vez, no primeiro mês do cliente (ex.: configurar a conta, liberar acessos). Nos meses seguintes ela não roda e não é cobrada de novo. As horas dela formam a “implantação”, cobrada só na primeira vez. Em produto avulso (um único ciclo) isso não muda nada."} aria-hidden="true">i</span></label>
@@ -3222,8 +3352,9 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
               approvable={approvableNames} hasNext={index < (steps?.length ?? 0) - 1} onReveal={() => blocks.reveal(3)} onClearDeliverableApprovals={() => setDelivItems((old) => { const active = new Set(activeDeliv(old, step.id).map((item) => item.uid)); return syncDelivStates(old.map((item) => active.has(item.uid) && item.fields.requires_approval ? { ...item, fields: { ...item.fields, requires_approval: false } } : item)); })} />
             <StepCyclesSection ops={f.ops} setOps={(p) => setOps(p)} readOnly={readOnly} />
           </StepBlock>
-          {/* 4 · Checklist, orientações e evidência */}
-          <StepBlock n={4} title="Checklist, orientações e evidência" {...bp(4)} summary={sum4} open={blocks.open.has(4)} onToggle={() => blocks.toggle(4)} help={"Três coisas diferentes:\n• Orientações: o passo a passo de COMO executar.\n• Checklist: a lista de itens que serão CONFERIDOS.\n• Evidência: a PROVA da entrega (arquivo ou link anexado)."}>
+      ),
+      4: (
+          <StepBlock key={4} n={4} title="Checklist, orientações e evidência" {...bp(4)} summary={sum4} open={blocks.open.has(4)} onToggle={() => blocks.toggle(4)} help={"Três coisas diferentes:\n• Orientações: o passo a passo de COMO executar.\n• Checklist: a lista de itens que serão CONFERIDOS.\n• Evidência: a PROVA da entrega (arquivo ou link anexado)."}>
             <div className="flex items-center justify-end gap-2">
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600" data-testid="step-checklist-count">{checklistCount(draftChecklist)} {checklistCount(draftChecklist) === 1 ? "item" : "itens"}</span>
@@ -3305,18 +3436,86 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
               </div>
             )}
           </StepBlock>
-          {/* 5 · Entregáveis desta etapa (a etapa é a fonte do vínculo; o resumo da tarefa só reflete) */}
-          <StepBlock n={5} title="Entregáveis desta etapa" {...bp(5)} summary={sum5} open={blocks.open.has(5)} onToggle={() => blocks.toggle(5)} help={"O que esta etapa precisa entregar. É o MESMO cadastro de entregáveis da tarefa (nada é copiado): o que você vincular, criar ou editar aqui aparece na seção Entregáveis da tarefa, e vice-versa. Só é gravado quando você salva a etapa."}>
-            <StepDeliverablesEditor sessionKey={`${recoveryKey}:deliverable`} task={task} step={{ id: step.id, name: f.name || step.name }} stepIndex={index + 1} readOnly={readOnly} items={delivItems} setItems={setDelivItems}
-              declaredNone={delivNone} setDeclaredNone={(v) => setOps({ no_deliverables: v ? true : undefined })} issues={delivIss} showErrors={showErrors} />
+      ),
+      5: (
+          <StepBlock key={5} n={5} title="Entregáveis desta etapa" {...bp(5)} summary={sum5} open={blocks.open.has(5)} onToggle={() => blocks.toggle(5)} help={"O que esta etapa precisa entregar. É o MESMO cadastro de entregáveis da tarefa (nada é copiado): o que você vincular, criar ou editar aqui aparece na seção Entregáveis da tarefa, e vice-versa. Só é gravado quando você salva a etapa."}>
+            <StepDeliverablesEditor inline={testLayout} sessionKey={`${recoveryKey}:deliverable`} task={task} step={{ id: step.id, name: f.name || step.name }} stepIndex={index + 1} readOnly={readOnly} items={delivItems} setItems={setDelivItems}
+              declaredNone={delivNone} setDeclaredNone={(v) => setOps({ no_deliverables: v ? true : undefined })} issues={delivIss} showErrors={showErrors}
+              approvalBlock={delivApprovalBlock} onUseDeliverableApproval={() => { setOps({ client_approval: { ...(f.ops?.client_approval ?? {}), mode: "deliverables" } }); }} />
           </StepBlock>
-          {/* 6 · Conexões e acessos (largura total) */}
-        <StepBlock n={6} title="Conexões e acessos desta etapa" {...bp(6)} summary={sum6} open={blocks.open.has(6)} onToggle={() => blocks.toggle(6)}>
-          <StepAccessesEditor version={version} readOnly={readOnly} quick={makeQuickCreate(version, act)} scope={{ task: { key: task.key, name: task.name }, step: { key: step.key, name: step.name } }}
+      ),
+      6: (
+        <StepBlock key={6} n={6} title="Conexões e acessos desta etapa" {...bp(6)} summary={sum6} open={blocks.open.has(6)} onToggle={() => blocks.toggle(6)}>
+          <StepAccessesEditor inline={testLayout} version={version} readOnly={readOnly} quick={makeQuickCreate(version, act)} scope={{ task: { key: task.key, name: task.name }, step: { key: step.key, name: step.name } }}
             items={accessItems} setItems={setAccessItems} accessOn={accessOn} setAccessOn={setAccessOn} ops={f.ops} setOps={(patch) => setOps(patch)}
             stepNames={Object.fromEntries((version?.tasks ?? []).flatMap((t: any) => (t.steps ?? []).map((st: any) => [st.key, st.name])))}
             issues={accIssues} showErrors={showErrors} />
         </StepBlock>
+      ),
+    };
+    editModal = (
+      <FramedPanel open onOpenChange={(o) => { if (!o) requestClose(); }} testId="step-edit-panel" title="Editar etapa">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div data-editor-layout={testLayout ? "test" : undefined} className="relative rounded-xl [&_label>span:first-child]:text-xs [&_label>span:first-child]:font-semibold [&_label>span:first-child]:text-slate-600" data-testid="step-edit-form" ref={modalRef}>
+        <fieldset disabled={readOnly} className="contents">
+        <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-8 min-w-8 items-center justify-center rounded-lg bg-sky-500 px-2 text-sm font-bold text-white">{index + 1}</span>
+            <span className="min-w-0">
+              <span className="block text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">Editar etapa {index + 1}</span>
+              <span className="block truncate text-base font-bold leading-tight text-slate-900 dark:text-slate-100">{f.name || step.name}</span>
+            </span>
+          </div>
+          {f.execution_mode === "hibrido" ? (
+            // Humano ou IA: os DOIS custos aparecem sempre, lado a lado.
+            <span className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="step-header-costs">
+              <span className="rounded-md bg-sky-50 px-2 py-0.5 text-sky-800 dark:bg-sky-950/40 dark:text-sky-200">Custo estimado com humano: <strong>{draftCost == null ? "a definir" : brl2(draftCost)}</strong></span>
+              <span className="rounded-md bg-violet-50 px-2 py-0.5 text-violet-800 dark:bg-violet-950/40 dark:text-violet-200">Custo estimado com IA: <strong>{draftAiCost == null ? "a definir" : brl2(draftAiCost)}</strong></span>
+            </span>
+          ) : (
+            <span className="text-xs text-slate-500">{draftCost == null ? "Custo estimado desta etapa: a definir" : <>Custo estimado desta etapa: <strong className="text-slate-800 dark:text-slate-100">{brl2(draftCost)}</strong></>}</span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3" data-testid="step-modal-toolbar">
+          {recoveredDraft && <p role="status" className="w-full rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-900">Tela recuperada nesta aba. Confira o preenchimento; alterações locais ainda precisam ser salvas.</p>}
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {step.draft_incomplete && <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800" data-testid="step-draft-badge">Rascunho incompleto</span>}
+            {/* Pendências REAIS de todos os blocos, consolidadas aqui (nunca escondidas): clicar leva ao primeiro campo que falta. */}
+            {issues.length > 0
+              ? <button type="button" onClick={() => goToIssue(firstIssue(issues))} className="rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-200" data-testid="step-pending-chip" title="Clique para ir ao primeiro campo que falta">{issues.length} {issues.length === 1 ? "pendência" : "pendências"} para concluir</button>
+              : <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800" data-testid="step-pending-chip">Rascunho pronto para concluir</span>}
+            {draftNote && <span role="status" className="text-[11px] font-semibold text-emerald-700" data-testid="step-draft-note">{draftNote}</span>}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {SHOW_HELPER_BUTTON && <button type="button" onClick={() => setHelperOpen((value) => !value)} className="inline-flex h-8 items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"><Lightbulb className="h-3.5 w-3.5" />Ajudante</button>}
+            <button type="button" onClick={() => goStep(7)} className="rounded-md border border-violet-200 px-2.5 py-1 text-xs font-semibold text-violet-700 dark:text-violet-300">Conferir etapa</button>
+            <button hidden={testLayout} type="button" onClick={() => { setGuide(1); blocks.expandAll(); }} title="Mostra todos os blocos um embaixo do outro, na própria página" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Expandir todos</button>
+            <button hidden={testLayout} type="button" onClick={() => { setGuide(1); blocks.collapseAll(); }} title="Volta para os cartões; cada um abre numa janela" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">Recolher todos</button>
+          </div>
+        </div>
+        {showErrors && issues.length > 0 && (
+          <div role="alert" className="mx-4 mt-3 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="step-error-summary">
+            <p className="font-bold">A etapa ainda não pode ser concluída ({issues.length} {issues.length === 1 ? "pendência" : "pendências"}). Nada do que você preencheu foi apagado.</p>
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+              {issues.map((it, i) => <li key={`${it.field}-${i}`}><button type="button" className="text-left underline decoration-dotted hover:text-rose-700" onClick={() => goToIssue(it)}>{it.message}</button></li>)}
+            </ul>
+            <p className="mt-1.5">Corrija e clique em “Concluir e salvar etapa”, ou use “Salvar rascunho da etapa” para guardar assim mesmo e continuar depois.</p>
+          </div>
+        )}
+        {formError && <p role="alert" className="mx-4 mt-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="step-save-error">Não foi possível salvar: {formError} Nada do que você preencheu foi apagado.</p>}
+        {helperOpen && <StepSetupGuide guide={guide} onGo={goStep} onClose={() => setHelperOpen(false)} />}
+        {/* Uma coluna só, 100% da largura: os 5 blocos empilhados (acordeões), nunca lado a lado. */}
+        <div className="flex flex-col gap-3 p-4">
+          <div hidden={guide === 7} className="space-y-3" data-testid="step-edit-blocks">
+          {/* 1 · O que é esta etapa */}
+          {(testLayout ? ([1, 2, 6, 5, 4, 3] as StepBlockId[]) : BLOCK_IDS).map(n => blockForms[n])}
+          {/* 2 · Quem faz e quanto tempo leva */}
+          {/* 3 · Quando a etapa termina */}
+          {/* 4 · Checklist, orientações e evidência */}
+          {/* 5 · Entregáveis desta etapa (a etapa é a fonte do vínculo; o resumo da tarefa só reflete) */}
+          {/* 6 · Conexões e acessos (largura total) */}
+          {testLayout && <ProductFlowWorkspace slot={"questionnaire:" + task.id} label="Criar ou revisar uma pergunta para esta etapa" />}
           {steps.length > 1 && <StepFlowControls step={step} steps={steps} index={index} taskId={taskId} act={act} />}
           <StepGovernance step={step} task={task} version={version} readOnly={readOnly} act={act} />
           </div>
@@ -3371,12 +3570,12 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
     );
   }
   return (
-    <li ref={liRef} data-testid={`step-card-${index + 1}`} className={`relative rounded-xl border bg-white px-3 py-2.5 text-[13px] shadow-sm before:absolute before:-left-[26px] before:top-[18px] before:h-3 before:w-3 before:rounded-full before:border-2 before:border-white before:bg-violet-500 dark:bg-slate-900/60 ${parallelWith.length > 0 ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900" : open ? "border-cyan-300 bg-sky-50/40 ring-1 ring-cyan-200 dark:border-cyan-800 dark:ring-cyan-900" : "border-slate-200 dark:border-slate-700"}`}>
-      <div className="flex items-start gap-3" data-testid="step-header">
-        <span className="section-number-badge mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" data-testid="step-number">{index + 1}</span>
+    <li ref={liRef} data-testid={`step-card-${index + 1}`} data-compact={compact || undefined} className={`relative rounded-lg border bg-white text-[13px] before:absolute before:top-[18px] before:rounded-full before:border-2 before:border-white before:bg-violet-500 dark:bg-slate-900/60 ${compact ? "px-2 py-1.5 before:-left-[18px] before:h-2 before:w-2 [&_[data-testid=step-deliverable-summary]]:text-[11px] [&_[data-testid=step-view-btn]]:h-7 [&_[data-testid=step-edit-btn]]:h-7" : "px-3 py-2.5 shadow-sm before:-left-[26px] before:h-3 before:w-3"} ${parallelWith.length > 0 ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-900" : open ? "border-cyan-300 bg-sky-50/40 ring-1 ring-cyan-200 dark:border-cyan-800 dark:ring-cyan-900" : "border-slate-200 dark:border-slate-700"}`}>
+      <div className={`flex items-start ${compact ? "gap-2" : "gap-3"}`} data-testid="step-header">
+        <span className={`section-number-badge mt-0.5 flex shrink-0 items-center justify-center rounded-full font-bold text-white ${compact ? "h-6 w-6 text-xs" : "h-8 w-8 text-sm"}`} data-testid="step-number">{index + 1}</span>
         <div className="min-w-0 flex-1 text-left" data-testid="step-toggle">
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-[15px] font-bold leading-tight text-slate-900 dark:text-slate-100">{step.name}</span>
+            <span className={`font-bold leading-tight text-slate-900 dark:text-slate-100 ${compact ? "text-[13px]" : "text-[15px]"}`}>{step.name}</span>
             {parallelWith.length > 0 && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200" data-testid="step-parallel-chip" title="Estas etapas acontecem ao mesmo tempo">⇄ Ao mesmo tempo que a etapa {parallelWith.join(", ")}</span>}
             {step.step_model_id != null && <button type="button" title="Ver o modelo global desta etapa" onClick={(e) => { e.stopPropagation(); setViewModel(true); }} className="rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-200 dark:bg-sky-900/40 dark:text-sky-200">Etapa #{step.step_model_id}</button>}
             <ModelStatusChips model={step.model} readOnly={readOnly} onSync={() => act(() => apiClient.syncCatalog2StepModel(step.id), "Etapa atualizada para a revisão atual do modelo global.")} />
@@ -4042,20 +4241,10 @@ export function DeadlineBaseField({ version, act, ringOf, locked, compact = fals
   const unitKey = `catalog2:deadline-unit:${version.id}`;
   const [unit, setUnitState] = useState<"min" | "h" | "d">(() => { try { const u = window.localStorage.getItem(unitKey); return u === "min" || u === "d" ? u : "h"; } catch { return "h"; } });
   const fromHours = (hrs: number | null, u: "min" | "h" | "d") => (hrs == null ? "" : u === "min" ? String(hrs * 60) : u === "d" ? String(Number((hrs / 24).toFixed(2))) : String(hrs));
-  const [v, setV] = useState<string>(() => fromHours(hoursOf(version), unit));
-  const unitRef = useRef(unit); unitRef.current = unit;
-  const vRef = useRef(v); vRef.current = v;
-  useEffect(() => {
-    // Depois de salvar, a versão volta do servidor em horas: só reescreve o campo se o que está digitado NÃO equivale a esse valor (ex.: outra pessoa mudou).
-    const serverH = hoursOf(version);
-    const n0 = Number(String(vRef.current).replace(",", "."));
-    const u = unitRef.current;
-    const typedH = vRef.current !== "" && Number.isFinite(n0) && n0 > 0 ? (u === "min" ? Math.ceil(n0 / 60) : u === "d" ? Math.ceil(n0 * 24) : n0) : null;
-    if (typedH !== null && typedH === serverH) return;
-    setV(fromHours(serverH, u));
-  }, [version.id, version.base_commercial_deadline_days, version.base_commercial_deadline_hours, wc.business_hours_per_day]); // eslint-disable-line react-hooks/exhaustive-deps
-  // R21-15 (reunião 21/10): o prazo pode ser digitado em minutos, horas ou dias; o sistema converte sozinho para HORAS (o que é guardado). Minutos sobem para a hora inteira seguinte.
   const readOnly = version.state === "publicada" || !!locked;
+  const [v, setV] = useFramedEditorDraft<string>(`deadline:${version.id}`, fromHours(hoursOf(version), unit), !readOnly, JSON.stringify([version.id, hoursOf(version)]));
+  const editedHere = useRef(false);
+  // R21-15 (reunião 21/10): o prazo pode ser digitado em minutos, horas ou dias; o sistema converte sozinho para HORAS (o que é guardado). Minutos sobem para a hora inteira seguinte.
   const setUnit = (u: "min" | "h" | "d") => { setUnitState(u); try { window.localStorage.setItem(unitKey, u); } catch { /* sem armazenamento: vale só nesta tela */ } };
   const num = Number(String(v).replace(",", "."));
   const typed = v !== "" && Number.isFinite(num) && num > 0;
@@ -4075,29 +4264,38 @@ export function DeadlineBaseField({ version, act, ringOf, locked, compact = fals
   const suggestedDays = stepsMinutes > 0 ? Math.max(1, Math.ceil(stepsMinutes / 60 / wc.business_hours_per_day)) : null;
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState(false);
-  const save = async () => {
+  const save = async (rethrow = false) => {
     setErr(null); setOkMsg(false);
     try { await act(() => apiClient.updateCatalog2VersionInfo(version.id, { base_commercial_deadline_hours: h }), "Prazo comercial salvo.", { rethrow: true }); setOkMsg(true); }
-    catch (e: any) { setErr(e?.message ?? "Não foi possível salvar o prazo."); }
+    catch (e: any) { setErr(e?.message ?? "Não foi possível salvar o prazo."); if (rethrow) throw e; }
   };
   // Salva sozinho 1 s depois de parar de digitar (antes só salvava ao sair do campo ou com Enter, e parecia que não gravava).
   const saveRef = useRef(save); saveRef.current = save;
+  const registerFlusher = useContext(FlushCtx);
+  const pendingDeadline = useRef({ readOnly, valid, dirty, changed: v !== fromHours(hoursOf(version), unit) });
+  pendingDeadline.current = { readOnly, valid, dirty, changed: v !== fromHours(hoursOf(version), unit) };
+  useEffect(() => registerFlusher(async () => {
+    const current = pendingDeadline.current;
+    if (current.readOnly || !current.changed) return;
+    if (!current.valid) { const message = "Informe um prazo comercial válido antes de salvar."; setErr(message); throw new Error(message); }
+    if (current.dirty) await saveRef.current(true);
+  }), [registerFlusher]);
   useEffect(() => {
-    if (!compact || readOnly || !dirty) return;
+    if (!compact || readOnly || !dirty || !editedHere.current) return;
     const t = window.setTimeout(() => { void saveRef.current(); }, 1000);
     return () => window.clearTimeout(t);
   }, [h, dirty, compact, readOnly]);
   if (compact) return (
-    <div id="catalog2-deadline-base" className={`flex h-full min-w-0 flex-col gap-2.5 px-1 md:pr-5 ${ringOf("catalog2-deadline-base")}`}>
-      <div className="flex items-start gap-2.5">
+    <div id="catalog2-deadline-base" className={`flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-1 py-2 ${ringOf("catalog2-deadline-base")}`}>
+      <div className="flex min-w-0 flex-1 basis-[13rem] items-start gap-2.5">
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"><CalendarClock className="h-4 w-4" /></span>
         <span className="min-w-0"><span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100">Prazo comercial<span className="field-info" data-help="Prazo prometido ao cliente, informado em HORAS úteis. 24 h = 1 dia. O sistema guarda o dia inteiro arredondado para cima (mínimo 1)." aria-hidden="true">i</span></span><span className="block text-[11px] text-slate-500">Prazo prometido ao cliente</span></span>
       </div>
       <div className="flex items-center gap-2">
-        <Input type="number" min={unit === "d" ? 0.04 : 1} step={unit === "d" ? "any" : 1} aria-label={`Prazo comercial base em ${unitLabel}`} className="h-10 w-28 rounded-lg border border-slate-300 bg-white px-3 text-right text-lg font-bold text-slate-900 focus:border-violet-500 focus:ring-2 focus:ring-violet-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" value={v} disabled={readOnly} onChange={(e) => { setV(e.target.value); setOkMsg(false); }} onBlur={() => { if (dirty) void save(); }} onKeyDown={(e) => { if (e.key === "Enter" && dirty) void save(); }} />
+        <Input type="number" min={unit === "d" ? 0.04 : 1} step={unit === "d" ? "any" : 1} aria-label={`Prazo comercial base em ${unitLabel}`} className="h-10 w-28 rounded-lg border border-slate-300 bg-white px-3 text-right text-lg font-bold text-slate-900 focus:border-violet-500 focus:ring-2 focus:ring-violet-200 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100" value={v} disabled={readOnly} onChange={(e) => { editedHere.current = true; setV(e.target.value); setOkMsg(false); }} onBlur={() => { if (dirty) void save(); }} onKeyDown={(e) => { if (e.key === "Enter" && dirty) void save(); }} />
         {unitSelect("h-10 rounded-lg border border-slate-300 bg-white px-2 text-sm font-semibold text-slate-700 focus:border-violet-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200")}
       </div>
-      <p className="text-[11px] leading-snug text-slate-500" data-testid="deadline-days-reflex">
+      <p className="min-w-0 flex-1 text-[11px] leading-snug text-slate-500" data-testid="deadline-days-reflex">
         {valid ? <><span className="mr-1.5 inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-800 dark:bg-violet-950/50 dark:text-violet-200">= {dayText}</span>{convNote ? <span data-testid="deadline-conversion">{convNote} · </span> : null}24 h = 1 dia</> : "Informe o prazo (minutos, horas ou dias); o equivalente em dias aparece aqui."}
         {err ? <span className="ml-2 font-semibold text-red-600">{err}</span> : null}{okMsg ? <span className="ml-2 font-semibold text-emerald-700" data-testid="deadline-saved">✓ Prazo salvo</span> : null}
       </p>
@@ -4148,8 +4346,8 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
   const Card = ({ keyName, icon: Icon, title, subtitle, status }: any) => <button type="button" onClick={() => setOpen(keyName)} className="flex min-h-[112px] items-center gap-3 rounded-[14px] border border-slate-200 bg-white px-4 text-left shadow-sm transition hover:border-violet-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/60"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-700"><Icon className="h-5 w-5" /></span><span className="min-w-0 flex-1"><span className="block font-semibold text-slate-800 dark:text-slate-100">{title}</span><span className="mt-0.5 block text-sm text-slate-500">{subtitle}</span></span><Badge className={status?.pending ? "border-0 bg-amber-100 text-amber-800" : "border-0 bg-emerald-100 text-emerald-700"}>{status?.text}</Badge><ChevronRight className="h-5 w-5 text-violet-600" /></button>;
   if (open === "overview") return <div id="catalog2-costs" className="mt-3 space-y-2">
     <CostAccordion id="catalog2-composition-card" icon={DollarSign} title="Composição do preço" subtitle="Custos, taxas e margem" status={result?.pending_info?.length ? "Pendente" : "Configurado"} tone={result?.pending_info?.length ? "amber" : "green"}><div className="grid gap-3 md:grid-cols-2"><div>{result?.pending_info?.length > 0 && <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"><span>Falta uma configuração para fechar o preço.</span><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="font-semibold text-violet-700">Corrigir</button></div>}{result?.error ? <p className="text-sm text-red-600">Não foi possível calcular este cenário.</p> : result && <PricingPriceSummary r={result} />}{result && !result.error && <div className="mt-3"><ChargeSummary pricing={result} onAdjustStep={(st) => window.dispatchEvent(new CustomEvent(GOTO_STEP_PRICE_EVENT, { detail: { taskKey: st.task_key, stepKey: st.step_key } }))} /></div>}</div><PricingDiagnostics result={result} /></div><PersistDetails persistKey="d3" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Custos e encargos <ChevronDown className="h-4 w-4 text-slate-400" /></summary>{result && <div className="border-t px-3 py-2"><PricingCostRows r={result} /></div>}</PersistDetails><PersistDetails persistKey="d4" className="mt-2 rounded-xl border border-slate-200"><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 text-sm font-semibold [&::-webkit-details-marker]:hidden">Memória de cálculo <ChevronDown className="h-4 w-4 text-slate-400" /></summary><div className="border-t px-3 py-2">{result ? <ChargeMemory pricing={result} /> : <span className="text-xs text-slate-500">Bases, taxas e margem aplicadas ao cenário atual.</span>}</div></PersistDetails></CostAccordion>
-    <CostAccordion icon={ListChecks} title="Simular cenário" subtitle="Teste variações e adicionais" status="Pronto para simular" tone="green"><div className="grid gap-3 md:grid-cols-2">{version.variations.map((va: any) => <Field key={va.id} label={va.name}><select className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm" value={sel.variation_option_keys.find((k: string) => va.options.some((o: any) => o.key === k)) ?? ""} onChange={(e) => setSel({ ...sel, variation_option_keys: [...sel.variation_option_keys.filter((k: string) => !va.options.some((o: any) => o.key === k)), e.target.value] })}>{va.options.map((o: any) => <option key={o.id} value={o.key}>{o.label}</option>)}</select></Field>)}<Field label="Adicionais"><div className="flex flex-wrap gap-2">{version.addons.map((a: any) => <CheckPill key={a.id} checked={sel.addon_keys.includes(a.key)} onChange={(checked) => setSel({ ...sel, addon_keys: checked ? [...sel.addon_keys, a.key] : sel.addon_keys.filter((k: string) => k !== a.key) })}>{a.name}</CheckPill>)}</div></Field><Field label="Quantidade de campanhas"><Input className="h-10" type="number" value={sel.quantity} onChange={(e) => setSel({ ...sel, quantity: Number(e.target.value) || 1 })} /></Field></div>{result && <PricingPriceSummary r={result} showCost />}<Button type="button" onClick={() => void run()} className="mt-3 w-full bg-violet-700 text-white hover:bg-fuchsia-700">Atualizar simulação</Button></CostAccordion>
-    <CostAccordion id="catalog2-periods-card" icon={CalendarClock} title="Modalidades por período" subtitle="Entrega recorrente" status="Mensal" tone="green"><ProductPeriodsPanel productId={productId} act={act} /></CostAccordion>
+    <CostAccordion icon={ListChecks} title="Simular cenário" subtitle="Teste variações e adicionais" status="Pronto para simular" tone="green"><div className="grid gap-3 md:grid-cols-2">{version.variations.map((va: any) => <Field key={va.id} label={va.name}><select className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm" value={sel.variation_option_keys.find((k: string) => va.options.some((o: any) => o.key === k)) ?? ""} onChange={(e) => setSel({ ...sel, variation_option_keys: [...sel.variation_option_keys.filter((k: string) => !va.options.some((o: any) => o.key === k)), e.target.value] })}>{va.options.map((o: any) => <option key={o.id} value={o.key}>{o.label}</option>)}</select></Field>)}<Field label="Adicionais"><div className="flex flex-wrap gap-2">{version.addons.map((a: any) => <CheckPill key={a.id} checked={sel.addon_keys.includes(a.key)} onChange={(checked) => setSel({ ...sel, addon_keys: checked ? [...sel.addon_keys, a.key] : sel.addon_keys.filter((k: string) => k !== a.key) })}>{a.name}</CheckPill>)}</div></Field><Field label="Quantidade contratada"><Input className="h-10" type="number" value={sel.quantity} onChange={(e) => setSel({ ...sel, quantity: Number(e.target.value) || 1 })} /></Field></div>{result && <PricingPriceSummary r={result} showCost />}<Button type="button" onClick={() => void run()} className="mt-3 w-full bg-violet-700 text-white hover:bg-fuchsia-700">Atualizar simulação</Button></CostAccordion>
+    <CostAccordion id="catalog2-periods-card" icon={CalendarClock} title="Modalidades por período" subtitle="Entrega recorrente" status={version.accepts_recurring ? "Mensal" : "Sem assinatura"} tone={version.accepts_recurring ? "green" : "violet"}>{version.accepts_recurring ? <ProductPeriodsPanel productId={productId} act={act} /> : <p className="text-xs text-slate-500">Este produto não oferece assinatura. Períodos recorrentes não se aplicam.</p>}</CostAccordion>
     <CostAccordion icon={FileText} title="Regras comerciais" subtitle="Margem e impostos" status="Configurar" tone="violet"><div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm text-slate-500">Margem, impostos e taxas são aplicados automaticamente à composição.</p><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white">Configurar regras comerciais</button></div></CostAccordion>
   </div>;
 
@@ -4186,7 +4384,7 @@ function CostTab({ version, refs, act, onReloadRefs, productId, highlightTarget,
             ))}
           </div>
         </Field>
-        <Field label="Quantidade de campanhas"><Input type="number" value={sel.quantity} onChange={(e) => setSel({ ...sel, quantity: Number(e.target.value) || 1 })} /></Field><Button type="button" onClick={() => void run()} className="mt-3 w-full bg-violet-700 text-white hover:bg-fuchsia-700">Atualizar simulação</Button></section><section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><h3 className="font-semibold">Resultado</h3>{result ? <PricingPriceSummary r={result} showCost /> : <p className="mt-3 text-sm text-slate-500">Ajuste o cenário e atualize a simulação.</p>}</section></section>}
+        <Field label="Quantidade contratada"><Input type="number" value={sel.quantity} onChange={(e) => setSel({ ...sel, quantity: Number(e.target.value) || 1 })} /></Field><Button type="button" onClick={() => void run()} className="mt-3 w-full bg-violet-700 text-white hover:bg-fuchsia-700">Atualizar simulação</Button></section><section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/60"><h3 className="font-semibold">Resultado</h3>{result ? <PricingPriceSummary r={result} showCost /> : <p className="mt-3 text-sm text-slate-500">Ajuste o cenário e atualize a simulação.</p>}</section></section>}
       {open === "periods" && <ProductPeriodsPanel productId={productId} act={act} />}
       {open === "rules" && <section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-violet-600" /><div><h3 className="font-semibold">Regras comerciais</h3><p className="text-xs text-slate-500">Margem e impostos aplicados na composição</p></div></div><button type="button" onClick={() => window.dispatchEvent(new Event("allka:open-pricing"))} className="mt-4 rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white">Configurar regras comerciais</button></section>}
     </div>
@@ -4198,7 +4396,7 @@ export const OPEN_COST_CARD_EVENT = "catalog2:open-cost-card";
 const CLOSE_COST_CARDS_EVENT = "catalog2:close-cost-cards";
 function CostAccordion({ id, icon: Icon, title, subtitle, status, tone, children }: any) {
   const tones: any = { amber: "bg-amber-100 text-amber-800", green: "bg-emerald-100 text-emerald-700", violet: "bg-violet-100 text-violet-700" };
-  const [open, setOpen] = usePersistedFlag(`cost-card:${id ?? title}`, false);
+  const [open, setOpen] = useFramedEditorOpen(`cost-card:${id ?? title}`);
   useEffect(() => {
     const on = (e: Event) => { if (id && (e as CustomEvent).detail?.id === id) setOpen(true); };
     const close = () => setOpen(false);
@@ -4247,6 +4445,7 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
       .catch(() => setRows([]));
   }, [productId]);
   useEffect(() => { load(); }, [load]);
+  usePeriodsChanged(productId, load);
 
   if (!rows) return null;
 
@@ -4263,7 +4462,7 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
             type="checkbox"
             checked={deliveryRecurrence === "mensal"}
             onChange={(e) => act(
-              () => apiClient.updateCatalog2ProductDeliveryRecurrence(productId, e.target.checked ? "mensal" : null).then(load),
+              () => apiClient.updateCatalog2ProductDeliveryRecurrence(productId, e.target.checked ? "mensal" : null).then(() => notifyPeriodsChanged(productId)),
               e.target.checked ? "Produto marcado como entrega mensal recorrente." : "Entrega mensal recorrente desmarcada — períodos ficam indisponíveis até ser definida de novo.",
             )}
           />
@@ -4332,22 +4531,22 @@ function ProductPeriodsPanel({ productId, act }: { productId: string; act: (fn: 
                         variant="outline"
                         className="h-7 px-2 text-xs"
                         disabled={draft === "" || Number.isNaN(Number(draft))}
-                        onClick={() => act(() => apiClient.updateCatalog2ProductPeriod(productId, row.period, { discount_percent: Number(draft), is_active: true }).then(load), `Período "${row.label}" configurado.`)}
+                        onClick={() => act(() => apiClient.updateCatalog2ProductPeriod(productId, row.period, { discount_percent: Number(draft), is_active: true }).then(() => notifyPeriodsChanged(productId)), `Período "${row.label}" configurado.`)}
                       >
                         Salvar
                       </Button>
                       {row.configured && row.is_active && (
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => act(() => apiClient.updateCatalog2ProductPeriod(productId, row.period, { discount_percent: row.discount_percent, is_active: false }).then(load), "Período desativado.")}>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => act(() => apiClient.updateCatalog2ProductPeriod(productId, row.period, { discount_percent: row.discount_percent, is_active: false }).then(() => notifyPeriodsChanged(productId)), "Período desativado.")}>
                           Desativar
                         </Button>
                       )}
                       {row.configured && !row.is_active && (
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => act(() => apiClient.updateCatalog2ProductPeriod(productId, row.period, { discount_percent: row.discount_percent, is_active: true }).then(load), "Período reativado.")}>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => act(() => apiClient.updateCatalog2ProductPeriod(productId, row.period, { discount_percent: row.discount_percent, is_active: true }).then(() => notifyPeriodsChanged(productId)), "Período reativado.")}>
                           Reativar
                         </Button>
                       )}
                       {row.configured && (
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600" onClick={() => act(() => apiClient.removeCatalog2ProductPeriod(productId, row.period).then(load), "Configuração removida.")}>
+                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-red-600" onClick={() => act(() => apiClient.removeCatalog2ProductPeriod(productId, row.period).then(() => notifyPeriodsChanged(productId)), "Configuração removida.")}>
                           Remover
                         </Button>
                       )}
@@ -4371,33 +4570,6 @@ const PRICING_FIELD_LABEL: Record<string, string> = {
   profit_margin_percent: "Margem de lucro (%)",
   human_review_percent: "Reserva para revisão humana (%)",
 };
-
-function SpecialtyRateRow({ specialty, isTestLocal, act, onReloadRefs }: any) {
-  const initialValue = specialty.max_hourly_rate ?? "";
-  const [value, setValue] = useState<string | number>(initialValue);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  useEffect(() => setValue(specialty.max_hourly_rate ?? ""), [specialty.id, specialty.max_hourly_rate]);
-  const changed = String(value) !== String(initialValue);
-  return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="w-40 truncate">{specialty.name}</span>
-      <Input aria-label={`Valor/hora padrão: ${specialty.name}`} className="w-24" type="number" value={value} onChange={(e) => setValue(e.target.value)} />
-      <SaveButton disabled={!changed} onClick={() => setConfirmOpen(true)}>Salvar valor/hora</SaveButton>
-      <Button size="sm" variant="ghost" disabled={!changed} onClick={() => setValue(initialValue)}>Restaurar padrão</Button>
-      {specialty.max_hourly_rate == null && <span className="text-xs text-amber-600">aguardando definição comercial</span>}
-      {specialty.max_hourly_rate != null && isTestLocal && <span className="text-xs text-amber-600">valor de teste — não é decisão comercial</span>}
-      <ConfirmationDialog
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        title="Salvar valor/hora padrão?"
-        message={`O valor de ${specialty.name} será aplicado automaticamente aos produtos que usam essa especialidade.`}
-        confirmText="Salvar valor/hora"
-        destructive={false}
-        onConfirm={() => act(() => apiClient.updateCatalog2Specialty(specialty.id, { max_hourly_rate: value === "" ? null : Number(value) }).then(onReloadRefs), "Valor/hora padrão salvo.")}
-      />
-    </div>
-  );
-}
 
 function PricingSettingsForm({ pricing, onSave }: any) {
   const [f, setF] = useState({ tax_percent: pricing.tax_percent ?? "", commission_percent: pricing.commission_percent ?? "", operational_fee_percent: pricing.operational_fee_percent ?? "", profit_margin_percent: pricing.profit_margin_percent ?? "", human_review_percent: pricing.human_review_percent ?? "" });
@@ -5201,6 +5373,7 @@ const LEVEL_META: Record<string, { label: string; chip: string; border: string; 
 type ReadinessFilter = "todos" | "pronto" | "bloqueador" | "pendente" | "opcional";
 
 function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDetail, onItems, onData, detailFor, detailTargetFor, taskName }: { taskName?: string; productId: string; versionId?: string; versionKey: string; onGo: (key: string) => void; onGoDetail: (key: string, targetId: string) => void; onItems?: (items: Record<string, { level: string; note: string }>) => void; onData?: (d: any) => void; detailFor?: (key: string) => string[]; detailTargetFor?: (key: string, index: number) => string | undefined }) {
+  const testLayout = useTestProductLayout();
   const { sidebarWidth } = useAppFrameMetrics();
   const sidebarWidthPx = typeof sidebarWidth === "number" ? sidebarWidth : parseInt(String(sidebarWidth)) || 0;
   const [data, setData] = useState<any>(null);
@@ -5250,7 +5423,7 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
   const fallbackKey = (entries.find((it) => it.level === "pendente") ?? entries.find((it) => it.level === "bloqueador"))?.key ?? null;
   const activeKey = selectedKey && entries.some((it) => it.key === selectedKey) ? selectedKey : fallbackKey;
   const active = entries.find((it) => it.key === activeKey) ?? null;
-  const stepOf = (key: string) => (READINESS_WHERE[key] ?? "").match(/^Passo \d/)?.[0] ?? "Abrir";
+  const stepOf = (key: string) => testLayout ? `Passo ${Math.max(0, PRODUCT_FLOW_STEPS.findIndex(step => step.keys.includes(key === "responsaveis" ? "esforco_tarefas" : key))) + 1}` : (READINESS_WHERE[key] ?? "").match(/^Passo \d/)?.[0] ?? "Abrir";
   const isTaskItem = (key: string) => ["tarefas", "etapas", "esforco_tarefas", "prazo", "conexoes"].includes(key);
   const BADGE = "inline-flex h-6 shrink-0 items-center justify-center rounded-full px-2.5 text-[11px] font-semibold";
 
@@ -5285,14 +5458,14 @@ function ProductReadinessPanel({ productId, versionId, versionKey, onGo, onGoDet
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Ver preenchimento do produto" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white/15 px-2 text-xs font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25" title="Ver o preenchimento do produto">
+      <TooltipProvider delayDuration={150}><Tooltip><TooltipTrigger asChild><button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Ver preenchimento do produto" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white/15 px-2 text-xs font-semibold text-white ring-1 ring-white/25 transition hover:bg-white/25">
         <CheckSquare className="h-3.5 w-3.5" aria-hidden="true" />
-        <span className="hidden xl:inline">Preenchimento</span>
+        {!testLayout && <span className="hidden xl:inline">Preenchimento</span>}
         {data?.error ? <span className="text-red-100">indisponível</span> : loading && !data ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <>
           {data?.items && <span className="text-white/80">{readyCount}/{entries.length}</span>}
           {nBlock > 0 ? <span className="rounded-full bg-red-400/90 px-1.5 py-0.5 text-[10px] leading-none text-white">{nBlock}</span> : nPend > 0 ? <span className="rounded-full bg-amber-300 px-1.5 py-0.5 text-[10px] leading-none text-amber-950">{nPend}</span> : <Check className="h-3.5 w-3.5 text-emerald-300" />}
         </>}
-      </button>
+      </button></TooltipTrigger><TooltipContent side="bottom" sideOffset={6}>Preenchimento — clique para ver mais</TooltipContent></Tooltip></TooltipProvider>
       <FramedPanel open={open} onOpenChange={setOpen} testId="product-readiness-dialog">
           <div className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
             <button type="button" onClick={() => setOpen(false)} aria-label="Fechar preenchimento" title="Fechar" className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"><X className="h-4 w-4" /></button>
@@ -5489,6 +5662,8 @@ function PersistDetails({ persistKey, open: _ignored, onToggle, children, ...res
 }
 
 function SectionCard({ icon: Icon, title, subtitle, help, headerAction, children, collapsible = true, defaultOpen = true, forceOpen = false, keepMounted = false, number, tone, storeKey }: { storeKey?: string; tone?: "soft"; number?: number; keepMounted?: boolean; icon: React.ComponentType<{ className?: string }>; title: string; subtitle: string; help?: string; headerAction?: React.ReactNode; children: React.ReactNode; collapsible?: boolean; defaultOpen?: boolean; forceOpen?: boolean }) {
+  const testLayout = useTestProductLayout();
+  if (testLayout) collapsible = false;
   const [open, setOpenRaw] = useState(() => readOpen("sec:" + (storeKey ?? title), defaultOpen));
   const setOpen = (fn: (o: boolean) => boolean) => setOpenRaw((o) => { const v = fn(o); writeOpen("sec:" + (storeKey ?? title), v); return v; });
   useAccordionAll((o) => { if (collapsible) setOpenRaw(o); });
@@ -5514,9 +5689,10 @@ function SectionCard({ icon: Icon, title, subtitle, help, headerAction, children
 // Somente os cartões principais recolhem. Ao abrir uma seção, seus campos
 // ficam todos visíveis e editáveis — sem um segundo nível de accordions.
 function FieldAccordion({ title, help, children }: { title: React.ReactNode; help?: string; children: React.ReactNode; forceOpen?: boolean }) {
+  const testLayout = useTestProductLayout();
   // Ajuda SÓ no ícone "i" (o tooltip não aparece mais ao passar o mouse no resto do cartão). O "i" é o mesmo da camada de ajuda.
   const heading = <div data-no-info={help ? "" : undefined} className="flex w-full items-center gap-2 text-left text-[12px] font-semibold text-slate-700 dark:text-slate-200"><span className="flex-1">{title}{help && <span className="field-info" data-help={help} aria-hidden="true">i</span>}</span></div>;
-  const card = <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40">
+  const card = <div className={testLayout ? "min-w-0 py-1" : "rounded-lg border border-slate-200 bg-slate-50/70 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/40"}>
     {heading}
     <div className="mt-2">{children}</div>
   </div>;
@@ -5541,12 +5717,12 @@ function fmtUpdatedAt(raw?: string | null) {
 // Cabeçalho do editor no padrão da plataforma (degradê da marca): voltar,
 // nome + status, subtítulo, versão, atualizar, menu ⋮ (nova versão / fixar na
 // bandeja) e fechar. Pedido do usuário 2026-09-25 (layout de referência).
-function HeaderIconBtn({ label, onClick, children, className = "" }: { label: string; onClick?: () => void; children: React.ReactNode; className?: string }) {
+function HeaderIconBtn({ label, onClick, children, className = "", testId }: { label: string; onClick?: () => void; children: React.ReactNode; className?: string; testId?: string }) {
   return (
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <button type="button" onClick={onClick} aria-label={label} className={`rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white ${className}`}>
+          <button type="button" data-testid={testId} onClick={onClick} aria-label={label} className={`rounded-lg p-2 text-white/90 transition-colors hover:bg-white/15 hover:text-white ${className}`}>
             {children}
           </button>
         </TooltipTrigger>
@@ -5615,7 +5791,54 @@ function VersionPicker({ versions, selectedVersionId, onSelect, unsavedDraftId, 
   );
 }
 
+// Item 2 (31/10) — Produto teste: UM status principal no cabeçalho em vez de 4–5 etiquetas repetidas (rascunho, não publicado, status,
+// versão, ativo). É só apresentação: status comercial do produto e estado da versão continuam conceitos separados no banco. O clique abre
+// os detalhes (versão aberta, publicação, catálogo) e a mesma troca de status comercial de antes (com a confirmação de sempre).
+export function headerStatusSummary(product: any, selVersion: any, isDraftView: boolean, isOldView: boolean) {
+  const h = product?.header ?? {};
+  const commercial = catalog2StatusLabel(product?.status);
+  const main = isDraftView
+    ? { label: `Rascunho v${selVersion?.version_number ?? "?"}`, tone: "bg-amber-300 text-amber-950", hint: "Você está editando um rascunho: nada muda para o cliente até publicar." }
+    : isOldView
+      ? { label: `Versão antiga v${selVersion?.version_number ?? "?"}`, tone: "bg-slate-300 text-slate-800", hint: "Versão substituída por uma publicação mais nova. Somente leitura." }
+      : { label: commercial, tone: catalog2StatusTone(product?.status), hint: "Status comercial do produto." };
+  const details = [
+    { k: "Status do produto", v: commercial },
+    { k: "Versão aberta", v: selVersion ? `v${selVersion.version_number} · ${selVersion.state === "rascunho" ? "rascunho (editável)" : "publicada (somente leitura)"}` : "—" },
+    { k: "Publicação", v: h.published ? `v${h.published_version_number} publicada (é a que o catálogo usa)` : "nenhuma versão publicada ainda" },
+    { k: "No catálogo", v: h.activated ? "ativo — aparece para os clientes" : h.awaiting_activation ? "publicado, aguardando ativação" : "não ativo" },
+  ];
+  return { main, details };
+}
+function HeaderStatusSummary({ product, selVersion, isDraftView, isOldView, onChangeStatus }: any) {
+  const { main, details } = headerStatusSummary(product, selVersion, isDraftView, isOldView);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" data-testid="header-status-summary" aria-label={`Status: ${main.label}. Abrir detalhes e mudar o status comercial`} title={`${main.hint} Clique para ver versão, publicação e catálogo.`}
+          className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold shadow-sm transition hover:brightness-95 ${main.tone}`}>
+          {main.label}<Info className="h-3 w-3 opacity-70" /><ChevronDown className="h-3 w-3" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72" data-testid="header-status-details">
+        <div className="space-y-1 px-2 py-1.5 text-xs">
+          {details.map((d) => <p key={d.k} className="flex justify-between gap-3"><span className="text-muted-foreground">{d.k}</span><span className="text-right font-semibold">{d.v}</span></p>)}
+        </div>
+        <div className="my-1 border-t" />
+        <p className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Mudar status comercial</p>
+        {CATALOG2_STATUSES.map((st) => (
+          <DropdownMenuItem key={st} onClick={() => onChangeStatus(st)} className="flex flex-col items-start gap-0.5">
+            <span className="font-semibold">{CATALOG2_STATUS_LABEL[st]}{st === product.status ? " ✓" : ""}</span>
+            <span className="max-w-[16rem] text-[11px] leading-snug text-muted-foreground">{CATALOG2_STATUS_MEANING[st]}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onRefresh, canNewVersion, onNewVersion, pin, canPublish, onPublish, versionInfo, priceInfo, editMode, onStartEdit, onStopEdit, onChangeStatus, onSaveDraft, unsavedDraftId, onClientView, previewOpen, readiness }: any) {
+  const testLayout = useTestProductLayout();
   // O atalho para a Bandeja precisa existir mesmo se o editor for aberto por
   // uma rota alternativa (sem o `pin` explícito do painel pai).
   const trayEntry: PinnedEntry = pin ?? { id: `catalog2-produto-${product.id}`, label: "Editor de produto", icon: Layers, path: `/admin/cadastro-produtos/${product.sequence_number ?? product.id}` };
@@ -5641,6 +5864,13 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
         <h2 title={headerTitle !== product.internal_name ? `Nome interno: ${product.internal_name}` : undefined} className="min-w-0 flex-1 whitespace-normal break-words text-[15px] font-bold leading-tight text-white [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] overflow-hidden">{headerTitle}</h2>
       </div>
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {testLayout ? (
+            <>
+              <HeaderStatusSummary product={product} selVersion={selVersion} isDraftView={isDraftView} isOldView={isOldView} onChangeStatus={onChangeStatus} />
+              {product.is_new && <Badge className="bg-emerald-100 text-emerald-700">Novo</Badge>}
+              <HeaderPriceTag version={selVersion} productId={product.id} fallback={priceInfo} />
+            </>
+          ) : (<>
           {isDraftView && <span className="inline-flex items-center gap-1 rounded-full bg-amber-300 px-2.5 py-0.5 text-xs font-bold text-amber-950 shadow-sm">Rascunho v{selVersion.version_number} · não publicado</span>}
           {isOldView && <span className="inline-flex items-center gap-1 rounded-full bg-slate-300 px-2.5 py-0.5 text-xs font-bold text-slate-800 shadow-sm">Versão antiga v{selVersion.version_number}</span>}
           <DropdownMenu>
@@ -5672,6 +5902,7 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
             </>
           )}
           <HeaderPriceTag version={selVersion} productId={product.id} fallback={priceInfo} />
+          </>)}
         </div>
       </div>
       <VersionPicker versions={product.versions} selectedVersionId={selectedVersionId} onSelect={onSelectVersion} unsavedDraftId={unsavedDraftId} />
@@ -5693,7 +5924,8 @@ function EditorHeader({ product, selectedVersionId, onSelectVersion, onBack, onR
           </Tooltip>
         </TooltipProvider>
       )}
-      <HeaderIconBtn label="Visualizar como o cliente vê (prévia da versão que está aberta)" onClick={onClientView} className={`flex shrink-0 items-center gap-1.5 !px-2.5 !py-1.5 text-xs font-semibold ${previewOpen ? "!bg-white/25 !text-white" : "bg-white/10"}`}><Eye className="h-4.5 w-4.5" /><span className="hidden sm:inline" data-testid="client-view-label">Ver como o cliente vê</span></HeaderIconBtn>
+      <HeaderIconBtn label="Visualizar como o cliente vê (prévia da versão que está aberta)" onClick={onClientView} className={`flex h-8 shrink-0 items-center justify-center gap-1.5 ${testLayout ? "w-8 !p-0" : "!px-2.5 !py-1.5"} text-xs font-semibold ${previewOpen ? "!bg-white/25 !text-white" : "bg-white/10"}`}><Eye className="h-4.5 w-4.5" />{!testLayout && <span className="hidden sm:inline" data-testid="client-view-label">Ver como o cliente vê</span>}</HeaderIconBtn>
+      {testLayout && <div data-flow-slot="header-ai" className="flex shrink-0 items-center" />}
       <HeaderIconBtn label={pinned ? "Remover da Bandeja de Telas" : "Adicionar à Bandeja de Telas"} onClick={toggle} className={pinned ? "!text-amber-300" : ""}>
         <Pin className={`h-5 w-5 ${pinned ? "fill-current" : ""}`} />
       </HeaderIconBtn>

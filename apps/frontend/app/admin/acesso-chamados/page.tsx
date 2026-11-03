@@ -798,7 +798,7 @@ export default function AcessoAosChamadosPage() {
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="tabela-cartao w-full text-xs">
             <thead>
               <tr className="text-left text-gray-500 border-b border-border/60">
                 <th className="py-2 pr-3">
@@ -833,17 +833,17 @@ export default function AcessoAosChamadosPage() {
                         />
                       )}
                     </td>
-                    <td className="py-2 pr-3">{u.name}</td>
-                    <td className="py-2 pr-3 text-gray-500">{u.email}</td>
-                    <td className="py-2 pr-3">
+                    <td className="py-2 pr-3" data-rotulo="Nome">{u.name}</td>
+                    <td className="py-2 pr-3 text-gray-500 break-all" data-rotulo="E-mail">{u.email}</td>
+                    <td className="py-2 pr-3" data-rotulo="Acesso">
                       <Badge variant={u.canUse ? "default" : "destructive"} className="text-[10px]">
                         {u.canUse ? "Liberado" : "Bloqueado"}
                       </Badge>
                     </td>
-                    <td className="py-2 pr-3 text-gray-400">{u.source}</td>
-                    <td className="py-2 pr-3 text-gray-400">{u.override ? u.override.effect : "—"}</td>
+                    <td className="py-2 pr-3 text-gray-400" data-rotulo="Origem">{u.source}</td>
+                    <td className="py-2 pr-3 text-gray-400" data-rotulo="Exceção">{u.override ? u.override.effect : "—"}</td>
                     <td className="py-2 pr-3">
-                      <div className="flex gap-1">
+                      <div className="flex flex-wrap gap-1">
                         {canEdit && (
                           <>
                             <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-emerald-600" onClick={() => setOverride(u.id, "ALLOW")}>

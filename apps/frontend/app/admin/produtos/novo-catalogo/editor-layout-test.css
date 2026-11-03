@@ -1,0 +1,96 @@
+/* Opt-in only: the current editor and its portalled forms keep their existing layout. */
+[data-editor-layout="test"] {
+  /* Long inline forms must scroll in the body, never move the fixed product header/footer. */
+  overflow: clip;
+}
+[data-editor-layout="test"] #catalog2-general > section {
+  border-radius: 12px;
+  box-shadow: none;
+  padding: 12px 16px;
+}
+[data-editor-layout="test"] #catalog2-general input,
+[data-editor-layout="test"] #catalog2-general textarea,
+[data-editor-layout="test"] #catalog2-general select {
+  font-size: 12px;
+  background-color: var(--input-background, #f8fafc);
+}
+[data-editor-layout="test"] #catalog2-general textarea[aria-label="Título comercial"] {
+  height: 36px;
+  min-height: 36px;
+  white-space: nowrap;
+  overflow-x: hidden;
+}
+[data-editor-layout="test"] #catalog2-general textarea[aria-label="Descrição curta"] {
+  min-height: 36px;
+  height: 36px;
+}
+[data-editor-layout="test"] #catalog2-commercial-fields .grid > div > div.rounded-lg {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+[data-editor-layout="test"] #catalog2-classification {
+  margin-top: 0;
+}
+[data-editor-layout="test"] #catalog2-classification select {
+  height: 34px;
+}
+[data-editor-layout="test"] #catalog2-field-four-f {
+  gap: 6px;
+}
+[data-editor-layout="test"] #catalog2-field-four-f > label {
+  min-height: 40px;
+  padding: 6px 10px;
+  border-width: 1px;
+}
+[data-editor-layout="test"] section:has(> div > [data-testid="audience-card"]) {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+[data-editor-layout="test"] [data-testid="audience-card"] > div {
+  margin-top: 4px;
+  column-gap: 12px;
+  row-gap: 4px;
+}
+[data-editor-layout="test"] [data-testid="audience-card"] [data-testid="agency-levels"] {
+  padding-top: 4px;
+}
+[data-editor-layout="test"] [data-flow-slot="initial-modalities"] > div > section {
+  padding: 6px 12px;
+}
+[data-editor-layout="test"] #catalog2-general [data-testid^="list-scroll-"] {
+  max-height: none;
+  overflow: visible;
+}
+[data-editor-layout="test"] [data-testid="commercial-accordion"] > summary svg:last-child {
+  display: none;
+}
+[data-editor-layout="test"] [data-testid^="step-block-"] > h5 > button {
+  padding: 8px 12px;
+}
+[data-editor-layout="test"] [data-testid^="step-block-"] > div[role="region"] {
+  padding: 10px 12px;
+}
+[data-editor-layout="test"] [data-testid="inline-deliverable-editor"] [data-testid^="deliverable-section-"] {
+  box-shadow: none;
+}
+[data-editor-layout="test"] [data-testid="inline-deliverable-editor"] h5 button {
+  padding: 6px 10px;
+  pointer-events: none;
+}
+[data-editor-layout="test"] [data-testid="inline-deliverable-editor"] h5 button > svg:last-child {
+  display: none;
+}
+[data-editor-layout="test"] [data-testid="inline-deliverable-editor"] input,
+[data-editor-layout="test"] [data-testid="inline-deliverable-editor"] select {
+  height: 32px;
+  font-size: 12px;
+}
+[data-editor-layout="test"] [data-testid="inline-deliverable-editor"] [role="region"] {
+  padding: 8px 10px;
+}
+/* Keep the commercial form mounted (pending edits survive), but focus on the selected task. */
+[data-editor-layout="test"] #catalog2-tasks:has([data-testid="test-task-editor"]) > section:first-child,
+[data-editor-layout="test"] #catalog2-tasks:has([data-testid="test-task-editor"]) > #sec-connections {
+  display: none;
+}

@@ -27,7 +27,22 @@ export interface StepFormLike {
   internal_step?: boolean;
   ops?: any;
 }
+/**
+ * Item 5 (31/10) — se um entregável DESTA etapa pode pedir aprovação individual do cliente. Espelha a regra do servidor
+ * (PUT da etapa): a aprovação por entregável só existe quando a etapa escolheu “por entregáveis”, o que só é possível em tarefa
+ * que executa por etapa e em etapa não interna. `hard` = não há como liberar dentro desta etapa (precisa desmarcar no entregável);
+ * sem `hard` = dá para liberar trocando o tipo de aprovação da etapa (bloco 3).
+ */
+export function deliverableApprovalBlock(o: { stageExecution: boolean; internal: boolean; mode?: string | null }): { text: string; hard: boolean } | null {
+  if (o.internal) return { hard: true, text: "Esta etapa é interna: o cliente não a vê, então nenhum entregável dela pode pedir aprovação do cliente." };
+  if (!o.stageExecution) return { hard: true, text: "Esta tarefa não executa por etapa: a aprovação do cliente acontece no fim da tarefa inteira, então um entregável desta etapa não pode pedir aprovação individual." };
+  if ((o.mode ?? "step") !== "deliverables") return { hard: false, text: "Para o cliente aprovar este entregável individualmente, a etapa precisa usar “Sim, por um ou mais entregáveis” (bloco Quando a etapa termina)." };
+  return null;
+}
+
 export interface StepIssueCtx {
+  /** Nomes dos entregáveis ativos da etapa que pedem aprovação do cliente (para a mensagem dizer QUAIS). */
+  approvalDeliverableNames?: string[];
   /** Especialidade padrão da tarefa (vale quando a etapa não tem a sua). */
   taskSpecialtyId?: string | null;
   /** A tarefa executa por etapa (aparecem os prazos de aprovação/refação/IA grátis). */
@@ -82,8 +97,18 @@ export function stepIssues(f: StepFormLike, ctx: StepIssueCtx = {}): StepIssue[]
     const ca = f.ops?.client_approval;
     const approvalCount = ctx.approvalDeliverables ?? ctx.approvableDeliverables ?? 0;
     if (!f.internal_step && ca?.mode === "deliverables" && approvalCount === 0) push(3, "approval_deliverables", "A aprovação é por entregável, mas nenhum entregável desta etapa exige aprovação do cliente. Marque “Exige aprovação” em ao menos um (bloco Entregáveis desta etapa) ou escolha outra opção.");
-    if (!f.internal_step && ca?.mode && ca.mode !== "deliverables" && approvalCount > 0) push(3, "approval_deliverables_conflict", "Há entregável(is) marcado(s) para aprovação, mas a etapa não usa aprovação por entregável. Desative essa aprovação nos entregáveis ou escolha “Sim, por um ou mais entregáveis”.");
+    // Igual ao servidor: sem escolha explícita a etapa aprova "pela própria etapa" — então entregável com aprovação também conflita.
+    if (!f.internal_step && (ca?.mode ?? "step") !== "deliverables" && approvalCount > 0) push(3, "approval_deliverables_conflict", "Há entregável(is) marcado(s) para aprovação, mas a etapa não usa aprovação por entregável. Desative essa aprovação nos entregáveis ou escolha “Sim, por um ou mais entregáveis”.");
     if (ca && f.internal_step && ca.mode !== "none") push(3, "approval_mode", "A etapa é interna (o cliente não a vê), então a aprovação do cliente não se aplica. Escolha “Não” ou desmarque “Etapa interna”.");
+  }
+  // Item 5 (31/10): tarefa que NÃO executa por etapa, ou etapa interna, nunca aceita entregável com aprovação individual do cliente —
+  // o servidor recusa ao concluir a etapa (approval_deliverable_conflict). Antes a tela não avisava nesses dois casos e o erro só
+  // aparecia ao salvar. Agora a pendência aparece no bloco Entregáveis, com os nomes, antes de tentar concluir.
+  {
+    const reason = deliverableApprovalBlock({ stageExecution: !!ctx.stageExecution, internal: !!f.internal_step, mode: f.ops?.client_approval?.mode });
+    const names = ctx.approvalDeliverableNames ?? [];
+    const count = ctx.approvalDeliverables ?? ctx.approvableDeliverables ?? 0;
+    if (reason?.hard && count > 0) push(5, "deliverables_approval", `${reason.text} Desmarque “Aprovação do cliente” em: ${names.length ? names.map((n) => `“${n}”`).join(", ") : `${count} entregável(is)`}. Obrigatório, evidência e qualificação continuam valendo.`);
   }
   // 5 · Entregáveis desta etapa
   for (const d of ctx.deliverableIssues ?? []) push(5, d.field, d.message);

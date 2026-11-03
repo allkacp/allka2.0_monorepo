@@ -40,7 +40,7 @@ const baseStep = (over: any = {}) => ({
 });
 const otherStep = { id: "st2", key: "otimizar", name: "Otimizar campanhas", sort_order: 2 };
 const deliv = (over: any = {}) => ({
-  id: "d1", key: "plano-estrategico", name: "Plano estratégico inicial de mídia paga", description: "Plano com metas e canais", type: "arquivo", responsible: "executor", is_required: true, requires_approval: true, visibility: "client",
+  id: "d1", key: "plano-estrategico", name: "Plano estratégico inicial de mídia paga", description: "Plano com metas e canais", type: "arquivo", responsible: "executor", is_required: true, requires_approval: false, visibility: "client",
   step_id: "st1", format: "PDF", delivery_moment: "step_end", template_url: null, template_name: null, evidence_required: false, requires_qualification: false, cycle_scope: "every_cycle", is_conditional: false, condition_json: null, sort_order: 1, draft_incomplete: false, ...over,
 });
 const baseTask = { id: "t1", key: "t1", name: "Gestão de anúncios", execution_mode: "humano", stage_execution: "task", specialty: { id: "sp1" } };
@@ -64,6 +64,17 @@ const fillModal = (name: string, desc: string) => {
   fireEvent.change(m.getByLabelText("Nome do entregável"), { target: { value: name } });
   if (desc) fireEvent.change(m.getByLabelText("Descrição do entregável"), { target: { value: desc } });
 };
+
+describe("resumo dos acessos reutilizados", () => {
+  it("não diz que está sem acesso quando usa o acesso de outra etapa", () => {
+    mount({ step: { ops: { access_scope: "some", access_keys: ["search-console"] } }, version: {
+      id: "v1", tasks: [], connection_requirements: [{ id: "r1", key: "search-console", name: "Search Console", when_task_key: "t1", when_step_key: "outra-etapa", shared_with_steps: true, draft_incomplete: false }],
+    } });
+    openEditor(); expandAll();
+    expect(screen.getByTestId("step-final-access")).toHaveTextContent("1 acesso(s) reutilizado(s) de outra etapa");
+    expect(screen.getByTestId("step-final-access")).not.toHaveTextContent("Nenhum acesso configurado");
+  });
+});
 const addDeliverable = async (name: string, desc = "Descrição completa", draft = false) => {
   fireEvent.click(screen.getByTestId("add-step-deliverable"));
   fillModal(name, desc);
@@ -119,6 +130,93 @@ describe("F5 dentro do entregável", () => {
   });
 });
 
+// Item 5 (31/10): entregável com aprovação do cliente em etapa que não aprova por entregável — aviso ANTES de salvar, com saída clara.
+describe("Entregável × tipo de aprovação (antes de salvar)", () => {
+  it("tarefa sem execução por etapa: entregável antigo com aprovação aparece em conflito, com o nome, e o botão explícito desmarca sem perder o resto", async () => {
+    mount({ deliverables: [deliv({ requires_approval: true })] });
+    openEditor(); expandAll();
+    const box = screen.getByTestId("deliverables-approval-conflict");
+    expect(box).toHaveTextContent("não executa por etapa");
+    expect(box).toHaveTextContent("“Plano estratégico inicial de mídia paga”");
+    expect(screen.queryByTestId("use-deliverable-approval")).not.toBeInTheDocument(); // não dá para liberar nesta tarefa
+    concluir();
+    await waitFor(() => expect(screen.getByTestId("step-block-5-status").textContent).toMatch(/pend/));
+    expect(api.updateCatalog2Step).not.toHaveBeenCalled(); // nada vai ao servidor com o conflito
+    fireEvent.click(screen.getByTestId("clear-deliverable-approvals"));
+    expect(screen.queryByTestId("deliverables-approval-conflict")).not.toBeInTheDocument();
+    concluir();
+    await waitFor(() => expect(api.updateCatalog2Deliverable).toHaveBeenCalledWith("d1", expect.objectContaining({ requires_approval: false, is_required: true })));
+    await waitFor(() => expect(api.updateCatalog2Step).toHaveBeenCalledTimes(1));
+  });
+
+  it("entregável NOVO nasce sem aprovação quando a etapa não aprova por entregável; o campo explica por quê e não deixa marcar", async () => {
+    mount();
+    openEditor(); expandAll();
+    fireEvent.click(screen.getByTestId("add-step-deliverable"));
+    const m = within(screen.getByTestId("deliverable-modal"));
+    const box = m.getByLabelText("Exige aprovação");
+    expect(box).not.toBeChecked();
+    expect(box).toBeDisabled();
+    expect(m.getByTestId("deliverable-approval-block")).toHaveTextContent("não executa por etapa");
+  });
+
+  // Validação 31/10 (API simulada): ciclo novo → salvar → recarregar → alterar → cancelar, no caso do vídeo (tarefa sem execução por etapa).
+  it("ciclo completo: cria sem aprovação (o servidor aceitaria), recarrega igual, altera e cancela sem gravar; clique duplo não duplica", async () => {
+    const first = mount();
+    openEditor(); expandAll();
+    await addDeliverable("Relatório de SEO");
+    concluir();
+    const again = screen.queryByRole("button", { name: "Concluir e salvar etapa" }); // durante o salvamento o botão some/trava
+    if (again && !(again as HTMLButtonElement).disabled) fireEvent.click(again);
+    await waitFor(() => expect(api.updateCatalog2Step).toHaveBeenCalledTimes(1));
+    expect(api.createCatalog2Deliverable).toHaveBeenCalledTimes(1);
+    expect(api.createCatalog2Deliverable.mock.calls[0]).toMatchObject(["t1", { name: "Relatório de SEO", step_id: "st1", requires_approval: false }]);
+    expect(lastPut().ops?.client_approval?.mode ?? "step").not.toBe("deliverables");
+    first.unmount(); resetOpenStoreForTests();
+    // "recarga": o servidor devolve o registro criado
+    mount({ deliverables: [deliv({ id: "new1", key: "relatorio-seo", name: "Relatório de SEO", requires_approval: false })] });
+    expect(screen.getByTestId("step-deliverable-summary").textContent).toContain("Relatório de SEO");
+    openEditor(); expandAll();
+    expect(items()).toHaveLength(1);
+    expect(items()[0]).toHaveAttribute("data-state", "saved");
+    expect(screen.queryByTestId("deliverables-approval-conflict")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Editar Relatório de SEO"));
+    const m = within(screen.getByTestId("deliverable-modal"));
+    expect(m.getByLabelText("Exige aprovação")).toBeDisabled();
+    fireEvent.change(m.getByLabelText("Nome do entregável"), { target: { value: "Nome alterado" } });
+    fireEvent.click(m.getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(await screen.findByTestId("deliverable-close-discard")); // alteração digitada: pergunta antes de descartar
+    await waitFor(() => expect(screen.queryByTestId("deliverable-modal")).not.toBeInTheDocument());
+    expect(items()[0].textContent).toContain("Relatório de SEO");
+    expect(items()[0]).toHaveAttribute("data-state", "saved");
+    expect(api.updateCatalog2Deliverable).not.toHaveBeenCalled();
+    expect(api.createCatalog2Deliverable).toHaveBeenCalledTimes(1);
+  });
+
+  it("tarefa por etapa com aprovação 'pela própria etapa': avisa e oferece trocar para 'por entregáveis' na hora", async () => {
+    mount({ taskOver: { stage_execution: "stage" }, deliverables: [deliv({ requires_approval: true })] });
+    openEditor(); expandAll();
+    fireEvent.click(screen.getByTestId("use-deliverable-approval"));
+    expect(screen.queryByTestId("deliverables-approval-conflict")).not.toBeInTheDocument();
+    concluir();
+    await waitFor(() => expect(api.updateCatalog2Step).toHaveBeenCalledTimes(1));
+    expect(lastPut().ops.client_approval.mode).toBe("deliverables");
+  });
+});
+
+// Item 4 (31/10): o valor/hora da especialidade é só REFERÊNCIA na etapa; a tarifa global se altera apenas na Precificação.
+describe("Valor/hora da especialidade na etapa", () => {
+  it("mostra o valor padrão como referência, sem campo, sem 'Editar valor/hora' e sem gravar a tarifa global", () => {
+    mount();
+    openEditor(); expandAll();
+    expect(screen.getByTestId("step-hourly-rate-value")).toHaveTextContent("R$ 50,00 por hora");
+    expect(screen.queryByRole("button", { name: /Editar valor\/hora/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Valor\/hora padrão/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("step-hourly-rate-link")).toHaveAttribute("href", "/admin/precificacao");
+    expect(api.updateCatalog2Specialty).toBeUndefined();
+  });
+});
+
 describe("Conferência final somente leitura", () => {
   it("mostra dados atuais, horas/custo e prazos sem campos editáveis; Corrigir preserva o rascunho sem gravar", () => {
     mount({ step: { approval_hours: 24, rework_hours: 8 }, taskOver: { stage_execution: "stage" } });
@@ -159,7 +257,7 @@ describe("Conferência final somente leitura", () => {
 
 describe("Entregáveis DENTRO da etapa", () => {
   it("desativar a aprovação de um entregável salvo precisa gravar a mudança antes de concluir a etapa", async () => {
-    mount({ taskOver: { stage_execution: "stage" }, deliverables: [deliv()], step: { ops: { client_approval: { mode: "step" } } } });
+    mount({ taskOver: { stage_execution: "stage" }, deliverables: [deliv({ requires_approval: true })], step: { ops: { client_approval: { mode: "step" } } } });
     openEditor(); expandAll();
     fireEvent.click(screen.getByRole("button", { name: "Desativar aprovação dos entregáveis" }));
     expect(screen.queryByTestId("approval-deliverables-conflict")).not.toBeInTheDocument();
@@ -170,7 +268,7 @@ describe("Entregáveis DENTRO da etapa", () => {
   });
 
   it("excluir o último entregável tira seu nome da aprovação e do resumo; declarar sem entregáveis salva a exclusão primeiro", async () => {
-    mount({ taskOver: { stage_execution: "stage" }, deliverables: [deliv()], step: { ops: { client_approval: { mode: "deliverables" } } } });
+    mount({ taskOver: { stage_execution: "stage" }, deliverables: [deliv({ requires_approval: true })], step: { ops: { client_approval: { mode: "deliverables" } } } });
     openEditor(); expandAll();
     fireEvent.click(screen.getByLabelText("Excluir Plano estratégico inicial de mídia paga"));
     fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Excluir entregável" }));
@@ -239,7 +337,8 @@ describe("Entregáveis DENTRO da etapa", () => {
     mount({ deliverables: [deliv()] });
     const sum = screen.getByTestId("step-deliverable-summary");
     expect(sum.textContent).toContain("1 entregável");
-    expect(sum.textContent).toContain("Plano estratégico inicial de mídia paga — aprovação do cliente — todo ciclo");
+    // tarefa que não executa por etapa: entregável sem aprovação individual (a regra do servidor não aceita aprovação aqui)
+    expect(sum.textContent).toContain("Plano estratégico inicial de mídia paga — todo ciclo");
     expect(screen.getByTestId("step-deliverable-state").textContent).toBe("completos");
     openEditor(); expandAll();
     expect(items()).toHaveLength(1);

@@ -42,6 +42,8 @@ const PROVISIONAL_DETAIL = {
   },
   readiness: {
     task_count: 0, step_count: 0, price_amount: null, deadline_days: null,
+    // sinal do servidor (computeProductReadiness) para produto com dados provisórios
+    ready_for_client: false, blockers: ["price_pending", "deadline_pending"],
     provisional: {
       is_provisional: true, needs_review: true,
       image_path: "/images/products/alk-web-004.svg", image_source_note: "teste",
@@ -63,7 +65,8 @@ describe("Catalog2ProductDetail — dado real", () => {
   it("mostra nome, categoria, código, preço/prazo reais (sem selo provisório) e opções reais", async () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
     render(<Catalog2ProductDetail productId="p1" onBack={() => {}} />);
-    expect(await screen.findByText("Criação de Site Institucional")).toBeInTheDocument();
+    // o nome aparece no caminho de navegação e no título; o título (h1) é o que identifica o produto
+    expect(await screen.findByRole("heading", { level: 1, name: "Criação de Site Institucional" })).toBeInTheDocument();
     expect(screen.getByText("Presença Digital")).toBeInTheDocument();
     expect(screen.getByText("site-institucional")).toBeInTheDocument();
     expect(screen.getAllByText(/R\$\s*750/).length).toBeGreaterThan(0);
@@ -71,13 +74,24 @@ describe("Catalog2ProductDetail — dado real", () => {
     expect(screen.getByText("Padrão")).toBeInTheDocument();
   });
 
-  it("botão Contratar SEMPRE desabilitado e com o aviso exato de bloqueio", async () => {
+  // Regra desde 24/09 (commit 6771aba): admin comum nunca contrata pelo detalhe; o Admin Master contrata
+  // EM NOME de empresa/agência quando o servidor diz que o produto está pronto; produto incompleto não contrata.
+  it("admin comum: contratação desabilitada, com o aviso exato de bloqueio", async () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
     render(<Catalog2ProductDetail productId="p1" onBack={() => {}} />);
-    await screen.findByText("Criação de Site Institucional");
-    const btn = screen.getByRole("button", { name: /contratação bloqueada/i });
-    expect(btn).toBeDisabled();
+    await screen.findByRole("heading", { level: 1, name: "Criação de Site Institucional" });
+    expect(screen.getByRole("button", { name: /contratação bloqueada/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Contratar" })).toBeDisabled();
+    expect(screen.getByText("Você está vendo como administrador — a contratação acontece pelo perfil da empresa/agência, não por aqui.")).toBeInTheDocument();
+  });
+
+  it("produto incompleto (ready_for_client=false no servidor): aviso exato e nunca contratável, nem pelo Admin Master", async () => {
+    api.getCatalog2ProductDetailPreview.mockResolvedValue({ ...REAL_DETAIL, readiness: { ...REAL_DETAIL.readiness, ready_for_client: false, blockers: ["price_pending"] } });
+    render(<Catalog2ProductDetail productId="p1" onBack={() => {}} isAdminMaster />);
+    await screen.findByRole("heading", { level: 1, name: "Criação de Site Institucional" });
     expect(screen.getByText("Produto em preparação. Dados provisórios precisam ser revisados antes da contratação.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /contratação bloqueada/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Contratar em nome de empresa\/agência/ })).not.toBeInTheDocument();
   });
 
   it("tarefas reais aparecem em 'O que está incluído' sem selo provisório", async () => {
@@ -90,15 +104,18 @@ describe("Catalog2ProductDetail — dado real", () => {
   it("5. memória de cálculo do preço: sem isAdminMaster (padrão), o ícone não aparece", async () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
     render(<Catalog2ProductDetail productId="p1" onBack={() => {}} />);
-    await screen.findByText("Criação de Site Institucional");
+    await screen.findByRole("heading", { level: 1, name: "Criação de Site Institucional" });
     expect(screen.queryByRole("button", { name: "Como o preço foi calculado" })).not.toBeInTheDocument();
   });
 
-  it("5. memória de cálculo do preço: com isAdminMaster, o ícone aparece ao lado do preço", async () => {
+  // A memória de cálculo saiu do detalhe em 24/09 (cabeçalho novo, commit 6771aba) e fica no Catálogo/Cadastro
+  // de produtos (coberta em catalog2-pricing-memory-popover.test.tsx). No detalhe, o Master contrata em nome da conta.
+  it("5. Admin Master no detalhe: sem memória de cálculo aqui; contrata em nome de empresa/agência quando o produto está pronto", async () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(REAL_DETAIL);
     render(<Catalog2ProductDetail productId="p1" onBack={() => {}} isAdminMaster />);
-    await screen.findByText("Criação de Site Institucional");
-    expect(screen.getByRole("button", { name: "Como o preço foi calculado" })).toBeInTheDocument();
+    await screen.findByRole("heading", { level: 1, name: "Criação de Site Institucional" });
+    expect(screen.queryByRole("button", { name: "Como o preço foi calculado" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Contratar em nome de empresa\/agência/ })).toBeEnabled();
   });
 
   it("recalcula preço e prazo com a opção e o adicional selecionados", async () => {
@@ -119,6 +136,8 @@ describe("Catalog2ProductDetail — dado real", () => {
     await waitFor(() => expect(api.simulateCatalog2).toHaveBeenLastCalledWith("v1", {
       variation_option_keys: ["premium"],
       addon_keys: ["urgencia"],
+      // adicionais por quantidade também vão na simulação (vazio quando não há nenhum)
+      addon_selections: {},
       quantity: 1,
       answers: {},
     }));
@@ -131,11 +150,15 @@ describe("Catalog2ProductDetail — dado provisório", () => {
   it("preço, prazo, modalidade, opções e destaques provisórios aparecem SEMPRE marcados", async () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(PROVISIONAL_DETAIL);
     render(<Catalog2ProductDetail productId="p2" onBack={() => {}} />);
-    expect(await screen.findByText("Landing Page de Alta Conversão")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Landing Page de Alta Conversão" })).toBeInTheDocument();
     expect(screen.getAllByText(/R\$\s*3\.?050/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/provisório — revisar/i)).toBeInTheDocument();
+    // marcas atuais (o "(provisório — revisar)" ao lado do preço saiu do cabeçalho em 24/09, commit 6771aba):
+    expect(screen.getByText("Este produto ainda tem campos provisórios (marcados ao longo da tela). Nenhum valor provisório entra em cotação, cesta ou checkout.")).toBeInTheDocument();
+    expect(screen.getByText("Dados provisórios - revise antes de contratar")).toBeInTheDocument();
     expect(screen.getByText("Essencial")).toBeInTheDocument();
+    expect(screen.getAllByText("provisória").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/provisóri/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /contratação bloqueada|Selecione uma opção/i })).toBeDisabled();
   });
 
   it("selecionar uma opção provisória é só visual — não muda o bloqueio de contratação", async () => {
@@ -177,11 +200,13 @@ describe("Catalog2ProductDetail — reunião 10/09 (esforço provisório para te
     },
   };
 
-  it("mostra o aviso de especialidade/tempo provisórios por tarefa e o rótulo 'funcional para teste' do produto", async () => {
+  // O rótulo de produto "Funcional para teste" saiu do cabeçalho do detalhe em 24/09 (commit 6771aba, ajuste de layout);
+  // o aviso que continua valendo é o selo por TAREFA com esforço provisório — é ele que este teste exige.
+  it("mostra o aviso de especialidade/tempo provisórios na tarefa com esforço provisório", async () => {
     api.getCatalog2ProductDetailPreview.mockResolvedValue(PROVISIONAL_EFFORT_DETAIL);
     render(<Catalog2ProductDetail productId="p3" onBack={() => {}} />);
     expect(await screen.findByText("Tarefa provisória")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Especialidade e tempo provisórios para teste — revisão humana pendente/)).toBeInTheDocument();
     expect(screen.getAllByText(/provisório/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Funcional para teste, pendente de revisão/i)).toBeInTheDocument();
   });
 });

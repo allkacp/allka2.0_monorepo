@@ -246,7 +246,14 @@ describe("Pacotes de produtos e dependências", () => {
     assert.equal(flow.json.state, "aguardando_dependencia_produto");
     assert.equal(flow.json.label, "Aguardando dependência de produto");
     assert.match(flow.json.reason, /criativos/);
+    // Recém-contratada (PARA_LANCAMENTO): aguarda o lançamento — não está "em lançamento", comprar não lança.
+    assert.equal((await prisma.projectTask.findUniqueOrThrow({ where: { id: c.task("estrategia").id } })).status, "PARA_LANCAMENTO");
+    const waiting = (await api(`/api/project-tasks/${c.task("estrategia").id}/flow`, { token })).json;
+    assert.equal(waiting.state, "aguardando_lancamento");
+    assert.equal(waiting.label, "Aguardando lançamento");
+    await prisma.projectTask.update({ where: { id: c.task("estrategia").id }, data: { status: "EM_LANCAMENTO" } });
     assert.equal((await api(`/api/project-tasks/${c.task("estrategia").id}/flow`, { token })).json.state, "em_lancamento");
+    await prisma.projectTask.update({ where: { id: c.task("estrategia").id }, data: { status: "PARA_LANCAMENTO" } });
 
     // só líder/admin dispensa; tarefa que já começou não pode
     const plain = await prisma.user.create({ data: { id: `pl-${uid()}${uid()}`, email: `pl-${uid()}@example.test`, password_hash: "x", name: "x", role: "company_user", account_type: "empresas", is_active: true, status: "ativo" } });

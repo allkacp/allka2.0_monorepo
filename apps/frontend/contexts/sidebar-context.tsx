@@ -174,15 +174,17 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
     description: "Agency preview account used for local development.",
   });
 
+  // Sem identidade de reserva: até o cabeçalho carregar a pessoa logada fica vazio. Antes o padrão era um admin
+  // ("Admin Test", "AT", "Administrador") e aparecia no menu "Mais" de qualquer perfil (reteste Codex de 02/11).
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    name: "Admin Test",
-    role: "Administrador",
-    job_title: "Master",
-    email: "admin@allka.test",
+    name: "",
+    role: "",
+    job_title: "",
+    email: "",
     phone: "",
-    avatar: "AT",
-    department: "Administração",
-    joinDate: "2023-01-01",
+    avatar: "",
+    department: "",
+    joinDate: "",
   });
 
   const [projectColor, setProjectColor] = useState<string | null>(null);

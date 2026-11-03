@@ -10,14 +10,15 @@
 | # | Nome | Em uma frase | Exemplo (clique para ver) |
 |---|---|---|---|
 | 1 | **Painel Moldura** | Container grande por cima da página, contorno violeta, 30 px de margem, acompanha a sidebar | [Cadastro de Produtos → ícone ▶ de um produto](http://localhost:8082/admin/cadastro-produtos) |
-| 1b | **Fundo escurecido padrão** | Fundo atrás de janelas: um pouco escuro e levemente desfocado | qualquer janela/alerta |
+| 1b | **Fundo escurecido padrão** | Fundo preto translúcido, levemente desfocado, nunca branco | qualquer janela/alerta |
 | 2 | **Barra lateral recolhida** | Com a sidebar recolhida, os botões ficam dentro da barra | [qualquer tela](http://localhost:8082/admin/dashboard) (botão ☰ da sidebar) |
 | 3 | **Abrir todos / Fechar todos** | Botãozinho duplo que abre/fecha todos os acordeões da tela | [Cadastro do produto → aba 1](http://localhost:8082/admin/cadastro-produtos/1) |
 | 4 | **Bolinha numerada em degradê** | Números 1, 2, 3 dos blocos com o degradê da plataforma | [Cadastro do produto → aba 1](http://localhost:8082/admin/cadastro-produtos/1) |
-| 5 | **Janela Moldura** | Janela menor, por cima de um Painel Moldura, véu branco claro (sidebar sempre visível) | Produto → Classificação → Variações → Ver → "Configurar impactos" |
+| 5 | **Janela Moldura** | Janela menor, por cima de um Painel Moldura, com fundo preto atrás e sidebar livre | Produto → Classificação → Variações → Ver → "Configurar impactos" |
 | 6 | **Tela Moldura Clara** *(nome provisório)* | O painel branco de toda tela do sistema (cantos arredondados, borda e sombra) | [Dashboard](http://localhost:8082/admin/dashboard) |
 | 7 | **Tela Moldura Escura** *(nome provisório)* | O mesmo painel, mais escuro (`#d6daf0`), usado nas telas de cadastro/edição | [Cadastro de Produtos](http://localhost:8082/admin/cadastro-produtos) |
 | 8 | **Linha + Ver** *(existente)* | Item recolhido numa linha (nome, resumo, etiquetas) com botão **Ver** que abre Painel Moldura | [Produto → Entrega → Questionário / Entregáveis](http://localhost:8082/admin/cadastro-produtos/1) |
+| 9 | **Menu Mais (celular)** *(existente, refeito 02/11)* | No celular/tablet, o botão "Mais" abre de baixo uma grade de ícones com o nome de cada item — os mesmos itens da barra lateral | [qualquer tela no celular](http://localhost:8082/admin/dashboard) → botão "Mais" da barra de baixo |
 
 ## Padrões FINAIS
 
@@ -34,10 +35,14 @@ O container grande que abre por cima da página (ex.: "Preenchimento do produto"
 - **Como usar:** `import { FramedPanel } from "@/components/framed-panel"` → `<FramedPanel open onOpenChange testId="...">…conteúdo…</FramedPanel>`. A margem está em `FRAMED_PANEL_MARGIN` (30) no mesmo arquivo: mudar lá muda em todas as telas.
 - **Usado em:** Preenchimento do produto, **editor de produto** (ao clicar em editar/Novo Produto), editar etapa, acesso da etapa, questionário de contratação, entregáveis, fluxo das etapas, variações, adicionais, prazos e condições, Personalizar Tema.
 - **Camadas (z-index):** painel em 1201; janelas comuns do sistema em 1300; menus/dicas em 1400 (para tudo aparecer por cima do painel).
+- **29/10 — regra final do cabeçalho interno (LOCAL):** os painéis/janelas abertos no editor mostram uma faixa compacta com Produto ID + nome e versão; Tarefa ID + nome e Etapa ID + nome quando houver contexto. Usa números públicos, nunca códigos internos. Produto com uma única tarefa também identifica essa tarefa nas telas comerciais; com várias, não escolhe uma arbitrariamente. `components/framed-editor-context.tsx`, herdado pelos portais de `framed-panel.tsx`. Não adiciona contexto de produto em telas fora do editor.
+- **29/10 — painéis aninhados (LOCAL):** cada fundo fica acima da moldura anterior e abaixo de seu próprio conteúdo. Base painel 1200/1201 e janela 1250/1251 preservadas; molduras internas sobem a partir da camada herdada. Assim o fundo preto realmente escurece o painel anterior.
 
 ### 1b. Fundo escurecido padrão (overlay)  ✅ final (20/10/2026)
-O fundo que aparece atrás de qualquer janela/modal/alerta: **um pouco mais escuro e levemente desfocado** (`bg-slate-950/60` + `backdrop-blur-[2px]`), nunca 100% escuro. Vale em `components/ui/dialog.tsx`, `components/ui/alert-dialog.tsx` e `components/framed-panel.tsx` — para mudar em tudo, altere nesses três.
-- **Regra do usuário:** a barra lateral **sempre aparece**; qualquer fundo (escuro ou claro) começa depois dela e acompanha quando ela recolhe/expande.
+
+**Uso acrescentado em 29/10, LOCAL:** Entrega do editor de produto lista Tarefa 1/2/3 como linhas compactas; nome ou Ver tarefa abre o FramedPanel com os cartões próprios e a lista de etapas já dentro. Entrega comercial permanece no produto. Não é uma nova moldura global nem liberação de múltiplas tarefas principais no individual. O usuário pediu manter esta alteração apenas local por enquanto.
+**Decisão final de 29/10 (implementada LOCAL, substitui o branco antigo e o teste opt-in):** o fundo atrás de painéis/janelas moldura e das bases comuns de diálogo/confirmação é **preto translúcido**, 60% e desfoque de 2 px (`bg-black/60 backdrop-blur-[2px]`). Não é preto opaco e NÃO se usa mais véu branco em Janela Moldura. Vale em `components/ui/dialog.tsx`, `components/ui/alert-dialog.tsx` e `components/framed-panel.tsx`; removido `overlayTone` para não permitir divergência entre molduras.
+- **Regra do usuário nas molduras:** a barra lateral **sempre aparece**; o fundo começa exatamente depois dela e acompanha quando ela recolhe/expande; clique no fundo bloqueia o conteúdo anterior e não fecha a moldura.
 
 ### 2. Barra lateral recolhida — botões dentro da barra  ✅ final (19/10/2026)
 Com a sidebar recolhida, **Expandir** e **Personalizar cores** ficam **dentro da barra, abaixo do logo**; nada aparece fora dela ao passar o mouse. Código: `components/sidebar.tsx` (`data-testid="sidebar-collapsed-actions"`).
@@ -55,10 +60,11 @@ Os números dos blocos (1, 2, 3…) usam a classe `.section-number-badge` (`app/
 ### 5. Janela Moldura  ✅ final (20/10/2026)
 A **janela menor** que abre **por cima de um Painel Moldura** (ex.: "Configurar impactos" de uma opção de variação). É a irmã pequena do Painel Moldura. Para pedir: "transforme isso numa **Janela Moldura**".
 - **Exemplo:** [Produto 1](http://localhost:8082/admin/cadastro-produtos/1) → aba 3 "Classificação e opções" → Variações → Ver → "Configurar impactos"; também "Nova condição" (Prazos e condições → Regras de prazo) e "Configurar impactos" dos adicionais.
-- **Fundo claro:** véu **branco translúcido** (`bg-white/55` + leve desfoque), que cobre tudo **menos a barra lateral**; a sidebar sempre aparece e o véu acompanha quando ela recolhe/expande.
+- **Fundo preto (decisão final de 29/10):** o mesmo overlay preto translúcido do Painel Moldura, cobrindo tudo **menos a barra lateral**; acompanha quando ela recolhe/expande. Substitui integralmente a regra antiga de véu branco.
 - **Centralizada** na área ao lado da sidebar; **largura máxima 66 rem (~990 px)** (aumentada ~18% em 20/10) e altura até `100dvh − 4rem`, com rolagem por dentro. O tamanho pode ser ajustado conforme o conteúdo (passe `className` com outro `max-w`).
 - Mesmo visual do Painel Moldura: contorno violeta, fundo `#f4f6fc`, margem interna de 10 px, cabeçalho em banner branco (`FRAMED_HEADER_CLASS`) e rodapé `FRAMED_FOOTER_CLASS`.
 - **Como usar:** `import { FramedModal } from "@/components/framed-panel"` → `<FramedModal open onOpenChange testId title>…</FramedModal>` (o componente chama-se `FramedModal`; o nome que você usa é **Janela Moldura**).
+- **Aplicado também em (01/11, LOCAL — pedido do usuário na auditoria T28; o padrão não mudou):** Financeiro → Carteiras → Comissões e os demais cartões de movimentação, Extrato da carteira, Projeções e Ajuste manual (`app/admin/financeiro/wallet-window.tsx`, que antes eram slides laterais por baixo do cabeçalho global); Projeto → Faturamento → Detalhes da Fatura (`components/project-invoice-details-window.tsx`). O Ajuste aberto de dentro do Extrato fica POR CIMA dele (Escape fecha um de cada vez). Uma Tela Slide (`EmbeddedSlideScreen`) atrás não fecha com o Escape que a janela de cima já usou.
 
 ## Padrões de container de tela (nomes PROVISÓRIOS: Tela Moldura Clara e Tela Moldura Escura — o usuário escolheu esses nomes em 21/10, ainda pode mexer)
 
@@ -73,6 +79,10 @@ A mesma Tela Moldura com fundo e borda mais escuros (**`#d6daf0`** com borda `#c
 - **Código:** sobreposição de classes (`!border-[#c3c8e6] !bg-[#d6daf0]`) em `apps/frontend/app/admin/produtos/page.tsx` e em `components/embedded-slide-screen.tsx` (`bare`). **Constante compartilhada (R21-28, 21/10):** `STANDARD_SHELL_PANEL_DARK_CLASS` (painel) e `STANDARD_SHELL_DARK_BG_CLASS` (fundos soltos) em `components/standard-page-shell.tsx`, ao lado da branca. O Cadastro de Produtos já usa; novas telas de cadastro devem usar a constante, não copiar as classes.
 
 ## Padrões EXISTENTES (catalogados; promover a final quando o usuário mandar)
+
+**Experimento local de 29/10 — Produto teste (NÃO é novo padrão global):** mesma moldura/shell, novo botão de frasco ao lado da ação de edição atual. `?editor=teste` ativa somente a apresentação alternativa de cadastro: campos abertos/compactos, classificação nas informações, tarefa inline com abas e etapas expandidas. Reutiliza registros e componentes atuais. `editor-layout-test.tsx/.css` + opt-ins em `product-editor.tsx`; as regras finais dos painéis/janelas não mudam. Não substituir o editor atual, promover a padrão ou publicar até aprovação do usuário.
+
+**Continuação do experimento — fluxo inteligente (29/10):** somente `editor=teste`: Produto → Tarefa e etapas → Variações e adicionais → Questionário e apresentação → Conferência, preço e publicação. Cadastros de apoio reutilizam a mesma instância de formulário em um slot contextual, sem duplicar registro ou estado; ao fechar o contexto, retornam à origem. Etapa plana em ordem identidade/executor/acessos/entregáveis/checklist/conclusão. Entregáveis/acessos inline, regras e confirmações globais preservadas. Não é padrão global aprovado; falta homologação visual/manual.
 
 ### Ajustes do cabeçalho e ferramentas — 28/10/2026
 - **Trilho direito compacto:** somente gatilhos visíveis ocupam espaço; ordem bandeja, tema, fonte, sugestões, alertas, ajuda e IA. Implementação compartilhada em `components/floating-tools-rail.tsx`; painéis/mobile mantidos.
@@ -92,6 +102,8 @@ A mesma Tela Moldura com fundo e borda mais escuros (**`#d6daf0`** com borda `#c
 | **Escolha de escopo do modelo** | Ao salvar um modelo global usado: Criar novo modelo × Editar globalmente (com impacto). | `ModelScopeDialog`, regra 37 |
 | **Moeda Allkoin (AK$)** | A moeda da Allka. **Todo valor da plataforma mostra os DOIS: Allkoin primeiro e o real entre parênteses — `AK$ 366,07 (R$ 366,07)`** (símbolo na frente, 2 casas; hoje 1 AK$ = R$ 1,00, por isso os números são iguais). Saldo e movimentação de carteira (recarga por Pix/boleto/cartão, comissão, brinde) são Allkoins: em espaço curto (cabeçalho, cartões) aparece `AK$ 1.000,00` e o mouse mostra os dois; no resto, os dois já visíveis. **Preço de produto** aparece em reais (`R$ 366,07`) e o mouse mostra `AK$ 366,07 (R$ 366,07)` — por enquanto nessa ordem; depois o usuário manda inverter. Pagar uma recarga continua em R$ ("Valor a pagar (R$)" → "Você recebe …"). Ainda só em R$ de propósito: faturas, valor de projeto, saque e extrato bancário — a detalhar. | `lib/allkoins.ts` (`fmtAllkoins`, `fmtAllkoinsBoth`, `fmtReais`, `ALLKOIN_BRL_RATE`), `components/price-with-allkoins.tsx` (`PriceWithAllkoins`, `AllkoinsAmount`, `AkBoth`, `Money`); [cabeçalho](http://localhost:8082/agency/dashboard), [Meu Perfil](http://localhost:8082/agency/perfil), [vitrine](http://localhost:8082/agency/catalogo-produtos) |
 | **Fechamento de tarefa técnica** | Resumo leigo + tabela de farol (🟢 pronto · 🟡 aguardando teste · 🔴 não deu certo · ⏸ adiado). | `docs/RETOMAR-AQUI.md` seção 1 |
+| **Menu Mais (celular)** (9) | Folha que sobe de baixo (até 92% da altura, cantos arredondados, degradê escuro da plataforma, alça no topo) com grade de ícones coloridos + nome. Itens = os MESMOS da barra lateral do perfil (a barra publica o menu em `lib/navigation-store.ts`; item novo na barra aparece sozinho no menu); "Principal" + uma seção por grupo com todos os subitens à vista (sem sanfona); busca sem acento; fecha no X, no Escape, no fundo ou arrastando a alça; contadores só reais; 3/4/5/6 ícones por linha (< 400 / 400–639 / 640–767 / ≥ 768 px). Pedido do usuário em 02/11 (LOCAL); ainda não promovido a final. | `components/app-menu-drawer.tsx`; [Dashboard no celular](http://localhost:8082/admin/dashboard) → "Mais" |
+| **Abas e seletores no celular** | Abaixo de 768 px as barras de abas do componente compartilhado quebram em linhas (nada fica cortado fora da tela); seletores de área (Financeiro, Relatórios) e barras de botões fazem o mesmo; tabelas seguem o `tabela-cartao`. No desktop nada muda. (02/11, LOCAL) | `components/ui/tabs.tsx` (`TabsList`); [Sistema no celular](http://localhost:8082/admin/sistema) |
 
 ## Regra de comparação (decidida pelo usuário)
 Quando o usuário pedir uma tela/comportamento novo e já existir um padrão **existente (não final)** que faça algo parecido, a IA **avisa antes de criar**: "já tem o <nome>, que faz X, Y e Z". Compara-se com ele se é a mesma coisa de fato e se o novo substitui o existente; só então se decide (reaproveitar, substituir ou criar outro) e se atualiza este catálogo.

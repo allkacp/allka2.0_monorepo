@@ -45,6 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { catalog2StatusLabel } from "@/lib/catalog2-status";
 import { apiClient } from "@/lib/api-client";
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { fmtBRL, Section, PortfolioGallery } from "@/components/product-detail-shared";
@@ -633,7 +634,7 @@ export function Catalog2ProductDetail({
         code={code}
         deadlineDays={displayDeadline}
         deadlineIsProvisional={deadlineIsProvisional}
-        statusLabel={statusValue === "disponivel" ? "Disponível" : "Em preparação"}
+        statusLabel={statusValue === "disponivel" ? "Disponível" : isClient && !clientProduct.is_preview && statusValue ? (clientProduct.status_label ?? catalog2StatusLabel(statusValue)) : "Em preparação"}
         extraBadges={
           <>
             {modality && (
@@ -1105,7 +1106,7 @@ export function Catalog2ProductDetail({
                         {(sel.delivery_groups ?? []).map((group: number, index: number) => (
                           <div key={index} className="flex items-center gap-2 text-xs">
                             <span className="w-14 text-muted-foreground">Tarefa {index + 1}</span>
-                            <Input type="number" min={1} className="w-16 h-8" value={Number.isFinite(group) ? String(group) : ""} onChange={(e) => setDeliveryGroup(index, e.target.value)} />
+                            <Input type="number" min={1} aria-label={`Unidades da tarefa ${index + 1}`} className="w-16 h-8" value={Number.isFinite(group) ? String(group) : ""} onChange={(e) => setDeliveryGroup(index, e.target.value)} />
                             <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => removeDeliveryGroup(index)}>Remover</Button>
                           </div>
                         ))}
@@ -1150,7 +1151,9 @@ export function Catalog2ProductDetail({
                         <div className="flex items-center justify-between"><span className="text-muted-foreground">{clientPeriodPricing.months > 1 ? "Total a pagar (antecipado)" : "Primeira cobrança"}</span><span className="font-bold text-sm"><Money value={clientPeriodPricing.total_price} /></span></div>
                         {(clientPeriodPricing.implementation_price ?? 0) > 0 && <div data-testid="first-charge-implementation" className="flex items-center justify-between text-muted-foreground"><span>· inclui a implantação inicial (só agora)</span><span><Money value={clientPeriodPricing.implementation_price} /></span></div>}
                         {clientPeriodPricing.renewal_price != null && clientPeriodPricing.months === 1 && <div data-testid="renewal-price" className="flex items-center justify-between text-muted-foreground"><span>Renovações (todo mês, sem implantação)</span><span><Money value={clientPeriodPricing.renewal_price} /></span></div>}
-                        <div className="flex items-center justify-between text-muted-foreground"><span>Desconto do período</span><span>{clientPeriodPricing.discount_percent}%</span></div>
+                        {/* Item 7 (31/10): base + percentual + total visíveis. Valores do servidor; o desconto vale só sobre a mensalidade. */}
+                        {clientPeriodPricing.reference_monthly_price != null && clientPeriodPricing.discount_percent > 0 && <div data-testid="period-base-price" className="flex items-center justify-between text-muted-foreground"><span>Mensalidade sem desconto</span><span><Money value={clientPeriodPricing.reference_monthly_price} /></span></div>}
+                        <div className="flex items-center justify-between text-muted-foreground"><span>Desconto do período</span><span data-testid="period-discount">{clientPeriodPricing.discount_percent > 0 ? `−${clientPeriodPricing.discount_percent}% na mensalidade` : "sem desconto"}</span></div>
                       </>
                     )}
                     {(clientPricing?.notices ?? []).map((n: string, i: number) => <p key={i} className="text-amber-600 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{n}</p>)}

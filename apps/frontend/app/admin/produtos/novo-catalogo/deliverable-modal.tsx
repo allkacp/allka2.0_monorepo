@@ -33,7 +33,9 @@ const HELP = "text-[11px] font-normal text-slate-500 dark:text-slate-400";
 
 export interface DeliverableModalContext { taskName: string; stepName?: string; stepIndex?: number }
 
-export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, context, keyLabel, onSave, onGoToStep, onClose, sessionKey }: {
+export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, context, keyLabel, onSave, onGoToStep, onClose, sessionKey, inline = false, onDraftChange, approvalBlock = null }: {
+  /** Item 5: se a etapa/tarefa não permite aprovação individual do cliente (mesma regra do servidor). hard = não dá para liberar nesta etapa. */
+  approvalBlock?: { text: string; hard: boolean } | null;
   initial: Fields; isNew: boolean;
   /** Etapas da tarefa (nome completo) para "Etapa responsável". */
   steps: { id: string; name: string; index: number }[];
@@ -46,6 +48,8 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
   onGoToStep?: () => void;
   onClose: () => void;
   sessionKey?: string;
+  inline?: boolean;
+  onDraftChange?: (value: Fields) => void;
 }) {
   const restored = useRef(readEditorSession<{ v: Fields; baseline: string; open: SectionId[]; y: number; picker: boolean }>(sessionKey));
   const saved = restored.current;
@@ -66,6 +70,9 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
   const persist = () => writeEditorSession(sessionKey, { v, baseline, open: [...open], y: scrollY.current, picker: filePickerOpen });
   useEffect(persist, [sessionKey, v, baseline, open, filePickerOpen]);
   const set = (p: Partial<Fields>) => setV((c) => ({ ...c, ...p }));
+  const draftChangeRef = useRef(onDraftChange);
+  draftChangeRef.current = onDraftChange;
+  useEffect(() => { if (inline) draftChangeRef.current?.(v); }, [inline, v]);
   const issues = useMemo(() => deliverableIssues(v), [v]);
   const dirty = JSON.stringify(v) !== baseline;
   const reveal = (s: SectionId) => setOpen((c) => (c.has(s) ? c : new Set([...c, s])));
@@ -89,7 +96,7 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
     try { await onSave(v, { draft }); setBaseline(JSON.stringify(v)); } catch (e: any) { setSaveErr(e?.message ?? "Não foi possível salvar. Nada do que você preencheu foi apagado."); setSaving(null); return; }
     setSaving(null);
   };
-  const requestClose = () => { if (saving) return; if (dirty) setCloseAsk(true); else onClose(); };
+  const requestClose = () => { if (saving) return; if (dirty && !inline) setCloseAsk(true); else onClose(); };
   const upload = async (file: File) => {
     setFileErr(null);
     try { const r = await apiClient.uploadCatalog2DeliverableFile(file); set({ template_url: `${FILE_PREFIX}${r.file.id}`, template_name: r.file.name }); }
@@ -109,14 +116,18 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
     }
   };
 
+  const Surface = inline ? InlineDeliverableSurface : Dialog;
+  const Content = inline ? InlineDeliverableContent : DialogContent;
+  const Title = inline ? "h4" : DialogTitle;
+  const Description = inline ? "p" : DialogDescription;
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) requestClose(); }}>
-      <DialogContent showCloseButton={false} onOpenAutoFocus={(event) => { if (valid) { event.preventDefault(); root.current?.focus({ preventScroll: true }); } }} className="flex max-h-[calc(100dvh-9rem)] w-[96vw] max-w-5xl flex-col gap-0 overflow-hidden bg-slate-50 p-0 dark:bg-slate-950 sm:max-w-5xl" data-testid="deliverable-modal">
+    <Surface open onOpenChange={(o: boolean) => { if (!o) requestClose(); }}>
+      <Content showCloseButton={false} onOpenAutoFocus={(event: Event) => { if (valid) { event.preventDefault(); root.current?.focus({ preventScroll: true }); } }} className="flex max-h-[calc(100dvh-9rem)] w-[96vw] max-w-5xl flex-col gap-0 overflow-hidden bg-slate-50 p-0 dark:bg-slate-950 sm:max-w-5xl" data-testid="deliverable-modal">
         <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900" data-testid="deliverable-modal-header">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="min-w-0">
-              <DialogTitle className="text-base font-bold">{isNew ? "Novo entregável" : "Editar entregável"}</DialogTitle>
-              <DialogDescription className="sr-only">Cadastre ou revise o entregável, seus responsáveis, vínculo com a etapa e regras de aprovação.</DialogDescription>
+              <Title className="text-base font-bold">{isNew ? "Novo entregável" : "Editar entregável"}</Title>
+              <Description className="sr-only">Cadastre ou revise o entregável, seus responsáveis, vínculo com a etapa e regras de aprovação.</Description>
               <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300" data-testid="deliverable-modal-context">
                 Tarefa: <strong>{context.taskName}</strong>{context.stepName ? <> · Etapa {context.stepIndex ? `${context.stepIndex} — ` : ""}<strong>{context.stepName}</strong></> : <> · <span className="font-semibold text-amber-700">sem etapa responsável</span></>}
               </p>
@@ -129,7 +140,7 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
           </div>
         </div>
 
-        <div ref={attachScroll} tabIndex={-1} data-testid="deliverable-scroll" onScroll={(e) => { scrollY.current = e.currentTarget.scrollTop; persist(); }} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 outline-none">
+        <div ref={attachScroll} tabIndex={-1} data-testid="deliverable-scroll" onScroll={(e) => { scrollY.current = e.currentTarget.scrollTop; persist(); }} className={inline ? "space-y-2 p-2 outline-none" : "min-h-0 flex-1 space-y-3 overflow-y-auto p-4 outline-none"}>
           {showErrors && issues.length > 0 && (
             <div role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="deliverable-error-summary">
               <p className="font-bold">O entregável ainda não pode ser concluído. Nada do que você preencheu foi apagado.</p>
@@ -138,18 +149,18 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
             </div>
           )}
           {saveErr && <p role="alert" className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800" data-testid="deliverable-save-error">{saveErr}</p>}
-          <div className="flex justify-end gap-1.5">
+          <div hidden={inline} className="flex justify-end gap-1.5">
             <button type="button" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200" onClick={() => setOpen(new Set(SECTIONS.map((s) => s.id)))}>Expandir todos</button>
             <button type="button" className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200" onClick={() => setOpen(new Set())}>Recolher todos</button>
           </div>
 
           {SECTIONS.map((sec) => {
-            const isOpen = open.has(sec.id);
+            const isOpen = inline || open.has(sec.id);
             const n = issuesIn(sec.id);
             return (
               <section key={sec.id} className={`rounded-xl border bg-white shadow-sm dark:bg-slate-900 ${showErrors && n ? "border-rose-400 ring-1 ring-rose-300" : "border-slate-200 dark:border-slate-700"}`} data-testid={`deliverable-section-${sec.id}`} data-open={isOpen ? "true" : "false"}>
                 <h5 className="m-0">
-                  <button type="button" id={`dsec-${sec.id}-h`} aria-expanded={isOpen} aria-controls={`dsec-${sec.id}-p`} onClick={() => setOpen((c) => { const x = new Set(c); if (x.has(sec.id)) x.delete(sec.id); else x.add(sec.id); return x; })}
+                  <button type="button" disabled={inline} id={`dsec-${sec.id}-h`} aria-expanded={isOpen} aria-controls={`dsec-${sec.id}-p`} onClick={() => setOpen((c) => { const x = new Set(c); if (x.has(sec.id)) x.delete(sec.id); else x.add(sec.id); return x; })}
                     className="flex w-full min-w-0 items-center gap-2 rounded-xl px-4 py-2.5 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:hover:bg-slate-800/50">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-600 text-xs font-bold text-white">{sec.id}</span>
                     <span className="min-w-0 flex-1">
@@ -207,12 +218,21 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
                         ["evidence_required", "Exige evidência", "Quem envia precisa anexar a PROVA (print, arquivo ou link).", "Exige evidência"],
                         ["requires_qualification", "Qualificação interna", "Um líder/qualificador confere o item antes de seguir.", "Passa por qualificação interna"],
                         ["requires_approval", "Aprovação do cliente", "O cliente precisa aprovar este item.", "Exige aprovação"],
-                      ] as const).map(([key, title, help, aria]) => (
-                        <label key={key} className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800/40">
-                          <input type="checkbox" className="mt-0.5 h-4 w-4" aria-label={aria} checked={(v as any)[key]} onChange={(e) => set({ [key]: e.target.checked } as Partial<Fields>)} />
-                          <span><strong className="block text-slate-800 dark:text-slate-100">{title}</strong><span className={HELP}>{help}</span></span>
-                        </label>
-                      ))}
+                      ] as const).map(([key, title, help, aria]) => {
+                        // Item 5: aprovação individual só quando a etapa permite. Bloqueio "duro" impede MARCAR (desmarcar continua livre,
+                        // para resolver cadastros antigos); a explicação aparece já aqui, não só no erro ao salvar a etapa.
+                        const isApproval = key === "requires_approval";
+                        const blockedOn = isApproval && approvalBlock?.hard && !v.requires_approval;
+                        const conflict = isApproval && approvalBlock && v.requires_approval;
+                        return (
+                          <label key={key} className={`flex items-start gap-2 rounded-lg border p-2.5 text-xs ${blockedOn ? "cursor-not-allowed border-slate-200 bg-slate-100 opacity-80 dark:border-slate-700" : conflict ? (approvalBlock!.hard ? "cursor-pointer border-rose-300 bg-rose-50" : "cursor-pointer border-amber-300 bg-amber-50") : "cursor-pointer border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/40"}`}>
+                            <input type="checkbox" className="mt-0.5 h-4 w-4" aria-label={aria} disabled={!!blockedOn} checked={(v as any)[key]} onChange={(e) => set({ [key]: e.target.checked } as Partial<Fields>)} />
+                            <span><strong className="block text-slate-800 dark:text-slate-100">{title}</strong><span className={HELP}>{help}</span>
+                              {isApproval && approvalBlock && (blockedOn || conflict) && <span className={`mt-1 block text-[11px] font-semibold ${approvalBlock.hard ? "text-rose-700" : "text-amber-800"}`} data-testid="deliverable-approval-block">{approvalBlock.text}{conflict && approvalBlock.hard ? " Desmarque para a etapa poder ser concluída." : ""}</span>}
+                            </span>
+                          </label>
+                        );
+                      })}
                     </div>
                   )}
                   {sec.id === 6 && (
@@ -255,7 +275,7 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900" data-testid="deliverable-modal-footer">
-          <Button type="button" variant="ghost" disabled={saving !== null} onClick={requestClose}>Cancelar</Button>
+          <Button type="button" variant="ghost" disabled={saving !== null} onClick={requestClose}>{inline ? "Fechar formulário (manter rascunho)" : "Cancelar"}</Button>
           <Button type="button" variant="outline" disabled={saving !== null} onClick={() => void submit(true)} data-testid="deliverable-save-draft" title="Guarda o que já foi preenchido, mesmo incompleto. O entregável fica marcado como rascunho e bloqueia a publicação até ser concluído.">{saving === "draft" ? "Salvando…" : "Salvar rascunho"}</Button>
           <Button type="button" disabled={saving !== null} onClick={() => void submit(false)} data-testid="deliverable-save">{saving === "final" ? "Salvando…" : "Salvar"}</Button>
         </div>
@@ -272,7 +292,12 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
             </div>
           </DialogContent>
         </Dialog>
-      </DialogContent>
-    </Dialog>
+      </Content>
+    </Surface>
   );
+}
+
+function InlineDeliverableSurface({ children }: any) { return <>{children}</>; }
+function InlineDeliverableContent({ children }: any) {
+  return <div data-testid="inline-deliverable-editor" className="min-w-0 rounded-xl border border-violet-200 bg-violet-50/30">{children}</div>;
 }

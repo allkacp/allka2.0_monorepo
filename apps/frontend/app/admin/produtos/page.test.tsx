@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { MemoryRouter } from "react-router-dom"
+import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom"
 import { SidebarProvider } from "@/contexts/sidebar-context"
 import { OpenScreensProvider } from "@/contexts/open-screens-context"
 import AdminProdutosPage from "@/app/admin/produtos/page"
@@ -12,9 +12,9 @@ import AdminProdutosPage from "@/app/admin/produtos/page"
 // O construtor agora abre dentro do container padrão (EmbeddedSlideScreen +
 // bandeja de telas), por isso o OpenScreensProvider.
 
-function renderPage() {
+function renderPage(initialEntry = "/") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <SidebarProvider>
         <OpenScreensProvider>
           <AdminProdutosPage />
@@ -66,6 +66,7 @@ const { api } = vi.hoisted(() => ({
     reorderCatalog2Steps: vi.fn(),
     getCatalog2Products: vi.fn(),
     getCatalog2Product: vi.fn(),
+    getCatalog2ProductIdByNumber: vi.fn(),
     createCatalog2Product: vi.fn(),
     newCatalog2Version: vi.fn(),
     setCatalog2ProductStatus: vi.fn(),
@@ -190,6 +191,42 @@ function productDetail(over: Partial<any> = {}) {
     ...over,
   }
 }
+
+it("Produto teste é ação vizinha ao editor atual, abre o mesmo produto e preserva o editor atual", async () => {
+  api.getCatalog2Product.mockResolvedValue(productDetail({ sequence_number: 2 }));
+  renderPage();
+  const testButton = await screen.findByRole("button", { name: "Produto teste" });
+  expect(screen.getByRole("button", { name: /editar produto|continuar configuração/i })).toBeInTheDocument();
+  await userEvent.click(testButton);
+  expect(await screen.findByTestId("product-test-notice")).toHaveTextContent("Mesmos dados");
+  expect(api.getCatalog2Product).toHaveBeenCalledWith("prod1");
+  expect(api.createCatalog2Product).not.toHaveBeenCalled();
+  expect(api.updateCatalog2VersionInfo).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole("button", { name: /^Fechar$/ }));
+  await waitFor(() => expect(screen.queryByTestId("product-test-notice")).not.toBeInTheDocument());
+  await userEvent.click(screen.getByRole("button", { name: /editar produto|continuar configuração/i }));
+  expect(await screen.findByTestId("product-editor-panel")).toBeInTheDocument();
+  expect(screen.queryByTestId("product-test-notice")).not.toBeInTheDocument();
+});
+
+it("link Produto teste suporta F5 direto sem criar outro produto", async () => {
+  renderPage("/admin/cadastro-produtos?produto=prod1&editor=teste");
+  expect(await screen.findByTestId("product-test-notice")).toBeInTheDocument();
+  expect(api.getCatalog2Product).toHaveBeenCalledWith("prod1");
+  expect(api.createCatalog2Product).not.toHaveBeenCalled();
+});
+
+it("URL numérica e canonicalização preservam editor=teste e o ID real", async () => {
+  api.getCatalog2ProductIdByNumber.mockResolvedValue({ id: "prod1" });
+  api.getCatalog2Product.mockResolvedValue(productDetail({ sequence_number: 2 }));
+  function Location() { const location = useLocation(); return <output data-testid="route">{location.pathname}{location.search}</output>; }
+  render(<MemoryRouter initialEntries={["/admin/cadastro-produtos/2?editor=teste"]}><SidebarProvider><OpenScreensProvider><Location /><Routes><Route path="/admin/cadastro-produtos/:produtoId?" element={<AdminProdutosPage />} /></Routes></OpenScreensProvider></SidebarProvider></MemoryRouter>);
+  expect(await screen.findByTestId("product-test-notice")).toBeInTheDocument();
+  expect(screen.getByTestId("route")).toHaveTextContent("/admin/cadastro-produtos/2?editor=teste");
+  expect(api.getCatalog2ProductIdByNumber).toHaveBeenCalledWith("2");
+  expect(api.getCatalog2Product).toHaveBeenCalledWith("prod1");
+  expect(api.createCatalog2Product).not.toHaveBeenCalled();
+});
 
 beforeEach(() => {
   vi.clearAllMocks()

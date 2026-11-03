@@ -104,3 +104,31 @@ describe("adaptApiProject — Admin responsável (ata 2026-08, reparo 'editar pr
     expect(project.adminResponsibleIsMaster).toBe(false);
   });
 });
+
+// 01/11 (teste do Codex no proj_956): a lista mostrava "Company" para a Lamego Academy
+// porque, sem company_type gravado, o adaptador caía num "company" fixo. A categoria
+// agora vem do vínculo real do projeto; Partner é status da agência, não outra categoria.
+describe("adaptApiProject — categoria da conta (coluna Empresa)", () => {
+  it("projeto de agência sem company_type gravado: Agency (nunca Company por padrão)", () => {
+    const p = adaptApiProject({ id: "a1", title: "Pedido", status: "in-progress", agency: "Lamego Academy", agency_id: "ag1", company_id: null, company_type: null });
+    expect(p.companyType).toBe("agency");
+    expect(p.companyIsPartner).toBe(false);
+  });
+  it("agência com perfil Partner ativo: companyIsPartner true", () => {
+    const p = adaptApiProject({ id: "a2", title: "Pedido", status: "in-progress", agency_id: "ag1", agency_owner: { id: "ag1", name: "Lamego Academy", partner_profile: { status: "active" } } });
+    expect(p.companyType).toBe("agency");
+    expect(p.companyIsPartner).toBe(true);
+  });
+  it("Partner apenas convidado não conta como Partner", () => {
+    const p = adaptApiProject({ id: "a3", title: "Pedido", status: "in-progress", agency_id: "ag1", agency_owner: { id: "ag1", name: "X", partner_profile: { status: "invited" } } });
+    expect(p.companyIsPartner).toBe(false);
+  });
+  it("projeto de empresa (novo ou legado) continua Company; company_type gravado tem prioridade", () => {
+    expect(adaptApiProject({ id: "c1", title: "P", status: "draft", company_id: "co1" }).companyType).toBe("company");
+    expect(adaptApiProject({ id: "c2", title: "P", status: "draft", client_id: "co2" }).companyType).toBe("company");
+    expect(adaptApiProject({ id: "c3", title: "P", status: "draft", agency_id: "ag1", company_type: "nomad" }).companyType).toBe("nomad");
+  });
+  it("sem nenhum vínculo: categoria vazia (sem selo), em vez de inventar Company", () => {
+    expect(adaptApiProject({ id: "x1", title: "P", status: "draft" }).companyType).toBe("");
+  });
+});

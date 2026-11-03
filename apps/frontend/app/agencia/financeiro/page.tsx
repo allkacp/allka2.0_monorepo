@@ -223,6 +223,14 @@ export default function AgenciaFinanceiro() {
           </div>
         </div>
 
+        {/* A rota de faturas ainda não lista faturas para agências (fatura nasce
+            ligada a empresa) — explicado aqui para os zeros não parecerem "nada pago". */}
+        <p role="note" className="mb-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          As faturas dos pedidos da agência ainda não aparecem nesta lista, por isso os totais abaixo ficam zerados.
+          Quando o cliente final paga pelo link de pagamento, a fatura é do cliente e a comissão da agência entra na
+          Carteira, em Allkoins.
+        </p>
+
         <div className="grid sm:grid-cols-3 gap-4 mb-4">
           <div className="bg-white rounded-xl border border-slate-100 p-4 shadow-sm">
             <div className="flex items-center gap-2 text-slate-500 text-xs mb-2">

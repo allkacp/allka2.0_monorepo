@@ -3557,7 +3557,9 @@ export default function AdminProjetosPage({
                                               }`}
                                             >
                                               {project.companyType === "agency"
-                                                ? "Agency"
+                                                ? project.companyIsPartner
+                                                  ? "Agency · Partner"
+                                                  : "Agency"
                                                 : project.companyType ===
                                                     "nomad"
                                                   ? "Nomad"

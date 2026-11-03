@@ -515,6 +515,7 @@ import {
   buildShareUrl,
 } from "@/features/dashboards/shared/dashboard-common";
 import { useDashboardSystemAlerts } from "@/features/dashboards/shared/use-dashboard-system-alerts";
+import { partnerProgramMetrics, partnerProgramWidgetData } from "@/lib/partner-program-metrics";
 
 type MetricType =
   | "invitesSent"
@@ -734,7 +735,8 @@ export default function AdminDashboardPage() {
   const tasksW = widgetData ? { ...dashboardData.tasks, ...widgetData.tasks } : dashboardData.tasks;
   const niW = dashboardData.nomadsIndicators;
   const auW = dashboardData.activeUsers;
-  const ppW = dashboardData.partnerProgram;
+  // Programa Partner: dados reais da conta (ausente = 0), nunca os números de demonstração.
+  const ppW = partnerProgramWidgetData(apiStats?.partnerProgram);
 
   const periodOptions = [
     { type: "today" as const, label: "Hoje" },
@@ -1924,67 +1926,10 @@ export default function AdminDashboardPage() {
 
   const widgetLibrary: WidgetLibraryItem[] = PARTNER_WIDGET_LIBRARY;
 
-  const getMetricsForPeriod = () => {
-    const pp = dashboardData.partnerProgram;
-    const activeClients = pp.accepted;
-    const conversionRate = pp.invitesSent > 0 ? (pp.accepted / pp.invitesSent) * 100 : 0;
-    const commissionsGenerated = pp.mrrGenerated;
-    const commissionsToReceive = Math.round(pp.mrrGenerated * 0.28);
-    const commissionPaidMonth = Math.round(pp.mrrGenerated * 0.45);
-    const partnerLevel =
-      pp.diamond > 0
-        ? "Diamond"
-        : pp.platinum > 0
-          ? "Platinum"
-          : pp.gold > 0
-            ? "Gold"
-            : pp.silver > 0
-              ? "Silver"
-              : "Bronze";
-
-    return {
-      invitesSent: {
-        value: pp.invitesSent.toLocaleString("pt-BR"),
-        change: 0,
-        trend: "up" as const,
-      },
-      clientsConverted: {
-        value: pp.accepted.toLocaleString("pt-BR"),
-        change: 0,
-        trend: "up" as const,
-      },
-      activeClients: {
-        value: activeClients.toLocaleString("pt-BR"),
-        change: 0,
-        trend: "up" as const,
-      },
-      commissionsGenerated: {
-        value: `R$ ${(commissionsGenerated / 1000).toFixed(1)}k`,
-        change: 0,
-        trend: "up" as const,
-      },
-      commissionsToReceive: {
-        value: `R$ ${(commissionsToReceive / 1000).toFixed(1)}k`,
-        change: 0,
-        trend: "up" as const,
-      },
-      commissionPaidMonth: {
-        value: `R$ ${(commissionPaidMonth / 1000).toFixed(1)}k`,
-        change: 0,
-        trend: "up" as const,
-      },
-      conversionRate: {
-        value: `${conversionRate.toFixed(1)}%`,
-        change: 0,
-        trend: "up" as const,
-      },
-      partnerLevel: {
-        value: partnerLevel,
-        change: 0,
-        trend: "up" as const,
-      },
-    };
-  };
+  // Mesma fonte para os cartões do topo e para o widget: só dados reais da API
+  // (lib/partner-program-metrics.ts). Antes o topo lia os números de demonstração
+  // de dashboardData.partnerProgram e o widget lia a API — daí 124/Diamond × 0/Bronze.
+  const getMetricsForPeriod = () => partnerProgramMetrics(apiStats?.partnerProgram);
 
   const metrics = getMetricsForPeriod();
 
@@ -3118,7 +3063,7 @@ export default function AdminDashboardPage() {
         }
 
         case "partnerProgram": {
-          const mpP = mData.partnerProgram;
+          const mpP = partnerProgramWidgetData(apiStats?.partnerProgram);
           const totalPartners =
             mpP.diamond + mpP.platinum + mpP.gold + mpP.silver + mpP.bronze;
           return (
@@ -3706,58 +3651,7 @@ export default function AdminDashboardPage() {
                     // A chamada passava dois argumentos que eram descartados em
                     // silencio — copiados da versao do lider, que tem outra
                     // assinatura.
-                    const widgetBase = getMetricsForPeriod();
-                    const widgetMetrics = !apiStats
-                      ? widgetBase
-                      : {
-                          ...widgetBase,
-                            invitesSent: {
-                              ...widgetBase.invitesSent,
-                              value: (
-                                apiStats.partnerProgram?.invitesSent ?? 0
-                              ).toLocaleString("pt-BR"),
-                            },
-                            clientsConverted: {
-                              ...widgetBase.clientsConverted,
-                              value: (
-                                apiStats.partnerProgram?.accepted ?? 0
-                              ).toLocaleString("pt-BR"),
-                            },
-                            activeClients: {
-                              ...widgetBase.activeClients,
-                              value: (
-                                apiStats.partnerProgram?.total ?? 0
-                              ).toLocaleString("pt-BR"),
-                            },
-                            commissionsGenerated: {
-                              ...widgetBase.commissionsGenerated,
-                              value: `R$ ${((apiStats.partnerProgram?.mrrGenerated ?? 0) / 1000).toFixed(1)}k`,
-                            },
-                            commissionsToReceive: {
-                              ...widgetBase.commissionsToReceive,
-                              value: `R$ ${((apiStats.partnerProgram?.mrrGenerated ?? 0) / 1000).toFixed(1)}k`,
-                            },
-                            commissionPaidMonth: {
-                              ...widgetBase.commissionPaidMonth,
-                              value: `R$ ${((apiStats.partnerProgram?.mrrGenerated ?? 0) / 1000).toFixed(1)}k`,
-                          },
-                            conversionRate: {
-                              ...widgetBase.conversionRate,
-                              value: `${apiStats.partnerProgram?.total ? ((apiStats.partnerProgram.accepted ?? 0) / apiStats.partnerProgram.total * 100).toFixed(1) : 0}%`,
-                            },
-                            partnerLevel: {
-                              ...widgetBase.partnerLevel,
-                              value: apiStats.partnerProgram?.diamond
-                                ? "Diamond"
-                                : apiStats.partnerProgram?.platinum
-                                  ? "Platinum"
-                                  : apiStats.partnerProgram?.gold
-                                    ? "Gold"
-                                    : apiStats.partnerProgram?.silver
-                                      ? "Silver"
-                                      : "Bronze",
-                            },
-                        };
+                    const widgetMetrics = getMetricsForPeriod();
                     return metricCards
                       .filter((m) => m.visible)
                       .sort((a, b) => a.order - b.order)

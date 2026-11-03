@@ -761,6 +761,13 @@ export function Header({
   const hasBottomStats = Boolean(
     ctx.points || ctx.stat || ctx.tasks || ctx.wallet,
   );
+  // O menu "Mais" do celular mostra a MESMA sigla e o MESMO papel deste cartão (reteste Codex de 02/11: lá
+  // aparecia "AT/Administrador" até para a agência).
+  useEffect(() => {
+    if (userProfile.avatar !== ctx.initials || userProfile.role !== ctx.roleLabel) {
+      updateUserProfile({ avatar: ctx.initials, role: ctx.roleLabel });
+    }
+  }, [ctx.initials, ctx.roleLabel]);
 
   return (
     <>
@@ -832,8 +839,10 @@ export function Header({
           <div className="flex-1" />
 
           {/* Right actions — min-w-0: quando não cabe tudo, quem cede são as
-              pílulas (nunca o perfil/busca, que antes saíam da tela). */}
-          <div className="flex items-center gap-3 min-w-0">
+              pílulas (nunca o perfil/busca, que antes saíam da tela). Abaixo de
+              1024 px não há pílulas: quem cede é a saudação (corta com reticências)
+              e os controles ficam inteiros. */}
+          <div className="flex items-center gap-3 min-w-0 max-lg:shrink-0" data-testid="header-actions">
             {/* Pílulas rápidas (pontos/stat/tarefas/carteira) — subiram pra
                 cá, do lado da busca, ao invés de uma segunda linha própria
                 (achado do usuário 2026-09-23: "subir lá pra do lado do
@@ -844,7 +853,8 @@ export function Header({
                 className="hidden shrink-0 items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-1.5 transition-all hover:bg-white/20 active:scale-95 md:flex">
                 <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-green-400/20"><Wallet className="h-3.5 w-3.5 text-green-400" /></div>
                 <div className="text-left">
-                  <p className="text-[10px] leading-none text-white/55">Saldo em carteira</p>
+                  {/* entre 768 e 1023 px só o valor (o rótulo voltava a empurrar o perfil para fora da tela) */}
+                  <p className="text-[10px] leading-none text-white/55 max-lg:hidden">Saldo em carteira</p>
                   <p className="text-xs font-bold leading-tight text-white" data-testid="header-wallet-amount"><AllkoinsAmount value={walletBalance} /></p>
                 </div>
               </button>
@@ -900,10 +910,12 @@ export function Header({
                 )}
               </div>
             )}
-            <div ref={searchRef} className="relative shrink-0">
+            {/* Busca: largura mínima larga só a partir de 1024 px; entre 768 e 1023 px ela cede espaço
+                (antes empurrava o perfil para fora: página de 902 px na Agência e 771 px no Admin em 768 px). */}
+            <div ref={searchRef} className="relative shrink-0 max-lg:shrink max-lg:min-w-0" data-testid="header-search">
               {/* Input activo */}
               {searchOpen ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/30 text-white md:min-w-80">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/30 text-white lg:min-w-80">
                   <Search className="h-4 w-4 shrink-0 text-white/60" />
                   <input
                     ref={inputRef}
@@ -944,10 +956,11 @@ export function Header({
               ) : (
                 <button
                   onClick={() => setSearchOpen(true)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group md:min-w-72"
+                  aria-label="Buscar"
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 border border-white/15 text-white/70 hover:bg-white/20 hover:text-white transition-all group lg:min-w-72"
                 >
                   <Search className="h-4 w-4 shrink-0" />
-                  <span className="hidden md:block text-xs text-white/50 group-hover:text-white/70 transition-colors flex-1">
+                  <span className="hidden lg:block text-xs text-white/50 group-hover:text-white/70 transition-colors flex-1">
                     Buscar...
                   </span>
                   <span className="hidden lg:flex items-center gap-0.5 text-[10px] text-white/30 border border-white/15 rounded px-1 py-0.5">

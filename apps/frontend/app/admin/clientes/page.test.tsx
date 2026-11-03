@@ -41,7 +41,7 @@ describe("Clientes — tabela adaptável e Painel Moldura", () => {
     const overlay = screen.getByTestId("client-details-window-overlay");
     expect(modal.className).toContain("!z-[1201]");
     expect(overlay.className).toContain("z-[1200]");
-    expect(overlay.className).toContain("bg-slate-950/60");
+    expect(overlay.className).toContain("bg-black/60");
     expect(overlay.style.left).toBe("72px");
     expect(modal.style.left).toBe("102px");
     expect(modal.style.top).toBe("30px");

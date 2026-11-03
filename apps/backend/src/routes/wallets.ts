@@ -1,10 +1,40 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { verifyToken } from "../middleware/auth";
+import { verifyToken, requireRole, requirePermission } from "../middleware/auth";
 import { validate, parsePagination } from "../middleware/validate";
+import { isAdminUser, resolveMyPartnerId } from "../lib/project-scope";
 
 const router = Router();
+
+// Quem pode o quê (fechamento de 02/11 — antes qualquer sessão válida lia todas as carteiras e até creditava saldo):
+//  • admin: tudo, como antes; criar/ajustar/alterar carteira exige também o perfil "sistema" (mesma regra de Faturas).
+//  • demais perfis: só a PRÓPRIA carteira em GET /, /:id e /:id/ledger; os painéis da plataforma (/stats, /ledger,
+//    /projections, /conciliation) e qualquer gravação respondem 403. A tela deles lê o saldo por /api/wallet-topup/summary.
+type WalletOwner = { owner_type: string; owner_id: string };
+
+// O dono sai sempre da sessão (User.company_id / User.agency_id / PartnerProfile ativo da agência / Nomade.user_id),
+// nunca de owner_type/owner_id vindos da requisição.
+async function ownWalletOwners(user: { id: string; account_type: string }): Promise<WalletOwner[]> {
+  if (user.account_type === "empresas" || user.account_type === "agencias") {
+    const u = await prisma.user.findUnique({ where: { id: user.id }, select: { company_id: true, agency_id: true } });
+    if (user.account_type === "empresas") return u?.company_id ? [{ owner_type: "company", owner_id: u.company_id }] : [];
+    if (!u?.agency_id) return [];
+    const partnerId = await resolveMyPartnerId(prisma, user.id);
+    return [{ owner_type: "agency", owner_id: u.agency_id }, ...(partnerId ? [{ owner_type: "partner", owner_id: partnerId }] : [])];
+  }
+  if (user.account_type === "nomades") {
+    const n = await prisma.nomade.findUnique({ where: { user_id: user.id }, select: { id: true } });
+    return n ? [{ owner_type: "nomad", owner_id: n.id }] : [];
+  }
+  return [];
+}
+
+async function walletVisibleTo(user: { id: string; role: string; account_type: string }, wallet: WalletOwner): Promise<boolean> {
+  if (isAdminUser(user)) return true;
+  const owners = await ownWalletOwners(user);
+  return owners.some((o) => o.owner_type === wallet.owner_type && o.owner_id === wallet.owner_id);
+}
 
 function getQueryString(value: unknown): string | undefined {
   if (Array.isArray(value)) {
@@ -73,7 +103,7 @@ async function enrichWallets(wallets: any[]) {
 }
 
 // ─── GET /api/wallets/stats ────────────────────────────────────────────────────
-router.get("/stats", verifyToken, async (req, res, next) => {
+router.get("/stats", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
     const fromRaw   = getQueryString(req.query.from);
     const toRaw     = getQueryString(req.query.to);
@@ -147,7 +177,7 @@ router.get("/stats", verifyToken, async (req, res, next) => {
 
 // ─── GET /api/wallets/ledger (global — all wallets) ───────────────────────────
 // Must be declared before /:id to avoid route conflict.
-router.get("/ledger", verifyToken, async (req, res, next) => {
+router.get("/ledger", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
     const direction  = getQueryString(req.query.direction);
@@ -209,7 +239,7 @@ router.get("/ledger", verifyToken, async (req, res, next) => {
 // ─── GET /api/wallets/projections ─────────────────────────────────────────────
 // Returns expected credits (pending invoices) and debits (recurring projects)
 // for the next N days (default 30). Not tied to wallet ledger — it's a projection.
-router.get("/projections", verifyToken, async (req, res, next) => {
+router.get("/projections", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
     const days    = Math.min(parseInt(getQueryString(req.query.days) ?? "", 10) || 30, 365);
     const now     = new Date();
@@ -282,7 +312,7 @@ const BANK_OUT_TYPES = [
 // Returns only WalletLedger entries with real bank impact (money actually moved
 // in/out of a bank account). Excludes bonus, project debits, internal transfers,
 // adjustments, and any type not in BANK_IN/BANK_OUT lists.
-router.get("/conciliation", verifyToken, async (req, res, next) => {
+router.get("/conciliation", verifyToken, requireRole("admin"), async (req, res, next) => {
   try {
     const { page, limit, skip } = parsePagination(req.query);
     const fromRaw   = getQueryString(req.query.from);
@@ -419,6 +449,12 @@ router.get("/", verifyToken, async (req, res, next) => {
       if (minBal === 0) where.balance = 0;
       else              where.balance = { gt: 0 };
     }
+    // Quem não é admin só lista a própria carteira; os filtros da query apenas a refinam (nunca ampliam).
+    if (!isAdminUser(req.user)) {
+      const owners = await ownWalletOwners(req.user!);
+      if (owners.length === 0) { res.json({ data: [], total: 0, page, limit }); return; }
+      where.OR = owners;
+    }
 
     const [total, wallets] = await Promise.all([
       prisma.wallet.count({ where }),
@@ -445,7 +481,8 @@ router.get("/", verifyToken, async (req, res, next) => {
 router.get("/:id", verifyToken, async (req, res, next) => {
   try {
     const wallet = await prisma.wallet.findUnique({ where: { id: getQueryString(req.params.id)! } });
-    if (!wallet) { res.status(404).json({ error: "Carteira não encontrada" }); return; }
+    // 404 também para a carteira de outro dono — não confirma que ela existe.
+    if (!wallet || !(await walletVisibleTo(req.user!, wallet))) { res.status(404).json({ error: "Carteira não encontrada" }); return; }
     const [enriched] = await enrichWallets([wallet]);
     res.json(enriched);
   } catch (err) { next(err); }
@@ -461,7 +498,13 @@ router.get("/:id/ledger", verifyToken, async (req, res, next) => {
     const fromRaw   = getQueryString(req.query.from);
     const toRaw     = getQueryString(req.query.to);
 
-    const where: Record<string, any> = { wallet_id: getQueryString(req.params.id)! };
+    const walletId  = getQueryString(req.params.id)!;
+    if (!isAdminUser(req.user)) {
+      const wallet = await prisma.wallet.findUnique({ where: { id: walletId }, select: { owner_type: true, owner_id: true } });
+      if (!wallet || !(await walletVisibleTo(req.user!, wallet))) { res.status(404).json({ error: "Carteira não encontrada" }); return; }
+    }
+
+    const where: Record<string, any> = { wallet_id: walletId };
     if (direction && direction !== "all") where.direction = direction;
     if (type      && type      !== "all") where.type      = type;
     if (status    && status    !== "all") where.status    = status;
@@ -496,7 +539,7 @@ const createSchema = z.object({
   notes:      z.string().optional(),
 });
 
-router.post("/", verifyToken, validate(createSchema), async (req, res, next) => {
+router.post("/", verifyToken, requireRole("admin"), requirePermission("sistema", "create"), validate(createSchema), async (req, res, next) => {
   try {
     const { owner_type, owner_id, balance = 0, notes } = req.body;
     const existing = await prisma.wallet.findUnique({ where: { owner_type_owner_id: { owner_type, owner_id } } });
@@ -531,7 +574,7 @@ const adjustSchema = z.object({
   reference_id:   z.string().optional(),
 });
 
-router.post("/:id/adjustment", verifyToken, validate(adjustSchema), async (req, res, next) => {
+router.post("/:id/adjustment", verifyToken, requireRole("admin"), requirePermission("sistema", "edit"), validate(adjustSchema), async (req, res, next) => {
   try {
     const wallet = await prisma.wallet.findUnique({ where: { id: getQueryString(req.params.id)! } });
     if (!wallet) { res.status(404).json({ error: "Carteira não encontrada" }); return; }
@@ -571,7 +614,7 @@ const updateSchema = z.object({
   notes:  z.string().optional(),
 });
 
-router.put("/:id", verifyToken, validate(updateSchema), async (req, res, next) => {
+router.put("/:id", verifyToken, requireRole("admin"), requirePermission("sistema", "edit"), validate(updateSchema), async (req, res, next) => {
   try {
     const wallet = await prisma.wallet.update({ where: { id: getQueryString(req.params.id)! }, data: req.body });
     const [enriched] = await enrichWallets([wallet]);

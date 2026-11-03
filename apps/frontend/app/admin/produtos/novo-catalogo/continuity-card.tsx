@@ -25,7 +25,7 @@ export const ASSET_RULE_OPTIONS: { value: string; label: string }[] = [
 const sel = "h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900 disabled:opacity-60";
 const info = (text: string) => <span className="field-info" data-help={text} aria-hidden="true">i</span>;
 
-export function ContinuityCard({ task, readOnly, act }: { task: any; readOnly: boolean; act: (fn: () => Promise<any>, ok?: string) => Promise<any> }) {
+export function ContinuityCard({ task, readOnly, act, compact = false }: { task: any; readOnly: boolean; act: (fn: () => Promise<any>, ok?: string) => Promise<any>; compact?: boolean }) {
   const mode: string = task.executor_continuity ?? "not_allowed";
   const [hours, setHours] = useState<string>(task.continuity_accept_hours == null ? "" : String(task.continuity_accept_hours));
   const [days, setDays] = useState<string>(task.asset_revalidate_days == null ? "" : String(task.asset_revalidate_days));
@@ -41,15 +41,15 @@ export function ContinuityCard({ task, readOnly, act }: { task: any; readOnly: b
     if (n !== (task.continuity_accept_hours ?? null)) save({ continuity_accept_hours: n }, "Prazo de aceite salvo.");
   };
   return (
-    <section className="mt-2 space-y-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900/60" data-testid="continuity-card" aria-label="Continuidade do executor">
-      <div className="flex items-start gap-2.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"><Repeat className="h-4 w-4" /></span>
+    <section className={compact ? "grid grid-cols-1 gap-x-3 gap-y-1.5 rounded-xl border border-slate-200 bg-white px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/60 sm:grid-cols-2 [&_select]:h-8 [&_select]:text-xs [&_input]:h-8 [&_input]:text-xs [&_label]:text-xs" : "mt-2 space-y-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900/60"} data-testid="continuity-card" data-compact={compact || undefined} aria-label="Continuidade do executor">
+      <div className={compact ? "flex items-center gap-1.5 sm:col-span-2" : "flex items-start gap-2.5"}>
+        <span className={compact ? "shrink-0 text-violet-700 dark:text-violet-300" : "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-950/40"}><Repeat className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} /></span>
         <span className="min-w-0">
-          <span className="block text-[14px] font-bold text-slate-900 dark:text-slate-100" data-no-info="">Continuidade do executor nos próximos ciclos{info("Define se, nos ciclos seguintes (ou numa nova contratação do mesmo cliente), a tarefa tenta voltar para o MESMO executor.\n• Não permitida: sempre distribuição normal.\n• Permitida: o cliente/líder escolhe manter.\n• Recomendada: o sistema sugere manter; o executor tem um prazo para aceitar.\n• Obrigatória: vai direto ao mesmo executor, salvo indisponibilidade.\nEtapas marcadas “Dispensável quando o mesmo executor continua” só são dispensadas se a continuidade estiver permitida, recomendada ou obrigatória.")}</span>
-          <span className="block text-[11px] text-slate-500">Vale para a tarefa; salva na hora.</span>
+          <span className={`font-bold text-slate-900 dark:text-slate-100 ${compact ? "text-xs" : "block text-[14px]"}`} data-no-info="">{compact ? "Configurações da tarefa" : "Continuidade do executor nos próximos ciclos"}{info("Define se, nos ciclos seguintes (ou numa nova contratação do mesmo cliente), a tarefa tenta voltar para o MESMO executor.\n• Não permitida: sempre distribuição normal.\n• Permitida: o cliente/líder escolhe manter.\n• Recomendada: o sistema sugere manter; o executor tem um prazo para aceitar.\n• Obrigatória: vai direto ao mesmo executor, salvo indisponibilidade.\nEtapas marcadas “Dispensável quando o mesmo executor continua” só são dispensadas se a continuidade estiver permitida, recomendada ou obrigatória.")}</span>
+          <span className={`text-[11px] text-slate-500 ${compact ? "ml-2" : "block"}`}>{readOnly ? "Continuidade e acessos." : "Vale para a tarefa; salva na hora."}</span>
         </span>
       </div>
-      <label className="block">
+      <label className={compact ? "order-1 block min-w-0" : "block"}>
         <span className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300" data-no-info="">Continuidade{info(current.help)}</span>
         <select aria-label="Continuidade do executor nos próximos ciclos" className={sel} disabled={readOnly} value={mode} onChange={(e) => {
           const v = e.target.value;
@@ -59,9 +59,9 @@ export function ContinuityCard({ task, readOnly, act }: { task: any; readOnly: b
           {CONTINUITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </label>
-      <p className="text-[11px] leading-snug text-slate-500" data-testid="continuity-help">{current.help}</p>
+      <p className={compact ? "sr-only" : "text-[11px] leading-snug text-slate-500"} data-testid="continuity-help">{current.help}</p>
       {on && (
-        <div className="grid gap-3 md:grid-cols-2" data-testid="continuity-details">
+        <div className={compact ? "order-3 grid gap-2 sm:col-span-2 sm:grid-cols-2" : "grid gap-3 md:grid-cols-2"} data-testid="continuity-details">
           <label className="block">
             <span className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300" data-no-info="">Prazo de aceite do executor preferido (horas){info("Quantas horas o executor do ciclo anterior tem para ACEITAR a tarefa. Sem resposta nesse prazo, vale a opção “Depois do prazo”. Vazio = sem prazo: a tarefa é atribuída direto a ele (se estiver elegível). Na continuidade obrigatória não há prazo: vai direto.")}</span>
             <input type="number" min={1} max={168} step={1} aria-label="Prazo de aceite do executor preferido (horas)" className={sel} disabled={readOnly || mode === "required"} value={hours} placeholder="sem prazo" onChange={(e) => setHours(e.target.value)} onBlur={commitHours} onKeyDown={(e) => { if (e.key === "Enter") commitHours(); }} />
@@ -83,11 +83,11 @@ export function ContinuityCard({ task, readOnly, act }: { task: any; readOnly: b
           </label>
         </div>
       )}
-      <div className="grid gap-3 md:grid-cols-2">
-          <label className="block md:col-span-2">
+      <div className={compact ? "order-2 min-w-0" : "grid gap-3 md:grid-cols-2"}>
+          <label className={compact ? "block" : "block md:col-span-2"}>
             <span className="mb-1 block text-xs font-semibold text-slate-600 dark:text-slate-300" data-no-info="">Revalidação dos acessos antes do novo ciclo{info("Quando os acessos do cliente precisam ser conferidos de novo. Padrão: só na primeira execução (e quando houver mudança).")}</span>
             <div className="flex flex-wrap items-center gap-2">
-              <select aria-label="Revalidação dos acessos antes do novo ciclo" className={`${sel} max-w-sm`} disabled={readOnly} value={task.asset_rule ?? "first_only"} onChange={(e) => save({ asset_rule: e.target.value }, "Regra de acessos salva.")}>
+              <select aria-label="Revalidação dos acessos antes do novo ciclo" className={`${sel} ${compact ? "min-w-0 flex-1" : "max-w-sm"}`} disabled={readOnly} value={task.asset_rule ?? "first_only"} onChange={(e) => save({ asset_rule: e.target.value }, "Regra de acessos salva.")}>
                 {ASSET_RULE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
               {(task.asset_rule ?? "first_only") === "every_x_days" && (

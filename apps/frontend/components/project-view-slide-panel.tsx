@@ -100,6 +100,7 @@ import {
   UserSearch,
 } from "lucide-react";
 import { InlineLoader } from "@/components/ui/loading";
+import { useToast } from "@/hooks/use-toast";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1162,6 +1163,7 @@ export function ProjectViewSlidePanel({
   onCancel,
 }: ProjectViewSlidePanelProps) {
   const [activeTab, setActiveTab] = useState("visao-geral");
+  const { toast } = useToast();
 
   // ── Products state ────────────────────────────────────────────────────────
   const [projectProducts, setProjectProducts] = useState<any[]>([]);
@@ -1402,7 +1404,14 @@ export function ProjectViewSlidePanel({
       setUnlinkTarget(null);
       await fetchProducts();
       await fetchTasks();
-    } catch (_) {
+    } catch (err) {
+      // Antes o erro sumia em silêncio (a janela só ficava aberta). Ex.: produto já pago não sai do projeto.
+      setUnlinkTarget(null);
+      toast({
+        title: "Não foi possível remover o produto",
+        description: err instanceof Error ? err.message : "Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setUnlinking(false);
     }

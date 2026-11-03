@@ -819,7 +819,7 @@ export default function AdminAllkademyPage() {
           </div>
         ) : (
           <div ref={tableScrollRef} onScroll={handleTableScroll} className="overflow-x-auto allka-table-scroll-body">
-            <table className="w-full text-xs min-w-[960px]">
+            <table className="tabela-cartao w-full text-xs min-w-[960px]">
               <thead>
                 <tr className="border-b border-slate-200/60 dark:border-slate-700/60">
                   <th
@@ -956,7 +956,7 @@ export default function AdminAllkademyPage() {
                     </td>
 
                     {visibleCols.has("titulo") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Título" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="flex items-center gap-2.5 max-w-[260px]">
                           <CourseThumb course={c} />
                           <div className="min-w-0">
@@ -969,12 +969,12 @@ export default function AdminAllkademyPage() {
                       </td>
                     )}
                     {visibleCols.has("categoria") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Categoria" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <CategoryBadge category={c.category} />
                       </td>
                     )}
                     {visibleCols.has("modulos") && (
-                      <td className="py-3 px-4 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Módulos" className="py-3 px-4 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <span className="inline-flex items-center gap-1 font-medium text-sm">
                           <Layers className="h-3.5 w-3.5 text-pink-500" />
                           {c._count?.modules ?? 0}
@@ -982,7 +982,7 @@ export default function AdminAllkademyPage() {
                       </td>
                     )}
                     {visibleCols.has("inscricoes") && (
-                      <td className="py-3 px-4 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Inscrições" className="py-3 px-4 text-center" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <span className="inline-flex items-center gap-1 font-medium text-sm">
                           <Users className="h-3.5 w-3.5 text-violet-500" />
                           {c._count?.enrollments ?? 0}
@@ -990,7 +990,7 @@ export default function AdminAllkademyPage() {
                       </td>
                     )}
                     {visibleCols.has("duracao") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Duração" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
                           <Clock className="h-3 w-3 text-slate-400" />
                           {fmtDuration(c.duration)}
@@ -998,14 +998,14 @@ export default function AdminAllkademyPage() {
                       </td>
                     )}
                     {visibleCols.has("acesso") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Acesso" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <NeonBadge color={c.is_free ? "emerald" : "amber"}>
                           {c.is_free ? "Gratuito" : "Pago"}
                         </NeonBadge>
                       </td>
                     )}
                     {visibleCols.has("status") && (
-                      <td className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
+                      <td data-rotulo="Status" className="py-3 px-4" style={{ borderRight: "1px solid rgba(148,163,184,0.15)" }}>
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold w-fit border ${c.is_published ? STATUS_DOT_CLASSES.published : STATUS_DOT_CLASSES.draft}`}>
                           <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.is_published ? STATUS_DOT_BG.published : STATUS_DOT_BG.draft}`} />
                           {c.is_published ? "Publicado" : "Rascunho"}
@@ -1013,7 +1013,7 @@ export default function AdminAllkademyPage() {
                       </td>
                     )}
                     {visibleCols.has("criado") && (
-                      <td className="py-3 px-4 text-xs text-slate-400">{fmtDate(c.created_at)}</td>
+                      <td data-rotulo="Criado em" className="py-3 px-4 text-xs text-slate-400">{fmtDate(c.created_at)}</td>
                     )}
                   </tr>
                 ))}

@@ -131,7 +131,7 @@ export function CentralChamadosAccessPanel() {
             módulo &quot;sistema&quot; inteiro — desenvolvedores, QA ou qualquer conta interna.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
             <Input
@@ -199,7 +199,7 @@ export function CentralChamadosAccessPanel() {
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="tabela-cartao w-full text-xs">
           <thead>
             <tr className="text-left text-gray-500 border-b border-border/60">
               <th className="py-2 pr-2 w-8" />
@@ -228,13 +228,13 @@ export function CentralChamadosAccessPanel() {
                 <td className="py-2 pr-2">
                   <input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleSelected(row.id)} />
                 </td>
-                <td className="py-2 pr-2">
+                <td className="py-2 pr-2" data-rotulo="Usuário">
                   <div className="font-medium">{row.name}</div>
-                  <div className="text-gray-400">{row.email}</div>
+                  <div className="text-gray-400 break-all">{row.email}</div>
                 </td>
-                <td className="py-2 pr-2">{row.accountType}</td>
-                <td className="py-2 pr-2">{row.profileName ?? "—"}</td>
-                <td className="py-2 pr-2">
+                <td className="py-2 pr-2" data-rotulo="Tipo de conta">{row.accountType}</td>
+                <td className="py-2 pr-2" data-rotulo="Perfil">{row.profileName ?? "—"}</td>
+                <td className="py-2 pr-2" data-rotulo="Acesso">
                   <Badge variant={row.canOpenRoadmap ? "default" : "secondary"} className="text-[10px]">
                     {row.canOpenRoadmap ? "Tem acesso" : "Sem acesso"}
                   </Badge>

@@ -13,7 +13,7 @@ import { validate } from "../middleware/validate";
 import { getRotationStatus, restartRotation, RotationError, startTaskRotation, sendManualOffer, assignNomadeDirectly } from "../lib/task-rotation-engine";
 import { atribuirLiderParaTarefa } from "../lib/atribuir-lider";
 import { withZeroDateRecovery } from "../lib/clean-zero-datetimes";
-import { combinedProjectWhere, isAdminUser } from "../lib/project-scope";
+import { combinedProjectWhere, isAdminUser, nomadeWorkTaskWhere } from "../lib/project-scope";
 import { recalculateProjectValue } from "../lib/project-value";
 import { findUnmetCatalog2Dependency, transitionNeedsDependencyGate, CATALOG2_STARTED_STATUSES } from "../lib/catalog2-task-dependencies";
 import { writeAccessAudit } from "../lib/product-feedback-service";
@@ -380,11 +380,17 @@ router.get(
                 status: true,
                 type: true,
                 consultant: true,
+                // Consultor da agência (usuário escolhido no projeto) e cliente
+                // cadastrado do projeto: fontes próprias, distintas do Líder da
+                // tarefa e do cliente legado (client_id).
+                consultant_user: { select: { id: true, name: true } },
+                client_record: { select: { id: true, name: true } },
                 client: {
                   select: { id: true, name: true, logo: true, cnpj: true },
                 },
               },
             },
+            lider_responsavel: { select: { id: true, name: true } },
             project_product: {
               select: {
                 id: true,
@@ -580,8 +586,11 @@ router.get(
           project: {
             include: {
               client: { select: { id: true, name: true, cnpj: true } },
+              consultant_user: { select: { id: true, name: true } },
+              client_record: { select: { id: true, name: true } },
             },
           },
+          lider_responsavel: { select: { id: true, name: true } },
           project_product: true,
           catalog_task: true,
           stages: { orderBy: { ordem: "asc" } },
@@ -1336,7 +1345,7 @@ router.get(
       let scopeWhere: ScopeWhere | null;
       if (req.user!.account_type === "nomades") {
         const nomade = await prisma.nomade.findUnique({ where: { user_id: req.user!.id }, select: { id: true } });
-        scopeWhere = nomade ? { OR: [{ nomade_responsavel_id: nomade.id }, { stages: { some: { nomade_id: nomade.id } } }] } : null;
+        scopeWhere = nomade ? nomadeWorkTaskWhere(nomade.id) : null;
       } else {
         scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
       }
@@ -2213,7 +2222,7 @@ async function resolveTaskActor(req: Request, key: string) {
     const nomade = await prisma.nomade.findUnique({ where: { user_id: user.id }, select: { id: true } });
     if (nomade) {
       task = await prisma.projectTask.findFirst({
-        where: { AND: [{ OR: [{ id: key }, { task_code: key }] }, { OR: [{ nomade_responsavel_id: nomade.id }, { stages: { some: { nomade_id: nomade.id } } }] }] },
+        where: { AND: [{ OR: [{ id: key }, { task_code: key }] }, nomadeWorkTaskWhere(nomade.id)] },
         select: sel,
       });
       executor = !!task;
@@ -2334,7 +2343,7 @@ router.get("/:id/operational", verifyToken, async (req: Request, res: Response, 
       const nomade = await prisma.nomade.findUnique({ where: { user_id: req.user!.id }, select: { id: true } });
       if (nomade) {
         const t = await prisma.projectTask.findFirst({
-          where: { AND: [{ OR: [{ id: key }, { task_code: key }] }, { OR: [{ nomade_responsavel_id: nomade.id }, { stages: { some: { nomade_id: nomade.id } } }] }] },
+          where: { AND: [{ OR: [{ id: key }, { task_code: key }] }, nomadeWorkTaskWhere(nomade.id)] },
           select: { id: true },
         });
         taskId = t?.id ?? null;

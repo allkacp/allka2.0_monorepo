@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { FramedEditorScope } from "@/components/framed-editor-context";
 
 const api = {
   updateCatalog2ProductDeliveryRecurrence: vi.fn(async () => ({})),
@@ -17,7 +18,7 @@ import { ContractModesSection, MONTHLY_ISSUE_RE, readinessDestination } from "./
 // fluxo; a pendência de entrega mensal leva ao campo certo do Passo 4 (e nunca a um botão dentro de componente que não aparece).
 const act = vi.fn(async (fn: () => Promise<any>, _ok?: string, opts?: any) => { try { await fn(); } catch (e) { if (opts?.rethrow) throw e; } });
 const version = (over: Record<string, any> = {}) => ({ id: "v1", accepts_one_time: true, accepts_recurring: false, pricing_mode: "calculated", ...over });
-beforeEach(() => { Object.values(api).forEach((f) => f.mockClear()); act.mockClear(); });
+beforeEach(() => { cleanup(); sessionStorage.clear(); localStorage.clear(); Object.values(api).forEach((f) => f.mockClear()); act.mockClear(); });
 
 describe("Cartão de modalidades · só Avulso e Assinatura mensal", () => {
   it("preserva múltiplas contratações nas versões existentes e só prepara a alteração até salvar", () => {
@@ -106,11 +107,47 @@ describe("Checklist de publicação · pendência de entrega mensal leva ao camp
 });
 
 describe("Entrega comercial · quadro Prontidão da entrega", () => {
+  it("F5 mantém painel, contexto, preço/modalidades pendentes e prazo digitado sem disparar gravação", async () => {
+    const { DeliveryCommercialOverview } = await import("./product-editor");
+    const v = { ...version(), state: "rascunho", title: "Website", tasks: [], base_commercial_deadline_hours: 72 };
+    const view = () => <FramedEditorScope product={{ id: "p1", number: 2, name: "Website" }} version={{ id: "v1", number: 2, state: "rascunho" }} task={{ id: "t1", number: 2, name: "Alteração" }}><DeliveryCommercialOverview version={v} readOnly={false} act={act} ringOf={() => ""} locked={false} product={{ id: "p1" }} /></FramedEditorScope>;
+    const first = render(view());
+    fireEvent.click(screen.getByTestId("commercial-overview-open"));
+    expect(screen.getByTestId("framed-editor-context")).toHaveTextContent("Produto ID 02 · Website");
+    expect(screen.getByTestId("framed-editor-context")).toHaveTextContent("Tarefa ID 02 · Alteração");
+    fireEvent.change(screen.getByLabelText("Tipo de preço"), { target: { value: "manual_fixed" } });
+    fireEvent.change(screen.getByLabelText("Preço fixo"), { target: { value: "125.5" } });
+    fireEvent.change(screen.getByLabelText("Prazo fixo em dias"), { target: { value: "4" } });
+    fireEvent.click(screen.getByLabelText("Permitir múltiplas contratações"));
+    fireEvent.change(screen.getByLabelText("Prazo comercial base em horas"), { target: { value: "96" } });
+    first.unmount(); render(view());
+    expect(screen.getByTestId("commercial-overview-modal")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tipo de preço")).toHaveValue("manual_fixed");
+    expect(screen.getByLabelText("Preço fixo")).toHaveValue(125.5);
+    expect(screen.getByLabelText("Prazo fixo em dias")).toHaveValue(4);
+    expect(screen.getByLabelText("Permitir múltiplas contratações")).not.toBeChecked();
+    expect(screen.getByLabelText("Prazo comercial base em horas")).toHaveValue(96);
+    expect(api.updateCatalog2VersionInfo).not.toHaveBeenCalled();
+  });
+
   it("explica o que é verificado e que prontidão NÃO significa produto publicado", async () => {
     const version = { id: "v1", title: "T", summary: "S", tasks: [], accepts_one_time: true, accepts_recurring: false };
     const { DeliveryCommercialOverview } = await import("./product-editor");
     render(<DeliveryCommercialOverview version={version} readOnly={false} act={act} ringOf={() => ""} locked={false} product={{ id: "p1", delivery_recurrence: null }} />);
     fireEvent.click(screen.getByRole("button", { name: /Entrega comercial/ }));
+    expect(screen.getByTestId("commercial-overview-modal")).toHaveStyle({ left: "102px", top: "30px", height: "calc(100dvh - 60px)" });
+    expect(screen.getByTestId("commercial-overview-modal-overlay")).toHaveClass("bg-black/60");
+    const stack = screen.getByTestId("commercial-fields-stack");
+    expect(stack).toHaveClass("flex", "flex-col");
+    expect(stack).not.toHaveClass("md:grid-cols-3");
+    const deadline = stack.querySelector("#catalog2-deadline-base")!;
+    const price = within(stack).getByTestId("price-type-card");
+    const modes = within(stack).getByTestId("modalities-card");
+    expect(deadline.compareDocumentPosition(price) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(price.compareDocumentPosition(modes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    for (const row of [deadline, price, modes]) {
+      expect(row).not.toHaveClass("h-full", "md:border-l", "md:pl-5");
+    }
     expect(screen.getByTestId("readiness-subtitle").textContent).toMatch(/estrutura para executar o produto está configurada/);
     const box = screen.getByTestId("readiness-explain");
     expect(box.tagName).toBe("DETAILS");

@@ -111,6 +111,7 @@ import { ProjectViewSlidePanel } from "@/components/project-view-slide-panel";
 import { ProjectManagementModal } from "@/components/project-management-modal";
 import { TarefasFilterDrawer } from "@/components/tarefas-filter-drawer";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
+import { taskClientName, taskConsultantName, taskDisplayCode, taskLeaderName } from "@/lib/task-display";
 import {
   FilterValues,
   EMPTY_FILTERS,
@@ -182,13 +183,19 @@ interface TarefaOperacional {
   updated_at: string;
   responsavel_agencia: { id: string; name: string; email?: string } | null;
   nomade_responsavel: { id: string; name: string; email?: string } | null;
+  /** Líder atribuído à TAREFA (nunca o consultor do projeto). */
+  lider_responsavel?: { id: string; name: string } | null;
   project: {
     id: string;
     title: string;
     status: string;
     type?: string;
     consultant?: string | null;
+    /** Consultor da agência escolhido no projeto. */
+    consultant_user?: { id: string; name: string } | null;
     client: { id: string; name: string; logo?: string; cnpj?: string } | null;
+    /** Cliente cadastrado escolhido no projeto (projetos novos não usam client). */
+    client_record?: { id: string; name: string } | null;
   };
   project_product: {
     id: string;
@@ -441,6 +448,7 @@ type ColKey =
   | "produto"
   | "status"
   | "nomade"
+  | "consultor"
   | "lider"
   | "prazo"
   | "execucao"
@@ -529,9 +537,16 @@ const ALL_COLUMNS: {
     minW: 100,
   },
   {
+    key: "consultor",
+    label: "Consultor",
+    info: "Consultor da agência escolhido no projeto. Não é o Líder da tarefa.",
+    defaultW: 150,
+    minW: 100,
+  },
+  {
     key: "lider",
     label: "Líder",
-    info: "Líder responsável por acompanhar a tarefa.",
+    info: "Líder atribuído à tarefa. Vazio = sem líder atribuído.",
     defaultW: 150,
     minW: 100,
   },
@@ -580,6 +595,13 @@ const DEFAULT_VISIBLE: ColKey[] = [
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Chave do filtro "Empresa": cliente legado (Company) ou cadastro de cliente do projeto — ids de tabelas diferentes, por isso o prefixo. */
+function clientFilterKey(t: TarefaOperacional): string | null {
+  if (t.project.client) return t.project.client.id;
+  if (t.project.client_record) return `cliente:${t.project.client_record.id}`;
+  return null;
+}
 
 function isOverdue(t: TarefaOperacional) {
   if (!t.due_date) return false;
@@ -663,14 +685,6 @@ function urgencyTone(dias: number | null, overdue: boolean) {
     border: "border-slate-200 dark:border-slate-700",
     pulse: false,
   };
-}
-
-// "T000001" (backend) → "tar00001" (platform-wide sequence-code style)
-function formatTaskCode(raw?: string | null): string | null {
-  if (!raw) return null;
-  const digits = raw.replace(/\D/g, "");
-  if (!digits) return raw;
-  return `tar${String(parseInt(digits, 10)).padStart(5, "0")}`;
 }
 
 function parseStrings(data: any): string[] {
@@ -1357,7 +1371,8 @@ export default function AdminTarefasPage({
   const uniqueEmpresas = useMemo(() => {
     const m = new Map<string, string>();
     tarefas.forEach((t) => {
-      if (t.project.client) m.set(t.project.client.id, t.project.client.name);
+      const key = clientFilterKey(t);
+      if (key) m.set(key, taskClientName(t.project)!);
     });
     return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [tarefas]);
@@ -1392,7 +1407,7 @@ export default function AdminTarefasPage({
     () =>
       Array.from(
         new Set(
-          tarefas.map((t) => t.project.consultant).filter(Boolean) as string[],
+          tarefas.map((t) => taskLeaderName(t)).filter(Boolean) as string[],
         ),
       ).sort(),
     [tarefas],
@@ -1449,8 +1464,10 @@ export default function AdminTarefasPage({
         const match =
           t.title.toLowerCase().includes(q) ||
           t.project.title.toLowerCase().includes(q) ||
-          (t.project.client?.name.toLowerCase().includes(q) ?? false) ||
+          (taskClientName(t.project)?.toLowerCase().includes(q) ?? false) ||
           t.project_product.product_name_snapshot.toLowerCase().includes(q) ||
+          (t.task_code?.toLowerCase().includes(q) ?? false) ||
+          (taskDisplayCode(t)?.toLowerCase().includes(q) ?? false) ||
           (t.code_snapshot?.toLowerCase().includes(q) ?? false) ||
           (t.nomade_responsavel?.name.toLowerCase().includes(q) ?? false) ||
           (t.responsavel_agencia?.name.toLowerCase().includes(q) ?? false);
@@ -1475,7 +1492,7 @@ export default function AdminTarefasPage({
       if (f.priority !== "all" && t.priority !== f.priority) return false;
       // Relationships
       if (f.project !== "all" && t.project_id !== f.project) return false;
-      if (f.empresa !== "all" && t.project.client?.id !== f.empresa)
+      if (f.empresa !== "all" && clientFilterKey(t) !== f.empresa)
         return false;
       if (
         f.product !== "all" &&
@@ -1486,7 +1503,7 @@ export default function AdminTarefasPage({
         return false;
       if (f.agencia !== "all" && t.responsavel_agencia?.id !== f.agencia)
         return false;
-      if (f.lider !== "all" && t.project.consultant !== f.lider) return false;
+      if (f.lider !== "all" && taskLeaderName(t) !== f.lider) return false;
       if (
         f.categoria !== "all" &&
         t.project_product.product_category_snapshot !== f.categoria
@@ -1624,8 +1641,8 @@ export default function AdminTarefasPage({
         let av: any, bv: any;
         switch (sortKey) {
           case "code_snapshot":
-            av = a.code_snapshot ?? "";
-            bv = b.code_snapshot ?? "";
+            av = taskDisplayCode(a) ?? "";
+            bv = taskDisplayCode(b) ?? "";
             break;
           case "title":
             av = a.title;
@@ -1636,8 +1653,8 @@ export default function AdminTarefasPage({
             bv = b.project.title;
             break;
           case "client_name":
-            av = a.project.client?.name ?? "";
-            bv = b.project.client?.name ?? "";
+            av = taskClientName(a.project) ?? "";
+            bv = taskClientName(b.project) ?? "";
             break;
           case "product_name":
             av = a.project_product.product_name_snapshot;
@@ -2536,9 +2553,7 @@ export default function AdminTarefasPage({
                                       <Tooltip>
                                         <TooltipTrigger asChild>
                                           <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400 cursor-help">
-                                            {tarefa.task_code
-                                              ? formatTaskCode(tarefa.task_code)
-                                              : tarefa.code_snapshot}
+                                            {taskDisplayCode(tarefa)}
                                           </span>
                                         </TooltipTrigger>
                                         <TooltipContent
@@ -2658,13 +2673,13 @@ export default function AdminTarefasPage({
                                     overflow: "hidden",
                                   }}
                                 >
-                                  {tarefa.project.client ? (
+                                  {taskClientName(tarefa.project) ? (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <div className="flex items-center gap-1.5 min-w-0 cursor-help">
                                           <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                           <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
-                                            {tarefa.project.client.name}
+                                            {taskClientName(tarefa.project)}
                                           </span>
                                         </div>
                                       </TooltipTrigger>
@@ -2672,8 +2687,8 @@ export default function AdminTarefasPage({
                                         side="top"
                                         className="text-xs"
                                       >
-                                        {tarefa.project.client.name}
-                                        {tarefa.project.client.cnpj
+                                        {taskClientName(tarefa.project)}
+                                        {tarefa.project.client?.cnpj
                                           ? ` · CNPJ: ${tarefa.project.client.cnpj}`
                                           : ""}
                                       </TooltipContent>
@@ -2848,7 +2863,29 @@ export default function AdminTarefasPage({
                                 </td>
                               )}
 
-                              {/* Líder */}
+                              {/* Consultor (do projeto) */}
+                              {visibleCols.has("consultor") && (
+                                <td data-rotulo="Consultor"
+                                  className="px-3 py-3.5"
+                                  style={{
+                                    borderRight:
+                                      "1px solid rgba(148,163,184,0.15)",
+                                    overflow: "hidden",
+                                  }}
+                                >
+                                  {taskConsultantName(tarefa.project) ? (
+                                    <span className="text-xs text-slate-600 dark:text-slate-400 truncate block">
+                                      {taskConsultantName(tarefa.project)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-300 dark:text-slate-600">
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                              )}
+
+                              {/* Líder (da tarefa) */}
                               {visibleCols.has("lider") && (
                                 <td data-rotulo="Líder"
                                   className="px-3 py-3.5"
@@ -2858,11 +2895,11 @@ export default function AdminTarefasPage({
                                     overflow: "hidden",
                                   }}
                                 >
-                                  {tarefa.project.consultant ? (
+                                  {taskLeaderName(tarefa) ? (
                                     <Tooltip>
                                       <TooltipTrigger asChild>
                                         <span className="text-xs text-slate-600 dark:text-slate-400 truncate block cursor-help">
-                                          {tarefa.project.consultant}
+                                          {taskLeaderName(tarefa)}
                                         </span>
                                       </TooltipTrigger>
                                       <TooltipContent
@@ -2870,7 +2907,7 @@ export default function AdminTarefasPage({
                                         className="text-xs"
                                       >
                                         Líder responsável:{" "}
-                                        {tarefa.project.consultant}
+                                        {taskLeaderName(tarefa)}
                                       </TooltipContent>
                                     </Tooltip>
                                   ) : (

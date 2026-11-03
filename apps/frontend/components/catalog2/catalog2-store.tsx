@@ -195,6 +195,18 @@ const CLIENT_SORT_OPTIONS = [
 // tela". Carrega tudo de uma vez (até 60, o máximo aceito pelo backend —
 // hoje são só ~37 produtos reais + fixture) e filtra por categoria no
 // cliente, igual o admin já fazia, em vez de paginar 12 em 12.
+// Produto visível mas NÃO contratável (pré-lançamento, pausado, esgotado): a etiqueta de status
+// vence "Novo" — regra de lib/catalog2-status.ts ("visível com etiqueta própria / com aviso").
+function isUnavailable(p: any): boolean {
+  return !p.is_preview && !!p.status && p.status !== "disponivel";
+}
+/** Motivo (cliente) ou pendências (prévia do admin) mostrados junto da etiqueta. */
+function statusNote(p: any): string | null {
+  if (!p.is_preview && p.unavailable_reason) return p.unavailable_reason.charAt(0).toUpperCase() + p.unavailable_reason.slice(1);
+  if (p.is_preview && (p.pendencies?.length ?? 0) > 0) return `Falta: ${p.pendencies.join(", ")}`;
+  return null;
+}
+
 function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
   const [data, setData] = useState<{ data: any[]; total: number } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -286,15 +298,18 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
                 onOpen={() => onOpen(p.sequence_number ?? p.slug)}
                 ctaLabel={(p.has_variations || p.has_addons) ? "Ver opções" : "Ver detalhes"}
                 statusBadge={
-                  p.is_new ? (
-                    <Badge className="border-0 bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white shadow-sm">Novo</Badge>
-                  ) : p.is_preview && p.status !== "disponivel" ? (
-                    <Badge className="border-0 bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 shadow-sm dark:bg-amber-900/40 dark:text-amber-200">Em preparação</Badge>
-                  ) : !p.is_preview && p.status && p.status !== "disponivel" ? (
-                    <Badge className={`border-0 px-2 py-1 text-[10px] font-bold shadow-sm ${catalog2StatusTone(p.status)}`}>{p.status_label ?? catalog2StatusLabel(p.status)}</Badge>
-                  ) : (
-                    <Badge className="border-0 bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700 shadow-none ring-1 ring-emerald-100">Disponível</Badge>
-                  )
+                  <div className="flex min-w-0 flex-col items-start gap-0.5">
+                    {isUnavailable(p) ? (
+                      <Badge className={`border-0 px-2 py-1 text-[10px] font-bold shadow-sm ${catalog2StatusTone(p.status)}`}>{p.status_label ?? catalog2StatusLabel(p.status)}</Badge>
+                    ) : p.is_new ? (
+                      <Badge className="border-0 bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white shadow-sm">Novo</Badge>
+                    ) : p.is_preview && p.status !== "disponivel" ? (
+                      <Badge className="border-0 bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-800 shadow-sm dark:bg-amber-900/40 dark:text-amber-200">Em preparação</Badge>
+                    ) : (
+                      <Badge className="border-0 bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700 shadow-none ring-1 ring-emerald-100">Disponível</Badge>
+                    )}
+                    {statusNote(p) && <span title={statusNote(p)!} className="max-w-full truncate text-[10px] font-medium text-amber-700 dark:text-amber-300">{statusNote(p)}</span>}
+                  </div>
                 }
               />
             ))}
@@ -318,12 +333,12 @@ function CatalogList({ refs, sp, setParam, setParams, onOpen, preview }: any) {
                 onOpen={() => onOpen(p.sequence_number ?? p.slug)}
                 ctaLabel={(p.has_variations || p.has_addons) ? "Ver opções" : "Ver detalhes"}
                 cornerBadgeRight={
-                  p.is_new ? (
+                  isUnavailable(p) ? (
+                    <Badge className={`border-0 px-2.5 py-1 text-[10px] font-bold shadow-sm ${catalog2StatusTone(p.status)}`}>{p.status_label ?? catalog2StatusLabel(p.status)}</Badge>
+                  ) : p.is_new ? (
                     <Badge className="border-0 bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">Novo</Badge>
                   ) : p.is_preview && p.status !== "disponivel" ? (
                     <Badge className="border-0 bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-800 shadow-sm dark:bg-amber-900/40 dark:text-amber-200">Em preparação</Badge>
-                  ) : !p.is_preview && p.status && p.status !== "disponivel" ? (
-                    <Badge className={`border-0 px-2.5 py-1 text-[10px] font-bold shadow-sm ${catalog2StatusTone(p.status)}`}>{p.status_label ?? catalog2StatusLabel(p.status)}</Badge>
                   ) : undefined
                 }
                 extraTags={

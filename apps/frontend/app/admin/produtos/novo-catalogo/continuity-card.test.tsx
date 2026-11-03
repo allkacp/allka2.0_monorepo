@@ -76,4 +76,24 @@ describe("Continuidade do executor · Passo 2", () => {
     expect(infos.length).toBeGreaterThanOrEqual(6);
     expect(infos.every((i) => (i.getAttribute("data-help") ?? "").length > 20)).toBe(true);
   });
+
+  it("a versão compacta mantém ajuda e os mesmos salvamentos de continuidade e acessos", async () => {
+    render(<ContinuityCard compact task={task()} readOnly={false} act={act} />);
+    expect(screen.getByTestId("continuity-card")).toHaveAttribute("data-compact", "true");
+    expect(screen.getByText("Configurações da tarefa")).toBeInTheDocument();
+    expect(screen.getByTestId("continuity-help")).toHaveClass("sr-only");
+    expect(screen.getByLabelText("Continuidade do executor nos próximos ciclos").closest("label")?.querySelector("[data-help]")).toHaveAttribute("data-help", expect.stringContaining("distribuição normal"));
+    fireEvent.change(screen.getByLabelText("Continuidade do executor nos próximos ciclos"), { target: { value: "recommended" } });
+    await waitFor(() => expect(updateTask).toHaveBeenCalledWith("t1", { executor_continuity: "recommended", continuity_accept_hours: 2, scope: "product" }));
+    fireEvent.change(screen.getByLabelText("Revalidação dos acessos antes do novo ciclo"), { target: { value: "always" } });
+    await waitFor(() => expect(updateTask).toHaveBeenCalledWith("t1", { asset_rule: "always", scope: "product" }));
+  });
+
+  it("a versão compacta respeita somente leitura e mantém todos os detalhes de uma continuidade ativa", () => {
+    render(<ContinuityCard compact task={task({ executor_continuity: "recommended", continuity_accept_hours: 2, asset_rule: "every_x_days", asset_revalidate_days: 30 })} readOnly act={act} />);
+    expect(screen.getByTestId("continuity-details")).toBeInTheDocument();
+    expect(screen.getByLabelText("Dias para revalidar os acessos")).toHaveValue(30);
+    for (const control of document.querySelectorAll("input,select,button[role=switch]")) expect(control).toBeDisabled();
+    expect(updateTask).not.toHaveBeenCalled();
+  });
 });

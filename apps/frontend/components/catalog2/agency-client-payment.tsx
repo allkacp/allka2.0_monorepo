@@ -5,6 +5,30 @@ import { Button } from "@/components/ui/button";
 import { Money } from "@/components/price-with-allkoins";
 import { STANDARD_SHELL_PANEL_CLASS } from "@/components/standard-page-shell";
 
+// Fora do portal logado a variável do tema não existe: sem a reserva, o cabeçalho ficava branco sobre branco.
+const HEADER_GRADIENT = "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))";
+const PERIOD_LABEL: Record<string, string> = { mensal: "Mensal", bimestral: "Bimestral", trimestral: "Trimestral", semestral: "Semestral", anual: "Anual" };
+
+/** Resumo do que foi contratado em cada linha — só informação comercial (sem custo, comissão ou acessos). */
+function ItemDetails({ item }: { item: any }) {
+  const quantity = Number(item.quantity ?? 1);
+  const groups: number[] = Array.isArray(item.delivery_groups) ? item.delivery_groups : [];
+  const months = Number(item.period_months ?? 1);
+  const modality = !item.modality || item.modality === "avulso"
+    ? "Avulso — pagamento único, sem renovação automática."
+    : item.modality === "mensal" && months === 1
+      ? "Assinatura mensal — este pagamento cobre o primeiro mês; a assinatura renova a cada mês."
+      : `Período ${(PERIOD_LABEL[item.modality] ?? item.modality).toLowerCase()} — este pagamento cobre ${months} meses.`;
+  const delivery = quantity > 1
+    ? groups.length > 1 ? ` · ${groups.length} entregas separadas (${groups.join(" + ")})` : " · entregues juntas"
+    : "";
+  return <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+    <p>Quantidade: {quantity}{delivery}</p>
+    <p>{modality}</p>
+    {Array.isArray(item.options) && item.options.length > 0 && <p>Opções contratadas: {item.options.join(" · ")}</p>}
+  </div>;
+}
+
 export default function AgencyClientPayment() {
   const { token = "" } = useParams();
   const [order, setOrder] = useState<any>(null);
@@ -29,14 +53,14 @@ export default function AgencyClientPayment() {
   }
   return <main className="min-h-dvh bg-background p-4 text-foreground sm:p-8" style={{ fontFamily: "inherit" }}>
     <div className={`${STANDARD_SHELL_PANEL_CLASS} mx-auto !h-auto max-w-xl !p-0`}>
-      <header className="flex items-center gap-3 rounded-t-2xl bg-primary p-4 text-primary-foreground" style={{ background: "var(--app-brand-gradient)" }}>
+      <header className="flex items-center gap-3 rounded-t-2xl bg-primary p-4 text-white" style={{ background: HEADER_GRADIENT }}>
         <CreditCard className="h-5 w-5" /><div><h1 className="text-base font-semibold">Pagamento da contratação</h1><p className="text-xs opacity-80">Allka · {order?.code || "Consulta do pedido"}</p></div>
       </header>
       <div className="space-y-4 p-5">
         {error && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</p>}
         {!order && !error && <Loader2 aria-label="Carregando pedido" className="h-5 w-5 animate-spin" />}
         {order && <>
-          <ul className="divide-y divide-border text-sm">{order.items.map((item: any, index: number) => <li key={index} className="flex justify-between gap-3 py-2"><span>{item.name}</span><Money value={item.total} /></li>)}</ul>
+          <ul className="divide-y divide-border text-sm">{order.items.map((item: any, index: number) => <li key={index} className="py-2"><div className="flex justify-between gap-3"><span className="font-medium">{item.name}</span><Money value={item.total} /></div><ItemDetails item={item} /></li>)}</ul>
           <div className="flex justify-between rounded-xl bg-muted p-3 font-semibold"><span>Total a pagar</span><Money value={order.total} /></div>
           {order.paid ? <div role="status" className="flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="h-5 w-5" />Pagamento confirmado. A agência dará continuidade ao atendimento.</div>
             : order.sandbox ? <section className="space-y-3">

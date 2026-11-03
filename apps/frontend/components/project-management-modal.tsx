@@ -25,18 +25,25 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { ProjectInvoiceDetailsWindow } from "@/components/project-invoice-details-window";
+import { ProjectTabsList } from "@/components/project-tabs-list";
+import { ProjectInvoicesTable } from "@/components/project-invoices-table";
+import { loadProjectWalletBalance } from "@/lib/project-wallet";
+import {
+  logActorText,
+  NO_VALUE,
+  projectBillingSnapshot,
+  projectModalityBadge,
+  projectProductIdentity,
+  projectProductModality,
+  taskAssignmentLabels,
+  taskCardCode,
+  taskDeadlineLabel,
+} from "@/lib/project-display";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -112,6 +119,8 @@ import {
   ChevronDown,
   FolderOpen,
   SendHorizonal,
+  Cpu,
+  HelpCircle,
 } from "lucide-react";
 import { useSidebar } from "@/contexts/sidebar-context";
 import { useAppFrameMetrics } from "@/hooks/useAppFrameMetrics";
@@ -135,6 +144,8 @@ import { apiClient } from "@/lib/api-client";
 import { TarefaDetailDrawer } from "@/components/tarefa-detail-drawer";
 import { TaskLaunchDrawer } from "@/components/task-launch-drawer";
 import { BulkTaskLaunchDrawer } from "@/components/bulk-task-launch-drawer";
+import { ProductTaskKanbanCard } from "@/components/product-task-kanban-card";
+import { LAUNCH_GROUP_HINT, TaskLaunchSubstatus } from "@/components/task-launch-substatus";
 import { TASK_STATUS_LABEL } from "@/lib/task-status-display";
 import {
   buildProposalData,
@@ -445,11 +456,13 @@ export function ProjectManagementModal({
 
         return {
           id: idx + 1,
-          nome: pp.product?.name ?? "—",
-          tipo: pp.product?.category ?? "—",
+          // Catálogo antigo lê o produto vinculado; no novo catálogo (sem produto antigo) vale o nome/categoria congelados na compra.
+          ...projectProductIdentity(pp),
+          modalidade: projectProductModality(pp),
+          catalog2: !!pp.catalog2_product_id,
           progresso,
           status,
-          dataContratacao: fmtDate(pp.created_at, "01/01/2000"),
+          dataContratacao: fmtDate(pp.created_at),
           dataEntrega: fmtDate(pp.due_date),
           tarefasConcluidas: concluidas,
           tarefasTotais: totais,
@@ -475,9 +488,17 @@ export function ProjectManagementModal({
               nome: t.title ?? "—",
               status: mappedStatus,
               prazo: fmtDate(prazoDate),
+              // Antes do lançamento a data acima é o prazo PARA LANÇAR, não o de entrega (só o rótulo muda).
+              prazoTipo:
+                t.status === "PARA_LANCAMENTO" && t.lancamento_expires_at
+                  ? "lancamento"
+                  : "entrega",
               lancamentoExpiresAt: t.lancamento_expires_at ?? null,
-              executor: "",
-              lider: "",
+              // Atribuição real da tarefa (antes sempre vazia): os ids vêm para todos; os nomes só para admin.
+              executorAtribuido: !!t.nomade_responsavel_id,
+              executor: t.nomade_responsavel_name ?? "",
+              liderAtribuido: !!t.lider_responsavel_id,
+              lider: t.lider_responsavel_name ?? "",
               rawStatus: t.status,
               etapas: (t.stages ?? []).map((s: any) => ({
                 id: s.id,
@@ -537,7 +558,7 @@ export function ProjectManagementModal({
     if (open && project?.id) fetchModalData();
     if (!open)
       setMockData({ produtos: [], tarefas: [], timeline: [], kanban: {} });
-    if (!open) { setMockInvoices([]); setBillingPayments([]); setBillingSummary(null); }
+    if (!open) { setMockInvoices([]); setBillingPayments([]); setBillingSubscriptions([]); setBillingSummary(null); }
     if (!open) setProjectFilesData(null);
     if (!open) { setMockCredentials([]); setCredentialsSummary(null); }
     if (!open) setDashboardData(null);
@@ -785,11 +806,13 @@ export function ProjectManagementModal({
         .then((res: any) => {
           setMockInvoices(Array.isArray(res?.invoices) ? res.invoices : []);
           setBillingPayments(Array.isArray(res?.payments) ? res.payments : []);
+          setBillingSubscriptions(Array.isArray(res?.subscriptions) ? res.subscriptions : []);
           setBillingSummary(res?.summary ?? null);
         })
         .catch(() => {
           setMockInvoices([]);
           setBillingPayments([]);
+          setBillingSubscriptions([]);
           setBillingSummary(null);
         })
         .finally(() => setBillingLoading(false));
@@ -832,9 +855,6 @@ export function ProjectManagementModal({
   const [defaultPaymentMethod, setDefaultPaymentMethod] =
     useState<string>("carteira");
   const [savedCards, setSavedCards] = useState<any[]>([]);
-  const [walletBalance] = useState(0);
-  const [allkoinBalance] = useState(0);
-  const [allkoinExchangeRate] = useState(1.0);
   const [showInvoiceDetails, setShowInvoiceDetails] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [showReativarDialog, setShowReativarDialog] = useState(false);
@@ -842,16 +862,35 @@ export function ProjectManagementModal({
 
   const [mockInvoices, setMockInvoices] = useState<any[]>([]);
   const [billingPayments, setBillingPayments] = useState<any[]>([]);
+  const [billingSubscriptions, setBillingSubscriptions] = useState<any[]>([]);
   const [billingSummary, setBillingSummary] = useState<any>(null);
   const [billingLoading, setBillingLoading] = useState(false);
   const [faturamentoSubTab, setFaturamentoSubTab] = useState<
     "faturas" | "formas-pagamento"
   >("faturas");
+  // Resumo do Faturamento (auditoria T28): forma/data do último pagamento e próxima cobrança vindas dos dados gravados.
+  const billingResumo = projectBillingSnapshot({
+    payments: billingPayments,
+    invoices: mockInvoices,
+    subscriptions: billingSubscriptions,
+  });
+  // Saldo da carteira em "Formas de Pagamento" (antes um 0 fixo): fonte autorizada de cada perfil, só leitura.
+  // undefined = carregando · null = indisponível · número = saldo real.
+  const [walletBalance, setWalletBalance] = useState<number | null | undefined>(undefined);
+  React.useEffect(() => {
+    if (!open || activeModalTab !== "faturamento" || faturamentoSubTab !== "formas-pagamento") return;
+    let cancelled = false;
+    setWalletBalance(undefined);
+    loadProjectWalletBalance({ accountType, ownerType: project?.ownerType, ownerId: project?.ownerId })
+      .then((value) => { if (!cancelled) setWalletBalance(value); })
+      .catch(() => { if (!cancelled) setWalletBalance(null); });
+    return () => { cancelled = true; };
+  }, [open, activeModalTab, faturamentoSubTab, accountType, project?.ownerType, project?.ownerId]);
 
   const handleDownloadInvoicePDF = (invoice: any) => {
     toast({
       title: "Download iniciado",
-      description: `Gerando PDF da fatura ${invoice.month}...`,
+      description: `Gerando PDF da fatura ${invoice.invoice_number ?? invoice.month ?? ""}...`,
     });
     // In a real app, this would generate and download a PDF
   };
@@ -1086,7 +1125,10 @@ export function ProjectManagementModal({
 
     // Filter by type
     if (productTypeFilter !== "all") {
-      filtered = filtered.filter((p) => p.tipo === productTypeFilter);
+      // O filtro "Tipo" oferece Avulso/Mensal: compara com a modalidade do produto (antes só com a categoria).
+      filtered = filtered.filter(
+        (p) => (p.modalidade ?? p.tipo) === productTypeFilter,
+      );
     }
 
     filtered.sort((a, b) => {
@@ -1272,13 +1314,14 @@ export function ProjectManagementModal({
         label: "Lançamento expirado",
         className: "bg-red-100 text-red-700 border-red-200",
       };
+    // Contagem do prazo PARA LANÇAR (lancamento_expires_at) — não é o prazo de entrega da tarefa.
     if (days <= 5)
       return {
-        label: `Expira em ${days}d`,
+        label: `Lançar em até ${days}d`,
         className: "bg-amber-100 text-amber-700 border-amber-200",
       };
     return {
-      label: `Vence em ${days}d`,
+      label: `Lançar em até ${days}d`,
       className: "bg-orange-100 text-orange-600 border-orange-200",
     };
   };
@@ -1574,18 +1617,30 @@ export function ProjectManagementModal({
                               : "Inativo"}
                         </span>
                       )}
-                      <span
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          dadosProjForm.lifecycle === "Mensal"
-                            ? "bg-violet-100 border-violet-300 text-violet-700 dark:bg-violet-900/40 dark:border-violet-700 dark:text-violet-300"
-                            : "bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-400"
-                        }`}
-                      >
-                        {dadosProjForm.lifecycle === "Mensal" && (
-                          <RefreshCw className="h-2.5 w-2.5" />
-                        )}
-                        {dadosProjForm.lifecycle}
-                      </span>
+                      {(() => {
+                        // Novo catálogo: o tipo do projeto não é gravado na compra — o selo resume a modalidade
+                        // de cada produto (ex.: SEO avulso + manutenção mensal). Projeto antigo mantém o tipo cadastrado.
+                        const modality = projectModalityBadge(
+                          mockData.produtos,
+                          dadosProjForm.lifecycle,
+                        );
+                        return (
+                          <span
+                            title={modality.title}
+                            data-testid="project-modality-badge"
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                              modality.recurring
+                                ? "bg-violet-100 border-violet-300 text-violet-700 dark:bg-violet-900/40 dark:border-violet-700 dark:text-violet-300"
+                                : "bg-slate-100 border-slate-300 text-slate-500 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-400"
+                            }`}
+                          >
+                            {modality.recurring && (
+                              <RefreshCw className="h-2.5 w-2.5" />
+                            )}
+                            {modality.label}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -1913,64 +1968,7 @@ export function ProjectManagementModal({
                 onValueChange={setActiveModalTab}
                 className="w-full flex flex-col h-full"
               >
-                <div className="flex-shrink-0 bg-white dark:bg-background px-[50px] pt-0 pb-[10px] overflow-x-auto">
-                  <TabsList className="grid w-max grid-cols-9 gap-1 bg-transparent p-0 h-auto">
-                    <TabsTrigger
-                      value="dashboard"
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                    >
-                      Dashboard
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="descricao"
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                    >
-                      Dados do Projeto
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="produtos"
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                    >
-                      Produtos
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="tarefas"
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                    >
-                      Tarefas
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="arquivos"
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                    >
-                      Arquivos
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="documentos"
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                    >
-                      Documentos
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="cofre"
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                    >
-                      Cofre
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="faturamento"
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                    >
-                      Faturamento
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="log"
-                      className="px-4 py-2 text-xs font-medium rounded-lg border border-transparent data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:border-blue-300 hover:bg-slate-100"
-                    >
-                      Log
-                    </TabsTrigger>
-                  </TabsList>
-                </div>
+                <ProjectTabsList />
 
                 <TabsContent
                   value="dashboard"
@@ -2795,13 +2793,13 @@ export function ProjectManagementModal({
                       )}
                     </div>
                   ) : (
-                    <div className="px-[50px] pt-[25px] pb-[80px] space-y-4">
-                      {/* Header */}
-                      <div className="flex items-center justify-between">
+                    <div className="px-[50px] max-md:px-3 pt-[25px] pb-[80px] space-y-4">
+                      {/* Header — no celular os botões descem para a linha de baixo em vez de exigir rolagem lateral */}
+                      <div className="flex items-center justify-between max-md:flex-wrap max-md:gap-2">
                         <h3 className="text-sm font-semibold text-slate-900">
                           Produtos Contratados
                         </h3>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 max-md:flex-wrap">
                           <Button
                             size="sm"
                             className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white"
@@ -3028,8 +3026,8 @@ export function ProjectManagementModal({
 
                               {/* Main info */}
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="font-bold text-sm text-slate-800 truncate">
+                                <div className="flex items-center gap-2 mb-1 max-md:flex-wrap">
+                                  <h4 className="font-bold text-sm text-slate-800 truncate max-md:whitespace-normal">
                                     {produto.nome}
                                   </h4>
                                   <span
@@ -3041,6 +3039,23 @@ export function ProjectManagementModal({
                                   >
                                     {produto.tipo}
                                   </span>
+                                  {produto.modalidade &&
+                                    produto.modalidade !== produto.tipo && (
+                                      <span
+                                        title="Modalidade contratada deste produto"
+                                        data-testid="project-product-modality"
+                                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${
+                                          produto.modalidade === "Avulso"
+                                            ? "bg-slate-100 text-slate-600"
+                                            : "bg-violet-100 text-violet-700"
+                                        }`}
+                                      >
+                                        {produto.modalidade !== "Avulso" && (
+                                          <RefreshCw className="h-2.5 w-2.5" />
+                                        )}
+                                        {produto.modalidade}
+                                      </span>
+                                    )}
                                 </div>
                                 {/* Progress bar */}
                                 <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden mb-1.5">
@@ -3049,7 +3064,10 @@ export function ProjectManagementModal({
                                     style={{ width: `${produto.progresso}%` }}
                                   />
                                 </div>
-                                <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                                <div
+                                  className="flex items-center gap-3 text-[11px] text-slate-500 max-md:flex-wrap max-md:gap-x-3 max-md:gap-y-1"
+                                  data-testid="project-product-meta"
+                                >
                                   {/* Task status breakdown */}
                                   {produto.tarefasTotais === 0 ? (
                                     <span className="italic text-slate-400">
@@ -3099,7 +3117,7 @@ export function ProjectManagementModal({
                                       </span>
                                     </div>
                                   )}
-                                  <span className="text-slate-300">•</span>
+                                  <span className="text-slate-300 max-md:hidden">•</span>
                                   <span className="flex items-center gap-1">
                                     <Calendar className="h-3 w-3" />
                                     Contratação:{" "}
@@ -3107,7 +3125,7 @@ export function ProjectManagementModal({
                                       {produto.dataContratacao}
                                     </span>
                                   </span>
-                                  <span className="text-slate-300">•</span>
+                                  <span className="text-slate-300 max-md:hidden">•</span>
                                   <span className="flex items-center gap-1">
                                     <Calendar className="h-3 w-3" />
                                     Entrega:{" "}
@@ -3874,9 +3892,9 @@ export function ProjectManagementModal({
                       {/* ── Main card ── */}
                       <div className="border border-slate-200/70 shadow-sm overflow-hidden rounded-xl bg-white">
                         {/* ── Top bar ── */}
-                        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 bg-slate-50/60">
+                        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 bg-slate-50/60 max-md:flex-wrap max-md:px-3">
                           {/* Search */}
-                          <div className="flex-1 relative min-w-0">
+                          <div className="flex-1 relative min-w-0 max-md:basis-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <input
                               type="text"
@@ -4173,7 +4191,7 @@ export function ProjectManagementModal({
                               getPaginatedTasks().map((tarefa, idx) => (
                                 <div key={tarefa.uniqueId}>
                                   <div
-                                    className={`flex items-center gap-4 px-5 py-3 transition-all ${
+                                    className={`flex items-center gap-4 px-5 py-3 transition-all max-md:flex-wrap max-md:gap-2 max-md:px-3 ${
                                       idx % 2 === 0
                                         ? "bg-white hover:bg-slate-50"
                                         : "bg-slate-200/50 hover:bg-slate-200/70"
@@ -4198,7 +4216,7 @@ export function ProjectManagementModal({
                                         >
                                           {tarefa.nome}
                                         </span>
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shrink-0">
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium border border-slate-200 shrink-0 max-md:shrink max-md:max-w-full">
                                           {tarefa.produtoNome}
                                         </span>
                                         {tarefa.etapas?.length > 0 && (
@@ -4213,8 +4231,8 @@ export function ProjectManagementModal({
                                       <div className="flex items-center gap-2.5 text-[11px] text-slate-400 flex-wrap">
                                         <span className="flex items-center gap-1">
                                           <Calendar className="h-3 w-3" />
-                                          <span className="font-medium text-slate-600">
-                                            {tarefa.prazo}
+                                          <span className="font-medium text-slate-600" title={taskDeadlineLabel(tarefa).title}>
+                                            {taskDeadlineLabel(tarefa).text}
                                           </span>
                                         </span>
                                         {(() => {
@@ -4232,21 +4250,24 @@ export function ProjectManagementModal({
                                     </div>
 
                                     {/* Status pill + expand + eye */}
-                                    <div className="flex items-center gap-2 shrink-0">
+                                    <div className="flex items-center gap-2 shrink-0 max-md:basis-full max-md:justify-end">
                                       {tarefa.status === "Para lançamento" ? (
                                         <button
                                           onClick={() => openLaunchDrawer(tarefa)}
                                           title={tarefa.rawStatus === "EM_LANCAMENTO" || tarefa.rawStatus === "AGUARDANDO_INFORMACOES" ? "Clique para continuar o lançamento" : "Clique para lançar a tarefa"}
-                                          className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border cursor-pointer hover:opacity-80 hover:ring-2 hover:ring-orange-300 transition-all ${getStatusBadgeColor(tarefa.status)}`}
+                                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border cursor-pointer hover:opacity-80 hover:ring-2 hover:ring-orange-300 transition-all ${getStatusBadgeColor(tarefa.status)}`}
                                         >
                                           <span
                                             className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`}
                                           />
                                           {tarefa.status}
                                         </button>
+                                      ) : null}
+                                      {tarefa.status === "Para lançamento" ? (
+                                        <TaskLaunchSubstatus rawStatus={tarefa.rawStatus} />
                                       ) : (
                                         <div
-                                          className={`hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}
+                                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}
                                         >
                                           <span
                                             className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${getStatusDotClass(tarefa.status)}`}
@@ -4393,7 +4414,10 @@ export function ProjectManagementModal({
                             )}
                           </div>
                         ) : (
-                          <div className="flex gap-3 overflow-x-auto px-5 pb-4 pt-4">
+                          <div
+                            className="flex gap-3 overflow-x-auto px-5 pb-4 pt-4 max-lg:grid max-lg:grid-cols-2 max-lg:overflow-x-visible max-md:grid-cols-1 max-md:px-3"
+                            data-testid="project-tasks-kanban"
+                          >
                             {[
                               "Para lançamento",
                               "Em Execução",
@@ -4410,7 +4434,7 @@ export function ProjectManagementModal({
                               return (
                                 <div
                                   key={status}
-                                  className="flex-shrink-0 w-64"
+                                  className="flex-shrink-0 w-64 max-lg:w-auto max-lg:min-w-0"
                                 >
                                   <div
                                     className="rounded-t-xl p-2.5 mb-2"
@@ -4427,6 +4451,7 @@ export function ProjectManagementModal({
                                         <span
                                           className="font-semibold text-xs"
                                           style={{ color: columnColor }}
+                                          title={status === "Para lançamento" ? LAUNCH_GROUP_HINT : undefined}
                                         >
                                           {status}
                                         </span>
@@ -4442,7 +4467,7 @@ export function ProjectManagementModal({
                                       </span>
                                     </div>
                                   </div>
-                                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1 max-lg:max-h-none max-lg:overflow-visible max-lg:pr-0">
                                     {statusTasks.length > 0 ? (
                                       statusTasks.map((tarefa) => (
                                         <div
@@ -4455,16 +4480,23 @@ export function ProjectManagementModal({
                                           <div className="flex items-center justify-between gap-1 mb-1.5">
                                             <div className="flex items-center justify-center bg-blue-50 rounded px-1.5 py-0.5">
                                               <span className="text-[9px] text-blue-600 font-bold">
-                                                #{tarefa.uniqueId}
+                                                {taskCardCode(tarefa, tarefa.uniqueId)}
                                               </span>
                                             </div>
-                                            <button className="h-5 w-5 flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors">
+                                            <button
+                                              type="button"
+                                              onClick={() => openTaskDrawer(tarefa)}
+                                              aria-label={`Ver detalhes da tarefa ${taskCardCode(tarefa, tarefa.uniqueId)}`}
+                                              title="Visualizar detalhes da tarefa"
+                                              className="h-5 w-5 flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors"
+                                            >
                                               <Eye className="h-3 w-3" />
                                             </button>
                                           </div>
                                           <p className="font-semibold text-xs text-slate-800 line-clamp-2 mb-1.5">
                                             {tarefa.nome}
                                           </p>
+                                          <TaskLaunchSubstatus rawStatus={tarefa.rawStatus} className="mb-1.5 mr-1" />
                                           <span className="inline-block text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 mb-1.5">
                                             {tarefa.produtoNome}
                                           </span>
@@ -4472,23 +4504,19 @@ export function ProjectManagementModal({
                                             <div className="flex items-center gap-1">
                                               <User className="h-2.5 w-2.5" />
                                               <span className="font-medium text-slate-600">
-                                                {canSeeNomadNames
-                                                  ? tarefa.executor
-                                                  : "Nômade"}
+                                                {taskAssignmentLabels(tarefa, canSeeNomadNames).executor}
                                               </span>
                                             </div>
                                             <div className="flex items-center gap-1">
                                               <Users className="h-2.5 w-2.5" />
                                               <span className="font-medium text-slate-600">
-                                                {canSeeNomadNames
-                                                  ? tarefa.lider
-                                                  : "Equipe Allka"}
+                                                {taskAssignmentLabels(tarefa, canSeeNomadNames).lider}
                                               </span>
                                             </div>
                                             <div className="flex items-center gap-1">
                                               <Calendar className="h-2.5 w-2.5" />
-                                              <span className="font-medium text-slate-600">
-                                                {tarefa.prazo}
+                                              <span className="font-medium text-slate-600" title={taskDeadlineLabel(tarefa).title}>
+                                                {taskDeadlineLabel(tarefa).text}
                                               </span>
                                             </div>
                                           </div>
@@ -4594,24 +4622,19 @@ export function ProjectManagementModal({
 
                       {/* ── Faturas sub-tab ─────────────────────────────────── */}
                       {faturamentoSubTab === "faturas" && (
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                        <div className="flex-1 overflow-y-auto p-6 max-md:p-3 space-y-4">
                           {/* MENSAL: billing info card */}
                           {dadosProjForm.lifecycle === "Mensal" &&
                             (() => {
                               const overdueInvoices = mockInvoices.filter(
                                 (inv: any) => inv.status === "overdue" || inv.status === "pending",
                               );
-                              const today = new Date();
+                              // Dia e próxima cobrança só quando gravados — sem supor dia 15 nem calcular débito a partir de hoje.
                               const billingDay =
-                                dadosProjForm.diaCobranca || 15;
-                              const nextDate = new Date(
-                                today.getFullYear(),
-                                today.getMonth() +
-                                  (today.getDate() >= billingDay ? 1 : 0),
-                                billingDay,
-                              );
-                              const nextBillingStr =
-                                nextDate.toLocaleDateString("pt-BR");
+                                project?.billingConfig?.billingDay ?? null;
+                              const nextBillingStr = billingLoading
+                                ? "…"
+                                : (billingResumo.next?.date ?? NO_VALUE);
                               return (
                                 <>
                                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
@@ -4626,7 +4649,9 @@ export function ProjectManagementModal({
                                             Dia de Cobrança
                                           </p>
                                           <p className="text-sm font-bold text-blue-900">
-                                            Dia {billingDay}
+                                            {billingDay != null
+                                              ? `Dia ${billingDay}`
+                                              : NO_VALUE}
                                           </p>
                                         </div>
                                         <div>
@@ -4730,20 +4755,25 @@ export function ProjectManagementModal({
                               );
                             })()}
 
-                          {/* Summary Cards */}
-                          <div className="grid grid-cols-3 gap-4 pb-4 border-b">
+                          {/* Summary Cards — só o que está gravado (pagamento, fatura, agenda da assinatura); sem dado, "—" */}
+                          <div
+                            className="grid grid-cols-3 gap-4 pb-4 border-b max-md:grid-cols-1 max-md:gap-2"
+                            data-testid="project-billing-summary"
+                          >
                             <div>
                               <p className="text-xs text-muted-foreground mb-1">
                                 Última Forma de Pagamento
                               </p>
-                              <p className="text-sm font-semibold">Carteira</p>
+                              <p className="text-sm font-semibold">
+                                {billingLoading ? "…" : billingResumo.lastMethod}
+                              </p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground mb-1">
                                 Último Pagamento
                               </p>
                               <p className="text-sm font-semibold">
-                                15/10/2025
+                                {billingLoading ? "…" : billingResumo.lastPaidAt}
                               </p>
                             </div>
                             <div>
@@ -4751,8 +4781,15 @@ export function ProjectManagementModal({
                                 Próxima Cobrança
                               </p>
                               <p className="text-sm font-semibold">
-                                15/11/2025
+                                {billingLoading
+                                  ? "…"
+                                  : (billingResumo.next?.date ?? NO_VALUE)}
                               </p>
+                              {!billingLoading && billingResumo.next && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  {billingResumo.next.note}
+                                </p>
+                              )}
                             </div>
                           </div>
 
@@ -4805,94 +4842,14 @@ export function ProjectManagementModal({
                             <p className="text-xs text-muted-foreground mb-3">
                               {mockInvoices.length} registro(s) encontrados.
                             </p>
-                            <div className="border rounded-lg overflow-hidden">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow className="bg-muted/50">
-                                    <TableHead className="text-xs font-semibold">
-                                      SITUAÇÃO
-                                    </TableHead>
-                                    <TableHead className="text-xs font-semibold">
-                                      FATURA
-                                    </TableHead>
-                                    <TableHead className="text-xs font-semibold">
-                                      DESCRIÇÃO
-                                    </TableHead>
-                                    <TableHead className="text-xs font-semibold">
-                                      VENCIMENTO
-                                    </TableHead>
-                                    <TableHead className="text-xs font-semibold">
-                                      VALOR
-                                    </TableHead>
-                                    <TableHead className="text-xs font-semibold text-right">
-                                      AÇÕES
-                                    </TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {mockInvoices.map((invoice) => {
-                                    const statusLabel = invoice.status === "paid" ? "Pago" : invoice.status === "overdue" ? "Atrasado" : invoice.status === "cancelled" ? "Cancelado" : "Pendente";
-                                    const statusClass = invoice.status === "paid" ? "bg-green-500 hover:bg-green-600" : invoice.status === "overdue" ? "bg-red-500 hover:bg-red-600" : invoice.status === "cancelled" ? "bg-slate-400 hover:bg-slate-500" : "bg-yellow-500 hover:bg-yellow-600";
-                                    return (
-                                    <TableRow
-                                      key={invoice.id}
-                                      className="hover:bg-muted/30"
-                                    >
-                                      <TableCell className="py-2">
-                                        <Badge className={`${statusClass} text-white text-xs`}>
-                                          {statusLabel}
-                                        </Badge>
-                                      </TableCell>
-                                      <TableCell className="text-xs font-medium">
-                                        {invoice.invoice_number ?? invoice.id.slice(-8).toUpperCase()}
-                                      </TableCell>
-                                      <TableCell className="text-xs max-w-[180px] truncate">
-                                        {invoice.description ?? "—"}
-                                      </TableCell>
-                                      <TableCell className="text-xs">
-                                        {invoice.due_date ? new Date(invoice.due_date).toLocaleDateString("pt-BR") : "—"}
-                                      </TableCell>
-                                      <TableCell className="text-xs font-semibold">
-                                        R$ {(invoice.amount ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                                      </TableCell>
-                                      <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-7 w-7 p-0 bg-blue-100 hover:bg-blue-200"
-                                            onClick={() => {
-                                              setSelectedInvoice(invoice);
-                                              setShowInvoiceDetails(true);
-                                            }}
-                                          >
-                                            <Eye className="h-3.5 w-3.5 text-blue-700" />
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="ghost"
-                                            className="h-7 w-7 p-0 bg-yellow-100 hover:bg-yellow-200"
-                                            onClick={() =>
-                                              handleDownloadInvoicePDF(invoice)
-                                            }
-                                          >
-                                            <Download className="h-3.5 w-3.5 text-yellow-700" />
-                                          </Button>
-                                        </div>
-                                      </TableCell>
-                                    </TableRow>
-                                    );
-                                  })}
-                                  {mockInvoices.length === 0 && (
-                                    <TableRow>
-                                      <TableCell colSpan={6} className="text-center text-xs text-slate-400 py-8">
-                                        Nenhuma fatura encontrada para este projeto.
-                                      </TableCell>
-                                    </TableRow>
-                                  )}
-                                </TableBody>
-                              </Table>
-                            </div>
+                            <ProjectInvoicesTable
+                              invoices={mockInvoices}
+                              onView={(invoice) => {
+                                setSelectedInvoice(invoice);
+                                setShowInvoiceDetails(true);
+                              }}
+                              onDownload={handleDownloadInvoicePDF}
+                            />
                           </div>}
                         </div>
                       )}
@@ -5051,10 +5008,17 @@ export function ProjectManagementModal({
                                 </div>
                                 <div className="flex-1">
                                   <div className="font-medium text-xs">
-                                    CARTEIRA
+                                    CARTEIRA (ALLKOINS)
                                   </div>
-                                  <div className="text-[10px] text-gray-500 mt-0.5">
-                                    Saldo: <AkBoth value={walletBalance} />
+                                  <div className="text-[10px] text-gray-500 mt-0.5" data-testid="project-wallet-balance">
+                                    Saldo:{" "}
+                                    {walletBalance === undefined ? (
+                                      "…"
+                                    ) : walletBalance === null ? (
+                                      "indisponível"
+                                    ) : (
+                                      <AkBoth value={walletBalance} />
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -5078,7 +5042,13 @@ export function ProjectManagementModal({
                                       Saldo Disponível
                                     </div>
                                     <div className="text-2xl font-bold text-green-900">
-                                      <AkBoth value={walletBalance} />
+                                      {walletBalance === undefined ? (
+                                        "…"
+                                      ) : walletBalance === null ? (
+                                        "Saldo indisponível"
+                                      ) : (
+                                        <AkBoth value={walletBalance} />
+                                      )}
                                     </div>
                                   </div>
                                   <Wallet className="h-10 w-10 text-green-600 opacity-20" />
@@ -5137,44 +5107,9 @@ export function ProjectManagementModal({
                                 className="w-4 h-4"
                               />
                             </label>
-
-                            {/* Allkoin */}
-                            <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors relative overflow-hidden">
-                              <div className="flex items-center gap-2.5 flex-1">
-                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 via-blue-600 to-blue-800 flex items-center justify-center shadow-lg">
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    fill="currentColor"
-                                    className="h-5 w-5 text-white"
-                                  >
-                                    <path d="M12 2C11.5 2 11 2.19 10.59 2.59L8 5.17L5.41 2.59C5 2.19 4.5 2 4 2C2.9 2 2 2.9 2 4C2 4.5 2.19 5 2.59 5.41L4 6.83V9C4 10.1 4.9 11 6 11H7L6 13L4 14C3.45 14 3 14.45 3 15V17C3 17.55 3.45 18 4 18H6V20C6 21.1 6.9 22 8 22H16C17.1 22 18 21.1 18 20V18H20C20.55 18 21 17.55 21 17V15C21 14.45 20.55 14 20 14L18 13L17 11H18C19.1 11 20 10.1 20 9V6.83L21.41 5.41C21.81 5 22 4.5 22 4C22 2.9 21.1 2 20 2C19.5 2 19 2.19 18.59 2.59L16 5.17L13.41 2.59C13 2.19 12.5 2 12 2M12 6C12.55 6 13 6.45 13 7S12.55 8 12 8 11 7.55 11 7 11.45 6 12 6M9 9C9.55 9 10 9.45 10 10S9.55 11 9 11 8 10.55 8 10 8.45 9 9 9M15 9C15.55 9 16 9.45 16 10S15.55 11 15 11 14 10.55 14 10 14.45 9 15 9Z" />
-                                  </svg>
-                                </div>
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium text-xs">
-                                      ALLKOIN
-                                    </span>
-                                    <Badge className="bg-[image:var(--app-brand-button,linear-gradient(to_right,#3b82f6,#9333ea))] text-white text-[9px] px-1.5 py-0">
-                                      Novo
-                                    </Badge>
-                                  </div>
-                                  <div className="text-[10px] text-gray-500 mt-0.5">
-                                    <AkBoth value={allkoinBalance} /> • 1 AK$ = R$ {allkoinExchangeRate.toFixed(2)}
-                                  </div>
-                                </div>
-                              </div>
-                              <input
-                                type="radio"
-                                name="payment-method"
-                                value="allkoin"
-                                checked={defaultPaymentMethod === "allkoin"}
-                                onChange={(e) =>
-                                  setDefaultPaymentMethod(e.target.value)
-                                }
-                                className="w-4 h-4"
-                              />
-                            </label>
+                            {/* Sem opção "ALLKOIN" à parte (decisão do usuário, 02/11): ela mostrava um AK$ 0,00 fixo no
+                                código. A Carteira acima já é o saldo em Allkoins, e pagar com Allkoins debita essa
+                                mesma carteira no servidor. */}
                           </div>
                         </div>
                       )}
@@ -5331,12 +5266,25 @@ export function ProjectManagementModal({
                                   <p className="text-[11px] text-slate-500 mt-0.5">
                                     {entry.description}
                                   </p>
-                                  {entry.actor_name && (
-                                    <p className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
-                                      <User className="w-2.5 h-2.5" />
-                                      {entry.actor_name}
-                                    </p>
-                                  )}
+                                  {(() => {
+                                    // Autoria como o servidor registrou; sem registro, a tela diz isso (nunca usa quem está vendo).
+                                    const actor = logActorText(entry);
+                                    const ActorIcon =
+                                      actor.kind === "system"
+                                        ? Cpu
+                                        : actor.kind === "unknown"
+                                          ? HelpCircle
+                                          : User;
+                                    return (
+                                      <p
+                                        data-testid="project-log-actor"
+                                        className={`text-[10px] mt-1 flex items-center gap-1 ${actor.kind === "unknown" ? "text-slate-300 italic" : "text-slate-400"}`}
+                                      >
+                                        <ActorIcon className="w-2.5 h-2.5" />
+                                        {actor.text}
+                                      </p>
+                                    );
+                                  })()}
                                   {/* Meta pills */}
                                   {Object.keys(meta).length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-1">
@@ -5650,9 +5598,9 @@ export function ProjectManagementModal({
                       {/* ── Main card ── */}
                       <div className="border border-slate-200/70 shadow-sm overflow-hidden rounded-xl bg-white">
                         {/* ── Top bar ── */}
-                        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 bg-slate-50/60">
+                        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-slate-200/70 bg-slate-50/60 max-md:flex-wrap max-md:px-3">
                           {/* Search */}
-                          <div className="flex-1 relative min-w-0">
+                          <div className="flex-1 relative min-w-0 max-md:basis-full">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <input
                               type="text"
@@ -5915,7 +5863,7 @@ export function ProjectManagementModal({
                                   >
                                     <div className="flex items-center justify-center bg-blue-50 rounded px-2 py-0.5 shrink-0">
                                       <span className="text-[11px] text-blue-600 font-bold">
-                                        #{uniqueTaskId}
+                                        {taskCardCode(tarefa, uniqueTaskId)}
                                       </span>
                                     </div>
                                     <div className="flex-1 min-w-0">
@@ -5933,18 +5881,14 @@ export function ProjectManagementModal({
                                         <span className="flex items-center gap-1">
                                           <User className="h-3 w-3" />
                                           <span className="font-medium text-slate-600">
-                                            {canSeeNomadNames
-                                              ? tarefa.executor
-                                              : "Nômade"}
+                                            {taskAssignmentLabels(tarefa, canSeeNomadNames).executor}
                                           </span>
                                         </span>
                                         <span>·</span>
                                         <span className="flex items-center gap-1">
                                           <Users className="h-3 w-3" />
                                           <span className="font-medium text-slate-600">
-                                            {canSeeNomadNames
-                                              ? tarefa.lider
-                                              : "Equipe Allka"}
+                                            {taskAssignmentLabels(tarefa, canSeeNomadNames).lider}
                                           </span>
                                         </span>
                                         {tarefa.prazo && (
@@ -5952,8 +5896,8 @@ export function ProjectManagementModal({
                                             <span>·</span>
                                             <span className="flex items-center gap-1">
                                               <Calendar className="h-3 w-3" />
-                                              <span className="font-medium text-slate-600">
-                                                {tarefa.prazo}
+                                              <span className="font-medium text-slate-600" title={taskDeadlineLabel(tarefa).title}>
+                                                {taskDeadlineLabel(tarefa).text}
                                               </span>
                                             </span>
                                           </>
@@ -5973,7 +5917,7 @@ export function ProjectManagementModal({
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                       <span className="text-[9px] text-slate-400 font-mono">
-                                        #{uniqueTaskId}
+                                        {taskCardCode(tarefa, uniqueTaskId)}
                                       </span>
                                       {tarefa.status === "Para lançamento" ? (
                                         <button
@@ -5991,6 +5935,9 @@ export function ProjectManagementModal({
                                           />
                                           {tarefa.status}
                                         </button>
+                                      ) : null}
+                                      {tarefa.status === "Para lançamento" ? (
+                                        <TaskLaunchSubstatus rawStatus={tarefa.rawStatus} />
                                       ) : (
                                         <div
                                           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${getStatusBadgeColor(tarefa.status)}`}
@@ -6030,8 +5977,8 @@ export function ProjectManagementModal({
 
                         {/* ── Kanban view ── */}
                         {productTaskViewMode === "kanban" && (
-                          <div className="p-5 overflow-x-auto">
-                            <div className="flex gap-4 min-w-max">
+                          <div className="p-5 overflow-x-auto max-md:p-3">
+                            <div className="flex gap-4 min-w-max max-lg:grid max-lg:grid-cols-2 max-lg:min-w-0 max-md:grid-cols-1">
                               {[
                                 "Para lançamento",
                                 "Em Execução",
@@ -6058,11 +6005,14 @@ export function ProjectManagementModal({
                                     "from-red-50 to-red-100/50 border-red-200",
                                 };
                                 return (
-                                  <div key={col} className="w-64 flex-shrink-0">
+                                  <div key={col} className="w-64 flex-shrink-0 max-lg:w-auto max-lg:min-w-0">
                                     <div
                                       className={`flex items-center justify-between mb-2 px-3 py-2 rounded-lg bg-gradient-to-br ${colColors[col]} border`}
                                     >
-                                      <span className="text-xs font-bold text-slate-700">
+                                      <span
+                                        className="text-xs font-bold text-slate-700"
+                                        title={col === "Para lançamento" ? LAUNCH_GROUP_HINT : undefined}
+                                      >
                                         {col}
                                       </span>
                                       <span className="text-xs font-bold text-slate-500">
@@ -6074,46 +6024,18 @@ export function ProjectManagementModal({
                                         const uniqueTaskId =
                                           selectedProduct.id * 1000 + tarefa.id;
                                         return (
-                                          <div
+                                          <ProductTaskKanbanCard
                                             key={uniqueTaskId}
-                                            onClick={() =>
-                                              tarefa.status === "Para lançamento"
-                                                ? openLaunchDrawer(tarefa)
-                                                : openTaskDrawer(tarefa)
-                                            }
-                                            title={
-                                              tarefa.status === "Para lançamento"
-                                                ? "Clique para lançar a tarefa"
-                                                : "Visualizar detalhes da tarefa"
-                                            }
-                                            className="bg-white rounded-lg border border-slate-200 p-3 shadow-sm hover:shadow-md hover:ring-2 hover:ring-blue-200 cursor-pointer transition-shadow"
-                                            style={{
-                                              borderLeft: `3px solid ${getStatusBorderColor(tarefa.status)}`,
-                                            }}
-                                          >
-                                            <div className="flex items-center gap-1.5 mb-1">
-                                              <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-1.5 py-0.5 rounded">
-                                                #{uniqueTaskId}
-                                              </span>
-                                            </div>
-                                            <p className="text-xs font-semibold text-slate-800 mb-1.5 leading-tight">
-                                              {tarefa.nome}
-                                            </p>
-                                            <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                                              <User className="h-2.5 w-2.5" />
-                                              <span>
-                                                {canSeeNomadNames
-                                                  ? tarefa.executor
-                                                  : "Nômade"}
-                                              </span>
-                                            </div>
-                                            {tarefa.prazo && (
-                                              <div className="flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                                                <Calendar className="h-2.5 w-2.5" />
-                                                <span>{tarefa.prazo}</span>
-                                              </div>
-                                            )}
-                                          </div>
+                                            code={taskCardCode(tarefa, uniqueTaskId)}
+                                            name={tarefa.nome}
+                                            executor={taskAssignmentLabels(tarefa, canSeeNomadNames).executor}
+                                            deadline={tarefa.prazo ? taskDeadlineLabel(tarefa) : null}
+                                            status={tarefa.status}
+                                            rawStatus={tarefa.rawStatus}
+                                            borderColor={getStatusBorderColor(tarefa.status)}
+                                            onView={() => openTaskDrawer(tarefa)}
+                                            onLaunch={() => openLaunchDrawer(tarefa)}
+                                          />
                                         );
                                       })}
                                       {colTasks.length === 0 && (
@@ -6966,240 +6888,19 @@ export function ProjectManagementModal({
         </SheetContent>
       </Sheet>
 
-      <Sheet open={showInvoiceDetails} onOpenChange={setShowInvoiceDetails}>
-        <SheetContent
-          side="right"
-          className="w-full sm:max-w-4xl p-0 flex flex-col"
-        >
-          {selectedInvoice && (
-            <>
-              {/* Header with gradient */}
-              <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
-                      <FileText className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold">Detalhes da Fatura</h2>
-                      <p className="text-sm text-white/90">
-                        {selectedInvoice.month}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge
-                    className={`${selectedInvoice.status === "PAGO" ? "bg-green-500" : "bg-yellow-500"} text-white`}
-                  >
-                    {selectedInvoice.status}
-                  </Badge>
-                </div>
-
-                {/* Main value display */}
-                <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 mt-4">
-                  <p className="text-sm text-white/80 mb-1">Valor Total</p>
-                  <p className="text-3xl font-bold">
-                    R$ {selectedInvoice.valor.toFixed(2).replace(".", ",")}
-                  </p>
-                  {selectedInvoice.desconto > 0 && (
-                    <div className="mt-2 flex items-center gap-2 text-sm">
-                      <span className="text-white/70 line-through">
-                        R${" "}
-                        {selectedInvoice.valorOriginal
-                          .toFixed(2)
-                          .replace(".", ",")}
-                      </span>
-                      <Badge className="bg-green-500/80 text-white text-xs">
-                        -{selectedInvoice.descontoPercentual.toFixed(1)}%
-                        desconto
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Content with scroll */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {/* Payment Information */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-blue-600" />
-                    Informações de Pagamento
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Agência
-                      </p>
-                      <p className="text-sm font-medium">
-                        {selectedInvoice.agencia}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        ID: {selectedInvoice.agenciaId}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Cliente
-                      </p>
-                      <p className="text-sm font-medium">
-                        {selectedInvoice.cliente}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        ID: {selectedInvoice.clienteId}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Forma de Pagamento
-                      </p>
-                      <p className="text-sm font-medium">
-                        {selectedInvoice.formaPagamento}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Competência
-                      </p>
-                      <p className="text-sm font-medium">
-                        {selectedInvoice.competencia}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dates */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-blue-600" />
-                    Datas
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Data de Cobrança
-                      </p>
-                      <p className="text-sm font-medium">
-                        {selectedInvoice.dataCobran}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">
-                        Data de Pagamento
-                      </p>
-                      <p className="text-sm font-medium">
-                        {selectedInvoice.dataPagamento ||
-                          "Aguardando pagamento"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Products */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <Package className="h-4 w-4 text-blue-600" />
-                    Produtos/Serviços Incluídos
-                  </h3>
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/50">
-                          <TableHead className="text-xs">Produto</TableHead>
-                          <TableHead className="text-xs text-center">
-                            Qtd
-                          </TableHead>
-                          <TableHead className="text-xs text-right">
-                            Valor Unit.
-                          </TableHead>
-                          <TableHead className="text-xs text-right">
-                            Total
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {selectedInvoice.produtos.map(
-                          (produto: any, idx: number) => (
-                            <TableRow key={idx}>
-                              <TableCell className="text-xs font-medium">
-                                {produto.nome}
-                              </TableCell>
-                              <TableCell className="text-xs text-center">
-                                {produto.quantidade}
-                              </TableCell>
-                              <TableCell className="text-xs text-right">
-                                R${" "}
-                                {produto.valorUnitario
-                                  .toFixed(2)
-                                  .replace(".", ",")}
-                              </TableCell>
-                              <TableCell className="text-xs font-semibold text-right">
-                                R${" "}
-                                {produto.valorTotal
-                                  .toFixed(2)
-                                  .replace(".", ",")}
-                              </TableCell>
-                            </TableRow>
-                          ),
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </div>
-
-                {/* Summary */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <DollarSign className="h-4 w-4 text-blue-600" />
-                    Resumo Financeiro
-                  </h3>
-                  <div className="border rounded-lg p-4 space-y-2 bg-muted/20">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Subtotal</span>
-                      <span className="font-medium">
-                        R${" "}
-                        {selectedInvoice.valorOriginal
-                          .toFixed(2)
-                          .replace(".", ",")}
-                      </span>
-                    </div>
-                    {selectedInvoice.desconto > 0 && (
-                      <div className="flex justify-between text-sm text-green-600">
-                        <span>
-                          Desconto (
-                          {selectedInvoice.descontoPercentual.toFixed(1)}%)
-                        </span>
-                        <span className="font-medium">
-                          -R${" "}
-                          {selectedInvoice.desconto
-                            .toFixed(2)
-                            .replace(".", ",")}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex justify-between text-base font-bold pt-2 border-t">
-                      <span>Total</span>
-                      <span className="text-blue-600">
-                        R$ {selectedInvoice.valor.toFixed(2).replace(".", ",")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer with action */}
-              <div className="border-t p-4 bg-muted/30">
-                <Button
-                  className="w-full"
-                  onClick={() => handleDownloadInvoicePDF(selectedInvoice)}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Baixar PDF da Fatura
-                </Button>
-              </div>
-            </>
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Detalhes da Fatura — Janela Moldura por cima da tela do projeto (antes: slide lateral sob o cabeçalho global). */}
+      <ProjectInvoiceDetailsWindow
+        open={showInvoiceDetails}
+        onOpenChange={setShowInvoiceDetails}
+        invoice={selectedInvoice}
+        payment={
+          billingPayments.find((p: any) => p.id === selectedInvoice?.payment_id) ??
+          null
+        }
+        agencyName={project?.agency || project?.ownerName}
+        clientName={project?.client}
+        onDownload={handleDownloadInvoicePDF}
+      />
 
       {/* Dados do Projeto — save confirmation */}
       <ConfirmationDialog

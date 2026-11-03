@@ -11,8 +11,40 @@ import { getTaskScopeWhere, applyScope } from "./project-tasks";
 import { findUnmetCatalog2Dependency, transitionNeedsDependencyGate } from "../lib/catalog2-task-dependencies";
 import { assertTaskStatusTransitionAllowed, TaskStatusGuardError } from "../lib/task-release-guard";
 import { DependencyInUseError } from "../lib/task-release-service";
+import { combinedProjectWhere, isAdminUser } from "../lib/project-scope";
 
 const router = Router();
+
+// ── Escopo (fechamento de 02/11) ─────────────────────────────────────────────
+// Antes qualquer sessão válida listava, vinculava, alterava e apagava produtos de QUALQUER projeto e lia as
+// tarefas de todos. Agora tudo deriva do MESMO escopo das tarefas (getTaskScopeWhere, já usado no PATCH
+// /tasks/:id abaixo), nunca de uma segunda regra.
+
+type AuthUser = { id: string; role: string; account_type: string };
+
+// Leitura dos vínculos projeto↔produto: admin vê tudo; agência/empresa só os projetos dela (legado OU novo);
+// Líder só os vínculos com alguma tarefa visível para ele; outro perfil (nômade incluso) → null = nada.
+async function projectProductScopeWhere(user: AuthUser): Promise<Record<string, unknown> | null> {
+  const taskScope = await getTaskScopeWhere(user.id, user.account_type, user.role);
+  if (taskScope === null || Object.keys(taskScope).length === 0) return taskScope;
+  return user.role === "lider" ? { tasks: { some: taskScope } } : taskScope;
+}
+
+// Gravação (vincular, alterar status/preço, desvincular): só o admin e a agência/empresa dona do projeto.
+async function canChangeProjectProducts(user: AuthUser, projectId: string): Promise<boolean> {
+  if (isAdminUser(user)) return true;
+  if (user.account_type !== "agencias" && user.account_type !== "empresas") return false;
+  const { where } = await combinedProjectWhere(prisma, user.id, user.account_type);
+  if (where === null) return false;
+  return !!(await prisma.project.findFirst({ where: { AND: [{ id: projectId }, where] }, select: { id: true } }));
+}
+
+// Produto já pago = está num pagamento PAGO (só a confirmação de pagamento, lib/confirm-payment.ts, cria isso).
+async function isProjectProductPaid(projectProductId: string): Promise<boolean> {
+  return (await prisma.paymentItem.count({ where: { project_product_id: projectProductId, payment: { status: "PAGO" } } })) > 0;
+}
+
+const PAID_LOCKED = "product_paid_locked";
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -77,8 +109,14 @@ router.get("/", verifyToken, async (req, res, next) => {
     const where: Record<string, unknown> = {};
     if (project_id) where["project_id"] = project_id;
 
+    const scopeWhere = await projectProductScopeWhere(req.user!);
+    if (scopeWhere === null) {
+      res.json({ data: [], total: 0 });
+      return;
+    }
+
     const items = await prisma.projectProduct.findMany({
-      where,
+      where: applyScope(where, scopeWhere),
       include: {
         product: {
           select: {
@@ -107,6 +145,10 @@ router.get("/", verifyToken, async (req, res, next) => {
             code_snapshot: true,
             name_snapshot: true,
             lancamento_expires_at: true,
+            // Quem executa/lidera (só os ids; os nomes vão abaixo apenas para admin) — a tela do projeto não pode
+            // sugerir atribuição que não existe (reteste Codex 01/11).
+            nomade_responsavel_id: true,
+            lider_responsavel_id: true,
             stages: {
               orderBy: { ordem: "asc" },
               select: {
@@ -130,6 +172,30 @@ router.get("/", verifyToken, async (req, res, next) => {
       },
       orderBy: { created_at: "asc" },
     });
+
+    // Nomes do executor (Nômade) e do Líder só para admin — para os demais perfis a tela mostra
+    // "Nômade atribuído"/"Equipe Allka" sem expor nomes, ou "Sem … atribuído" quando não há ninguém.
+    if (req.user?.account_type === "admin") {
+      const allTasks = items.flatMap((pp) => pp.tasks);
+      const nomadeIds = [...new Set(allTasks.map((t) => t.nomade_responsavel_id).filter((id): id is string => !!id))];
+      const liderIds = [...new Set(allTasks.map((t) => t.lider_responsavel_id).filter((id): id is string => !!id))];
+      const [nomades, lideres] = await Promise.all([
+        nomadeIds.length ? prisma.nomade.findMany({ where: { id: { in: nomadeIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+        liderIds.length ? prisma.user.findMany({ where: { id: { in: liderIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
+      ]);
+      const nomadeName = new Map(nomades.map((n) => [n.id, n.name]));
+      const liderName = new Map(lideres.map((u) => [u.id, u.name]));
+      const data = items.map((pp) => ({
+        ...pp,
+        tasks: pp.tasks.map((t) => ({
+          ...t,
+          nomade_responsavel_name: t.nomade_responsavel_id ? (nomadeName.get(t.nomade_responsavel_id) ?? null) : null,
+          lider_responsavel_name: t.lider_responsavel_id ? (liderName.get(t.lider_responsavel_id) ?? null) : null,
+        })),
+      }));
+      res.json({ data, total: data.length });
+      return;
+    }
 
     res.json({ data: items, total: items.length });
   } catch (err) {
@@ -158,12 +224,12 @@ router.post(
         expected_end_date,
       } = req.body;
 
-      // 1. Verify project exists
+      // 1. Verify project exists — e é de quem está vinculando (404 também para projeto alheio: não confirma que existe)
       const project = await prisma.project.findUnique({
         where: { id: project_id },
         select: { id: true, title: true, status: true },
       });
-      if (!project) {
+      if (!project || !(await canChangeProjectProducts(req.user!, project_id))) {
         res.status(404).json({ error: "Projeto não encontrado" });
         return;
       }
@@ -271,9 +337,29 @@ router.patch(
       const existing = await prisma.projectProduct.findUnique({
         where: { id },
       });
-      if (!existing) {
+      if (!existing || !(await canChangeProjectProducts(req.user!, existing.project_id))) {
         res.status(404).json({ error: "Vínculo não encontrado" });
         return;
+      }
+
+      // Decisão do usuário (02/11): depois de pago, a agência/empresa dona não muda mais preço ao cliente, comissão
+      // nem pagador, e não cancela o produto — só o admin corrige. Reenviar o mesmo valor continua aceito.
+      // Exceção: produto do catálogo antigo (product_id) — a tela antiga de criar projeto grava preço/comissão/
+      // pagador do checkout logo DEPOIS de pagar (project-create-new-panel.tsx, handleCheckoutComplete).
+      if (!isAdminUser(req.user) && (await isProjectProductPaid(id))) {
+        const changed = (field: "preco_final_cliente_snapshot" | "comissao_snapshot" | "pagador_snapshot") =>
+          req.body[field] !== undefined && req.body[field] !== existing[field];
+        const commercial =
+          existing.product_id === null &&
+          (changed("preco_final_cliente_snapshot") || changed("comissao_snapshot") || changed("pagador_snapshot"));
+        const cancels = req.body.status === "CANCELADO" && existing.status !== "CANCELADO";
+        if (commercial || cancels) {
+          res.status(409).json({
+            error: "Este produto já foi pago: preço, comissão, pagador e cancelamento só podem ser alterados pela Allka.",
+            code: PAID_LOCKED,
+          });
+          return;
+        }
       }
 
       const data: Record<string, unknown> = {};
@@ -322,8 +408,13 @@ router.delete(
       const existing = await prisma.projectProduct.findUnique({
         where: { id },
       });
-      if (!existing) {
+      if (!existing || !(await canChangeProjectProducts(req.user!, existing.project_id))) {
         res.status(404).json({ error: "Vínculo não encontrado" });
+        return;
+      }
+      // Produto pago não sai do projeto, para ninguém: o pagamento aponta para ele (o banco já recusava, com erro genérico).
+      if (await isProjectProductPaid(id)) {
+        res.status(409).json({ error: "Este produto já foi pago e não pode ser removido do projeto.", code: PAID_LOCKED });
         return;
       }
 
@@ -361,8 +452,15 @@ router.get(
       if (assignee_id) where["assignee_id"] = assignee_id;
       if (phase) where["phase"] = phase;
 
+      // Mesmo escopo de GET /api/project-tasks: fora dele, lista vazia.
+      const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+      if (scopeWhere === null) {
+        res.json({ data: [], total: 0 });
+        return;
+      }
+
       const tasks = await prisma.projectTask.findMany({
-        where,
+        where: applyScope(where, scopeWhere),
         include: {
           project: {
             select: {
@@ -412,8 +510,14 @@ router.get(
 
 router.get("/tasks/:id", verifyToken, async (req, res, next) => {
   try {
-    const task = await prisma.projectTask.findUnique({
-      where: { id: req.params.id as string },
+    // Mesmo escopo do PATCH abaixo; tarefa fora dele = 404 (não confirma que existe).
+    const scopeWhere = await getTaskScopeWhere(req.user!.id, req.user!.account_type, req.user!.role);
+    if (scopeWhere === null) {
+      res.status(404).json({ error: "Tarefa não encontrada" });
+      return;
+    }
+    const task = await prisma.projectTask.findFirst({
+      where: applyScope({ id: req.params.id as string }, scopeWhere),
       include: {
         project: {
           include: { client: { select: { id: true, name: true, cnpj: true } } },

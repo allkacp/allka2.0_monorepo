@@ -54,9 +54,12 @@ const CHIP: Record<BlockStatus, string> = {
   na: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
 };
 
-export function StepBlock({ n, title, status, count = 0, summary, open, onToggle, onGo, onSaveDraft, savingDraft = false, draftNote, inline = false, help, children }: {
+export function StepBlock({ n, title, status, count = 0, summary, open, onToggle, onGo, onSaveDraft, savingDraft = false, draftNote, inline = false, flat = false, help, children }: {
   n: StepBlockId; title: string; status: BlockStatus; /** pendências reais do bloco (mostradas no selo) */ count?: number; summary?: string; open: boolean; onToggle: () => void; /** vai para outro bloco (anterior/próximo) */ onGo?: (n: StepBlockId) => void; /** salva a etapa como rascunho sem sair do bloco */ onSaveDraft?: () => void; savingDraft?: boolean; draftNote?: string | null; /** modo lista (Expandir todos): abre na própria página */ inline?: boolean; help?: string; children: React.ReactNode;
+  flat?: boolean;
 }) {
+  open = flat || open;
+  inline = flat || inline;
   const id = `step-block-${n}`;
   const asModal = open && !inline;
   // O conteúdo fica SEMPRE montado (nada digitado se perde): ele é desenhado num nó próprio que muda de lugar —
@@ -79,9 +82,9 @@ export function StepBlock({ n, title, status, count = 0, summary, open, onToggle
   return (
     <section className={`min-w-0 rounded-xl border bg-white shadow-sm dark:bg-slate-900 ${status === "error" ? "border-rose-400 ring-1 ring-rose-300" : "border-slate-200 dark:border-slate-700"}`} data-testid={`step-block-${n}`} data-status={status} data-open={open ? "true" : "false"}>
       <h5 className="m-0">
-        <button type="button" id={`${id}-header`} aria-expanded={open} aria-controls={inline ? `${id}-panel` : undefined} aria-haspopup={inline ? undefined : "dialog"} onClick={onToggle}
+        <button type="button" disabled={flat} id={`${id}-header`} aria-expanded={open} aria-controls={inline ? `${id}-panel` : undefined} aria-haspopup={inline ? undefined : "dialog"} onClick={onToggle}
           className="flex w-full min-w-0 items-center gap-2 rounded-xl px-4 py-3 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 dark:hover:bg-slate-800/50">
-          <span className="section-number-badge flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white">{n}</span>
+          <span className="section-number-badge flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white">{flat ? ({ 1: "A", 2: "B", 6: "C", 5: "D", 4: "E", 3: "F" })[n] : n}</span>
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-sm font-bold text-slate-800 dark:text-slate-100" data-no-info="">{title}</span>
@@ -90,9 +93,9 @@ export function StepBlock({ n, title, status, count = 0, summary, open, onToggle
             </span>
             {(inline ? !open : true) && summary && <span className="mt-0.5 block truncate text-xs font-normal text-slate-500 dark:text-slate-400" data-testid={`step-block-${n}-summary`}>{summary}</span>}
           </span>
-          {inline
+          {!flat && (inline
             ? (open ? <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" /> : <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />)
-            : <span className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200"><Pencil className="h-3.5 w-3.5" aria-hidden="true" />Editar</span>}
+            : <span className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-violet-200 bg-white px-2.5 text-xs font-semibold text-violet-700 dark:border-violet-800 dark:bg-slate-900 dark:text-violet-200"><Pencil className="h-3.5 w-3.5" aria-hidden="true" />Editar</span>)}
         </button>
       </h5>
       {/* cartão: o conteúdo mora aqui, escondido (modo janela) ou à vista (modo lista) */}
@@ -101,7 +104,7 @@ export function StepBlock({ n, title, status, count = 0, summary, open, onToggle
         <div ref={setCardSlot} className="min-w-0 space-y-3" />
       </div>
       {asModal && (
-        <FramedModal open overlayTone="dark" onOpenChange={(o) => { if (!o) onToggle(); }} testId={`step-block-${n}-modal`} title={title}>
+        <FramedModal open onOpenChange={(o) => { if (!o) onToggle(); }} testId={`step-block-${n}-modal`} title={title}>
           <div className="mx-[2px] mt-[2px] flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900">
             <div className="flex min-w-0 items-center gap-2">
               <span className="section-number-badge flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white">{n}</span>

@@ -21,6 +21,11 @@ import {
 
 type SetItems = (u: AccessItem[] | ((cur: AccessItem[]) => AccessItem[])) => void;
 
+function AccessEditorSurface({ inline, title, onClose, children }: { inline: boolean; title: string; onClose: () => void; children: React.ReactNode }) {
+  if (inline) return <div className="mt-2 min-w-0 space-y-2 border-t border-violet-100 pt-2" data-testid="inline-access-editor">{children}</div>;
+  return <FramedPanel open onOpenChange={open => { if (!open) onClose(); }} testId="step-access-panel" title={title}>{children}</FramedPanel>;
+}
+
 const STATE_BADGE: Record<string, { text: string; cls: string }> = {
   saved: { text: "Salvo no servidor", cls: "bg-slate-100 text-slate-700" },
   new: { text: "Novo — ainda não salvo", cls: "bg-violet-100 text-violet-800" },
@@ -28,10 +33,11 @@ const STATE_BADGE: Record<string, { text: string; cls: string }> = {
   removed: { text: "Será removido ao salvar a etapa", cls: "bg-rose-100 text-rose-700" },
 };
 
-export function StepAccessesEditor({ version, scope, readOnly, items, setItems, accessOn, setAccessOn, ops, setOps, stepNames, issues, showErrors, quick }: {
+export function StepAccessesEditor({ version, scope, readOnly, items, setItems, accessOn, setAccessOn, ops, setOps, stepNames, issues, showErrors, quick, inline = false }: {
   version: any; scope: StepScope; readOnly: boolean;
   /** Criar variação/opção dentro da condição do acesso (mesmas rotas do cadastro de variações). */
   quick?: QuickCreate;
+  inline?: boolean;
   items: AccessItem[]; setItems: SetItems;
   /** "Esta etapa precisa de acesso" (ligado/desligado) — o servidor só muda ao salvar a etapa. */
   accessOn: boolean; setAccessOn: (v: boolean) => void;
@@ -174,7 +180,7 @@ export function StepAccessesEditor({ version, scope, readOnly, items, setItems, 
               </li>
             ))}
             {items.map((i) => {
-              const isOpen = open.has(i.uid);
+              const isOpen = inline || open.has(i.uid);
               const iss = showErrors ? issues.filter((x) => x.field === `access:${i.uid}`) : [];
               const badge = i.state === "saved" && i.form.draft_incomplete ? { text: "Rascunho incompleto", cls: "bg-amber-100 text-amber-800" } : STATE_BADGE[i.state];
               const removed = i.state === "removed";
@@ -199,17 +205,18 @@ export function StepAccessesEditor({ version, scope, readOnly, items, setItems, 
                   </div>
                   {iss.map((x) => <p key={x.message} role="alert" className="mt-1.5 text-[11px] font-semibold text-rose-600">{x.message}</p>)}
                   {isOpen && !removed && vocab && (
-                    <FramedPanel open onOpenChange={(o) => { if (!o) cancelPanel(i.uid); }} testId="step-access-panel" title={accessName(i)}>
+                    <AccessEditorSurface inline={inline} onClose={() => cancelPanel(i.uid)} title={accessName(i)}>
                       <div className={`flex shrink-0 items-center justify-between gap-2 rounded-2xl bg-white px-4 py-3 shadow-sm dark:bg-slate-900 ${FRAMED_HEADER_CLASS}`}>
                         <div className="flex min-w-0 items-center gap-2"><AccessLogo type={{ ...(i.typeObj ?? {}), name: accessName(i) }} size={32} /><div className="min-w-0"><p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">{accessName(i)}</p><p className="truncate text-xs text-slate-500">{readOnly ? "Somente leitura" : "As alterações só vão para o rascunho da etapa; ela é gravada quando você salvar a etapa."}</p></div></div>
                       </div>
-                      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+                      <div className={inline ? "min-w-0 px-2 py-2" : "min-h-0 flex-1 overflow-y-auto px-3 py-3"}>
                         <RequirementRow embedded lockType initial={i.form} isNew={i.state === "new"} types={types} vocab={vocab} tasks={[]} version={version} readOnly={readOnly} scope={{ kind: "step", task: scope.task, step: scope.step }} onChange={(f) => update(i.uid, f)} quick={quick} />
                       </div>
-                      <div className={`flex shrink-0 justify-end gap-2 ${FRAMED_FOOTER_CLASS}`}>
+                      <div hidden={inline} className={`flex shrink-0 justify-end gap-2 ${FRAMED_FOOTER_CLASS}`}>
                         {readOnly ? <Button type="button" variant="outline" onClick={closePanel}>Fechar</Button> : (<><Button type="button" variant="outline" onClick={() => cancelPanel(i.uid)} data-testid="access-panel-cancel">Cancelar</Button><Button type="button" onClick={closePanel} data-testid="access-panel-save">Salvar alterações</Button></>)}
                       </div>
-                    </FramedPanel>
+                      {inline && <p className="text-[11px] text-slate-500">Este acesso será gravado junto com a etapa.</p>}
+                    </AccessEditorSurface>
                   )}
                 </li>
               );

@@ -25,7 +25,9 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        'bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px] pb-0',
+        // No celular (< 768 px) as abas quebram em linhas em vez de empurrar a tela para o lado (revisão mobile 02/11);
+        // no desktop nada muda.
+        'bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px] pb-0 max-md:h-auto max-md:max-w-full max-md:flex-wrap',
         className,
       )}
       {...props}

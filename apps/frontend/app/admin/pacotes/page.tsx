@@ -109,7 +109,7 @@ export default function AdminPacotesPage() {
             <span><strong>Impedir a venda separada dos produtos deste pacote</strong><span className="block text-xs text-slate-500">Por padrão, um produto de um pacote continua sendo vendido separadamente. Marque só se quiser que ele seja contratado apenas com os itens exigidos pelo pacote (regra abaixo). Atenção: o cliente deixa de poder comprá-lo sozinho.</span></span>
           </label>
           <label className="font-semibold text-slate-500">Quando a venda separada estiver impedida, o pedido precisa ter:
-            <select aria-label="Regra do pacote" className="ml-2 h-8 rounded border border-slate-300 bg-transparent px-2" value={mode} onChange={(e) => setMode(e.target.value as "all" | "specific" | "any")}>
+            <select aria-label="Regra do pacote" className="ml-2 h-8 rounded border border-slate-300 bg-transparent px-2 max-sm:ml-0 max-sm:mt-1 max-sm:block max-sm:w-full" value={mode} onChange={(e) => setMode(e.target.value as "all" | "specific" | "any")}>
               <option value="all">Todos os itens do pacote</option>
               <option value="specific">Itens específicos (marque abaixo)</option>
               <option value="any">Pelo menos um outro item do pacote</option>

@@ -33,6 +33,7 @@ import { MountWhenOpened } from "@/components/mount-when-opened";
 import { apiClient } from "@/lib/api-client";
 import { useAgencia } from "@/contexts/agencia-context";
 import { canOpenRoadmapPanel } from "@/lib/admin-permissions";
+import { navigationSignature, publishNavigation } from "@/lib/navigation-store";
 import { useOpenRoadmapPanel } from "@/hooks/use-open-roadmap-panel";
 import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -1211,6 +1212,13 @@ export function Sidebar({ transparent = false }: { transparent?: boolean } = {})
 
     return [...reordered, ...newItems];
   })();
+
+  // O menu "Mais" do celular mostra exatamente estes itens (mesmas regras e ordem) — publica quando o menu muda.
+  const navigationKey = navigationSignature(navigation);
+  useEffect(() => {
+    publishNavigation(navigation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationKey]);
 
   const handleDragStart = (e: React.DragEvent, index: number) => {
     setDraggedItem(index);

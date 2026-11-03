@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useProductAiSource } from "./product-ai-inventory";
 
 // Público do produto (C7): lista de marcação — quem pode ver e contratar. A IA também respeita.
 export type AudienceKey = "company" | "agency" | "partner" | "internal";
@@ -145,6 +146,7 @@ export function AudienceCard({ product, readOnly, onDone, registerFlush, bare = 
     setSel(next);
   };
   const [lv, setLv] = useState<string[]>(savedLv);
+  useProductAiSource("audience", { audience: effectiveAudience(sel.length ? sel.join(",") : "all").map(key => AUDIENCE_CHECKS.find(item => item.key === key)?.label ?? key), agency_levels: lv.map(key => levelOptions.find(item => item.key === key)?.name ?? key) });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   useEffect(() => { setSel(effectiveAudience(product?.visibility_mode)); setLv(parseLevelValue(product?.visibility_agency_levels, levelOptions)); }, [product?.id, product?.visibility_mode, product?.visibility_agency_levels, levelOptions]);

@@ -21,10 +21,12 @@ const STATE_TONE: Record<string, string> = {
   concluida: "bg-emerald-100 text-emerald-800",
   dispensada_por_regra: "bg-slate-200 text-slate-700",
   cancelada: "bg-slate-200 text-slate-700",
+  aguardando_lancamento: "bg-slate-100 text-slate-700",
   em_lancamento: "bg-slate-100 text-slate-700",
 }
 
-/** Chip curto do estado do fluxo (para o cabeçalho). O motivo aparece ao passar o mouse. */
+/** Chip curto do estado do fluxo (para o cabeçalho). O motivo aparece ao passar o mouse.
+ *  Leva o prefixo "Fluxo:" porque fica ao lado do status da TAREFA — são escopos diferentes (status gravado × situação derivada). */
 export function TaskFlowBadge({ taskId, status }: { taskId: string; status: string }) {
   const [flow, setFlow] = useState<any>(null)
   useEffect(() => { apiClient.getTaskFlow(taskId).then(setFlow).catch(() => setFlow(null)) }, [taskId, status])
@@ -34,7 +36,7 @@ export function TaskFlowBadge({ taskId, status }: { taskId: string; status: stri
       title={flow.reason}
       className="inline-flex items-center text-[11px] font-semibold bg-white/10 text-white border border-white/20 rounded-full px-2.5 py-1"
     >
-      {flow.label}
+      Fluxo: {flow.label}
     </span>
   )
 }
