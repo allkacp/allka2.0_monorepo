@@ -1,5 +1,9 @@
 # Passagem Claude → Codex — 01/11/2026 (SOMENTE LOCAL)
 
+## 03/11 — ATENÇÃO: autorização posterior publicou código e espelhou QA
+
+As restrições históricas de “não deploy” abaixo foram superadas SOMENTE pelo pedido e confirmação do usuário em 03/11. Deploy completo 0036e96/tag deploy-2026-11-03-1 + espelho 240 tabelas/131 anexos concluídos, backups recuperáveis e igualdade de hashes/FKs provadas. Ler PRIMEIRA entrada em docs/deploy-log.md e topo de RETOMAR-AQUI.md. Frontend/backend workflows verdes; CI geral vermelho em 5 arquivos frontend, não ocultar. Builds/typechecks e 60 testes direcionados passaram. Nenhuma nova compra/lançamento/publicação de versão; nenhuma credencial redefinida. Não repetir espelho. QA agora reflete pacote local com projeto 956, 4 projetos/7 tarefas no total; login normal Agência/saldo/substatus conferidos. Segurança das demais rotas Nômade e demais pendências seguem abertas.
+
 ## 02/11 — Reteste Codex da PARTE F: aprovado na interface Admin e Agência (somente local)
 
 - Perfis realmente usados: Admin Vinicius Guardia e Agência Lamego Academy; projeto 956 já existente. Nenhuma compra, pagamento, publicação ou lançamento efetuado.

@@ -1,4 +1,10 @@
-# RETOMAR AQUI — de onde paramos (atualizado em 2026-11-02)
+# RETOMAR AQUI — de onde paramos (atualizado em 2026-11-03)
+
+## 03/11 — DEPLOY E ESPELHO QA CONCLUÍDOS, autorização atual do usuário
+
+Código completo 0036e96 em allka2/main, tag deploy-2026-11-03-1; frontend e backend online nessa imagem, workflows verdes. Espelho de 240 tabelas + 131 anexos autorizado explicitamente após contagens e backup/ensaio, aplicado às 08:15:17 Brasília: hashes idênticos ao pacote, 264 FKs sem quebra, migrations preservadas. QA agora tem 8 usuários, 2 empresas, 2 clientes, 4 projetos, 37 produtos e 7 tarefas. Login normal da Agência e projeto 956/saldo 1.174,46/substatus SEO conferidos no navegador. Site/API/local saudáveis. Detalhes e backups recuperáveis na PRIMEIRA entrada de docs/deploy-log.md.
+
+**Ressalva:** CI geral 41625335307 vermelho (5 arquivos frontend falharam, 213 passaram). Os builds/typechecks e 60 testes direcionados passaram, mas não declarar suíte integral aprovada nem todas as falhas antigas sem comparação. Sem novo lançamento/compra/publicação/redefinição de senha. Não repetir espelho automaticamente; próximos dados exclusivos do QA exigem nova autorização para substituir. Configurações/chaves online próprias preservadas. Pendências de segurança das outras rotas do Nômade e roteiro macro continuam abertas. Usuário informou fluxo de execução/entrega de etapa funcionando. Aba final QA: /agency/projetos/956, Tarefas, Agência Lamego Academy. Local não foi fechado.
 
 ## 02/11 — Reteste Codex da PARTE F: aprovado na interface Admin e Agência (somente local)
 
