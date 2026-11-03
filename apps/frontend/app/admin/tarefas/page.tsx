@@ -128,6 +128,8 @@ type TaskStatus =
   | "PAUSADA_DEPENDENCIA_EXTERNA"
   | "PARA_LANCAMENTO"
   | "EM_LANCAMENTO"
+  | "LANCAMENTO_ENVIADO_PARA_ANALISE"
+  | "DEVOLVIDA_PARA_AGENCIA"
   | "AGUARDANDO_INFORMACOES"
   | "AGUARDANDO_ETAPA"
   | "LIBERADA_PARA_EXECUCAO"
@@ -226,6 +228,22 @@ const STATUS_CFG: Record<
     group: string;
   }
 > = {
+  LANCAMENTO_ENVIADO_PARA_ANALISE: {
+    label: "Briefing em análise",
+    color: "text-violet-700",
+    bg: "bg-violet-50",
+    border: "border-violet-200",
+    icon: SendHorizonal,
+    group: "pendente",
+  },
+  DEVOLVIDA_PARA_AGENCIA: {
+    label: "Briefing devolvido para ajuste",
+    color: "text-orange-700",
+    bg: "bg-orange-50",
+    border: "border-orange-200",
+    icon: RotateCcw,
+    group: "pendente",
+  },
   PAUSADA_DEPENDENCIA_EXTERNA: {
     label: "Pausada por dependência externa",
     color: "text-rose-700",
@@ -1923,7 +1941,7 @@ export default function AdminTarefasPage({
     setTarefas((prev) =>
       prev.map((t) =>
         t.id === taskId
-          ? { ...t, status: "LIBERADA_PARA_EXECUCAO" as TaskStatus }
+          ? { ...t, status: "LANCAMENTO_ENVIADO_PARA_ANALISE" as TaskStatus }
           : t,
       ),
     );
@@ -2083,7 +2101,7 @@ export default function AdminTarefasPage({
             }}
             onStatusChange={handleStatusChange}
             updatingId={updatingId}
-            isAdmin
+            isAdmin={routeBase.startsWith("/admin/")}
             startInEditMode={drawerStartInEditMode}
             actionError={taskActionError}
           />
@@ -3434,7 +3452,7 @@ export default function AdminTarefasPage({
       />
 
       {/* Launch Drawer */}
-      {launchTask && (
+      {launchDrawerOpen && launchTask && (
         <TaskLaunchDrawer
           task={launchTask}
           onClose={() => setLaunchDrawerOpen(false)}

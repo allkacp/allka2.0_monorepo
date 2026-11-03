@@ -1,5 +1,20 @@
 # Passagem Claude → Codex — 01/11/2026 (SOMENTE LOCAL)
 
+## 03/11 — Codex após passagem da Rose: pedido957 JÁ pago em simulação
+
+Não repetir projeto/pedido. UI conferiu cotação1.226,32 e usuário autorizou termos/contratação/pagamento simulado. Geradas T015720/721, briefings fictícios enviados. SEO aprovado pelo Admin, agora AGUARDANDO_NOMADE; Manutenção em análise. Perfil operacional do Reynário preparado por script localguardado com autorização específica (1perfil/2habilitações; sem novo login/CNPJ/termos/senha/Líder). Rose Líder criada pelo Claude foi conferida ativa/Geral. Falta distribuição correta das etapas: SEO primeira etapa sem lider_id; Manutenção usa qa-user-leader antigo. Não alterar matriz publicada nem pular etapa para fazer passar. Nômade ainda não recebeu/aceitou/executou. Detalhes em docs/teste-ciclo-agencia-nomade-2026-11-03.md. Navegador bloqueou novamente antes de entrar como Rose. Correções locais de lançamento e estado da UI descritas no relatório; sem novo deploy/espelho.
+
+## 03/11 — Claude → Codex: já existe Líder no local (Rose Bonifácio)
+
+```text
+Retomar a Plataforma Allka 2026 — já existe um Líder no ambiente LOCAL (http://localhost:8082).
+Leia o primeiro bloco de docs/RETOMAR-AQUI.md ("Claude criou a Líder Rose Bonifácio").
+- Líder: Rose Bonifácio, e-mail rose.lider@lamego.com.vc, senha = a padrão dos usuários de teste locais (SEED_TEST_USER_PASSWORD do apps/backend/.env). Área "Geral", sem filtro de categoria: a fila dela mostra todas as tarefas; a tarefa do projeto 957 enviada para análise já aparece lá.
+- A antiga Rose de Empresa (rose@lamego.com.vc) agora se chama Carla Mendes; e-mail, senha, empresa e vínculos iguais.
+- Seguir o ciclo do teste ponta a ponta (docs/teste-ciclo-agencia-nomade-2026-11-03.md) com a Rose como Líder. O Reynário (Nômade) continua sem cadastro operacional.
+LIMITES: somente local; não espelhar para QA, não publicar, não apagar dados; compra/pagamento/lançamento só com confirmação do usuário.
+```
+
 ## 03/11 — ATENÇÃO: autorização posterior publicou código e espelhou QA
 
 As restrições históricas de “não deploy” abaixo foram superadas SOMENTE pelo pedido e confirmação do usuário em 03/11. Deploy completo 0036e96/tag deploy-2026-11-03-1 + espelho 240 tabelas/131 anexos concluídos, backups recuperáveis e igualdade de hashes/FKs provadas. Ler PRIMEIRA entrada em docs/deploy-log.md e topo de RETOMAR-AQUI.md. Frontend/backend workflows verdes; CI geral vermelho em 5 arquivos frontend, não ocultar. Builds/typechecks e 60 testes direcionados passaram. Nenhuma nova compra/lançamento/publicação de versão; nenhuma credencial redefinida. Não repetir espelho. QA agora reflete pacote local com projeto 956, 4 projetos/7 tarefas no total; login normal Agência/saldo/substatus conferidos. Segurança das demais rotas Nômade e demais pendências seguem abertas.

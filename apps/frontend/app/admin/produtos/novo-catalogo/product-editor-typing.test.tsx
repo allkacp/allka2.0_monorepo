@@ -259,6 +259,21 @@ describe("digitar na descrição", () => {
 // pendente antes de trocar de passo); "Salvar rascunho" fica secundário; no último passo a principal é Publicar. Item 2: status único.
 describe("Produto teste: ação principal do rodapé e status único", () => {
   beforeEach(() => { window.sessionStorage.clear(); window.localStorage.clear(); cleanup(); writes.mockClear(); product.versions = [JSON.parse(JSON.stringify(version))]; product.published_version_id = null; });
+  it("rodapé cresce e quebra linhas sem sobrepor navegação e edição", async () => {
+    render(<ProductEditor productId="p1" layout="test" openInEditMode onBack={() => {}} />);
+    await waitFor(() => expect(screen.getByLabelText("Título comercial")).toBeEnabled());
+    // JSDOM não mede layout: protege a estrutura; a geometria é conferida no navegador real.
+    const footer = screen.getByTestId("editor-footer");
+    expect(footer).toHaveClass("flex-wrap", "min-h-[52px]");
+    expect(footer).not.toHaveClass("h-[52px]");
+    for (const group of [screen.getByTestId("editor-footer-navigation"), screen.getByTestId("editor-footer-actions")]) {
+      expect(group).toHaveClass("w-full", "min-w-0", "flex-wrap", "lg:w-auto", "[&>button]:max-w-full", "[&>button]:whitespace-normal");
+    }
+    fireEvent.click(screen.getByTestId("footer-next"));
+    const nav = screen.getByRole("navigation", { name: "Passos do produto" });
+    await waitFor(() => expect(nav.querySelector('[aria-current="step"]')).toHaveTextContent("Configurações da tarefa e etapas"));
+    expect(screen.queryByText("Deseja salvar antes de travar a edição?")).not.toBeInTheDocument();
+  });
   it("em edição: 'Salvar e continuar' é a principal; no último passo some o avançar e Publicar vira a principal", async () => {
     render(<ProductEditor productId="p1" layout="test" openInEditMode onBack={() => {}} />);
     await waitFor(() => expect(screen.getByLabelText("Título comercial")).toBeEnabled());

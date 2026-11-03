@@ -18,6 +18,7 @@ vi.mock("@/components/confirmation-dialog", () => ({
 }));
 vi.mock("@/hooks/useAppFrameMetrics", () => ({ useAppFrameMetrics: () => ({ top: 0, left: 0, width: 1000, height: 800, sidebarWidth: 72 }) }));
 import { StepRow } from "./product-editor";
+import { ProductEditorLayoutProvider } from "./editor-layout-test";
 
 const refs = { specialties: [{ id: "sp1", name: "Gestor de Tráfego", execution_kind: "humano", max_hourly_rate: 50, is_active: true }] };
 const baseStep = (over: any = {}) => ({
@@ -49,6 +50,36 @@ const serverReq = (over: any = {}) => ({
 });
 
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); Object.values(api).forEach((f) => f.mockClear()); act.mockClear(); });
+
+describe("Fluxo novo: salvar etapa sem confirmação redundante", () => {
+  const mountNew = () => {
+    const step = baseStep({ ops: { no_deliverables: true } });
+    return render(<ProductEditorLayoutProvider value="test"><ul><StepRow step={step} index={0} steps={[step]} taskId="t1" readOnly={false} act={act} refs={refs} task={{ ...task, steps: [step] }} version={mkVersion()} /></ul></ProductEditorLayoutProvider>);
+  };
+  it("volta à lista só depois de a gravação terminar, sem exigir outro Concluir", async () => {
+    let release!: () => void;
+    api.updateCatalog2Step.mockImplementationOnce(() => new Promise(r => { release = () => r({}); }));
+    mountNew(); openEditor();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar e voltar às etapas" }));
+    await waitFor(() => expect(api.updateCatalog2Step).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId("step-edit-form")).toBeInTheDocument();
+    release();
+    await waitFor(() => expect(screen.queryByTestId("step-edit-form")).not.toBeInTheDocument());
+    expect(lastPut()).toMatchObject({ draft: false });
+    expect(screen.queryByTestId("step-view-modal")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("step-saved-banner")).not.toBeInTheDocument();
+    expect(screen.getByTestId("step-edit-btn")).toBeInTheDocument();
+  });
+  it("falha mantém a etapa aberta e os campos preenchidos", async () => {
+    api.updateCatalog2Step.mockRejectedValueOnce(new Error("Falha ao gravar"));
+    mountNew(); openEditor();
+    fireEvent.change(screen.getByLabelText("Nome da etapa"), { target: { value: "Não perder" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar e voltar às etapas" }));
+    expect(await screen.findByTestId("step-save-error")).toHaveTextContent("Falha ao gravar");
+    expect(screen.getByLabelText("Nome da etapa")).toHaveValue("Não perder");
+    expect(screen.getByTestId("step-edit-form")).toBeInTheDocument();
+  });
+});
 
 describe("Etapa · acordeão fechado e botão Editar sempre à vista", () => {
   it("vem fechada, com o Editar no cabeçalho; marca 'Rascunho incompleto' quando for o caso", () => {

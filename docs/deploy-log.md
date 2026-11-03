@@ -1,5 +1,48 @@
 # Registro de deploys
 
+## 03/11 — Terceiro deploy solicitado; espelho em preparação
+
+- Usuário pediu GitHub + deploy + espelho do estado local. Escopo de código: cotação vencida, fechamento/moldura/status do lançamento, rodapé do editor e salvar etapa/entregável, testes e documentação. Sem migration nova.
+- Pré-publicação: builds frontend/backend e checagens de tipos passaram; 113/113 testes de tela em oito arquivos e agency-link-contract6/6 em banco descartável. Suíte catalog2-catalog anterior29/30 (falha3b da prévia administrativa fora da função corrigida, sem baseline repetido); CI geral do deploy anterior ainda tinha falhas, não afirmar resolução. Scanner de294 arquivos (fontes novas/alteradas e bundle) sem segredos conhecidos.
+- Backup QA validado antes da publicação em /opt/allka-2026/backups/mirror-20261103-3-before/: qa-before.sql.gz SHA256 e30a7415d918ce64199ff71ac58fbfa2e9a275608fe87e0307b3cfadbc4d42c1; uploads-before.tar.gz SHA2561c92decc57598a67d0e9237d542557f76d9b8ec90bd2ee4082cfe3313a18cb86. Pacote local privado backups/espelho-local-qa-20261103-3, controle de migrations excluído. API local parou apenas para congelar e foi reativada.
+- Comparação inicial240 tabelas:33 diferentes. Local→QA: usuários9→8, projetos5→4, tarefas9→7, Nômade operacional1→0, Líder1→0; Agency1/Company1/clientes2/produtos37 iguais em contagem. Anexos131 iguais por hash. Ensaio e confirmação de substituição ainda pendentes nesta anotação; nenhum dado QA substituído.
+- Limites de homologação: compra/pagamento simulado/briefings conferidos localmente, não aceite/execução/entrega/reprovação/aprovação do Reynário. Rose Líder pronta no local; vínculos de executor de etapas ainda precisam revisão. Não consertar isso editando matriz publicada silenciosamente durante deploy.
+
+## Pendente de deploy — 03/11 lançamento: moldura, fechamento e estados
+
+- Frontend TaskLaunchDrawer usa Painel Moldura e rodapé adaptável; cliente também por client_record. Lista compartilhada respeita launchDrawerOpen; envio representa análise, não liberação. Rótulos de briefing em análise/devolvido explícitos. Agência não recebe isAdmin no detalhe compartilhado; proteção backend já existente preservada.
+- Regressões22/22 na execução final, typechecks frontend/backend limpos e diff --check passou. UI real confirmou envio de dois briefings e fechamento correto após Manutenção. Layout detalhe319px e fluxo derivado Em execução ainda pendentes.
+- DADOS LOCAIS (não publicar como fixture de deploy): usuário autorizou pedido957/termos/pagamento simulado1.226,32; tarefasT015720/721 geradas, briefings fictícios enviados, SEO liberado por Admin; Manutenção em análise. Autorizou preparar perfil operacional do Reynário pelo script localguardado (sem CNPJ, senha, termos, carteira ou Líder novos). Rose criada pelo Claude em rodada paralela preservada. Nenhum dado/código desta rodada enviado ao QA/GitHub. Aceite/execução/aprovações ainda não homologados.
+
+## 03/11 — Líder Rose Bonifácio criada no banco LOCAL pelo Claude (DADO LOCAL — NÃO é deploy, NÃO está no QA)
+
+Pedido do usuário direto ao Claude: "se tiver um usuário que chama Rose… pode transformar ele em líder, se não, cria esse usuário, Rose Bonifácio, líder, completa o cadastro, com o cadastro fake". A Rose existente (`rose@lamego.com.vc`, user_2) era a ÚNICA conta de Empresa (dona de "Rose Bonifácio Consultoria e Serviços Ltda.", sem projetos); perguntado, o usuário escolheu: "cria a conta da rose e essa que existe muda o nome". Feito SÓ no banco LOCAL (`allka` no Docker), sem mudar código:
+- Conta de Empresa existente: só o NOME mudou para **Carla Mendes** (mesmo e-mail `rose@lamego.com.vc`, mesma senha, papel, empresa e vínculos). O nome da empresa ("Rose Bonifácio Consultoria e Serviços Ltda.") NÃO foi mudado.
+- Conta nova **Rose Bonifácio — Líder** (user_9, `rose.lider@lamego.com.vc`, role/account_type `lider`, ativa): mesmos registros que o cadastro do admin (`POST /api/users`, account_type lider) cria — usuário + área de líder "Geral" ativa, sem filtro de categoria (a fila mostra todas as tarefas) — e cadastro fictício completo: cargo "Líder de Área", telefone/WhatsApp, CPF/RG/CNPJ fictícios, nascimento, endereço (Av. Paulista, São Paulo/SP) e nota "[TESTE] Cadastro fictício…". Senha = a padrão dos usuários de teste locais (`SEED_TEST_USER_PASSWORD` do `apps/backend/.env`; ver `.env.example`); nenhuma senha escrita em documento.
+- Conferido pela API local: login OK; `/api/auth/me` = lider; fila `/api/lider/tasks` = 200 e já mostra a tarefa do projeto 957 que está em LANCAMENTO_ENVIADO_PARA_ANALISE; `/api/projects` = 200 (Líder lê); DELETE de projeto = 403 (bloqueio de 02/11).
+- Cópia para desfazer a troca de nome: `backup-rose-empresa-users.sql` na pasta de rascunho da sessão do Claude (fora do Git). Para desfazer a conta nova: apagar o usuário user_9 (área e perfil vão junto por cascata) — só com ordem do usuário.
+- NÃO está no QA/online: o espelho de 03/11 foi antes disso; levar a Rose Líder para o QA exige novo espelho, só com ordem do usuário.
+
+## Pendente de deploy — 03/11 cotação vencida reutilizada no checkout
+
+- Backend `catalog2-client.ts/createQuote`: nova cotação da cesta só reaproveita fotografia ainda vigente e equivalente em preço, prazo, moeda, cálculo e execução, sem vínculo a pedido/projeto. Mantidas cotações históricas/proteção comercial e rotas explícitas de renovação. Sem migration ou alteração direta dos dados reais.
+- Regressões 14b/14c/14d adicionadas a catalog2-catalog.integration: todas passaram em banco descartável; repetição sequencial e isolamento também. Suíte29/30: falha3b de listagem de prévia administrativa, fora da função corrigida; baseline não repetido. Typecheck backend limpo.
+- Reteste UI ainda não executado: navegador retornou `Local browser use is disabled in Work settings`. Projeto957 e cesta preservados; sem aceitar termos, confirmar pedido ou pagamento. Sem commit/push/deploy/espelho. Não homologar ciclo ponta a ponta.
+
+## Pendente de deploy — 03/11 simplificação de salvar etapa e entregável
+
+- Item 1: fluxo novo usa **Salvar e voltar às etapas**. Após sucesso real, fecha o editor e retorna à lista, sem abrir o resumo e pedir um segundo Concluir. Ver continua disponível; editor antigo conserva sua confirmação. Validação, erro com preservação do formulário, rascunho incompleto e escolha do alcance global/produto continuam intactos.
+- Item 2: `DeliverableEditorModal` recebe `saveTarget="stage"` quando chamado pelo editor da etapa, inclusive no modal legado. Ação **Adicionar à etapa** / **Aplicar alterações à etapa**, alternativa **Manter incompleto na etapa**, nota explícita sobre salvar a etapa para gravar no servidor. Chamadas que realmente salvam no servidor mantêm Salvar/Salvar rascunho. Sem novas rotas, campos, migrations ou persistência antecipada.
+- 99/99 testes em cinco arquivos (step-row-draft, step-row-universal, step-deliverables-inline, catalog2-deliverables-ui, deliverable-file-picker). Novas regressões: aguardar gravação antes de fechar, erro mantém texto, adicionar entregável não chama API. Conferido no navegador local Admin/SEO003/V2: Salvar e voltar → alcance só neste produto → lista sem segundo Concluir; novo entregável só no formulário → cancelar/descartar → reabrir sem item temporário. A etapa 2 foi salva com o conteúdo existente, sem editar modelo global, preço ou prazo. Não publicou versão. Prova fora do Git: 03-11-etapa-salvar-voltar.png.
+- Checagem de tipos frontend passou limpa após ajustar a assinatura da consulta no teste novo. Sem commit/push/deploy/espelho; seis melhorias restantes no relatório. Não homologa compra ou ciclos.
+
+## Pendente de deploy — 03/11 correção do rodapé do cadastro
+
+- Somente frontend: `product-editor.tsx` deixa o rodapé crescer e quebrar linhas; navegação e ações não se sobrepõem. Botões longos respeitam a largura do grupo. Mantidas cores, ações, handlers, regras e dados; em 1280 px o rodapé continua com 52 px. Sem backend, banco ou migrations.
+- Regressão em `product-editor-typing.test.tsx`: estrutura responsiva e avanço independente de Travar edição. Arquivo completo 17/17; typecheck frontend limpo. A proteção de estrutura em JSDOM não substitui medição real.
+- Navegador real local, Admin/SEO003/V2 já existente: medi o passo 2 em 360, 390, 402, 768 e 1280 px; zero interseções de botões ou botões fora do rodapé. Cliques reais Produto → Configurações em 402×668 e Configurações → Conferência em 360×800 avançaram sem diálogo de travar. Nenhum campo comercial alterado, nenhuma publicação. Viewport restaurado; prova `03-11-rodape-corrigido-360.png` fora do Git.
+- Sem commit/push/deploy/espelho nesta rodada. As oito recomendações de usabilidade do relatório continuam separadas deste erro funcional.
+
 ## deploy-2026-11-03-2 — editor novo como configuração normal, PUBLICADO
 
 - **Publicação:** commit 9d47944c5cfa4f5321b952d0cd68ee307ab5eeae enviado ao allka2/main; tag deploy-2026-11-03-2 enviada. Deploy Frontend 41630549184 concluído com sucesso. Container frontend confirmado em 9d47944; backend preservado em 0036e96 (sem mudança, sem workflow backend nesta rodada).

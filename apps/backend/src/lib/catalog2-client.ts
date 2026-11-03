@@ -1030,11 +1030,26 @@ export async function createQuote(ctx: ClientContext, productIdOrSlug: string, r
   }
 
   const checksum = configChecksum(product.id, version.id, sel, period);
-  const validUntil = new Date(Date.now() + QUOTE_TTL_HOURS * 3600 * 1000);
+  const now = new Date();
+  const validUntil = new Date(now.getTime() + QUOTE_TTL_HOURS * 3600 * 1000);
+  const currentPrice = periodPricing ? periodPricing.total_price : pricing.lines.commercial_final_price.amount;
+  const currentDeadline = periodPricing ? periodPricing.commercial_deadline_days : pricing.deadline.commercial_deadline_days;
+  const pricingSnapshot = JSON.stringify(periodPricing ? clientPeriodPricingView(periodPricing) : clientPricingView(pricing));
+  const executionReference = executionSnapshot(pricing, version.quantity_rules_json);
 
-  // Clique duplo: a MESMA config (mesmo período) já válida → devolve a existente.
+  // Uma NOVA cotação da cesta só deduplica uma fotografia ainda vigente e equivalente
+  // ao cálculo atual. Status persistido "valida" sozinho não prova validade: a cotação
+  // pode ter vencido ou a tarifa/regra mudado sem mudar a seleção/checksum.
+  // Não reescreve cotações anteriores (nem suas proteções comerciais); renovação e
+  // contratação de uma cotação explicitamente escolhida continuam pelas rotas próprias.
   const existing = await prisma.catalog2Quote.findFirst({
-    where: { account_kind: ctx.account_kind, account_id: ctx.account_id, config_checksum: checksum, status: "valida" },
+    where: {
+      account_kind: ctx.account_kind, account_id: ctx.account_id, config_checksum: checksum, status: "valida",
+      valid_until: { gt: now }, commercial_request_id: null, for_project_id: null,
+      commercial_price: currentPrice, commercial_deadline_days: currentDeadline, currency: pricing.currency,
+      pricing_snapshot_json: pricingSnapshot, execution_snapshot_json: executionReference,
+    },
+    orderBy: { created_at: "desc" },
   });
   if (existing) return serializeQuote(existing);
 
@@ -1047,16 +1062,16 @@ export async function createQuote(ctx: ClientContext, productIdOrSlug: string, r
       version_id: version.id,
       selection_json: JSON.stringify(sel),
       deliverables_json: JSON.stringify(deliverablesFor(version, sel, pricing)),
-      execution_snapshot_json: executionSnapshot(pricing, version.quantity_rules_json),
+      execution_snapshot_json: executionReference,
       quantity: sel.quantity ?? 1,
       // Item 6: com período, o "preço/prazo comerciais" da cotação SÃO os
       // do período (total antecipado / prazo do 1º ciclo) — nunca o avulso
       // por baixo, que continua só como referência em pricing_snapshot_json.
-      commercial_deadline_days: periodPricing ? periodPricing.commercial_deadline_days : pricing.deadline.commercial_deadline_days,
-      commercial_price: periodPricing ? periodPricing.total_price : pricing.lines.commercial_final_price.amount,
+      commercial_deadline_days: currentDeadline,
+      commercial_price: currentPrice,
       currency: pricing.currency,
       config_checksum: checksum,
-      pricing_snapshot_json: JSON.stringify(periodPricing ? clientPeriodPricingView(periodPricing) : clientPricingView(pricing)),
+      pricing_snapshot_json: pricingSnapshot,
       status: "valida",
       valid_until: validUntil,
       is_preview: false,

@@ -442,6 +442,61 @@ describe("Catálogo do cliente — visibilidade, configurador, cotação e cesta
     assert.equal(c1.json.item_id, c2.json.item_id);
   });
 
+  it("14b. criar pela cesta não reaproveita cotação vencida ainda marcada valida e preserva a antiga", async () => {
+    const body = { product: SLUG, selection: { variation_option_keys: ["estatico", "autorizado"], quantity: 7 } };
+    const first = await api("/api/catalog2/quotes", { method: "POST", token: AG.token, body });
+    assert.equal(first.status, 201);
+    const past = new Date(Date.now() - 86400000);
+    const original = await prisma.catalog2Quote.update({ where: { id: first.json.id }, data: { valid_until: past } });
+    const fresh = await api("/api/catalog2/quotes", { method: "POST", token: AG.token, body });
+    assert.equal(fresh.status, 201);
+    assert.notEqual(fresh.json.id, first.json.id);
+    assert.ok(new Date(fresh.json.valid_until).getTime() > Date.now());
+    const preserved = await prisma.catalog2Quote.findUniqueOrThrow({ where: { id: first.json.id } });
+    assert.equal(preserved.status, "valida"); // criação não renova nem reescreve o documento antigo
+    assert.equal(preserved.valid_until?.getTime(), past.getTime());
+    assert.equal(preserved.commercial_price, original.commercial_price);
+    assert.equal(preserved.pricing_snapshot_json, original.pricing_snapshot_json);
+    const retry = await api("/api/catalog2/quotes", { method: "POST", token: AG.token, body });
+    assert.equal(retry.json.id, fresh.json.id);
+  });
+
+  it("14c. nova cotação usa a regra atual, sem sobrescrever cotação vigente com preço protegido", async () => {
+    const body = { product: SLUG, selection: { variation_option_keys: ["estatico", "autorizado"], quantity: 8 } };
+    const first = await api("/api/catalog2/quotes", { method: "POST", token: CO.token, body });
+    assert.equal(first.status, 201);
+    const original = await prisma.catalog2Quote.findUniqueOrThrow({ where: { id: first.json.id } });
+    try {
+      await prisma.catalog2PricingSettings.update({ where: { id: "default" }, data: { profit_margin_percent: 80 } });
+      const fresh = await api("/api/catalog2/quotes", { method: "POST", token: CO.token, body });
+      assert.equal(fresh.status, 201);
+      assert.notEqual(fresh.json.id, first.json.id);
+      assert.ok(fresh.json.commercial_price > first.json.commercial_price);
+      const preserved = await prisma.catalog2Quote.findUniqueOrThrow({ where: { id: first.json.id } });
+      assert.equal(preserved.commercial_price, original.commercial_price);
+      assert.equal(preserved.pricing_snapshot_json, original.pricing_snapshot_json);
+      assert.equal(preserved.valid_until?.getTime(), original.valid_until?.getTime());
+      const retry = await api("/api/catalog2/quotes", { method: "POST", token: CO.token, body });
+      assert.equal(retry.json.id, fresh.json.id);
+      const other = await api("/api/catalog2/quotes", { method: "POST", token: CO2.token, body });
+      assert.equal(other.status, 201);
+      assert.notEqual(other.json.id, fresh.json.id);
+    } finally {
+      await prisma.catalog2PricingSettings.update({ where: { id: "default" }, data: { profit_margin_percent: 30 } });
+    }
+  });
+
+  it("14d. mesmo total não reaproveita referência operacional desatualizada", async () => {
+    const body = { product: SLUG, selection: { variation_option_keys: ["estatico", "autorizado"], quantity: 9 } };
+    const first = await api("/api/catalog2/quotes", { method: "POST", token: AG.token, body });
+    assert.equal(first.status, 201);
+    await prisma.catalog2Quote.update({ where: { id: first.json.id }, data: { execution_snapshot_json: null } });
+    const fresh = await api("/api/catalog2/quotes", { method: "POST", token: AG.token, body });
+    assert.equal(fresh.status, 201);
+    assert.notEqual(fresh.json.id, first.json.id);
+    assert.equal(fresh.json.commercial_price, first.json.commercial_price);
+  });
+
   it("15. conta A não acessa cotação da conta B", async () => {
     const mine = await api("/api/catalog2/quotes", { method: "POST", token: CO.token, body: { product: SLUG, selection: { variation_option_keys: ["carrossel", "autorizado"], quantity: 3 } } });
     const asOther = await api(`/api/catalog2/quotes/${mine.json.id}`, { token: CO2.token });

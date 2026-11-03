@@ -1032,13 +1032,13 @@ function ProductEditorContent({ productId, onBack, pin, notice, embedded, openIn
         const nextText = next ? (testFooter && editMode ? `Salvar e continuar: ${next.label.split(":")[0]}` : `Passo ${idx + 2}: ${next.label.split(":")[0]}`) : "Fim";
         const publishIsPrimary = !testFooter || !next;
         return (
-          <div className="flex h-[52px] shrink-0 items-center gap-2 border-t border-white/70 bg-[#dfe5f6] px-1 pt-2 dark:border-slate-700/60 dark:bg-slate-950">
-            <div className="flex min-w-0 items-center gap-1.5">
+          <div data-testid="editor-footer" className="flex min-h-[52px] shrink-0 flex-wrap items-center gap-2 border-t border-white/70 bg-[#dfe5f6] px-1 py-2 dark:border-slate-700/60 dark:bg-slate-950">
+            <div data-testid="editor-footer-navigation" className="flex w-full min-w-0 flex-wrap items-center gap-1.5 lg:w-auto [&>button]:h-auto [&>button]:min-h-8 [&>button]:max-w-full [&>button]:whitespace-normal [&>button]:py-1.5 [&>button>svg]:shrink-0">
               {/* Navegação direta: "Início" só aparece no passo 2; do passo 3 em diante volta para o passo anterior; no passo 1 só há o "próximo". */}
               {prev && <Button variant="outline" className="h-8 gap-1 px-2.5 text-xs" onClick={() => go(prev.id)}><ArrowLeft className="h-3.5 w-3.5" /> {idx === 1 ? "Início" : `Passo ${idx}: ${prev.label.split(":")[0]}`}</Button>}
               {!(testFooter && !next) && <Button data-testid="footer-next" title={testFooter && editMode && next ? "Grava o que está pendente neste passo e abre o próximo. Se der erro, você continua aqui com tudo preenchido." : undefined} style={{ background: "var(--app-brand-gradient, linear-gradient(90deg, #2558FF 0%, #6E2C96 55%, #D92293 100%))" }} className="h-8 gap-1 px-2.5 text-xs text-white shadow-md hover:brightness-110 disabled:opacity-55" disabled={!next} onClick={() => next && go(next.id)}>{nextText} <ChevronRight className="h-3.5 w-3.5" /></Button>}
             </div>
-            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <div data-testid="editor-footer-actions" className="ml-auto flex w-full min-w-0 flex-wrap items-center justify-end gap-1.5 lg:w-auto [&>button]:h-auto [&>button]:min-h-8 [&>button]:max-w-full [&>button]:whitespace-normal [&>button]:py-1.5 [&>button>svg]:shrink-0">
               <Button variant="outline" onClick={() => setScreenNotificationsOpen((open) => !open)} className="relative h-8 gap-1.5 px-2.5 text-xs" title="Avisos desta tela"><ListChecks className="h-3.5 w-3.5" /> Avisos{screenNotifications.length > 0 && <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold text-white">{screenNotifications.length}</span>}</Button>
               {fmtUpdatedAt(version.updated_at ?? product.updated_at) && <span className="hidden text-[11px] text-slate-500 2xl:inline">Atualizado: {fmtUpdatedAt(version.updated_at ?? product.updated_at)}</span>}
               {!editMode ? (
@@ -3069,7 +3069,12 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
       }, mode === "draft" ? "Rascunho da etapa salvo." : "Etapa concluída e salva.", { rethrow: true });
       setF((cur) => ({ ...cur, ops: newOps }));
       baseline.current = { f: JSON.stringify({ ...f, ops: newOps }), on: accessOn };
-      if (mode === "final") { clearEditorSession(recoveryKey); setShowErrors(false); setEditing(false); setJustSaved(true); setOpen(true); /* volta para a janela "Ver" já com os dados atualizados */ }
+      if (mode === "final") {
+        clearEditorSession(recoveryKey); setShowErrors(false); setEditing(false);
+        // No fluxo novo, o sucesso já é confirmado por act: volta à lista, sem exigir outro Concluir.
+        // O resumo permanece disponível pelo botão Ver; o editor antigo conserva sua confirmação.
+        setJustSaved(!testLayout); setOpen(!testLayout);
+      }
       else setDraftNote(`Rascunho salvo às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}. Você pode fechar e continuar depois do mesmo ponto.`);
     } catch (e: any) {
       setFormError(e?.message ?? "Não foi possível salvar a etapa. Nada do que você preencheu foi apagado.");
@@ -3499,7 +3504,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
             <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
               {issues.map((it, i) => <li key={`${it.field}-${i}`}><button type="button" className="text-left underline decoration-dotted hover:text-rose-700" onClick={() => goToIssue(it)}>{it.message}</button></li>)}
             </ul>
-            <p className="mt-1.5">Corrija e clique em “Concluir e salvar etapa”, ou use “Salvar rascunho da etapa” para guardar assim mesmo e continuar depois.</p>
+            <p className="mt-1.5">Corrija e clique em “{testLayout ? "Salvar e voltar às etapas" : "Concluir e salvar etapa"}”, ou use “Salvar rascunho da etapa” para guardar assim mesmo e continuar depois.</p>
           </div>
         )}
         {formError && <p role="alert" className="mx-4 mt-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="step-save-error">Não foi possível salvar: {formError} Nada do que você preencheu foi apagado.</p>}
@@ -3548,7 +3553,7 @@ export function StepRow({ step, index, steps, taskId, readOnly, act, refs, task,
           </div>}
           <Button size="sm" variant="ghost" className="h-9" disabled={saving !== null} onClick={requestClose}>Cancelar</Button>
           <Button size="sm" variant="outline" className="h-9" disabled={saving !== null} onClick={() => { setDraftNote(null); void commitStep("draft").catch(() => {}); }} data-testid="step-save-draft" title="Guarda tudo o que já foi preenchido, mesmo incompleto. A etapa fica marcada como rascunho incompleto e não é liberada para execução nem publicada.">{saving === "draft" ? "Salvando…" : "Salvar rascunho da etapa"}</Button>
-          <SaveButton onClick={concludeClick} disabled={saving !== null}>{saving === "final" ? "Salvando…" : "Concluir e salvar etapa"}</SaveButton>
+          <SaveButton onClick={concludeClick} disabled={saving !== null}>{saving === "final" ? "Salvando…" : testLayout ? "Salvar e voltar às etapas" : "Concluir e salvar etapa"}</SaveButton>
         </div>
         <ModelScopeDialog embedded={inModels} open={scopeAsk} kindLabel="etapa" modelId={step.step_model_id} onCancel={() => setScopeAsk(false)} onChoose={(sc) => { setScopeAsk(false); void commitStep("final", sc).catch(() => {}); }} />
         <Dialog open={closeAsk} onOpenChange={(o) => { if (!o) setCloseAsk(false); }}>

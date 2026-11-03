@@ -33,7 +33,9 @@ const HELP = "text-[11px] font-normal text-slate-500 dark:text-slate-400";
 
 export interface DeliverableModalContext { taskName: string; stepName?: string; stepIndex?: number }
 
-export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, context, keyLabel, onSave, onGoToStep, onClose, sessionKey, inline = false, onDraftChange, approvalBlock = null }: {
+export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, context, keyLabel, onSave, onGoToStep, onClose, sessionKey, inline = false, onDraftChange, approvalBlock = null, saveTarget = "server" }: {
+  /** O editor dentro da etapa só aplica ao formulário; as rotas do servidor ficam no salvar da etapa. */
+  saveTarget?: "server" | "stage";
   /** Item 5: se a etapa/tarefa não permite aprovação individual do cliente (mesma regra do servidor). hard = não dá para liberar nesta etapa. */
   approvalBlock?: { text: string; hard: boolean } | null;
   initial: Fields; isNew: boolean;
@@ -145,7 +147,7 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
             <div role="alert" className="rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-100" data-testid="deliverable-error-summary">
               <p className="font-bold">O entregável ainda não pode ser concluído. Nada do que você preencheu foi apagado.</p>
               <ul className="mt-1 list-disc space-y-0.5 pl-5">{issues.map((it) => <li key={it.field}><button type="button" className="text-left underline decoration-dotted" onClick={() => goTo(it)}>{it.message}</button></li>)}</ul>
-              <p className="mt-1">Corrija ou use “Salvar rascunho” para guardar assim mesmo.</p>
+              <p className="mt-1">Corrija ou use “{saveTarget === "stage" ? "Manter incompleto na etapa" : "Salvar rascunho"}” para guardar assim mesmo{saveTarget === "stage" ? " no formulário; depois salve a etapa para gravar no servidor" : ""}.</p>
             </div>
           )}
           {saveErr && <p role="alert" className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800" data-testid="deliverable-save-error">{saveErr}</p>}
@@ -274,10 +276,11 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
           })}
         </div>
 
+        {saveTarget === "stage" && <p role="note" data-testid="deliverable-stage-save-note" className="px-4 py-2 text-xs text-violet-800 dark:text-violet-200">Adicionar ou aplicar mantém o entregável no formulário. Para gravar no servidor, salve a etapa.</p>}
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-900" data-testid="deliverable-modal-footer">
           <Button type="button" variant="ghost" disabled={saving !== null} onClick={requestClose}>{inline ? "Fechar formulário (manter rascunho)" : "Cancelar"}</Button>
-          <Button type="button" variant="outline" disabled={saving !== null} onClick={() => void submit(true)} data-testid="deliverable-save-draft" title="Guarda o que já foi preenchido, mesmo incompleto. O entregável fica marcado como rascunho e bloqueia a publicação até ser concluído.">{saving === "draft" ? "Salvando…" : "Salvar rascunho"}</Button>
-          <Button type="button" disabled={saving !== null} onClick={() => void submit(false)} data-testid="deliverable-save">{saving === "final" ? "Salvando…" : "Salvar"}</Button>
+          <Button type="button" variant="outline" disabled={saving !== null} onClick={() => void submit(true)} data-testid="deliverable-save-draft" title={saveTarget === "stage" ? "Mantém o preenchimento incompleto no formulário. Só vai ao servidor quando você salvar a etapa." : "Guarda o que já foi preenchido, mesmo incompleto. O entregável fica marcado como rascunho e bloqueia a publicação até ser concluído."}>{saving === "draft" ? (saveTarget === "stage" ? "Aplicando…" : "Salvando…") : saveTarget === "stage" ? "Manter incompleto na etapa" : "Salvar rascunho"}</Button>
+          <Button type="button" disabled={saving !== null} onClick={() => void submit(false)} data-testid="deliverable-save">{saving === "final" ? (saveTarget === "stage" ? "Aplicando…" : "Salvando…") : saveTarget === "stage" ? (isNew ? "Adicionar à etapa" : "Aplicar alterações à etapa") : "Salvar"}</Button>
         </div>
 
         <Dialog open={closeAsk} onOpenChange={(o) => { if (!o) setCloseAsk(false); }}>
@@ -287,7 +290,7 @@ export function DeliverableEditorModal({ initial, isNew, steps, lockedStepName, 
             <p className="text-sm text-slate-600 dark:text-slate-300">O que você preencheu neste entregável ainda não foi salvo. O que prefere fazer?</p>
             <div className="flex flex-col gap-2 pt-1">
               <Button type="button" onClick={() => setCloseAsk(false)} data-testid="deliverable-close-continue">Continuar editando</Button>
-              <Button type="button" variant="outline" disabled={saving !== null} onClick={() => { setCloseAsk(false); void submit(true); }} data-testid="deliverable-close-draft">Salvar como rascunho</Button>
+              <Button type="button" variant="outline" disabled={saving !== null} onClick={() => { setCloseAsk(false); void submit(true); }} data-testid="deliverable-close-draft">{saveTarget === "stage" ? "Manter rascunho na etapa" : "Salvar como rascunho"}</Button>
               <Button type="button" variant="ghost" className="text-rose-600 hover:text-rose-700" onClick={() => { setCloseAsk(false); onClose(); }} data-testid="deliverable-close-discard">Descartar alterações</Button>
             </div>
           </DialogContent>

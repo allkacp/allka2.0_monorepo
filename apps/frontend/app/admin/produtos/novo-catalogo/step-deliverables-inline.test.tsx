@@ -13,6 +13,18 @@ function Harness({ inline = true }: { inline?: boolean }) {
   return <><StepDeliverablesEditor task={{ id: "t1", name: "Tarefa", steps: [{ id: "s1", name: "Etapa" }], deliverables: [] }} step={{ id: "s1", name: "Etapa" }} stepIndex={1} readOnly={false} items={items} setItems={setItems} declaredNone={none} setDeclaredNone={setNone} issues={[]} showErrors={false} inline={inline} /><output data-testid="rascunho">{JSON.stringify(items)}</output></>;
 }
 describe("entregável no ponto de necessidade", () => {
+  it("Adicionar à etapa aplica ao formulário, mas não grava antecipadamente no servidor", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("radio", { name: /Esta etapa tem entregáveis/ }));
+    expect(screen.getByTestId("deliverable-stage-save-note")).toHaveTextContent("Para gravar no servidor, salve a etapa");
+    expect(screen.getByTestId("deliverable-save-draft")).toHaveTextContent("Manter incompleto na etapa");
+    fireEvent.change(screen.getByLabelText("Nome do entregável"), { target: { value: "Relatório" } });
+    fireEvent.change(screen.getByLabelText("Descrição do entregável"), { target: { value: "Diagnóstico documentado" } });
+    fireEvent.click(screen.getByRole("button", { name: "Adicionar à etapa" }));
+    expect(screen.queryByTestId("inline-deliverable-editor")).not.toBeInTheDocument();
+    expect(screen.getByTestId("rascunho")).toHaveTextContent("Relatório");
+    expect(writes).not.toHaveBeenCalled();
+  });
   it("marcar que tem entregável abre os campos dentro da etapa, todos visíveis, sem gravação antecipada", () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole("radio", { name: /Esta etapa tem entregáveis/ }));

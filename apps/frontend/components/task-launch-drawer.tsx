@@ -1,7 +1,7 @@
 import { PageLoader } from "@/components/ui/loading";
 import { TaskLaunchConnections } from "@/components/connections/task-launch-connections";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { EmbeddedSlideScreen } from "@/components/embedded-slide-screen";
+import { FramedPanel } from "@/components/framed-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { apiClient } from "@/lib/api-client";
 import { BriefingQuestionField, isVisible as briefingIsVisible, pendingMessage as briefingPending, type BriefingValue } from "@/components/briefing-question-field";
 import { cn } from "@/lib/utils";
+import { taskClientName } from "@/lib/task-display";
 import {
   Clock,
   SendHorizonal,
@@ -1173,7 +1174,7 @@ export function TaskLaunchDrawer({
   // ── Sub-render: Footer ────────────────────────────────────────────────────
   function renderFooter() {
     return (
-      <div className="shrink-0 border-t border-slate-200 bg-white px-6 py-4">
+      <div className="shrink-0 border-t border-slate-200 bg-white px-3 py-3 sm:px-6">
         {/* Submit error */}
         {submitError && (
           <div className="flex items-start gap-2 mb-3 px-3 py-2.5 bg-red-50 border border-red-200 rounded-lg">
@@ -1192,7 +1193,7 @@ export function TaskLaunchDrawer({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           {/* Left */}
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={onClose} className="text-slate-600">Cancelar</Button>
@@ -1209,7 +1210,7 @@ export function TaskLaunchDrawer({
             // Mode selection — no actions
             <div />
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               {fillMode === "manual" && (
                 <Button variant="outline" onClick={handleSaveDraft} disabled={savingDraft || briefingQuestions.length === 0} className="gap-1.5">
                   {savingDraft ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : draftSavedAt ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : null}
@@ -1219,7 +1220,7 @@ export function TaskLaunchDrawer({
               <Button
                 onClick={handleSubmitBriefing}
                 disabled={submitting || fillMode === "ai" || (fillMode === "manual" && !canRelease)}
-                className="gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
+                className="h-auto min-h-9 whitespace-normal gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-50"
               >
                 {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                 Enviar briefing para análise
@@ -1233,8 +1234,8 @@ export function TaskLaunchDrawer({
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <EmbeddedSlideScreen open={true} onClose={onClose} hideHeader>
-      <div className="flex flex-col flex-1 min-h-0 w-full">
+    <FramedPanel open={true} onOpenChange={(open) => { if (!open) onClose(); }} title="Lançamento da tarefa" testId="task-launch-panel">
+      <div className="flex flex-col flex-1 min-h-0 min-w-0 w-full">
         {initializing ? (
           /* Loading state */
           <PageLoader text="Preparando lançamento…" compact />
@@ -1242,7 +1243,7 @@ export function TaskLaunchDrawer({
           <>
             {/* ════════════════ HEADER ════════════════ */}
             <div
-              className="px-6 pt-5 pb-5 shrink-0 text-white"
+              className="px-3 py-3 sm:px-6 shrink-0 text-white"
               style={{
                 background:
                   "linear-gradient(135deg, #2558FF 0%, #6E2C96 55%, #A61E86 100%)",
@@ -1268,7 +1269,7 @@ export function TaskLaunchDrawer({
                   </span>
                 )}
               </div>
-              <h2 className="text-xl font-bold text-white leading-tight mb-2">
+              <h2 className="text-base font-bold text-white leading-tight mb-2 break-words">
                 {currentTask.title}
               </h2>
 
@@ -1294,7 +1295,7 @@ export function TaskLaunchDrawer({
                 </div>
                 <div>
                   <p className="text-white/50 text-[10px] uppercase tracking-wider mb-0.5">Cliente</p>
-                  <p className="text-white text-sm font-medium truncate">{currentTask.project?.client?.name ?? "—"}</p>
+                  <p className="text-white text-sm font-medium truncate">{taskClientName(currentTask.project) ?? "—"}</p>
                 </div>
                 <div>
                   <p className="text-white/50 text-[10px] uppercase tracking-wider mb-0.5">Prazo</p>
@@ -1324,7 +1325,7 @@ export function TaskLaunchDrawer({
             </div>
 
             {/* ════════════════ BODY ════════════════ */}
-            <div className="flex-1 overflow-y-auto bg-slate-50/60">
+            <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-slate-50/60">
               {/* Conexões que a tarefa precisa: uma linha por conexão; some quando a tarefa não exige nenhuma. Nunca trava o lançamento. */}
               <TaskLaunchConnections projectId={effectiveProjectId} taskId={currentTask.id} />
               {fillMode === null ? renderModeSelection() : renderFillingContent()}
@@ -1335,6 +1336,6 @@ export function TaskLaunchDrawer({
           </>
         )}
       </div>
-    </EmbeddedSlideScreen>
+    </FramedPanel>
   );
 }

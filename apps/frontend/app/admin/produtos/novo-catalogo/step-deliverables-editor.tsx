@@ -205,7 +205,7 @@ export function StepDeliverablesEditor({ task, step, stepIndex, readOnly, items,
         </div>
       )}
       {modal && (
-        <DeliverableEditorModal inline={inline} onDraftChange={inline ? keepInlineDraft : undefined} key={modal.item?.uid ?? "new"} initial={modal.item ? modal.item.fields : blankFields()} isNew={!modal.item || modal.item.state === "new"} steps={stepList}
+        <DeliverableEditorModal saveTarget="stage" inline={inline} onDraftChange={inline ? keepInlineDraft : undefined} key={modal.item?.uid ?? "new"} initial={modal.item ? modal.item.fields : blankFields()} isNew={!modal.item || modal.item.state === "new"} steps={stepList}
           lockedStepName={modal.item ? undefined : step.name} context={{ taskName: task.name ?? "", stepName: stepList.find((s) => s.id === (modal.item?.fields.step_id || step.id))?.name, stepIndex: stepList.find((s) => s.id === (modal.item?.fields.step_id || step.id))?.index }}
           sessionKey={sessionKey ? `${sessionKey}:fields` : undefined} keyLabel={modal.item?.key} onSave={saveFromModal} onClose={closeModal} approvalBlock={approvalBlock} />
       )}
