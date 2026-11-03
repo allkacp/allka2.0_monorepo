@@ -1,8 +1,8 @@
 # RETOMAR AQUI — de onde paramos (atualizado em 2026-11-03)
 
-## 03/11 — MAIS RECENTE: editor novo promovido na interface, deploy autorizado em andamento
+## 03/11 — MAIS RECENTE: editor novo como configuração normal PUBLICADO no QA
 
-Pedido após o deploy abaixo: manter só o botão normal de configuração de produto, abrindo o fluxo novo; tirar botão/faixa Produto teste. Feito na página Cadastro de Produtos (lista e cartões), URLs normais, criação e bandeja. O editor anterior NÃO foi apagado: guardado via ?editor=antigo, sem ação visível. ?editor=teste continua compatível. Mesmos dados/APIs, nada gravado no banco. 20 testes direcionados passaram (4 página + 16 editor), repetidos para esta publicação. Usuário autorizou posteriormente GitHub + deploy do ajuste; em andamento, resultado final no topo do deploy-log. Não repetir espelho nem alterar os dados online. Usuário testará e pedirá gravação/regravação e produto com ciclos depois. Não começar agora, não apagar resquícios do antigo sem pedido futuro.
+Pedido após o deploy abaixo: manter só o botão normal de configuração de produto, abrindo o fluxo novo; tirar botão/faixa Produto teste. Feito na página Cadastro de Produtos (lista e cartões), URLs normais, criação e bandeja. O editor anterior NÃO foi apagado: guardado via ?editor=antigo, sem ação visível. ?editor=teste continua compatível. Mesmos dados/APIs, nada gravado no banco. Usuário autorizou depois GitHub + deploy: frontend 9d47944/tag deploy-2026-11-03-2 publicado com sucesso (run 41630549184); backend 0036e96 preservado. Asset servido confirma o novo padrão, sem rótulo Produto teste; site 200/API ok. 20 testes repetidos passaram, typechecks/builds e scanner limpos. CI geral ainda em andamento na conferência, não declarar falhas anteriores resolvidas. Resultado detalhado no topo do deploy-log. NÃO houve novo espelho: dados online preservados. Usuário testará e pedirá gravação/regravação e produto com ciclos depois. Não começar agora, não apagar resquícios do antigo sem pedido futuro.
 
 ## 03/11 — DEPLOY E ESPELHO QA CONCLUÍDOS, autorização atual do usuário
 

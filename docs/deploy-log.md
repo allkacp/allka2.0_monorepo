@@ -1,12 +1,16 @@
 # Registro de deploys
 
-## Em publicação autorizada — 03/11: editor novo como configuração normal
+## deploy-2026-11-03-2 — editor novo como configuração normal, PUBLICADO
+
+- **Publicação:** commit 9d47944c5cfa4f5321b952d0cd68ee307ab5eeae enviado ao allka2/main; tag deploy-2026-11-03-2 enviada. Deploy Frontend 41630549184 concluído com sucesso. Container frontend confirmado em 9d47944; backend preservado em 0036e96 (sem mudança, sem workflow backend nesta rodada).
+- **Conferência online:** /admin/cadastro-produtos HTTP 200 e API health ok. Asset servido /assets/page-BFcNLnwL.js contém a seleção padrão novo (editor=antigo recupera current; demais entradas usam test), Configuração do produto e recuperação editor=antigo; não contém rótulo Produto teste. Assim foi conferido o conteúdo servido, não só a tag da imagem. Sem novo login manual/Admin nesta rodada; login Agência havia sido comprovado no deploy anterior, backend inalterado.
+- **Verificação repetida:** 20/20 testes direcionados, typecheck/backend e builds frontend/backend passaram; scanner de 277 arquivos compilados sem credenciais conhecidas. CI geral 41630549135 ainda em andamento na conferência; falhas gerais do deploy anterior não foram resolvidas por este ajuste. Não declarar CI integral verde. Nenhum dado local enviado, banco/anexos/versões/preços/tarefas preservados online. Sem migrations.
 
 - Pedido posterior ao deploy: mostrar somente o botão habitual de configuração abrindo o novo fluxo; guardar o editor antigo, sem excluí-lo. Feito localmente e, em pedido posterior explícito, usuário autorizou GitHub e deploy deste ajuste. Não repetir espelho de dados, não começar gravação/ciclos.
 - Lista e cartões de Cadastro de Produtos: removida ação extra Produto teste, mantido botão habitual Editar produto/Continuar configuração, agora com layout novo por padrão. Criação e links diretos normais também entram no fluxo novo. Cabeçalho/bandeja usam Configuração do produto, sem faixa de layout alternativo. Mesmos produtos/dados/APIs, sem cópia ou gravação de cadastro.
 - Antigo preservado integralmente, acessível para recuperação por /admin/cadastro-produtos/<número>?editor=antigo, sem botão na lista. Links existentes editor=teste continuam abrindo o novo fluxo. Não apagar implementação antiga sem ordem futura do usuário.
 - Testes: quatro regressões direcionadas da página passaram (ação única/novo padrão, link antigo teste, URL numérica e editor antigo guardado); product-editor-typing 16/16 passou. Total 20 testes aprovados; demais 43 testes da página não executados neste recorte. Checagem de tipos frontend passou, diff sem erro de whitespace, site local HTTP 200. Não declarar suíte geral resolvida; falhas do CI do deploy anterior permanecem registradas.
-- Arquivos: apps/frontend/app/admin/produtos/page.tsx, page.test.tsx, novo-catalogo/product-editor.tsx, product-editor-typing.test.tsx. Só frontend e documentação; sem alteração de backend, banco, migrations ou publicação de versão. Para conferir após deploy: allka.store/admin/cadastro-produtos, botão habitual de configuração de qualquer produto. Teste visual manual do usuário e regravação ficam para depois, conforme pedido. Resultado final do deploy será registrado antes de encerrar.
+- Arquivos: apps/frontend/app/admin/produtos/page.tsx, page.test.tsx, novo-catalogo/product-editor.tsx, product-editor-typing.test.tsx. Só frontend e documentação; sem alteração de backend, banco, migrations ou publicação de versão. Para conferir: allka.store/admin/cadastro-produtos, botão habitual de configuração de qualquer produto. Teste visual manual do usuário e regravação ficam para depois, conforme pedido.
 
 ## deploy-2026-11-03-1 — código completo e espelho local → QA CONCLUÍDOS
 
