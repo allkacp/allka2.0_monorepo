@@ -1,8 +1,8 @@
 # RETOMAR AQUI — de onde paramos (atualizado em 2026-11-03)
 
-## 03/11 — Pedido mais recente: GitHub, deploy e espelho do local
+## 03/11 — MAIS RECENTE: GitHub, deploy e espelho concluídos
 
-Usuário interrompeu o teste para pedir subida completa/espelho. Código validado: dois builds/typechecks,113 testes tela e6 contratação passaram; scanner294 arquivos limpo. Backup QA e pacote local preparados; aguardam ensaio/confirmar substituição. Ler entrada "Terceiro deploy solicitado" no topo do deploy-log. Não declarar publicado/espelhado até conclusão real. Perfil Rose/Reynário e projeto957 são dados do pacote, não seeds automáticos. Aceite/execução/reprovação/aprovação continuam pendentes.
+Usuário interrompeu o teste para pedir subida completa/espelho e confirmou explicitamente substituir240 tabelas do QA. Código2bdde0c/tagdeploy-2026-11-03-3 no GitHub e containers frontend/backend do QA; workflows41731879109/41731879234 verdes. Espelho aplicado03/11 às19:41:10 Brasília:240 tabelas idênticas,264FKs sem quebra,131 anexos iguais, migrations/chaves/configurações preservadas, backups inicial/final recuperáveis. QA9 usuários/2 empresas/2 clientes/5 projetos/37 produtos/9 tarefas; Rose e Reynário incluídos como dados, não seeds. Site/API200; login normal RoseLíder e auth/me200 viaAPI. CI geral41731879223 vermelho:5 arquivos frontend falharam/214 passaram. Não equivale a homologação integral. Detalhes/provas/backups no topo de deploy-log. Aceite/execução/reprovação/ajuste/aprovação continuam pendentes. Não repetir compra, pagamento ou espelho. Notas antigas abaixo de "sem deploy"/"Rose não está no QA" são históricas e foram superadas por este bloco.
 
 ## 03/11 — MAIS RECENTE: projeto957 pago em simulação; tarefas720/721 com briefing; Reynário preparado
 
