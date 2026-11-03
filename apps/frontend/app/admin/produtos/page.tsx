@@ -25,7 +25,6 @@ import {
   Search,
   Filter,
   EyeOff,
-  FlaskConical,
   Settings2,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
@@ -294,10 +293,6 @@ function ReadinessPendingBadge({ rp }: { rp: any }) {
   return <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger asChild><span className="inline-flex cursor-help">{items.length === 0 ? <CheckCircle2 className="h-5 w-5 text-emerald-600" aria-label="Sem pendências" /> : <Badge className={`min-w-7 justify-center rounded-full border-0 px-2 py-1 text-xs font-bold ${tone.badge}`}>{items.length}</Badge>}</span></TooltipTrigger><PendingDetailsTooltip items={items} /></Tooltip></TooltipProvider>;
 }
 
-function ProductTestButton({ onClick }: { onClick: () => void }) {
-  return <TooltipProvider delayDuration={150}><Tooltip><TooltipTrigger asChild><button type="button" aria-label="Produto teste" onClick={onClick} className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px] border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950 dark:text-violet-200"><FlaskConical className="h-3.5 w-3.5" /></button></TooltipTrigger><TooltipContent>Produto teste · layout alternativo, mesmos dados</TooltipContent></Tooltip></TooltipProvider>;
-}
-
 export default function AdminProdutosPage() {
   const isAdminMaster = useIsAdminMaster();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -319,7 +314,9 @@ export default function AdminProdutosPage() {
     searchParams.get("produto") ??
     (routeProductId && !/^\d+$/.test(routeProductId) ? routeProductId : null),
   );
-  const editorLayout = searchParams.get("editor") === "teste" ? "test" : "current";
+  // O novo fluxo é o padrão. O anterior fica preservado para recuperação por URL,
+  // sem ação na lista; links antigos com editor=teste continuam funcionando.
+  const editorLayout = searchParams.get("editor") === "antigo" ? "current" : "test";
   // ?ver=<id> abre o DETALHE completo (só leitura) — ação separada do
   // construtor (?produto=<id>). Ícone de olho → detalhe; ícone de lápis →
   // construtor (reparo 2026-09, "não abra o construtor quando a ação
@@ -329,10 +326,10 @@ export default function AdminProdutosPage() {
   );
 
   const openProduct = useCallback(
-    (id: string | null, layout: "current" | "test" = "current") => {
+    (id: string | null, layout: "current" | "test" = "test") => {
       // Ctrl/Cmd + clique: abre o editor em outra aba (deep link ?produto=<id>).
       if (id && isModifierClick()) {
-        window.open(`/admin/cadastro-produtos?produto=${encodeURIComponent(id)}${layout === "test" ? "&editor=teste" : ""}`, "_blank", "noopener");
+        window.open(`/admin/cadastro-produtos?produto=${encodeURIComponent(id)}${layout === "current" ? "&editor=antigo" : ""}`, "_blank", "noopener");
         return;
       }
       setOpenProductId(id);
@@ -340,7 +337,7 @@ export default function AdminProdutosPage() {
       if (id) setSearchParams(prev => {
         const next = new URLSearchParams(prev);
         next.set("produto", id);
-        if (layout === "test") next.set("editor", "teste"); else next.delete("editor");
+        if (layout === "current") next.set("editor", "antigo"); else next.delete("editor");
         return next;
       }, { replace: true });
       if (!id) navigate({ pathname: "/admin/cadastro-produtos", search: "" }, { replace: true });
@@ -373,9 +370,10 @@ export default function AdminProdutosPage() {
   }, [openProductId]);
   useEffect(() => {
     if (!openProductId || openProductNumber == null) return;
-    if (routeProductId === String(openProductNumber) && !searchParams.get("produto") && (searchParams.get("editor") === "teste") === (editorLayout === "test")) return;
+    if (routeProductId === String(openProductNumber) && !searchParams.get("produto")) return;
     resolvedRouteRef.current = String(openProductNumber);
-    navigate({ pathname: `/admin/cadastro-produtos/${openProductNumber}`, search: editorLayout === "test" ? "?editor=teste" : "" }, { replace: true });
+    const editorQuery = editorLayout === "current" ? "?editor=antigo" : searchParams.get("editor") === "teste" ? "?editor=teste" : "";
+    navigate({ pathname: `/admin/cadastro-produtos/${openProductNumber}`, search: editorQuery }, { replace: true });
   }, [openProductId, openProductNumber, routeProductId, searchParams, navigate, editorLayout]);
 
   const viewProduct = useCallback(
@@ -1618,7 +1616,6 @@ export default function AdminProdutosPage() {
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
-                                <ProductTestButton onClick={() => openProduct(p.id, "test")} />
                                 <ProductRowActionsMenu
                                   p={p}
                                   rowAction={rowAction}
@@ -1742,7 +1739,6 @@ export default function AdminProdutosPage() {
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                            <ProductTestButton onClick={() => openProduct(p.id, "test")} />
                             <ProductRowActionsMenu
                               p={p}
                               rowAction={rowAction}
@@ -1871,7 +1867,7 @@ export default function AdminProdutosPage() {
             }
           }}
           testId="product-editor-panel"
-          title={editorLayout === "test" ? "Produto teste" : "Editar produto"}
+          title="Configuração do produto"
           className="!bg-[#d6daf0] dark:!bg-violet-950"
         >
           {openProductId && (
@@ -1885,10 +1881,10 @@ export default function AdminProdutosPage() {
                 void bootstrap();
               }}
               pin={{
-                id: `catalog2-produto-${openProductId}${editorLayout === "test" ? "-teste" : ""}`,
-                label: editorLayout === "test" ? "Produto teste" : "Editor de produto",
+                id: `catalog2-produto-${openProductId}${editorLayout === "current" ? "-antigo" : ""}`,
+                label: "Configuração do produto",
                 icon: Package,
-                path: `/admin/cadastro-produtos/${openProductNumber ?? openProductId}${editorLayout === "test" ? "?editor=teste" : ""}`,
+                path: `/admin/cadastro-produtos/${openProductNumber ?? openProductId}${editorLayout === "current" ? "?editor=antigo" : ""}`,
               }}
             />
           )}

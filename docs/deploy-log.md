@@ -1,5 +1,13 @@
 # Registro de deploys
 
+## Em publicação autorizada — 03/11: editor novo como configuração normal
+
+- Pedido posterior ao deploy: mostrar somente o botão habitual de configuração abrindo o novo fluxo; guardar o editor antigo, sem excluí-lo. Feito localmente e, em pedido posterior explícito, usuário autorizou GitHub e deploy deste ajuste. Não repetir espelho de dados, não começar gravação/ciclos.
+- Lista e cartões de Cadastro de Produtos: removida ação extra Produto teste, mantido botão habitual Editar produto/Continuar configuração, agora com layout novo por padrão. Criação e links diretos normais também entram no fluxo novo. Cabeçalho/bandeja usam Configuração do produto, sem faixa de layout alternativo. Mesmos produtos/dados/APIs, sem cópia ou gravação de cadastro.
+- Antigo preservado integralmente, acessível para recuperação por /admin/cadastro-produtos/<número>?editor=antigo, sem botão na lista. Links existentes editor=teste continuam abrindo o novo fluxo. Não apagar implementação antiga sem ordem futura do usuário.
+- Testes: quatro regressões direcionadas da página passaram (ação única/novo padrão, link antigo teste, URL numérica e editor antigo guardado); product-editor-typing 16/16 passou. Total 20 testes aprovados; demais 43 testes da página não executados neste recorte. Checagem de tipos frontend passou, diff sem erro de whitespace, site local HTTP 200. Não declarar suíte geral resolvida; falhas do CI do deploy anterior permanecem registradas.
+- Arquivos: apps/frontend/app/admin/produtos/page.tsx, page.test.tsx, novo-catalogo/product-editor.tsx, product-editor-typing.test.tsx. Só frontend e documentação; sem alteração de backend, banco, migrations ou publicação de versão. Para conferir após deploy: allka.store/admin/cadastro-produtos, botão habitual de configuração de qualquer produto. Teste visual manual do usuário e regravação ficam para depois, conforme pedido. Resultado final do deploy será registrado antes de encerrar.
+
 ## deploy-2026-11-03-1 — código completo e espelho local → QA CONCLUÍDOS
 
 - **Autorização:** usuário pediu GitHub + deploy completo + espelho e confirmou nesta rodada substituir as 240 tabelas após apresentação de contagens, diferenças, backup íntegro e ensaio. Exclusivo QA allka.store/api.allka.store; não abertura comercial nem homologação global.

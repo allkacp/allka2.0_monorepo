@@ -1,5 +1,9 @@
 # RETOMAR AQUI — de onde paramos (atualizado em 2026-11-03)
 
+## 03/11 — MAIS RECENTE: editor novo promovido na interface, deploy autorizado em andamento
+
+Pedido após o deploy abaixo: manter só o botão normal de configuração de produto, abrindo o fluxo novo; tirar botão/faixa Produto teste. Feito na página Cadastro de Produtos (lista e cartões), URLs normais, criação e bandeja. O editor anterior NÃO foi apagado: guardado via ?editor=antigo, sem ação visível. ?editor=teste continua compatível. Mesmos dados/APIs, nada gravado no banco. 20 testes direcionados passaram (4 página + 16 editor), repetidos para esta publicação. Usuário autorizou posteriormente GitHub + deploy do ajuste; em andamento, resultado final no topo do deploy-log. Não repetir espelho nem alterar os dados online. Usuário testará e pedirá gravação/regravação e produto com ciclos depois. Não começar agora, não apagar resquícios do antigo sem pedido futuro.
+
 ## 03/11 — DEPLOY E ESPELHO QA CONCLUÍDOS, autorização atual do usuário
 
 Código completo 0036e96 em allka2/main, tag deploy-2026-11-03-1; frontend e backend online nessa imagem, workflows verdes. Espelho de 240 tabelas + 131 anexos autorizado explicitamente após contagens e backup/ensaio, aplicado às 08:15:17 Brasília: hashes idênticos ao pacote, 264 FKs sem quebra, migrations preservadas. QA agora tem 8 usuários, 2 empresas, 2 clientes, 4 projetos, 37 produtos e 7 tarefas. Login normal da Agência e projeto 956/saldo 1.174,46/substatus SEO conferidos no navegador. Site/API/local saudáveis. Detalhes e backups recuperáveis na PRIMEIRA entrada de docs/deploy-log.md.

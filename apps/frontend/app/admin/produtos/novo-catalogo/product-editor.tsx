@@ -22,7 +22,7 @@ import { AccordionToggleAll, useAccordionAll } from "./accordion-toggle-all";
 import { StepLeaderSelect } from "./step-leader-select";
 import { FramedModal, FramedPanel, FRAMED_HEADER_CLASS } from "@/components/framed-panel";
 import { FramedEditorScope, useFramedEditorOpen, useFramedEditorDraft, clearFramedEditorDrafts } from "@/components/framed-editor-context";
-import { ProductEditorLayoutProvider, ProductTestNotice, TaskEditorSurface, TaskEditorPane, useTestProductLayout, ProductFlowProvider, ProductFlowField, ProductFlowTarget, ProductFlowWorkspace, PRODUCT_FLOW_STEPS, flowDestination, type ProductEditorLayout } from "./editor-layout-test";
+import { ProductEditorLayoutProvider, TaskEditorSurface, TaskEditorPane, useTestProductLayout, ProductFlowProvider, ProductFlowField, ProductFlowTarget, ProductFlowWorkspace, PRODUCT_FLOW_STEPS, flowDestination, type ProductEditorLayout } from "./editor-layout-test";
 import { ModelPickerDialog, TaskModelInfoDialog, ModelScopeDialog, ModelEditCtx, type ModelScope, SimilarModelsDialog, ModelStatusChips, TaskIndicators, EXEC_LABEL, PURPOSE_LABEL, CYCLE_TYPE_LABEL, REPEAT_RULE_LABEL, IMPLEMENTATION_RULE_LABEL, CONTINUITY_LABEL, ASSET_RULE_LABEL } from "./catalog2-models-ui";
 import { TaskOpsForm } from "./catalog2-ops-ui";
 import { OPEN_STEP_EVENT, TaskDeliverablesEditor } from "./catalog2-deliverables-ui";
@@ -873,7 +873,6 @@ function ProductEditorContent({ productId, onBack, pin, notice, embedded, openIn
         pin={pin}
         readiness={<ProductReadinessPanel taskName={(version?.tasks ?? [])[0]?.name} productId={productId} versionId={selectedVersionId} versionKey={`${selectedVersionId}:${loadCount}`} onGo={goToReadinessItem} onGoDetail={goToReadinessAdjustment} onItems={setReadinessItems} onData={setReadinessData} detailFor={(key: string) => readinessDetailLines(key, product, version, readinessItems?.[key]?.note)} detailTargetFor={(key: string, index: number) => readinessDetailTargets(key, product, version, readinessItems?.[key]?.note)[index]} />}
       /></div>}
-      {!previewOpen && testLayout && <ProductTestNotice />}
       {!previewOpen && <AssignmentWarning issues={(product.assignment_issues ?? []).filter((issue: any) => issue.version_id === selectedVersionId)} onReview={() => { setEditorTab("entrega"); setSubTabs(cur => ({ ...cur, entrega: "tarefas" })); }} />}
       <ConfirmationDialog
         open={leaveDlg !== null}

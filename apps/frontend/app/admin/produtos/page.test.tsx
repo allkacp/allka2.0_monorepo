@@ -192,26 +192,29 @@ function productDetail(over: Partial<any> = {}) {
   }
 }
 
-it("Produto teste é ação vizinha ao editor atual, abre o mesmo produto e preserva o editor atual", async () => {
+it("configuração normal abre o novo fluxo sem botão ou aviso de teste", async () => {
   api.getCatalog2Product.mockResolvedValue(productDetail({ sequence_number: 2 }));
   renderPage();
-  const testButton = await screen.findByRole("button", { name: "Produto teste" });
-  expect(screen.getByRole("button", { name: /editar produto|continuar configuração/i })).toBeInTheDocument();
-  await userEvent.click(testButton);
-  expect(await screen.findByTestId("product-test-notice")).toHaveTextContent("Mesmos dados");
+  const configButton = await screen.findByRole("button", { name: /editar produto|continuar configuração/i });
+  expect(screen.queryByRole("button", { name: "Produto teste" })).not.toBeInTheDocument();
+  await userEvent.click(configButton);
+  expect(await screen.findByLabelText("Título comercial")).toHaveValue("Demo v1");
+  expect(within(screen.getByRole("navigation", { name: "Passos do produto" })).getAllByRole("button")).toHaveLength(3);
+  expect(screen.queryByTestId("product-test-notice")).not.toBeInTheDocument();
   expect(api.getCatalog2Product).toHaveBeenCalledWith("prod1");
   expect(api.createCatalog2Product).not.toHaveBeenCalled();
   expect(api.updateCatalog2VersionInfo).not.toHaveBeenCalled();
   await userEvent.click(screen.getByRole("button", { name: /^Fechar$/ }));
-  await waitFor(() => expect(screen.queryByTestId("product-test-notice")).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByTestId("product-editor-panel")).not.toBeInTheDocument());
   await userEvent.click(screen.getByRole("button", { name: /editar produto|continuar configuração/i }));
   expect(await screen.findByTestId("product-editor-panel")).toBeInTheDocument();
-  expect(screen.queryByTestId("product-test-notice")).not.toBeInTheDocument();
+  expect(await screen.findByLabelText("Título comercial")).toBeInTheDocument();
 });
 
-it("link Produto teste suporta F5 direto sem criar outro produto", async () => {
+it("link antigo editor=teste continua abrindo o novo fluxo sem aviso", async () => {
   renderPage("/admin/cadastro-produtos?produto=prod1&editor=teste");
-  expect(await screen.findByTestId("product-test-notice")).toBeInTheDocument();
+  expect(await screen.findByLabelText("Título comercial")).toBeInTheDocument();
+  expect(screen.queryByTestId("product-test-notice")).not.toBeInTheDocument();
   expect(api.getCatalog2Product).toHaveBeenCalledWith("prod1");
   expect(api.createCatalog2Product).not.toHaveBeenCalled();
 });
@@ -221,11 +224,23 @@ it("URL numérica e canonicalização preservam editor=teste e o ID real", async
   api.getCatalog2Product.mockResolvedValue(productDetail({ sequence_number: 2 }));
   function Location() { const location = useLocation(); return <output data-testid="route">{location.pathname}{location.search}</output>; }
   render(<MemoryRouter initialEntries={["/admin/cadastro-produtos/2?editor=teste"]}><SidebarProvider><OpenScreensProvider><Location /><Routes><Route path="/admin/cadastro-produtos/:produtoId?" element={<AdminProdutosPage />} /></Routes></OpenScreensProvider></SidebarProvider></MemoryRouter>);
-  expect(await screen.findByTestId("product-test-notice")).toBeInTheDocument();
+  expect(await screen.findByLabelText("Título comercial")).toBeInTheDocument();
   expect(screen.getByTestId("route")).toHaveTextContent("/admin/cadastro-produtos/2?editor=teste");
   expect(api.getCatalog2ProductIdByNumber).toHaveBeenCalledWith("2");
   expect(api.getCatalog2Product).toHaveBeenCalledWith("prod1");
   expect(api.createCatalog2Product).not.toHaveBeenCalled();
+});
+
+it("editor antigo fica guardado e acessível apenas por URL explícita", async () => {
+  renderPage("/admin/cadastro-produtos?produto=prod1&editor=antigo");
+  expect(await screen.findByTestId("product-editor-panel")).toBeInTheDocument();
+  const archivedNav = await screen.findByRole("navigation", { name: "Passos do produto" });
+  expect(within(archivedNav).getAllByRole("button")).toHaveLength(5);
+  expect(within(archivedNav).getByRole("button", { name: /Informações do produto/ })).toBeInTheDocument();
+  expect(screen.queryByLabelText("Título comercial")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Produto teste" })).not.toBeInTheDocument();
+  expect(api.createCatalog2Product).not.toHaveBeenCalled();
+  expect(api.updateCatalog2VersionInfo).not.toHaveBeenCalled();
 });
 
 beforeEach(() => {

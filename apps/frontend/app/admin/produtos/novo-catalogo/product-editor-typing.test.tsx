@@ -45,10 +45,10 @@ describe("digitar na descrição", () => {
     expect(card).toHaveTextContent("Sem assinatura");
     expect(within(card).queryByText("Mensal", { exact: true })).toBeNull();
   });
-  it("Produto teste abre formulário completo com os mesmos dados, sem substituir o layout atual", async () => {
+  it("novo fluxo abre os mesmos dados sem aviso de teste e preserva o layout anterior", async () => {
     const first = render(<ProductEditor productId="p1" layout="test" onBack={() => {}} />);
-    expect(await screen.findByTestId("product-test-notice")).toHaveTextContent("salvar altera este produto nos dois layouts");
     expect(await screen.findByLabelText("Título comercial")).toHaveValue("Produto");
+    expect(screen.queryByTestId("product-test-notice")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Título comercial")).toBeDisabled();
     expect(screen.getByLabelText("Descrição")).toHaveValue("Texto");
     expect(screen.getByText("Classificação do produto")).toBeVisible();
