@@ -1,6 +1,20 @@
 # Registro de deploys
 
-## Pendente de deploy — 04/11 publicação solicitada pelo usuário
+## Deploy 2026-11-04-1 — código, documentação e espelho autorizado concluídos
+
+Frontend `d09fdc4` publicado pelo workflow [41893460663](https://github.com/allkacp/allka2.0_monorepo/actions/runs/41893460663), concluído com sucesso. Tag `deploy-2026-11-04-1` enviada ao remote allka2. Backend permanece `2bdde0c`: não houve alteração de backend/schema/migrations nesta rodada. Relatório de prontidão e PDF de 16 páginas incluídos no GitHub; dumps e segredos NÃO incluídos.
+
+Espelho confirmado pelo usuário e aplicado em **04/11/2026 às 16:11:18 (Brasília; 19:11:18Z)**. Comparação do audit-after com a cópia congelada: **240 tabelas, zero diferenças/extras, 131 anexos idênticos**; verificação posterior: **264 vínculos, zero quebrados**. Histórico de migrations comparado antes/depois sem alterações. Permanecem 9 usuários, 2 empresas, 2 clientes, 5 projetos, 37 produtos e 9 tarefas. Chaves/configurações preservadas. Não repetir espelho automaticamente: a igualdade é do instante da aplicação, novos usos do site alteram presença/sessões.
+
+Backup FINAL recuperável: `/opt/allka-2026/backups/mirror-20261104-1-final/qa-final-before.sql.gz`, SHA256 `9c3008c9f3b373dd7e5d2b0c1acfbadf323f345a17ba2d096fec60846fa2088b`; anexos `uploads-final-before.tar.gz`, SHA256 `1c92decc57598a67d0e9237d542557f76d9b8ec90bd2ee4082cfe3313a18cb86`. Marcador `applied-at.txt` presente. SQL congelado e backup inicial descritos no registro de preparação abaixo.
+
+Verificações após espelho: site/API online HTTP 200 e health ok; login normal de Líder e auth/me 200. Asset servido do editor tem o mesmo SHA256 do container publicado (`320171205e73840ca808f6b60ce891144b3faf7f24f6706a4d73c9edaed75554`). Local continua rodando: frontend 8082/API 3001 respondem 200 e MySQL saudável.
+
+CI `41893462183`: testes frontend e backend/builds passaram; falhou no scanner porque o job herdou `NODE_ENV=test` ao gerar o frontend, mantendo um ramo local de identificação no artefato de teste. O deploy real usa production e o scanner local de produção passou. Ajuste `d97747c` limita `NODE_ENV=production` à etapa Frontend build; não remove o scanner nem muda assertions. **Novo CI [41895087673](https://github.com/allkacp/allka2.0_monorepo/actions/runs/41895087673) concluído com SUCESSO**: frontend, backend, builds, scanner de credenciais e regressão de interpolação passaram. A rodada anterior confirmou 219 arquivos/1.984 testes frontend; a repetição também passou. Último commit desta rodada altera somente documentação e usa `[skip ci]`, pois não altera o código validado em d97747c nem requer novo deploy.
+
+Pendências preservadas: G18 (Cobrança estimada zerada em produto sem tarefas), G19 (resumo marca campos vazios como configurados), pagamento real/split/recorrência e ciclo operacional completo do Reynário. Deploy em QA NÃO certifica produção comercial.
+
+## Preparação histórica — 04/11 publicação solicitada (concluída acima)
 
 Usuário autorizou GitHub/deploy de tudo desta rodada e pediu preparar também espelho. Código:11 arquivos de frontend/testes da PARTE G, preservando backend/schema/migrations. Documentação nova de prontidão e PDF16páginas incluídos; docs/arquitetura marcado histórico. G18/G19, pagamento real e ciclo do Reynário continuam pendentes, não corrigidos silenciosamente neste deploy.
 
@@ -16,7 +30,7 @@ UI Admin: Aura específica nas duas rotas aprovada; menus Bloquear/Excluir visí
 
 Leitura financeira: registro PagBank implemented=true/proven=false/recurring=false; link público de contratação com confirmação somente sandbox; webhook observado ligado à recarga. Documento exige integração de pagamento/pedido/split real e auditoria de guardas de simulação antes da produção. Não fez chamadas pagas ou inspeção de segredos. Testes completos do Claude continuam como resultado dele, sem nova execução nesta rodada. Modificações de fonte/testes existentes preservadas.
 
-## Pendente de deploy — 04/11: 72 falhas dos 5 arquivos de teste de tela pelo Claude (LOCAL — NÃO é deploy)
+## Histórico da preparação — 04/11: 72 falhas dos 5 arquivos pelo Claude (publicadas no deploy acima)
 
 **SOMENTE LOCAL; sem commit/push/deploy/espelho; nenhum dado gravado; nenhuma compra/pagamento/tarefa criada.** Pedido: corrigir as 72 falhas dos 5 arquivos de teste de tela do CI `41731879223` (código `2bdde0c`, tag `deploy-2026-11-03-3`). Reproduzidas no local: Cadastro de Produtos 35, Catálogo 29, Usuários 5, Aura 2, Permissões 1.
 

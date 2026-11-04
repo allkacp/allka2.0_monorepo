@@ -1,5 +1,13 @@
 # RETOMAR AQUI — de onde paramos (atualizado em 2026-11-04)
 
+## 04/11 — MAIS RECENTE: GitHub, deploy e espelho concluídos
+
+Usuário autorizou publicação e CONFIRMOU substituir as 240 tabelas do QA pelo local congelado. Frontend `d09fdc4` no ar, tag `deploy-2026-11-04-1`; backend `2bdde0c` preservado sem novas migrations. Espelho terminou 19:11:18Z, comparou 240 tabelas/131 anexos iguais e 264 vínculos sem quebra. Backup final e evidências em `docs/deploy-log.md`, seção Deploy 2026-11-04-1. Site/API/login online conferidos; ambiente local 8082/3001 rodando. NÃO repetir espelho sem nova ordem.
+
+Testes completos frontend passaram no CI `41893462183`, mas scanner falhou no artefato gerado em NODE_ENV=test. Corrigida somente a configuração da etapa de build em `d97747c`; **nova validação `41895087673` terminou toda VERDE**, incluindo testes frontend/backend, builds, scanner e interpolação. Aplicação publicada é o build production do workflow Frontend, não aquele artefato de teste. Commit final apenas de documentação não requer novo deploy.
+
+Relatório completo/PDF de prontidão já versionados. Não há certificação de produção: G18/G19, pagamento real e ciclo completo do Reynário continuam pendentes. Nenhuma compra, lançamento ou publicação de produto nova foi feita nesta rodada. O usuário poderá continuar ajustes localmente.
+
 ## 04/11 — Codex conferiu PARTE G e preparou documentação para revisão sênior
 
 Pedido do usuário: concluir conferência local e documentar toda a plataforma, incluindo primeira versão comercial, módulos existentes/futuros e requisitos de pagamento, usuários, produtos, contratação, automações, IA, Líderes e Nômades. Entrega: [Plataforma Allka e prontidão de produção](plataforma-allka-prontidao-producao-2026-11-04.md), com 17 portões de aceite, correspondência dos30 itens técnicos VS1, operação/VS2, arquitetura atual, fontes, riscos e roteiro para o sênior. Sem certificação de produção; sem nova execução de cobrança, jobs ou ciclo do Reynário. Não publica dados nem código.

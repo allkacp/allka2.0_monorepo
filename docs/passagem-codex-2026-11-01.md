@@ -1,5 +1,9 @@
 # Passagem Claude → Codex — 01/11/2026 (SOMENTE LOCAL)
 
+## 04/11 — Publicação e espelho autorizados concluídos
+
+Esta entrada supera a restrição SOMENTE LOCAL dos relatos históricos abaixo apenas para o deploy solicitado nesta rodada. GitHub allka2/main recebeu `d09fdc4` (frontend/documentação/PDF) e `d97747c` (build do CI em production). QA usa frontend d09fdc4 e backend 2bdde0c; tag deploy-2026-11-04-1. Espelho explicitamente confirmado aplicado às 19:11:18Z: 240 tabelas iguais, 131 anexos iguais, 264 vínculos sem quebra, migrations/chaves preservadas e backup recuperável. Site/API/login conferidos; local 8082 rodando. Detalhes e hashes no deploy-log. Não repetir o espelho automaticamente. CI de d97747c (`41895087673`) concluído com SUCESSO em todas as etapas. G18/G19, pagamento real e ciclo completo do Reynário NÃO foram resolvidos por publicar código/dados.
+
 ## 04/11 — Retorno Codex da PARTE G e relatório para o sênior
 
 Conferência visual LOCAL/Admin sem gravar: Aura correta nas duas rotas; Bloquear/Excluir abrem e foram cancelados; exclusão própria desabilitada; nome por lápis/✓ pede Confirmar e Cancelar preserva original. Preço real SEO003 sem provisório. Não havia amostra numérica provisória no produto28 (A definir), portanto essa marca segue sem homologação visual.
