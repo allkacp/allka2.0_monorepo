@@ -340,6 +340,44 @@ describe("Questionário na tarefa · reutilização e proteção de modelo compa
     expect(screen.getByTestId("ai-questionnaire").textContent).toMatch(/Gerar questionário com IA/);
   });
 
+  // Vindos de app/admin/produtos/page.test.tsx (04/11): lá eram testes do editor de setembro; o fluxo atual é este modal.
+  const fillNewQuestionnaire = () => {
+    fireEvent.click(screen.getByRole("button", { name: /Criar novo questionário/ }));
+    fireEvent.change(screen.getByLabelText("Nome do questionário"), { target: { value: "Briefing de conteúdo" } });
+    fireEvent.click(within(screen.getByTestId("questionnaire-create-modal")).getByRole("button", { name: /Adicionar/ }));
+    fireEvent.change(screen.getByLabelText("Texto da pergunta"), { target: { value: "Qual o objetivo da campanha?" } });
+    fireEvent.click(within(screen.getByTestId("question-modal")).getByRole("button", { name: "Salvar" }));
+  };
+
+  it("clique repetido em 'Criar e vincular' não dispara duas criações — o botão fica desabilitado enquanto salva", async () => {
+    let finish: (v: any) => void = () => {};
+    api.addCatalog2Questionnaire.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }) as any);
+    render(<QuestionnaireSection task={task(null)} refs={{ questionnaires: [] }} act={act} version={{}} readOnly={false} />);
+    fillNewQuestionnaire();
+    const save = screen.getByRole("button", { name: "Criar e vincular" });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(api.addCatalog2Questionnaire).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Salvando…" })).toBeDisabled();
+    finish({ id: "novo" });
+    await waitFor(() => expect(api.setCatalog2TaskQuestionnaire).toHaveBeenCalledWith("t1", "novo"));
+    expect(api.addCatalog2Questionnaire).toHaveBeenCalledTimes(1);
+    expect(api.addCatalog2QuestionnaireQuestion).toHaveBeenCalledTimes(1);
+  });
+
+  it("erro ao criar o questionário não vincula nada e preserva o que foi preenchido no modal", async () => {
+    api.addCatalog2Questionnaire.mockRejectedValueOnce(new Error("Falha simulada"));
+    render(<QuestionnaireSection task={task(null)} refs={{ questionnaires: [] }} act={act} version={{}} readOnly={false} />);
+    fillNewQuestionnaire();
+    fireEvent.click(screen.getByRole("button", { name: "Criar e vincular" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Criar e vincular" })).not.toBeDisabled());
+    expect(api.setCatalog2TaskQuestionnaire).not.toHaveBeenCalled();
+    expect(screen.getByTestId("questionnaire-create-modal")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nome do questionário")).toHaveValue("Briefing de conteúdo");
+    expect(screen.getByText(/Qual o objetivo da campanha?/)).toBeInTheDocument();
+  });
+
   it("criar novo questionário abre um MODAL (nada de formulário aberto na página)", () => {
     render(<QuestionnaireSection task={task(null)} refs={{ questionnaires: [] }} act={act} version={{}} readOnly={false} />);
     expect(screen.queryByTestId("questionnaire-editor")).not.toBeInTheDocument();

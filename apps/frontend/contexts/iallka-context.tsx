@@ -82,12 +82,15 @@ type ScreenArea = "catalogo" | "cadastro-produtos" | "projetos" | "tarefas" | "d
  * Reconhece a URL por segmentos, não por um trecho solto. A prioridade é
  * deliberada: em `/projetos/:id/tarefas`, a pessoa está trabalhando em
  * Tarefas e não em Projetos, portanto a Aura deve assumir Tarefas.
+ * Produtos segue as rotas do App.tsx (2026-09): o cadastro/edição vive em
+ * `/admin/cadastro-produtos` (e o editor em `/admin/produtos/novo-catalogo`);
+ * `/admin/produtos`, `/company/produtos` e `/…/catalogo` são o CATÁLOGO.
  */
 function screenAreaForRoute(pathname: string): ScreenArea {
   const segments = pathname.toLowerCase().split("/").filter(Boolean);
   if (segments.includes("tarefas")) return "tarefas";
-  if (segments.includes("catalogo-produtos")) return "catalogo";
-  if (segments.includes("produtos")) return "cadastro-produtos";
+  if (segments.includes("cadastro-produtos") || segments.includes("novo-catalogo")) return "cadastro-produtos";
+  if (segments.some((segment) => segment === "produtos" || segment === "catalogo" || segment === "catalogo-produtos")) return "catalogo";
   if (segments.some((segment) => segment.startsWith("projeto"))) return "projetos";
   if (segments.includes("dashboard")) return "dashboard";
   if (segments.includes("allkademy")) return "allkademy";

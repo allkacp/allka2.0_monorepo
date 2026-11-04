@@ -500,6 +500,11 @@ export function Catalog2ProductDetail({
   const displayPrice = isClient
     ? (clientPricing?.commercial_price ?? clientProduct?.starting_price ?? null)
     : (selectedCalculatedPrice ?? selectedOption?.price ?? readiness?.price_amount ?? readiness?.pricing_simulation?.price_amount ?? provisional?.price_amount ?? null);
+  // Preço que só existe na prévia provisória (sem preço comercial, simulação ou opção calculada): marcado como o prazo
+  // ao lado — antes aparecia "R$ 500,00" limpo, como se fosse valor real (04/11).
+  const priceIsProvisional = !isClient && displayPrice != null
+    && selectedCalculatedPrice == null && selectedOption?.price == null
+    && readiness?.price_amount == null && readiness?.pricing_simulation?.price_amount == null;
   const selectedCalculatedDeadline = selectionSimulation?.deadline?.commercial_deadline_days ?? selectionSimulation?.estimated_deadline_days ?? null;
   const displayDeadline = isClient
     ? (clientPricing?.commercial_deadline_days ?? clientProduct?.commercial_deadline_days ?? null)
@@ -656,7 +661,7 @@ export function Catalog2ProductDetail({
             {shareProductUrl && <CopyLinkButton url={shareProductUrl} />}
             <span className="hidden sm:block h-7 w-px bg-white/20" />
             <div className="hidden sm:block text-right">
-              <p className="text-lg font-extrabold leading-none text-white" title={!isClient && priceSummary ? priceSummary.explanation : undefined}>{displayPrice != null ? (isClient ? <PriceWithAllkoins value={displayPrice} /> : fmtBRL(displayPrice)) : "A definir"}{!isClient && priceSummary && priceSummary.source !== "comercial" && <span className="ml-1 text-[9px] font-medium opacity-80">({priceSummary.source === "simulacao" ? "simulação" : "calculado, com pendência"})</span>}</p>
+              <p className="text-lg font-extrabold leading-none text-white" title={!isClient && priceSummary ? priceSummary.explanation : undefined}>{displayPrice != null ? (isClient ? <PriceWithAllkoins value={displayPrice} /> : fmtBRL(displayPrice)) : "A definir"}{!isClient && priceSummary && priceSummary.source !== "comercial" ? <span className="ml-1 text-[9px] font-medium opacity-80">({priceSummary.source === "simulacao" ? "simulação" : "calculado, com pendência"})</span> : priceIsProvisional && <span className="ml-1 text-[9px] font-medium opacity-80">(provisório)</span>}</p>
               {displayDeadline != null && <p className="mt-1 text-[10px] font-medium text-white/70">Prazo de entrega: {displayDeadline} dias</p>}
             </div>
             <div className="flex flex-col items-stretch gap-1.5">

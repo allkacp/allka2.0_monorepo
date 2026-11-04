@@ -154,6 +154,20 @@ describe("IallkaFloatingIcon — ícone e painel", () => {
     expect(screen.queryByText("Ajude-me a criar um projeto")).not.toBeInTheDocument();
   });
 
+  // Regressão 04/11: a Aura lia as rotas antigas — /admin/produtos (hoje o CATÁLOGO) recebia as sugestões do
+  // Cadastro e /admin/cadastro-produtos caía como tela genérica. Rotas reais conforme App.tsx.
+  it.each([
+    ["/admin/produtos/3", "Ajude-me a escolher um produto"],
+    ["/agency/catalogo", "Ajude-me a escolher um produto"],
+    ["/company/produtos", "Ajude-me a escolher um produto"],
+    ["/admin/cadastro-produtos/3", "O que falta completar neste produto?"],
+  ])("8d. %s recebe as sugestões da tela certa", async (path, sugestao) => {
+    renderIcon(path);
+    const [button] = await openIcons();
+    await userEvent.setup().click(button);
+    expect(await screen.findByText(sugestao)).toBeInTheDocument();
+  });
+
   it("9. tela genérica: orientação curta, sem fingir sugestões específicas", async () => {
     renderIcon("/perfil");
     const [btn] = await openIcons();

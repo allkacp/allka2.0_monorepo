@@ -1080,7 +1080,10 @@ export function UserViewSlidePanel({
     (scope === "conta" ? isContaEditMode : isDadosEditMode) ||
     (editingDataField?.scope === scope && editingDataField.field === field);
 
-  const InlineFieldEditButton = ({
+  // Chamado como função (não como <Componente />): declarado aqui dentro, como componente ele virava um TIPO novo a cada
+  // render do painel e o React desmontava/remontava o botão — um render no meio do clique (ex.: chegada do resumo do
+  // usuário ou da carteira) fazia o clique no lápis/✓ se perder (achado de 04/11). Não usa hooks.
+  const renderInlineFieldEditButton = ({
     scope,
     field,
     label,
@@ -3011,11 +3014,7 @@ export function UserViewSlidePanel({
                           )}
                         </div>
                         {!isContaEditMode && (
-                          <InlineFieldEditButton
-                            scope="conta"
-                            field="name"
-                            label="nome completo"
-                          />
+                          renderInlineFieldEditButton({ scope: "conta", field: "name", label: "nome completo" })
                         )}
                       </div>
 
@@ -3046,11 +3045,7 @@ export function UserViewSlidePanel({
                           )}
                         </div>
                         {!isContaEditMode && (
-                          <InlineFieldEditButton
-                            scope="conta"
-                            field="email"
-                            label="e-mail"
-                          />
+                          renderInlineFieldEditButton({ scope: "conta", field: "email", label: "e-mail" })
                         )}
                       </div>
 
@@ -3157,11 +3152,7 @@ export function UserViewSlidePanel({
                         </div>
                         {!isContaEditMode && (
                           <div className="mt-2">
-                            <InlineFieldEditButton
-                              scope="conta"
-                              field="role"
-                              label="tipo de usuário"
-                            />
+                            {renderInlineFieldEditButton({ scope: "conta", field: "role", label: "tipo de usuário" })}
                           </div>
                         )}
                       </div>
@@ -3203,11 +3194,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="name"
-                              label="nome completo"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "name", label: "nome completo" })}
                           </div>
                         )}
                       </div>
@@ -3237,11 +3224,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="social_name"
-                              label="nome social"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "social_name", label: "nome social" })}
                           </div>
                         )}
                       </div>
@@ -3271,11 +3254,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="birth_date"
-                              label="data de nascimento"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "birth_date", label: "data de nascimento" })}
                           </div>
                         )}
                       </div>
@@ -3306,11 +3285,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="gender"
-                              label="gênero"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "gender", label: "gênero" })}
                           </div>
                         )}
                       </div>
@@ -3336,11 +3311,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="cpf"
-                              label="CPF ou documento"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "cpf", label: "CPF ou documento" })}
                           </div>
                         )}
                       </div>
@@ -3364,11 +3335,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="rg"
-                              label="RG"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "rg", label: "RG" })}
                           </div>
                         )}
                       </div>
@@ -3411,11 +3378,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="email"
-                              label="e-mail"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "email", label: "e-mail" })}
                           </div>
                         )}
                       </div>
@@ -3442,11 +3405,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="phone"
-                              label="telefone principal"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "phone", label: "telefone principal" })}
                           </div>
                         )}
                       </div>
@@ -3473,11 +3432,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="whatsapp"
-                              label="WhatsApp"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "whatsapp", label: "WhatsApp" })}
                           </div>
                         )}
                       </div>
@@ -3509,11 +3464,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="phone_secondary"
-                              label="telefone secundário"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "phone_secondary", label: "telefone secundário" })}
                           </div>
                         )}
                       </div>
@@ -3569,11 +3520,7 @@ export function UserViewSlidePanel({
                           )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="zip_code"
-                              label="CEP"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "zip_code", label: "CEP" })}
                           </div>
                         )}
                       </div>
@@ -3599,11 +3546,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="street"
-                              label="rua"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "street", label: "rua" })}
                           </div>
                         )}
                       </div>
@@ -3629,11 +3572,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="number"
-                              label="número"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "number", label: "número" })}
                           </div>
                         )}
                       </div>
@@ -3663,11 +3602,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="complement"
-                              label="complemento"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "complement", label: "complemento" })}
                           </div>
                         )}
                       </div>
@@ -3698,11 +3633,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="neighborhood"
-                              label="bairro"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "neighborhood", label: "bairro" })}
                           </div>
                         )}
                       </div>
@@ -3728,11 +3659,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="city"
-                              label="cidade"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "city", label: "cidade" })}
                           </div>
                         )}
                       </div>
@@ -3762,11 +3689,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="state"
-                              label="estado"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "state", label: "estado" })}
                           </div>
                         )}
                       </div>
@@ -3793,11 +3716,7 @@ export function UserViewSlidePanel({
                         )}
                         {!isDadosEditMode && (
                           <div className="absolute right-2 top-2">
-                            <InlineFieldEditButton
-                              scope="dados"
-                              field="country"
-                              label="país"
-                            />
+                            {renderInlineFieldEditButton({ scope: "dados", field: "country", label: "país" })}
                           </div>
                         )}
                       </div>
@@ -3848,11 +3767,7 @@ export function UserViewSlidePanel({
                           )}
                           {!isDadosEditMode && (
                             <div className="absolute right-2 top-2">
-                              <InlineFieldEditButton
-                                scope="dados"
-                                field="admin_notes"
-                                label="observações administrativas"
-                              />
+                              {renderInlineFieldEditButton({ scope: "dados", field: "admin_notes", label: "observações administrativas" })}
                             </div>
                           )}
                         </div>
@@ -3883,11 +3798,7 @@ export function UserViewSlidePanel({
                           )}
                           {!isDadosEditMode && (
                             <div className="absolute right-2 top-2">
-                              <InlineFieldEditButton
-                                scope="dados"
-                                field="internal_notes"
-                                label="notas internas"
-                              />
+                              {renderInlineFieldEditButton({ scope: "dados", field: "internal_notes", label: "notas internas" })}
                             </div>
                           )}
                         </div>
@@ -3996,11 +3907,7 @@ export function UserViewSlidePanel({
                       )}
                       {!isContaEditMode && (
                         <div className="absolute right-2 top-2">
-                          <InlineFieldEditButton
-                            scope="conta"
-                            field="status"
-                            label="status da conta"
-                          />
+                          {renderInlineFieldEditButton({ scope: "conta", field: "status", label: "status da conta" })}
                         </div>
                       )}
                     </div>

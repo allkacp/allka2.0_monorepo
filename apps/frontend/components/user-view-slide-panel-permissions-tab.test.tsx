@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 // Fechamento pré-deploy QA — item 1 (corrigir "Meu Perfil" em todos os
 // portais): a aba "Permissões" (perfil de acesso admin, vínculo com outras
@@ -12,6 +13,8 @@ const { apiClientMock } = vi.hoisted(() => ({
   apiClientMock: {
     getPermissionProfiles: vi.fn().mockResolvedValue([]),
     getWallets: vi.fn().mockResolvedValue({ data: [] }),
+    // Resumo de acessos/atividade da Visão Geral — rota só de admin (GET /admin/users/:id/overview).
+    getAdminUserOverview: vi.fn().mockResolvedValue({ data: null }),
     updateUser: vi.fn(),
     createWalletAdjustment: vi.fn(),
   },
@@ -51,6 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   apiClientMock.getPermissionProfiles.mockResolvedValue([]);
   apiClientMock.getWallets.mockResolvedValue({ data: [] });
+  apiClientMock.getAdminUserOverview.mockResolvedValue({ data: null });
 });
 
 function renderPanel(viewerRole: "admin" | "partner" | "agency" | "company" | "nomad") {
@@ -75,11 +79,14 @@ describe("UserViewSlidePanel — aba Permissões não vaza para autoatendimento"
     // Abas normais de autoatendimento continuam presentes.
     expect(screen.getByRole("tab", { name: /visão geral/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /segurança/i })).toBeInTheDocument();
+    // O resumo administrativo do usuário também não é pedido no autoatendimento.
+    expect(apiClientMock.getAdminUserOverview).not.toHaveBeenCalled();
   });
 
   it("Admin (viewerRole=admin) continua vendo a aba Permissões", async () => {
     renderPanel("admin");
     await waitFor(() => expect(screen.getByRole("tab", { name: /permiss/i })).toBeInTheDocument());
+    expect(apiClientMock.getAdminUserOverview).toHaveBeenCalledWith("u-1");
   });
 
   it("Partner (viewerRole=partner) continua vendo a aba Permissões", async () => {
@@ -91,5 +98,25 @@ describe("UserViewSlidePanel — aba Permissões não vaza para autoatendimento"
     renderPanel("nomad");
     await waitFor(() => expect(screen.getByRole("tab", { name: /conta/i })).toBeInTheDocument());
     expect(screen.queryByRole("tab", { name: /permiss/i })).not.toBeInTheDocument();
+    expect(apiClientMock.getAdminUserOverview).not.toHaveBeenCalled();
+  });
+});
+
+// Achado de 04/11 (erro real): o lápis/✓ de cada campo era um componente declarado dentro do painel, então qualquer
+// render do painel (ex.: chegada do resumo do admin) trocava o nó do botão — um clique nesse instante se perdia.
+describe("UserViewSlidePanel — botões de edição por campo continuam os mesmos entre renders", () => {
+  it("o lápis 'Editar nome completo' é o mesmo nó antes e depois de o resumo do usuário chegar", async () => {
+    let resolveOverview: (value: any) => void = () => {};
+    apiClientMock.getAdminUserOverview.mockReturnValue(new Promise((resolve) => { resolveOverview = resolve; }));
+    const user = userEvent.setup();
+    renderPanel("admin");
+    await user.click(await screen.findByRole("tab", { name: "Conta & Dados" }));
+    const before = (await screen.findAllByRole("button", { name: "Editar nome completo" }))[0];
+
+    await act(async () => { resolveOverview({ data: { activity: [], last_access_at: null } }); });
+
+    const after = screen.getAllByRole("button", { name: "Editar nome completo" })[0];
+    expect(after).toBe(before);
+    expect(before.isConnected).toBe(true);
   });
 });

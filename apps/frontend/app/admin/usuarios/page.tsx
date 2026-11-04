@@ -3937,6 +3937,20 @@ export default function UsuariosPage() {
                                       <Key className="h-4 w-4 text-[#0F55B8]" />
                                       Gerenciar permissões
                                     </DropdownMenuItem>
+                                    {/* 04/11 (decisão do usuário): o link de primeiro acesso e a exclusão só existiam
+                                        no menu da coluna fixa de ações, que está oculta desde a padronização de 21/09 —
+                                        não havia caminho na tela. Mesmas regras daquele menu; o rótulo de bloqueio agora
+                                        combina com a janela que ele abre ("Bloquear usuário"). */}
+                                    {(user as any).must_set_password && (
+                                      <DropdownMenuItem
+                                        className="gap-3 rounded-xl py-2.5 focus:bg-[#F3F7FF]"
+                                        disabled={emitindoAcesso === user.id}
+                                        onClick={() => emitirPrimeiroAcesso(user)}
+                                      >
+                                        <KeyRound className="h-4 w-4 text-[#0F55B8]" />
+                                        Copiar link de primeiro acesso
+                                      </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
                                       className="gap-3 rounded-xl py-2.5 text-red-600 focus:bg-red-50 focus:text-red-600"
@@ -3944,10 +3958,26 @@ export default function UsuariosPage() {
                                         handleUserAction(user, "block")
                                       }
                                     >
-                                      <UserX className="h-4 w-4" />
+                                      {user.is_active ? (
+                                        <UserX className="h-4 w-4" />
+                                      ) : (
+                                        <Shield className="h-4 w-4" />
+                                      )}
                                       {user.is_active
-                                        ? "Desativar usuário"
-                                        : "Ativar usuário"}
+                                        ? "Bloquear usuário"
+                                        : "Desbloquear usuário"}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="gap-3 rounded-xl py-2.5 text-red-600 focus:bg-red-50 focus:text-red-600"
+                                      disabled={!canDelete}
+                                      aria-label={canDelete ? undefined : deleteBlockedReason}
+                                      title={canDelete ? undefined : deleteBlockedReason}
+                                      onClick={() =>
+                                        handleUserAction(user, "delete")
+                                      }
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      {canDelete ? "Excluir usuário" : deleteBlockedReason}
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>

@@ -160,21 +160,26 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
+  // 04/11: o texto informativo sobre os 162 produtos do catálogo antigo saiu da tela em 24/09 (mudança aceita pelo
+  // usuário em 04/11). O que continua valendo: só produtos catalog2 reais, com situação, e nenhum produto antigo.
   it("lista os produtos catalog2 reais em cards — nunca o catálogo antigo", async () => {
     renderPage();
     expect(await screen.findByText("Site Institucional")).toBeInTheDocument();
     expect(screen.getByText("Landing Page")).toBeInTheDocument();
     expect(screen.getAllByText("Ativo").length).toBeGreaterThan(0);
     expect(screen.getByText("Em preparação")).toBeInTheDocument();
-    expect(screen.getByText(/catálogo antigo, com 162 produtos, não aparece mais aqui/i)).toBeInTheDocument();
+    expect(api.getCatalog2Products).toHaveBeenCalled();
+    expect(screen.queryByText(/ANTIGA #|catálogo antigo/i)).not.toBeInTheDocument();
   });
 
-  it("a fixture [TESTE LOCAL] fica separada da grade principal e é identificada", async () => {
+  // Decisão do usuário de 23/09 (comentário em page.tsx): o produto "[TESTE LOCAL]" aparece igual aos outros, porque
+  // é o mesmo que company/agency/líder usam para testar a compra. Ele só nunca recebe selo comercial.
+  it("a fixture [TESTE LOCAL] aparece na grade como os demais, mas sem selo comercial", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    expect(screen.queryByText("[TESTE LOCAL] Demo")).not.toBeInTheDocument();
-    expect(screen.getByText(/1 produto de demonstração/i)).toBeInTheDocument();
-    expect(screen.getByText(/nunca aparece no catálogo do cliente/i)).toBeInTheDocument();
+    const fixture = screen.getByRole("button", { name: "[TESTE LOCAL] Demo — ver detalhes" });
+    expect(within(fixture).queryByText(/^Novo$|Lançamento|Promoção|Destaque/)).not.toBeInTheDocument();
+    expect(within(fixture).getByText("Ativo")).toBeInTheDocument();
   });
 
   it("busca filtra a grade pelo nome do produto", async () => {
@@ -193,73 +198,90 @@ describe("Catálogo de Produtos administrativo (catalog2) — grade de cards", (
     expect(screen.getByText("Landing Page")).toBeInTheDocument();
   });
 
-  it("card mostra o valor real quando existe, e um valor provisório MARCADO (nunca a mensagem antiga de ausência) quando não existe", async () => {
+  // Regra dura (RETOMAR-AQUI, "nunca inventar preço, hora ou prazo"): o card não mostra mais um preço "provisório"
+  // calculado por hash. Sem preço real, o card fica sem preço — nunca um valor inventado.
+  it("card mostra o valor real quando existe e, sem preço real, não inventa um valor", async () => {
     renderPage();
     await screen.findByText("Landing Page");
-    await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
-    // real (Site Institucional)
-    expect(screen.getByText("Preço comercial BRL 1200.")).toBeInTheDocument();
-    // "Landing Page" não tem preço/prazo/tarefas reais — mostra valor
-    // provisório determinístico, sempre com o selo "provisório" ao lado.
-    const card = screen.getByText("Landing Page").closest(".group, li") as HTMLElement;
-    expect(within(card).getByText(/^R\$ \d+\.\d{2}$/)).toBeInTheDocument();
-    expect(within(card).getAllByLabelText(/provisóri[ao]/i).length).toBeGreaterThan(0);
-    expect(within(card).getByText(/^\d+ tarefa\(s\)$/)).toBeInTheDocument();
+    const real = screen.getByRole("button", { name: "Site Institucional — ver detalhes" });
+    expect(within(real).getByText("R$ 1.200,00")).toBeInTheDocument();
+    expect(within(real).getByText("10 dia(s)")).toBeInTheDocument();
+    const semPreco = screen.getByRole("button", { name: "Landing Page — ver detalhes" });
+    expect(within(semPreco).queryByText(/R\$/)).not.toBeInTheDocument();
+    expect(within(semPreco).getByText("Tarefas a definir")).toBeInTheDocument();
+    expect(within(semPreco).getByText("3 pendências")).toBeInTheDocument();
   });
 
-  it("abrir o detalhe de um produto: painel dentro do container padrão, com pendências honestas e sem controle de edição", async () => {
+  // Desde 24/09 o clique abre o detalhe comercial completo (mesma tela que company/agency/líder veem) e o Admin
+  // Master pode contratar em nome de empresa/agência (deploy-log, 24/09). Nunca há edição/publicação/exclusão aqui.
+  it("abrir o detalhe de um produto: tela comercial completa, sem controle de edição, com a contratação em nome do cliente", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    // "Site Institucional" não tem pendências (blockers/pendings vazios).
-    const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
-    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
+    const card = screen.getByRole("button", { name: "Site Institucional — ver detalhes" });
+    await userEvent.click(within(card).getByRole("button", { name: /Ver detalhes/ }));
     expect(await screen.findByRole("button", { name: "Voltar ao catálogo" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Site Institucional" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Contratar em nome de empresa\/agência/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /publicar/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /excluir/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /adicionar à cesta/i })).not.toBeInTheDocument();
   });
 
-  it("detalhe de produto com pendências reais mostra os blockers/pendings honestamente", async () => {
+  // Regressão 04/11 (erro real): o preço que só existe na prévia provisória aparecia "R$ 500,00" sem marca no
+  // detalhe do admin, enquanto o prazo ao lado vinha "(provisório)".
+  it("detalhe de produto sem preço/prazo reais marca o preço E o prazo provisórios", async () => {
     renderPage();
     await screen.findByText("Landing Page");
-    const card = screen.getByText("Landing Page").closest(".group, li") as HTMLElement;
-    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
-    expect(await screen.findByText(/^Padrão$/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/provisóri/i).length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole("button", { name: "Landing Page — ver detalhes" }));
+    await screen.findByRole("button", { name: "Voltar ao catálogo" });
+    const preco = await screen.findByText(/R\$ 500,00/);
+    expect(preco.closest("p")).toHaveTextContent("(provisório)");
+    expect(screen.getByText(/5 dias/, { selector: "span" })).toHaveTextContent("(provisório)");
+    expect(screen.getByText("Nenhuma tarefa cadastrada ainda.")).toBeInTheDocument();
   });
 
-  it("reunião 10/09: produto com esforço provisório mostra o aviso na linha e no detalhe", async () => {
+  it("o preço real no detalhe nunca recebe a marca de provisório", async () => {
     renderPage();
-    const row = (await screen.findByText("Consultoria Express")).closest(".group, li") as HTMLElement;
-    expect(within(row).getByText(/especialidade\/tempo provisórios/i)).toBeInTheDocument();
+    await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: "Site Institucional — ver detalhes" }));
+    const preco = await screen.findByText(/R\$ 1\.200,00/, { selector: "p.text-lg" });
+    expect(preco).not.toHaveTextContent(/provisório/);
+  });
 
-    await userEvent.click(within(row).getByRole("button", { name: "Escolher" }));
-    expect(await screen.findByText(/Funcional para teste, pendente de revisão/i)).toBeInTheDocument();
+  it("reunião 10/09: produto com esforço provisório mostra o aviso no card e no detalhe", async () => {
+    renderPage();
+    const card = await screen.findByRole("button", { name: "Consultoria Express — ver detalhes" });
+    expect(within(card).getByLabelText(/Especialidade e tempo provisórios para teste/i)).toBeInTheDocument();
+
+    await userEvent.click(within(card).getByRole("button", { name: /Ver detalhes/ }));
+    expect(await screen.findByText("Entrega principal")).toBeInTheDocument();
+    expect(screen.getAllByText("provisório").length).toBeGreaterThan(0);
   });
 });
 
 // Reparo 2026-09 seguinte ("recuperação completa dos layouts"): alternador
 // Lista/Grade também no Catálogo, com preferência isolada da do Cadastro.
 describe("Lista/Grade — alternador de visualização (Catálogo)", () => {
-  it("padrão é Lista para quem ainda não tem preferência salva (reunião 10/09); alternar pra Grade troca a apresentação sem perder categoria/busca", async () => {
+  // Desde 24/09 o padrão é Grade de 3 colunas (antes Lista, reunião 10/09); o usuário aceitou o estado atual em 04/11.
+  it("padrão é Grade (3 colunas) para quem ainda não tem preferência salva; alternar pra Lista troca a apresentação sem perder categoria", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
     expect(screen.queryByRole("table")).not.toBeInTheDocument(); // nunca virou tabela administrativa
-    expect(screen.getByRole("list")).toBeInTheDocument(); // Lista é o padrão agora
-
-    await userEvent.click(screen.getByRole("button", { name: /Marketing/ }));
-    await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
-    expect(screen.queryByText("Site Institucional")).not.toBeInTheDocument(); // filtro de categoria preservado
-    expect(screen.getByText("Landing Page")).toBeInTheDocument();
-    expect(document.querySelector(".grid")).toBeTruthy();
-  });
-
-  it("preferência já existente (Grade) é respeitada — não volta pra Lista por padrão", async () => {
-    window.localStorage.setItem("allka:view-mode:admin-catalogo-produtos", "4");
-    renderPage();
-    await screen.findByText("Site Institucional");
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
     expect(document.querySelector(".grid")).toBeTruthy();
+
+    await userEvent.click(screen.getByRole("button", { name: /Marketing/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Lista" }));
+    expect(screen.getByRole("list")).toBeInTheDocument();
+    expect(screen.queryByText("Site Institucional")).not.toBeInTheDocument(); // filtro de categoria preservado
+    expect(screen.getByText("Landing Page")).toBeInTheDocument();
+  });
+
+  it("preferência já existente (Lista) é respeitada — não volta pra Grade por padrão", async () => {
+    window.localStorage.setItem("allka:view-mode:admin-catalogo-produtos", "list");
+    renderPage();
+    await screen.findByText("Site Institucional");
+    expect(screen.getByRole("list")).toBeInTheDocument();
   });
 
   it("preferência de visualização do Catálogo é isolada da do Cadastro (chaves de localStorage distintas)", async () => {
@@ -273,13 +295,12 @@ describe("Lista/Grade — alternador de visualização (Catálogo)", () => {
   it("persiste em localStorage e sobrevive a um novo mount (equivalente a F5)", async () => {
     const { unmount } = renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
+    await userEvent.click(screen.getByRole("button", { name: "Lista" }));
     unmount();
 
     renderPage();
     await screen.findByText("Site Institucional");
-    expect(document.querySelector(".grid")).toBeTruthy();
-    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+    expect(screen.getByRole("list")).toBeInTheDocument();
   });
 
   it("botão 'Visualizar como cliente' existe e aponta pro preview do catalog2", async () => {
@@ -290,62 +311,48 @@ describe("Lista/Grade — alternador de visualização (Catálogo)", () => {
   });
 });
 
-// Recuperação fiel do layout publicado (verificado via VPS/GHCR: produção
-// roda f14e783, cujo product-catalog-view.tsx é byte-idêntico a a809971 —
-// mesma referência já usada). SORT_OPTIONS do publicado tinha 7 opções;
-// as com dado real (preço/nome) viram sort de verdade, as sem dado real
-// (vendas/avaliação) ficam visíveis e desabilitadas — nunca removidas,
-// nunca inventadas.
-describe("Ordenação — fiel ao layout publicado, nunca com dado inventado", () => {
-  it("Menor/Maior preço ordenam por price_amount REAL quando existe (produtos com preço real ficam em ordem crescente/decrescente entre si)", async () => {
+// Desde 25/09 a ordenação fica DENTRO do botão de filtros (deploy-log: "botão Filtros só com ícone (a ordenação foi
+// para dentro dele)"). "Mais vendidos"/"Melhor avaliados" desabilitados saíram nessa mudança (aceito em 04/11).
+async function openFilters() {
+  await userEvent.click(screen.getByRole("button", { name: "Filtros e ordenação" }));
+  return screen.findByLabelText("Ordenar por");
+}
+
+describe("Ordenação — por dado real, nunca inventado", () => {
+  it("Menor/Maior preço ordenam por price_amount REAL quando existe", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: "4 colunas" })); // heading <h3> só existe em cards
-    await userEvent.click(screen.getByRole("button", { name: /Nome A–Z/ }));
-    await userEvent.click(screen.getByText("Menor preço"));
+    await userEvent.selectOptions(await openFilters(), "Menor preço");
     const namesAsc = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
-    // Consultoria Express (300) sempre antes de Site Institucional (1200) —
-    // preço real, nunca depende de hash provisório.
     expect(namesAsc.indexOf("Consultoria Express")).toBeLessThan(namesAsc.indexOf("Site Institucional"));
 
-    await userEvent.click(screen.getByRole("button", { name: /Menor preço/ }));
-    await userEvent.click(screen.getByText("Maior preço"));
+    await userEvent.selectOptions(screen.getByLabelText("Ordenar por"), "Maior preço");
     const namesDesc = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
     expect(namesDesc.indexOf("Site Institucional")).toBeLessThan(namesDesc.indexOf("Consultoria Express"));
   });
 
-  it("'Menor preço' inclui produtos sem preço real na ordenação, usando um valor provisório determinístico (nunca ficam soltos/sem posição)", async () => {
+  it("'Menor preço' mantém na grade os produtos sem preço real (nunca somem)", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
-    await userEvent.click(screen.getByRole("button", { name: /Nome A–Z/ }));
-    await userEvent.click(screen.getByText("Menor preço"));
-    const names = screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
-    // "Landing Page" (sem preço real) aparece na grade, ordenado junto com
-    // os demais — nunca ausente, nunca com posição aleatória entre F5s
-    // (mesmo hash, mesma posição sempre).
-    expect(names).toContain("Landing Page");
-    expect(names.length).toBe(3); // fixture nunca entra
+    await userEvent.selectOptions(await openFilters(), "Menor preço");
+    // conta os cards (o painel de filtros aberto também tem um <h3> "Filtros")
+    const names = screen.getAllByRole("button", { name: / — ver detalhes$/ }).map((c) => c.getAttribute("aria-label"));
+    expect(names).toContain("Landing Page — ver detalhes");
+    expect(names.length).toBe(4); // a fixture entra como os demais (decisão de 23/09)
   });
 
-  it("'Mais vendidos' e 'Melhor avaliados' aparecem desabilitados com explicação — nunca removidos, nunca com dado inventado", async () => {
+  it("as opções de ordenação usam só dados que existem no catalog2", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: /Nome A–Z/ }));
-    const vendidos = screen.getByText("Mais vendidos");
-    const avaliados = screen.getByText("Melhor avaliados");
-    expect(vendidos.closest('[role="menuitem"]')).toHaveAttribute("aria-disabled", "true");
-    expect(avaliados.closest('[role="menuitem"]')).toHaveAttribute("aria-disabled", "true");
-    expect(vendidos.closest('[role="menuitem"]')).toHaveAttribute("title", expect.stringContaining("Sem dado real"));
-    expect(avaliados.closest('[role="menuitem"]')).toHaveAttribute("title", expect.stringContaining("não tem avaliação"));
+    const select = await openFilters();
+    const labels = within(select).getAllByRole("option").map((o) => o.textContent);
+    expect(labels).toEqual(expect.arrayContaining(["Nome A–Z", "Menor preço", "Maior preço", "Mais pendências"]));
+    expect(labels.some((l) => /vendidos|avaliad/i.test(l ?? ""))).toBe(false);
   });
 });
 
-// Reunião 10/09 ("Cabeçalho e filtros do Catálogo de Produtos"): busca em
-// destaque + Filtros + ordenação + alternador numa única linha; categorias
-// em badges logo abaixo, com contador e seleção clara; painel de filtros
-// só com filtros catalog2 reais (Aplicar/Limpar/Fechar, contagem e badges
-// de ativos); nada duplicado; contratação nunca liberada aqui.
+// Reunião 10/09 ("Cabeçalho e filtros do Catálogo de Produtos"), na versão de 25/09: busca, categorias com cor e
+// contador, filtros+ordenação num único botão, badges de filtros ativos; nada duplicado.
 describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
   it("badges de categorias reais mostram contador correto, incluindo 'Todos'", async () => {
     renderPage();
@@ -353,8 +360,8 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     const todos = screen.getByRole("button", { name: /Todos/ });
     const performance = screen.getByRole("button", { name: /Performance/ });
     const marketing = screen.getByRole("button", { name: /Marketing/ });
-    expect(within(todos).getByText("3")).toBeInTheDocument(); // 3 reais — fixture nunca conta
-    expect(within(performance).getByText("1")).toBeInTheDocument();
+    expect(within(todos).getByText("4")).toBeInTheDocument(); // a fixture conta como os demais (23/09)
+    expect(within(performance).getByText("2")).toBeInTheDocument();
     expect(within(marketing).getByText("2")).toBeInTheDocument();
   });
 
@@ -371,16 +378,16 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     expect(todos.className).not.toContain("text-white");
   });
 
-  it("painel de filtros abre com apenas filtros catalog2 reais (status + com preço/prazo/tarefas/etapas/pendências/provisórios) e Aplicar/Limpar/Fechar", async () => {
+  it("painel de filtros abre com apenas filtros catalog2 reais (status + com preço/prazo/tarefas/etapas/pendências/faltando) e Aplicar/Limpar/Fechar", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: /^Filtros$/ }));
-    expect(await screen.findByText("Com preço")).toBeInTheDocument();
+    await openFilters();
+    expect(screen.getByText("Com preço")).toBeInTheDocument();
     expect(screen.getByText("Com prazo")).toBeInTheDocument();
     expect(screen.getByText("Com tarefas")).toBeInTheDocument();
     expect(screen.getByText("Com etapas")).toBeInTheDocument();
     expect(screen.getByText("Com pendências")).toBeInTheDocument();
-    expect(screen.getByText("Campos provisórios")).toBeInTheDocument();
+    expect(screen.getByText("Campos faltando")).toBeInTheDocument();
     expect(screen.getByLabelText("Status")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Aplicar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Limpar" })).toBeInTheDocument();
@@ -389,10 +396,10 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     expect(screen.queryByText(/avaliação|recorrência|código legado/i)).not.toBeInTheDocument();
   });
 
-  it("aplicar 'Com pendências' filtra a grade; Limpar restaura tudo e some a contagem de ativos", async () => {
+  it("aplicar 'Com pendências' filtra a grade; Limpar filtros restaura tudo", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: /^Filtros$/ }));
+    await openFilters();
     await userEvent.click(screen.getByText("Com pendências"));
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
 
@@ -409,7 +416,7 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
   it("filtros ativos aparecem como badges removíveis (X remove só aquele filtro)", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: /^Filtros$/ }));
+    await openFilters();
     await userEvent.click(screen.getByText("Com tarefas"));
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
 
@@ -421,13 +428,14 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     expect(screen.getByText("Landing Page")).toBeInTheDocument(); // filtro removido, volta a aparecer
   });
 
-  it("nenhum controle duplicado: só uma busca, um botão Filtros, um controle de ordenação e uma linha de categorias", async () => {
+  it("nenhum controle duplicado: só uma busca, um botão de filtros/ordenação e uma linha de categorias", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
     expect(screen.getAllByPlaceholderText(/Buscar produtos/i).length).toBe(1);
-    expect(screen.getAllByRole("button", { name: /^Filtros$/ }).length).toBe(1);
-    expect(screen.getAllByRole("button", { name: /Nome A–Z|Nome Z–A|Menor preço|Maior preço|Alterado recentemente/ }).length).toBe(1);
+    expect(screen.getAllByRole("button", { name: "Filtros e ordenação" }).length).toBe(1);
     expect(screen.getAllByRole("button", { name: /^Todos/ }).length).toBe(1);
+    await openFilters();
+    expect(screen.getAllByLabelText("Ordenar por").length).toBe(1);
   });
 
   it("busca + categoria + filtro combinados funcionam juntos", async () => {
@@ -435,7 +443,7 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     await screen.findByText("Site Institucional");
     await userEvent.click(screen.getByRole("button", { name: /Marketing/ }));
     await userEvent.type(screen.getByPlaceholderText(/Buscar produtos/i), "landing");
-    await userEvent.click(screen.getByRole("button", { name: /^Filtros$/ }));
+    await openFilters();
     await userEvent.click(screen.getByText("Com pendências"));
     await userEvent.click(screen.getByRole("button", { name: "Aplicar" }));
     expect(screen.getByText("Landing Page")).toBeInTheDocument();
@@ -443,19 +451,17 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     expect(screen.queryByText("Site Institucional")).not.toBeInTheDocument();
   });
 
-  it("abrir e fechar o detalhe de um produto preserva busca, categoria, filtro e modo de visualização", async () => {
+  it("abrir e voltar do detalhe de um produto preserva busca, categoria e modo de visualização", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
     await userEvent.click(screen.getByRole("button", { name: "Lista" }));
+    await userEvent.click(screen.getByRole("button", { name: /Marketing/ }));
     await userEvent.type(screen.getByPlaceholderText(/Buscar produtos/i), "consultoria");
-    await userEvent.click(screen.getByRole("button", { name: "Escolher" }));
-    await screen.findByRole("button", { name: "Voltar ao catálogo" });
-    // botão fechar do painel (EmbeddedSlideScreen) é só ícone, sem rótulo
-    // acessível próprio — identificado pela classe do container padrão.
-    const closeBtn = Array.from(document.querySelectorAll("button")).find((b) => b.className.includes("text-white/80")) as HTMLElement;
-    await userEvent.click(closeBtn);
+    await userEvent.click(screen.getByRole("button", { name: "Consultoria Express — ver detalhes" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Voltar ao catálogo" }));
 
-    expect(screen.getByPlaceholderText(/Buscar produtos/i)).toHaveValue("consultoria");
+    expect(await screen.findByPlaceholderText(/Buscar produtos/i)).toHaveValue("consultoria");
+    expect(screen.getByRole("button", { name: /Marketing/ }).className).toContain("text-white");
     expect(screen.getByRole("list")).toBeInTheDocument(); // continua em Lista
     expect(screen.getAllByText("Consultoria Express").length).toBeGreaterThan(0);
   });
@@ -468,150 +474,126 @@ describe("Cabeçalho e filtros reorganizados (Catálogo)", () => {
     expect(screen.getByText("Site Institucional")).toBeInTheDocument();
   });
 
-  it("nenhuma ação de contratação/checkout aparece nesta tela (só leitura/conferência)", async () => {
+  // A contratação aqui é só a do Admin Master em nome de empresa/agência (24/09); nunca cesta/checkout próprio.
+  it("nenhuma cesta/checkout próprio aparece nesta tela — só a contratação em nome do cliente, no detalhe", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
     expect(screen.queryByRole("button", { name: /contratar|adicionar à cesta|finalizar compra/i })).not.toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole("button", { name: "Escolher" })[0]);
+    await userEvent.click(screen.getAllByRole("button", { name: /Ver detalhes/ })[0]);
     await screen.findByRole("button", { name: "Voltar ao catálogo" });
-    expect(screen.queryByRole("button", { name: /contratar|adicionar à cesta|finalizar compra/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /adicionar à cesta|finalizar compra/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /Contratar em nome de empresa\/agência/ })).toBeInTheDocument();
   });
 });
 
-// Reunião 10/09 ("Cards e interação do catálogo"): card/linha inteiros
-// clicáveis (mouse, Enter, Espaço), código interno escondido atrás de um
-// ícone de informação com tooltip acessível, sem textos repetidos, com
-// badges comerciais (reais quando existirem, provisórios e marcados quando
-// não), badge sempre sobre a imagem, fixture nunca com badge, e Lista como
-// padrão inicial (já coberto no bloco de Lista/Grade acima).
+// Reunião 10/09 ("Cards e interação do catálogo"): card/linha inteiros clicáveis (mouse, Enter, Espaço), sem textos
+// repetidos, badges comerciais reais sobre a imagem, fixture nunca com badge.
 describe("Cards e interação (reunião 10/09)", () => {
   it("clicar em qualquer área livre do card (Grade) abre o detalhe completo", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: "3 colunas" })); // resumo só aparece em modo não-compacto
-    const card = screen.getByText("Site Institucional").closest(".group") as HTMLElement;
-    // clica numa área livre (o próprio texto do resumo), não no botão
+    const card = screen.getByRole("button", { name: "Site Institucional — ver detalhes" });
     await userEvent.click(within(card).getByText("Site institucional completo."));
-    expect(await screen.findByText("Nenhuma pendência — pronto para revisão final.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Voltar ao catálogo" })).toBeInTheDocument();
   });
 
   it("Enter e Espaço no card focado abrem o detalhe", async () => {
-    renderPage();
-    await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
-    const card = screen.getByRole("button", { name: /Site Institucional — ver detalhes/i });
-    card.focus();
-    await userEvent.keyboard("{Enter}");
-    expect(await screen.findByText("Nenhuma pendência — pronto para revisão final.")).toBeInTheDocument();
+    for (const key of ["{Enter}", " "]) {
+      const { unmount } = renderPage();
+      await screen.findByText("Site Institucional");
+      const card = screen.getByRole("button", { name: "Site Institucional — ver detalhes" });
+      card.focus();
+      await userEvent.keyboard(key);
+      expect(await screen.findByRole("button", { name: "Voltar ao catálogo" })).toBeInTheDocument();
+      unmount();
+    }
   });
 
-  it("botão interno 'Escolher' não dispara a abertura duas vezes (não propaga pro card)", async () => {
+  it("botão interno 'Ver detalhes' não dispara a abertura duas vezes (não propaga pro card)", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
-    const card = screen.getByText("Site Institucional").closest(".group") as HTMLElement;
-    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
-    // abre normalmente — só uma vez (não há erro de dois onOpen simultâneos,
-    // e o painel mostra exatamente um produto).
+    const card = screen.getByRole("button", { name: "Site Institucional — ver detalhes" });
+    await userEvent.click(within(card).getByRole("button", { name: /Ver detalhes/ }));
     expect(await screen.findByRole("button", { name: "Voltar ao catálogo" })).toBeInTheDocument();
-    expect(screen.getAllByRole("heading", { name: "Site Institucional" }).length).toBeGreaterThan(0);
+    await screen.findByRole("heading", { level: 1, name: "Site Institucional" });
+    expect(api.getCatalog2ProductDetailPreview).toHaveBeenCalledTimes(1);
   });
 
-  it("ação principal é 'Escolher' e abre apenas o detalhe administrativo", async () => {
+  it("ação principal do card é 'Ver detalhes'", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    expect(screen.getAllByRole("button", { name: "Escolher" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /^Ver detalhes/ }).length).toBe(4);
   });
 
-  it("código interno (slug/id) não ocupa espaço fixo no card — só aparece no ícone de informação, nunca 'ANTIGA #'", async () => {
+  it("código interno (slug/id) não ocupa espaço fixo no card — nunca 'ANTIGA #'", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
     expect(screen.queryByText("p01-site-institucional")).not.toBeInTheDocument();
-    expect(screen.queryByText(/ANTIGA #/)).not.toBeInTheDocument();
     expect(screen.queryByText(/ANTIGA #/i)).not.toBeInTheDocument();
-  });
-
-  it("ícone de informação do código é focável por teclado e expõe um <Tooltip> acessível (não depende só de title)", async () => {
-    // Mesmo padrão já usado no projeto para Radix Tooltip (ver
-    // layout-compact-item6.test.tsx): o Radix só MONTA o TooltipContent
-    // quando aberto (hover ou foco reais), o que é frágil de simular em
-    // jsdom — a garantia testável é que o alvo é um <button> de verdade,
-    // focável, com aria-label descritivo (funciona tanto por mouse quanto
-    // por teclado, ao contrário de um `title` puro em texto não focável).
-    renderPage();
-    await screen.findByText("Site Institucional");
-    const infoBtn = screen.getByRole("button", { name: /Código e identificadores de Site Institucional/i });
-    expect(infoBtn.tagName).toBe("BUTTON");
-    infoBtn.focus();
-    expect(infoBtn).toHaveFocus();
   });
 
   it("cada informação (categoria, status, preço) aparece uma única vez por card — nada repetido", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
-    const card = screen.getByText("Site Institucional").closest(".group") as HTMLElement;
+    const card = screen.getByRole("button", { name: "Site Institucional — ver detalhes" });
     expect(within(card).getAllByText("Performance").length).toBe(1);
     expect(within(card).getAllByText("Ativo").length).toBe(1);
-    expect(within(card).getAllByText("Preço comercial BRL 1200.").length).toBe(1);
+    expect(within(card).getAllByText("R$ 1.200,00").length).toBe(1);
   });
 
   it("badge comercial real ('Novo') aparece sobre a imagem quando o produto tem o dado real", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
+    const card = screen.getByRole("button", { name: "Site Institucional — ver detalhes" });
     const badge = within(card).getByText("Novo");
-    // o badge vive dentro do mesmo wrapper relativo da miniatura (imagem).
     const thumbWrapper = badge.closest(".relative");
     expect(thumbWrapper?.querySelector("img, svg")).toBeTruthy();
   });
 
-  it("produto sem badge real mostra um badge provisório claramente marcado, ou nenhum badge — nunca finge dado comercial real", async () => {
+  it("produto sem badge real não recebe badge comercial limpo — nunca finge dado comercial real", async () => {
     renderPage();
     await screen.findByText("Consultoria Express");
-    const card = screen.getByText("Consultoria Express").closest(".group, li") as HTMLElement;
-    const provisionalBadge = within(card).queryByText(/\(provisório\)/);
-    // ou tem um badge provisório claramente marcado, ou não tem badge nenhum
-    // — nunca um badge "limpo" sem marcação para um produto sem dado real.
-    if (provisionalBadge) expect(provisionalBadge.textContent).toMatch(/\(provisório\)/);
+    const card = screen.getByRole("button", { name: "Consultoria Express — ver detalhes" });
+    expect(within(card).queryByText(/^(Novo|Lançamento|Promoção|Destaque)$/)).not.toBeInTheDocument();
   });
 
   it("fixture '[TESTE LOCAL]' nunca recebe badge comercial", async () => {
     renderPage();
-    await screen.findByText("Site Institucional");
-    expect(screen.queryByText("[TESTE LOCAL] Demo")).not.toBeInTheDocument(); // fica fora da grade mesmo
+    const card = await screen.findByRole("button", { name: "[TESTE LOCAL] Demo — ver detalhes" });
+    expect(within(card).queryByText(/^(Novo|Lançamento|Promoção|Destaque)/)).not.toBeInTheDocument();
   });
 
-  it("texto cortado (nome/categoria/resumo) mostra o conteúdo completo via atributo acessível (title)", async () => {
+  it("texto cortado (nome/resumo) mostra o conteúdo completo via atributo acessível (title)", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
-    await userEvent.click(screen.getByRole("button", { name: "4 colunas" }));
-    const card = screen.getByText("Site Institucional").closest(".group") as HTMLElement;
+    const card = screen.getByRole("button", { name: "Site Institucional — ver detalhes" });
     expect(within(card).getByText("Site Institucional")).toHaveAttribute("title", "Site Institucional");
-    expect(within(card).getByText("Performance")).toHaveAttribute("title", "Performance");
+    expect(within(card).getByText("Site institucional completo.")).toHaveAttribute("title", "Site institucional completo.");
   });
 
-  it("Lista: a linha inteira é clicável (mouse e teclado) e preserva imagem/preço/prazo/status/ação", async () => {
+  it("Lista: a linha inteira é clicável (mouse e teclado) e preserva preço/prazo/status", async () => {
     renderPage();
     await screen.findByText("Site Institucional");
+    await userEvent.click(screen.getByRole("button", { name: "Lista" }));
     const row = screen.getByRole("button", { name: /Site Institucional — ver detalhes/i });
     expect(row.tagName).toBe("LI");
+    expect(within(row).getByText("R$ 1.200,00")).toBeInTheDocument();
+    expect(within(row).getByText("10 dia(s)")).toBeInTheDocument();
+    expect(within(row).getByText("Ativo")).toBeInTheDocument();
     row.focus();
     await userEvent.keyboard(" ");
-    expect(await screen.findByText("Nenhuma pendência — pronto para revisão final.")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Voltar ao catálogo" })).toBeInTheDocument();
   });
 
-  it("detalhe comercial completo: mostra loading e depois erro claro quando a API falha (nunca tela em branco), com opção de tentar novamente", async () => {
+  it("detalhe comercial completo: mostra erro claro quando a API falha (nunca tela em branco), com opção de tentar novamente", async () => {
     api.getCatalog2ProductDetailPreview.mockRejectedValueOnce(new Error());
     renderPage();
     await screen.findByText("Site Institucional");
-    const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
-    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
+    await userEvent.click(screen.getByRole("button", { name: "Site Institucional — ver detalhes" }));
     expect(await screen.findByText(/não foi possível carregar o detalhe/i)).toBeInTheDocument();
 
-    const retry = screen.getByRole("button", { name: /Tentar novamente/i });
-    await userEvent.click(retry);
-    expect(await screen.findByRole("heading", { name: "Site Institucional" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Tentar novamente/i }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Site Institucional" })).toBeInTheDocument();
   });
 
   it("detalhe comercial completo: produto inexistente (404) mostra 'não encontrado' sem oferecer tentar novamente (repetir nunca resolveria)", async () => {
@@ -620,10 +602,10 @@ describe("Cards e interação (reunião 10/09)", () => {
     );
     renderPage();
     await screen.findByText("Site Institucional");
-    const card = screen.getByText("Site Institucional").closest(".group, li") as HTMLElement;
-    await userEvent.click(within(card).getByRole("button", { name: "Escolher" }));
+    await userEvent.click(screen.getByRole("button", { name: "Site Institucional — ver detalhes" }));
     expect(await screen.findByText("Produto não encontrado.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Tentar novamente/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Voltar" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Voltar" }));
+    expect(await screen.findByPlaceholderText(/Buscar produtos/i)).toBeInTheDocument();
   });
 });

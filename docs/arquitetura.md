@@ -1,5 +1,7 @@
 # Arquitetura
 
+> **Aviso de atualização em 04/11/2026:** o conteúdo abaixo é histórico e contém referências obsoletas a cPanel, PM2 e SQLite/PostgreSQL. A implantação atual usa MySQL8.4, Docker Compose, Caddy e imagens GHCR no VPS. Consulte o [README operacional](../README.md) e a [arquitetura atual e prontidão de produção](plataforma-allka-prontidao-producao-2026-11-04.md#7-arquitetura-atual-e-mapa-de-manutenção) antes de configurar, testar ou publicar. O histórico foi preservado para referência, não é instrução de deploy vigente.
+
 Documento de referência da arquitetura técnica da plataforma Allka 2026.
 
 ---

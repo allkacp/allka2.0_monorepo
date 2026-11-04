@@ -97,6 +97,14 @@ const { api } = vi.hoisted(() => ({
     getCatalog2ProductReadiness: vi.fn(),
     getCatalog2ProductDetailPreview: vi.fn(),
     getCatalog2ProductOrigin: vi.fn(),
+    // usados pelo editor novo (aba Histórico e catálogo global de modelos de tarefa, 30/09)
+    getCatalog2ProductHistory: vi.fn().mockResolvedValue({ data: [] }),
+    getCatalog2TaskModels: vi.fn().mockResolvedValue({ data: [], total: 0 }),
+    getCatalog2StepModels: vi.fn().mockResolvedValue({ data: [], total: 0 }),
+    addCatalog2TaskFromModel: vi.fn(),
+    getCatalog2TaskClearSnapshots: vi.fn().mockResolvedValue({ data: [] }),
+    // modal da etapa (abre sozinho depois de "Criar nova etapa")
+    getCatalog2Leaders: vi.fn().mockResolvedValue({ data: [] }),
   },
 }))
 vi.mock("@/lib/api-client", () => ({ apiClient: api }))
@@ -192,10 +200,67 @@ function productDetail(over: Partial<any> = {}) {
   }
 }
 
+// ── Caminhos do editor padrão (fluxo de 3 passos, desde 03/11) ──────
+type User = ReturnType<typeof userEvent.setup>
+async function openEditorPanel(user: User) {
+  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
+  await screen.findByLabelText("Título comercial")
+  return screen.getByTestId("product-editor-panel")
+}
+/** O editor abre na versão publicada, em leitura: escolhe o rascunho v2 e entra em edição. */
+async function editDraft(user: User, panel: HTMLElement) {
+  await chooseVersion(user, panel, "v2 — Rascunho")
+  await user.click(await within(panel).findByRole("button", { name: /^Editar$/ }))
+  await within(panel).findByRole("button", { name: "Travar edição" })
+}
+/** Escolhe a versão no menu "Versão do produto" (o rótulo também aparece no cabeçalho, por isso o item do menu). */
+async function chooseVersion(user: User, panel: HTMLElement, label: string) {
+  await user.click(within(panel).getByRole("button", { name: "Versão do produto" }))
+  const options = await screen.findAllByText(label)
+  const item = options.map((o) => o.closest('[role^="menuitem"],[role="option"]')).find(Boolean) as HTMLElement | undefined
+  // a versão já aberta pode vir desabilitada (ou fora da lista) no menu: nesse caso só confere o cabeçalho e fecha
+  if (!item || item.hasAttribute("data-disabled") || item.getAttribute("aria-disabled") === "true") {
+    expect(within(panel).getAllByText(label).length).toBeGreaterThan(0)
+    await user.keyboard("{Escape}")
+  } else await user.click(item)
+}
+async function goToEditorStep(user: User, panel: HTMLElement, label: RegExp) {
+  const nav = within(panel).getByRole("navigation", { name: "Passos do produto" })
+  await user.click(within(nav).getAllByRole("button").find((b) => label.test(b.textContent ?? ""))!)
+}
+function editorSubTab(panel: HTMLElement, name: string) {
+  return within(panel).getAllByRole("tab").find((t) => t.textContent?.startsWith(name))!
+}
+/** Campo "Nome da nova tarefa", achado pelo rótulo. O Field envolve o campo no <label> (associação implícita); a busca
+ *  é pelo nome acessível porque a camada de ajuda injeta um "i" aria-hidden dentro do rótulo, e getByLabelText compara o
+ *  texto bruto ("Nome da nova tarefai"). */
+function newTaskInput(panel: HTMLElement) {
+  return within(panel).queryByRole("textbox", { name: "Nome da nova tarefa" })
+}
+async function startNewTask(user: User, panel: HTMLElement, name: string) {
+  await user.click(within(panel).getByRole("button", { name: "Adicionar tarefa" }))
+  await user.click(await screen.findByRole("menuitem", { name: /Criar nova tarefa/ }))
+  // colar em vez de digitar letra a letra: cada tecla re-renderiza o editor inteiro (era o que estourava os 15s na
+  // suíte completa); o que se verifica é o nome que chega à API, não a digitação
+  await user.click(newTaskInput(panel)!)
+  await user.paste(name)
+}
+/** Os cartões de custo do passo 3 abrem em Painel Moldura pelo botão "Ver". */
+async function openCostCard(user: User, panel: HTMLElement, title: string) {
+  const card = within(panel).getAllByText(title)[0].closest("details,section,div[class*=rounded]") as HTMLElement
+  await user.click(within(card).getByRole("button", { name: /^Ver/ }))
+  return screen.findByTestId("cost-card-panel")
+}
+
 it("configuração normal abre o novo fluxo sem botão ou aviso de teste", async () => {
   api.getCatalog2Product.mockResolvedValue(productDetail({ sequence_number: 2 }));
   renderPage();
-  const configButton = await screen.findByRole("button", { name: /editar produto|continuar configuração/i });
+  // A lista só começa a carregar depois do bootstrap e do timer de loadList.
+  // Neste primeiro cenário a montagem fria excedeu o waitFor padrão de 1s nas
+  // duas suítes completas de 04/11, mas passou isolada. Esperar a linha real
+  // (limite local de 5s), sem afrouxar as verificações nem o timeout da suíte.
+  await screen.findByText("[TESTE LOCAL] Demo", {}, { timeout: 5000 });
+  const configButton = screen.getByRole("button", { name: /editar produto|continuar configuração/i });
   expect(screen.queryByRole("button", { name: "Produto teste" })).not.toBeInTheDocument();
   await userEvent.click(configButton);
   expect(await screen.findByLabelText("Título comercial")).toHaveValue("Demo v1");
@@ -246,6 +311,8 @@ it("editor antigo fica guardado e acessível apenas por URL explícita", async (
 beforeEach(() => {
   vi.clearAllMocks()
   window.localStorage.clear()
+  // o editor guarda rascunho/edição por sessão em sessionStorage (editor-session.ts): sem limpar, um teste herdava o anterior
+  window.sessionStorage.clear()
   api.getCurrentUser.mockResolvedValue({ id: "u1", account_type: "admin", admin_profile: { is_active: true, is_master: true } })
   api.getCatalog2Overview.mockResolvedValue(OVERVIEW)
   api.getCatalog2Pillars.mockResolvedValue(REFS.pillars)
@@ -311,20 +378,17 @@ it("título e menu: 'Cadastro de Produtos' (não mais 'Preparação de Produtos'
 it("layout recuperado: banner padrão (StandardPageBanner), abas de filtro rápido e tabela (não mais <ul> avulsa)", async () => {
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  // StandardPageBanner: título dentro de um <h1>, ícone circular com
-  // gradiente — mesmo componente usado em /admin/empresas e outras telas.
   const heading = screen.getByRole("heading", { name: "Cadastro de Produtos" })
   expect(heading.className).toMatch(/font-bold/)
-  // Abas de filtro rápido — "Todos os produtos"/"Ativos"/"Em preparação"/
-  // "Com pendências"/"Categorias", cada uma com contador.
   for (const label of ["Todos os produtos", "Ativos", "Em preparação", "Com pendências", "Categorias"]) {
-    expect(screen.getByText(label)).toBeInTheDocument()
+    expect(screen.getAllByText(label).length).toBeGreaterThan(0)
   }
-  // Tabela de verdade (thead/tbody com colunas), não mais uma lista <ul>.
+  // Tabela de verdade. O nome acessível do cabeçalho inclui a alça "Redimensionar coluna …" (colunas com largura
+  // ajustável desde 10/2026), por isso a comparação é pelo começo do nome.
   expect(screen.getByRole("table")).toBeInTheDocument()
-  expect(screen.getByRole("columnheader", { name: "Produto" })).toBeInTheDocument()
-  expect(screen.getByRole("columnheader", { name: "Status" })).toBeInTheDocument()
-  expect(screen.getByRole("columnheader", { name: "Ações" })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: /^Produto/ })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: /^Status/ })).toBeInTheDocument()
+  expect(screen.getByRole("columnheader", { name: /^Ações/ })).toBeInTheDocument()
 })
 
 // Reparo 2026-09 seguinte ("recuperação completa dos layouts"): o
@@ -335,16 +399,16 @@ describe("Lista/Grade — alternador de visualização (Cadastro)", () => {
     await screen.findByText("[TESTE LOCAL] Demo")
     expect(screen.getByRole("table")).toBeInTheDocument()
 
-    await userEvent.type(screen.getByPlaceholderText(/Buscar por nome/i), "demo")
+    // A busca se chama "Pesquisar produtos" desde 04/10.
+    await userEvent.type(screen.getByPlaceholderText(/Pesquisar produtos/i), "demo")
     await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ q: "demo" })))
 
     await userEvent.click(screen.getByRole("button", { name: "3 colunas" }))
     expect(screen.queryByRole("table")).not.toBeInTheDocument()
-    // busca continua no campo — não foi limpa pela troca de modo
-    expect(screen.getByPlaceholderText(/Buscar por nome/i)).toHaveValue("demo")
+    expect(screen.getByPlaceholderText(/Pesquisar produtos/i)).toHaveValue("demo")
     // o card em modo grade também abre o construtor
     await userEvent.click(screen.getByRole("button", { name: /editar produto|continuar configuração/i }))
-    expect(await screen.findByText("Título comercial")).toBeInTheDocument()
+    expect(await screen.findByLabelText("Título comercial")).toBeInTheDocument()
   })
 
   it("ajuste de colunas: 2/3/4/5 colunas produzem classes de grid diferentes", async () => {
@@ -377,9 +441,10 @@ describe("Lista/Grade — alternador de visualização (Cadastro)", () => {
     await userEvent.click(screen.getByRole("button", { name: "3 colunas" }))
     expect(screen.queryByRole("table")).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: /editar produto|continuar configuração/i }))
-    await screen.findByText("Título comercial")
-    await userEvent.click(screen.getByRole("button", { name: "Voltar" }))
-    await screen.findByPlaceholderText(/Buscar por nome/i)
+    await screen.findByLabelText("Título comercial")
+    await userEvent.click(within(screen.getByTestId("product-editor-panel")).getByRole("button", { name: /^Fechar$/ }))
+    await waitFor(() => expect(screen.queryByTestId("product-editor-panel")).not.toBeInTheDocument())
+    expect(screen.getByPlaceholderText(/Pesquisar produtos/i)).toBeInTheDocument()
     expect(screen.queryByRole("table")).not.toBeInTheDocument()
   })
 })
@@ -391,24 +456,22 @@ it("clicar na aba 'Ativos' filtra a listagem (status=disponivel) sem precisar ab
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ status: "disponivel" })))
 })
 
-it("editor: mostra os seis status em português e só persiste a escolha ao clicar em Salvar status", async () => {
+// Desde 30/09 o status muda pelo selo da lista (só Admin Master) e pede confirmação com o resumo do produto; o
+// antigo "Salvar status" do editor saiu. O que continua: seis status em português e nada gravado antes de confirmar.
+it("status: mostra os seis status em português e só persiste a escolha depois de confirmar", async () => {
   const user = userEvent.setup()
   api.setCatalog2ProductStatus.mockResolvedValue({ ok: true, status: "pre_lancamento" })
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-
-  const status = await screen.findByRole("combobox", { name: "Status do produto" })
-  expect(within(status).getByRole("option", { name: "Em preparação" })).toBeInTheDocument()
-  expect(within(status).getByRole("option", { name: "Pré-lançamento" })).toBeInTheDocument()
-  expect(within(status).getByRole("option", { name: "Ativo" })).toBeInTheDocument()
-  expect(within(status).getByRole("option", { name: "Pausado" })).toBeInTheDocument()
-  expect(within(status).getByRole("option", { name: "Esgotado temporariamente" })).toBeInTheDocument()
-  expect(within(status).getByRole("option", { name: "Inativo" })).toBeInTheDocument()
-
-  await user.selectOptions(status, "pre_lancamento")
+  await user.click(await screen.findByRole("button", { name: "Mudar o status do produto" }))
+  const items = (await screen.findAllByRole("menuitem")).map((item) => item.textContent ?? "")
+  for (const label of ["Em preparação", "Pré-lançamento", "Ativo", "Pausado", "Esgotado temporariamente", "Inativo"]) {
+    expect(items.some((text) => text.startsWith(label))).toBe(true)
+  }
+  await user.click(screen.getAllByRole("menuitem").find((item) => item.textContent?.startsWith("Pré-lançamento"))!)
+  expect(await screen.findByText(/Mudar o status para “Pré-lançamento”\?/)).toBeInTheDocument()
   expect(api.setCatalog2ProductStatus).not.toHaveBeenCalled()
-  await user.click(screen.getByRole("button", { name: "Salvar status" }))
+  await user.click(screen.getByTestId("status-change-confirm"))
   await waitFor(() => expect(api.setCatalog2ProductStatus).toHaveBeenCalledWith("prod1", "pre_lancamento"))
 })
 
@@ -422,12 +485,14 @@ it("editor: publicação fica bloqueada quando há pendência estrutural, mesmo 
   })
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  await user.click(screen.getByRole("tab", { name: "Revisão e publicação" }))
-  await user.click(screen.getByRole("tab", { name: "Publicação e versões" }))
-
-  expect(await screen.findByText("Selecione um pilar.")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: "Publicar versão" })).toBeDisabled()
+  const panel = await openEditorPanel(user)
+  await editDraft(user, panel)
+  await goToEditorStep(user, panel, /Conferência, preço e publicação/)
+  await user.click(editorSubTab(panel, "Publicação e versões"))
+  expect(await within(panel).findByText("2 bloqueio(s)")).toBeInTheDocument()
+  expect(within(panel).getByRole("button", { name: "Publicar versão" })).toBeDisabled()
+  expect(api.validateCatalog2Version).toHaveBeenCalledWith("v2")
+  expect(api.publishCatalog2Version).not.toHaveBeenCalled()
 })
 
 // Bug real reportado 2026-09-11: "Com pendências" reusava o mesmo estado
@@ -438,26 +503,23 @@ it("bug real: 'Com pendências' filtra de verdade (has_pendencies=true), fica vi
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
 
-  const pendenciasTab = screen.getByText("Com pendências").closest("button") as HTMLElement
-  const categoriasTab = screen.getByText("Categorias").closest("button") as HTMLElement
+  // A faixa visível é a compacta da barra (botões com aria-label; a faixa larga antiga está oculta). Cada aba tem a sua
+  // cor sempre visível e a selecionada fica mais forte (QUICK_TAB_TONE: rosa e violeta "-200").
+  const pendenciasTab = screen.getByRole("button", { name: "Com pendências" })
+  const categoriasTab = screen.getByRole("button", { name: "Categorias" })
 
   await userEvent.click(pendenciasTab)
-  // filtra de verdade — vai ao backend com has_pendencies=true
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ has_pendencies: "true" })))
-  // fica visualmente ativa (mesma classe de cor usada nas outras abas ativas)
-  expect(pendenciasTab.className).toContain("text-blue-600")
-  // "Categorias" não fica ativa junto, e o painel dela não abre sozinho
-  expect(categoriasTab.className).not.toContain("text-blue-600")
+  expect(pendenciasTab.className).toContain("bg-rose-200")
+  expect(categoriasTab.className).not.toContain("bg-violet-200")
   expect(screen.queryByLabelText("Pilar")).not.toBeInTheDocument()
 
-  // busca e ordenação continuam funcionando com o filtro ativo
-  await userEvent.type(screen.getByPlaceholderText(/Buscar por nome/i), "demo")
+  await userEvent.type(screen.getByPlaceholderText(/Pesquisar produtos/i), "demo")
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ has_pendencies: "true", q: "demo" })))
 
-  // clicar em "Todos os produtos" limpa o filtro de pendências
-  await userEvent.click(screen.getByText("Todos os produtos"))
-  await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ has_pendencies: undefined })))
-  expect(pendenciasTab.className).not.toContain("text-blue-600")
+  await userEvent.click(screen.getByRole("button", { name: "Todos os produtos" }))
+  await waitFor(() => expect(api.getCatalog2Products).toHaveBeenLastCalledWith(expect.objectContaining({ has_pendencies: undefined })))
+  expect(pendenciasTab.className).not.toContain("bg-rose-200")
 })
 
 // Bug real reportado 2026-09-11: o contador ("36 produtos") vem de
@@ -468,10 +530,6 @@ it("bug real: 'Com pendências' filtra de verdade (has_pendencies=true), fica vi
 // 36, enquanto a página selecionada continuava a mesma): a API responde com
 // `total` correto e `data: []`, porque a página pedida não existe mais.
 it("bug real: contador mostra 36 produtos mas tabela/grade ficam vazias (página antiga inválida após o total cair) — corrige sozinho, sem F5", async () => {
-  // Simula a API real: pagina de verdade por `page`/`page_size`, com um
-  // total GRANDE na 1ª chamada (equivalente aos 162 antigos / a um total
-  // anterior) e, a partir da 2ª chamada em diante, o total real de 36 —
-  // sem que nenhum filtro rastreado (status/busca/ordenação) tenha mudado.
   const ALL_36 = Array.from({ length: 36 }, (_, i) => ({
     id: `real-${i}`, internal_name: `Produto real ${i}`, slug: `produto-${i}`,
     pillar: { name: "A. Presença" }, category: { name: "Performance" }, origin: "novo",
@@ -483,18 +541,14 @@ it("bug real: contador mostra 36 produtos mas tabela/grade ficam vazias (página
   let call = 0
   api.getCatalog2Products.mockImplementation(async (params: any) => {
     call++
-    const pageSize = 15
+    // Como a API real: respeita o page_size pedido pela tela (o padrão da barra é 10 por página; antes a simulação
+    // fixava 15 e a página "corrigida" pela tela continuava vazia só na simulação).
+    const pageSize = Number(params?.page_size) || 15
     const page = Number(params?.page) || 1
-    // 1ª chamada (mount, page=1): total "antigo", bem maior que 36 — é o
-    // que faz o botão "5" existir e ser clicável.
     if (call === 1) {
       const old = Array.from({ length: 90 }, (_, i) => ({ ...ALL_36[i % 36], id: `old-${i}` }))
       return { data: old.slice(0, pageSize), total: 90, page: 1, page_size: pageSize }
     }
-    // Da 2ª chamada em diante o total real (36) já está valendo — SEM
-    // nenhum filtro rastreado (status/busca/ordenação) ter mudado. Se a
-    // página pedida (5) não existe mais no total novo, vem "total certo,
-    // data vazia" — exatamente o bug relatado.
     const total = ALL_36.length
     const start = (page - 1) * pageSize
     return { data: ALL_36.slice(start, start + pageSize), total, page, page_size: pageSize }
@@ -503,19 +557,18 @@ it("bug real: contador mostra 36 produtos mas tabela/grade ficam vazias (página
   renderPage()
   await screen.findByText("Produto real 0")
 
-  // usuário navega pra uma página só válida no total "antigo" (90 → 6
-  // páginas) — a paginação aparece espelhada (topo + rodapé), usa a 1ª.
-  await userEvent.click(screen.getAllByRole("button", { name: "5" })[0])
-  // reproduz o bug: a API respondeu total=36 (contador bateria com "36"),
-  // mas data=[] porque a página 5 não existe mais pro total real (3 páginas).
+  // A paginação compacta da barra tem o campo "Ir para a página" (desde 10/2026); vai pra uma página que só existia
+  // no total "antigo" (90 → 6 páginas).
+  await userEvent.type(screen.getByRole("spinbutton", { name: "Ir para a página" }), "5")
+  await userEvent.click(screen.getByRole("button", { name: "Ir" }))
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ page: 5 })))
 
   // a tela se corrige sozinha — nunca fica "36 produtos, tabela vazia"
   await waitFor(() => {
     expect(screen.getAllByText(/Produto real/).length).toBeGreaterThan(0)
   })
-  const calledPages = api.getCatalog2Products.mock.calls.map((c: any[]) => c[0]?.page)
-  expect(calledPages[calledPages.length - 1]).toBeLessThanOrEqual(3)
+  const lastCall = api.getCatalog2Products.mock.calls.at(-1)![0]
+  expect(lastCall.page).toBeLessThanOrEqual(Math.ceil(36 / lastCall.page_size))
 })
 
 // Bug real reportado 2026-09-11 (evidência real de tela): aba "Todos os
@@ -545,47 +598,56 @@ it("bug real: falha real na listagem (ex.: erro 500 do backend) aparece como ERR
   expect(screen.queryByText(/Erro ao carregar a lista de produtos/i)).not.toBeInTheDocument()
 })
 
+// Os textos informativos sobre os 162 produtos do catálogo antigo saíram da tela em 24/09 (aceito pelo usuário em
+// 04/11); a lista continua vindo só do catalog2.
 it("listagem: mostra produtos catalog2, situação, etiqueta Novo, e nunca os 162 antigos", async () => {
   renderPage()
   expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()
-  expect(screen.getByText(/não conta os 162 operacionais/i)).toBeInTheDocument()
-  expect(screen.getByText(/catálogo antigo, com 162 produtos, não aparece mais aqui/i)).toBeInTheDocument()
-  expect(screen.getByText("Novo")).toBeInTheDocument()
+  expect(api.getCatalog2Products).toHaveBeenCalled()
   expect(screen.getAllByText("Ativo").length).toBeGreaterThan(0)
-  // busca é passada ao backend
-  await userEvent.type(screen.getByPlaceholderText(/Buscar por nome/i), "demo")
+  // a etiqueta "Novo" fica no selo da imagem, que só existe nos cards (modo Grade)
+  await userEvent.click(screen.getByRole("button", { name: "3 colunas" }))
+  expect(screen.getByText("Novo")).toBeInTheDocument()
+  expect(screen.queryByText(/ANTIGA #/i)).not.toBeInTheDocument()
+  await userEvent.type(screen.getByPlaceholderText(/Pesquisar produtos/i), "demo")
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ q: "demo" })))
 })
 
-it("resumo de status único: um só bloco descreve 'em preparação' e o que falta", async () => {
+// O bloco de texto do resumo saiu com o painel de importação (24/09, aceito em 04/11): o resumo por situação são as
+// próprias abas da barra, cada uma com o seu número, sem repetir os estados em outro painel.
+it("resumo de status único: as abas da barra mostram cada situação uma vez, com o número real", async () => {
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  expect(screen.getByText(/produtos da plataforma, ainda/i)).toBeInTheDocument()
-  expect(screen.getAllByText(/em prepara/i).length).toBeGreaterThan(0)
-  expect(screen.getByText(/catálogo antigo, com 162 produtos, não aparece mais aqui/i)).toBeInTheDocument()
+  expect(within(screen.getByRole("button", { name: "Em preparação" })).getByText("36")).toBeInTheDocument()
+  expect(within(screen.getByRole("button", { name: "Ativos" })).getByText("1")).toBeInTheDocument()
+  expect(screen.getAllByRole("button", { name: "Em preparação" })).toHaveLength(1)
 })
 
-it("construtor abre dentro do container padrão (EmbeddedSlideScreen, com botão de fixar na bandeja) e Voltar fecha sem sair da lista", async () => {
+it("construtor abre dentro do container padrão (com botão de fixar na bandeja) e Fechar volta pra lista", async () => {
   const user = userEvent.setup()
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
   await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  expect(await screen.findByText("Título comercial")).toBeInTheDocument()
-  expect(screen.getByRole("button", { name: /adicionar à bandeja de telas/i })).toBeInTheDocument()
-  await user.click(screen.getByRole("button", { name: "Voltar" }))
-  expect(await screen.findByPlaceholderText(/Buscar por nome/i)).toBeInTheDocument()
+  expect(await screen.findByLabelText("Título comercial")).toBeInTheDocument()
+  const panel = screen.getByTestId("product-editor-panel")
+  // a página também tem o seu botão de bandeja — o do construtor fica dentro do painel
+  expect(within(panel).getByRole("button", { name: /adicionar à bandeja de telas/i })).toBeInTheDocument()
+  await user.click(within(panel).getByRole("button", { name: /^Fechar$/ }))
+  await waitFor(() => expect(screen.queryByTestId("product-editor-panel")).not.toBeInTheDocument())
+  expect(screen.getByPlaceholderText(/Pesquisar produtos/i)).toBeInTheDocument()
 })
 
-it("construtor: mostra aviso de campos provisórios quando o produto ainda não tem preço/tarefas reais", async () => {
-  api.getCatalog2Readiness.mockResolvedValue({
-    ready_for_client: 0, total: 1, client_visible_now: 0, with_blockers: 1, note: "",
-    products: [{ id: "prod1", name: "[TESTE LOCAL] Demo", task_count: 0, price_amount: null, blockers: [], pendings: [] }],
-  })
+// O aviso fixo de "campos provisórios" do construtor saiu (aceito em 04/11). Quem diz o que falta é o indicador de
+// preenchimento do cabeçalho e a lista de bloqueios da conferência.
+it("construtor: produto sem preço mostra o que falta no preenchimento e nos bloqueios", async () => {
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
   await userEvent.click(screen.getByRole("button", { name: /editar produto|continuar configuração/i }))
-  await screen.findByText("Título comercial")
-  expect(await screen.findByText(/campos provisórios/i)).toBeInTheDocument()
+  await screen.findByLabelText("Título comercial")
+  const panel = screen.getByTestId("product-editor-panel")
+  expect(within(panel).getByRole("button", { name: "Ver preenchimento do produto" })).toBeInTheDocument()
+  expect(within(panel).getByText("Preço a definir")).toBeInTheDocument()
+  expect(within(panel).getByText("Precificação")).toBeInTheDocument()
 })
 
 it("reunião 10/09: produto com esforço provisório mostra 'Especialidade e tempo provisórios para teste' na listagem", async () => {
@@ -595,49 +657,41 @@ it("reunião 10/09: produto com esforço provisório mostra 'Especialidade e tem
   })
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  expect(await screen.findByLabelText(/Especialidade e tempo provisórios para teste/i)).toBeInTheDocument()
+  // Desde 10/2026 o aviso fica no ícone de saúde da linha ("Dados provisórios") e o motivo aparece ao passar o mouse.
+  const icon = await screen.findByLabelText("Dados provisórios")
+  await userEvent.hover(icon)
+  expect((await screen.findAllByText("Especialidade e tempo provisórios para teste.")).length).toBeGreaterThan(0)
 })
 
-it("editor: as 10 seções seguem acessíveis, reagrupadas em 5 etapas + Origem", async () => {
+// Editor padrão desde 03/11 (fluxo de 3 passos): abre na versão publicada, em leitura; editar pede escolher o
+// rascunho e clicar em "Editar".
+it("editor: as seções do cadastro seguem acessíveis no fluxo de 3 passos", async () => {
   const user = userEvent.setup()
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
+  const panel = await openEditorPanel(user)
+  const nav = within(panel).getByRole("navigation", { name: "Passos do produto" })
+  const labels = within(nav).getAllByRole("button").map((b) => b.textContent ?? "")
+  expect(labels).toHaveLength(3)
+  expect(labels[0]).toMatch(/Produto/)
+  expect(labels[1]).toMatch(/Configurações da tarefa e etapas/)
+  expect(labels[2]).toMatch(/Conferência, preço e publicação/)
 
-  // 5 etapas de trabalho + área secundária de origem
-  expect(await screen.findByRole("tab", { name: "Informações do produto" })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: "Classificação e opções" })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: "Entrega: tarefas, etapas e prazos" })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: "Custos e preço" })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: "Revisão e publicação" })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: "Origem e importação" })).toBeInTheDocument()
+  // Passo 1: dados, classificação, público, descrição, comercial, itens, requisitos e resumo da mudança
+  for (const section of ["Dados principais", "Classificação do produto", "Quem pode ver este produto", "Descrição completa", "Informações comerciais", "Requisitos e resumo dos entregáveis", "Resumo da mudança"]) {
+    expect(within(panel).getAllByText(section).length).toBeGreaterThan(0)
+  }
+  expect(within(panel).getByText("Classificações 4F")).toBeInTheDocument()
 
-  // Informações do produto (ex-"1. Geral") abre por padrão
-  expect(await screen.findByText("Título comercial")).toBeInTheDocument()
+  // Passo 2: variações do produto e as tarefas com as suas etapas
+  await goToEditorStep(user, panel, /Configurações da tarefa e etapas/)
+  expect(within(panel).getAllByText("Formato").length).toBeGreaterThan(0)
+  expect(within(panel).getByRole("button", { name: "Ver tarefa 1: Tarefa 1" })).toBeInTheDocument()
 
-  // Classificação e opções → 3 sub-abas, cada painel renderiza
-  await user.click(screen.getByRole("tab", { name: "Classificação e opções" }))
-  await user.click(await screen.findByRole("tab", { name: /^Classificação$/ }))
-  // "Classificações 4F" também é o rótulo de um card na LISTAGEM por trás
-  // (agora sempre montada — o construtor abre em overlay, não mais troca de
-  // tela cheia) — desambiguar pelo <span> do campo do editor.
-  expect(await screen.findByText("Classificações 4F", { selector: "span" })).toBeInTheDocument()
-  await user.click(screen.getByRole("tab", { name: /^Variações$/ }))
-  expect(await screen.findByText(/Escolhas OBRIGATÓRIAS/i)).toBeInTheDocument()
-  await user.click(screen.getByRole("tab", { name: /^Adicionais$/ }))
-  expect(await screen.findByText(/Escolhas OPCIONAIS/i)).toBeInTheDocument()
-
-  // Entrega → tarefas/etapas + prazos/condições, cada painel renderiza
-  await user.click(screen.getByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-  await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-  expect(await screen.findByText(/Modelos do catálogo/i)).toBeInTheDocument()
-  await user.click(screen.getByRole("tab", { name: /^Prazos e condições$/ }))
-  expect(await screen.findByText(/Regras tipadas/i)).toBeInTheDocument()
-
-  // Revisão e publicação → pré-visualização + publicação/versões
-  await user.click(screen.getByRole("tab", { name: "Revisão e publicação" }))
-  expect(await screen.findByRole("tab", { name: /^Pré-visualização$/ })).toBeInTheDocument()
-  expect(screen.getByRole("tab", { name: /^Publicação e versões$/ })).toBeInTheDocument()
+  // Passo 3: conferência final, publicação/versões e histórico
+  await goToEditorStep(user, panel, /Conferência, preço e publicação/)
+  for (const tab of ["Conferência final", "Publicação e versões", "Histórico"]) expect(editorSubTab(panel, tab)).toBeTruthy()
+  expect(within(panel).getAllByText("Composição do preço").length).toBeGreaterThan(0)
 })
 
 // Reunião 2026-09-14 (Item 3 — "Cadastro integrado do produto"): o admin
@@ -654,338 +708,140 @@ function statefulDraftProduct() {
 }
 
 describe("Cadastro integrado do produto (Item 3, reunião 2026-09-14)", () => {
-  it("criar tarefa nova, adicionar e editar etapa, criar especialidade nova, criar e vincular questionário — tudo fica visível ao reabrir", async () => {
-    const user = userEvent.setup()
-    let db = statefulDraftProduct()
-    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
-
-    let taskSeq = 0
-    api.addCatalog2Task.mockImplementation(async (versionId: string, body: any) => {
-      const v = db.versions.find((x: any) => x.id === versionId)
-      const task = { id: `t-new-${++taskSeq}`, key: body.key, name: body.name, sort_order: 99, execution_mode: "humano", estimated_minutes: null, is_conditional: false, requires_review: false, specialty: null, questionnaire: null, ai: null, depends_on: [], steps: [] }
-      v.tasks.push(task)
-      return task
-    })
-    api.addCatalog2Step.mockImplementation(async (taskId: string, body: any) => {
-      const task = db.versions.flatMap((v: any) => v.tasks).find((t: any) => t.id === taskId)
-      const step = { id: `s-new-${task.steps.length + 1}`, key: body.key, name: body.name, sort_order: task.steps.length + 1, estimated_minutes: body.estimated_minutes ?? null, is_conditional: false }
-      task.steps.push(step)
-      return step
-    })
-    api.updateCatalog2Step.mockImplementation(async (stepId: string, body: any) => {
-      const step = db.versions.flatMap((v: any) => v.tasks).flatMap((t: any) => t.steps).find((s: any) => s.id === stepId)
-      Object.assign(step, body)
-      return step
-    })
-    // Cópia LOCAL da lista de especialidades — nunca muta o fixture
-    // REFS.specialties.data compartilhado entre testes (evitaria "vazar"
-    // a especialidade criada aqui pros demais testes do arquivo).
-    const specialtiesList = [...REFS.specialties.data]
-    api.getCatalog2Specialties.mockImplementation(async () => ({ data: specialtiesList }))
-    api.addCatalog2Specialty.mockImplementation(async (body: any) => {
-      const specialty = { id: "sp-new-1", key: body.key, name: body.name, max_hourly_rate: body.max_hourly_rate ?? null }
-      specialtiesList.push(specialty)
-      return specialty
-    })
-    api.updateCatalog2Task.mockImplementation(async (taskId: string, body: any) => {
-      const task = db.versions.flatMap((v: any) => v.tasks).find((t: any) => t.id === taskId)
-      if ("specialty_id" in body) task.specialty = body.specialty_id ? specialtiesList.find((s: any) => s.id === body.specialty_id) : null
-      Object.assign(task, body)
-      return task
-    })
-    let questionnaireSeq = 0
-    const questionnaireDb: any[] = []
-    api.addCatalog2Questionnaire.mockImplementation(async (body: any) => {
-      const q = { id: `q-new-${++questionnaireSeq}`, name: body.name, description: body.description ?? null, questions: [] }
-      questionnaireDb.push(q)
-      return q
-    })
-    api.addCatalog2QuestionnaireQuestion.mockImplementation(async (questionnaireId: string, body: any) => {
-      const q = questionnaireDb.find((x) => x.id === questionnaireId)
-      const question = { id: `qq-${q.questions.length + 1}`, key: body.key, label: body.label, is_required: body.is_required, sort_order: body.sort_order }
-      q.questions.push(question)
-      return question
-    })
-    api.setCatalog2TaskQuestionnaire.mockImplementation(async (taskId: string, questionnaireId: string | null) => {
-      const task = db.versions.flatMap((v: any) => v.tasks).find((t: any) => t.id === taskId)
-      task.questionnaire = questionnaireId ? questionnaireDb.find((q) => q.id === questionnaireId) : null
-      return { ok: true, questionnaire_id: questionnaireId }
-    })
-
-    renderPage()
-    await screen.findByText("[TESTE LOCAL] Demo")
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    await screen.findByText(/Modelos do catálogo/i)
-
-    // 1. Criar uma tarefa nova (fluxo "Criar nova").
-    await user.click(screen.getByRole("button", { name: /Criar nova/i }))
-    await user.type(screen.getByLabelText("key"), "briefing-inicial")
-    await user.type(screen.getByLabelText("nome"), "Briefing inicial")
-    await user.click(screen.getByRole("button", { name: "Criar tarefa" }))
-    expect(await screen.findByText(/Briefing inicial/)).toBeInTheDocument()
-    expect(api.addCatalog2Task).toHaveBeenCalledWith("v2", { key: "briefing-inicial", name: "Briefing inicial" })
-
-    // 2. Adicionar uma etapa dentro da tarefa. Nesse ponto o formulário de
-    // "Criar nova" tarefa continua aberto (abaixo da lista), então "key"/
-    // "nome" aparecem duas vezes na tela — o da ETAPA vem primeiro no DOM
-    // (dentro da lista de tarefas), o da tarefa nova vem depois.
-    const stepKeyInputs = screen.getAllByLabelText("key")
-    await user.type(stepKeyInputs[0], "coleta-dados")
-    const stepNameInputs = screen.getAllByLabelText("nome")
-    await user.type(stepNameInputs[0], "Coletar dados do cliente")
-    await user.click(screen.getByRole("button", { name: "Adicionar etapa" }))
-    expect(await screen.findByText(/Coletar dados do cliente/)).toBeInTheDocument()
-
-    // 3. Editar a etapa recém-criada.
-    await user.click(screen.getByText("editar"))
-    const editNameInput = screen.getByDisplayValue("Coletar dados do cliente")
-    await user.clear(editNameInput)
-    await user.type(editNameInput, "Coletar briefing completo")
-    await user.click(screen.getByRole("button", { name: "Salvar" }))
-    expect(await screen.findByText(/Coletar briefing completo/)).toBeInTheDocument()
-    expect(api.updateCatalog2Step).toHaveBeenCalledWith("s-new-1", { name: "Coletar briefing completo", estimated_minutes: null })
-
-    // 4. Criar uma especialidade nova durante a configuração da tarefa.
-    await user.click(screen.getByText("+ nova especialidade"))
-    await user.type(screen.getAllByLabelText("key")[0], "copywriter")
-    await user.type(screen.getAllByLabelText("nome")[0], "Copywriter")
-    await user.click(screen.getByRole("button", { name: "Criar especialidade" }))
-    await waitFor(() => expect(api.addCatalog2Specialty).toHaveBeenCalledWith({ key: "copywriter", name: "Copywriter", max_hourly_rate: null }))
-    expect(await screen.findByRole("option", { name: "Copywriter" })).toBeInTheDocument()
-
-    // 5. Criar e vincular um questionário (perguntas + obrigatoriedade).
-    await user.click(screen.getByRole("button", { name: /Criar novo questionário/i }))
-    await user.type(screen.getByLabelText("nome do questionário"), "Briefing de conteúdo")
-    await user.type(screen.getByLabelText("nova pergunta"), "Qual o objetivo da campanha?")
-    await user.click(screen.getByRole("button", { name: "Adicionar pergunta" }))
-    expect(screen.getByText(/Qual o objetivo da campanha\?/)).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Criar e vincular" }))
-    await waitFor(() => expect(api.setCatalog2TaskQuestionnaire).toHaveBeenCalledWith("t-new-1", "q-new-1"))
-    expect(await screen.findByText(/Questionário: Briefing de conteúdo/)).toBeInTheDocument()
-    expect(screen.getByText(/Qual o objetivo da campanha\?/)).toBeInTheDocument()
-
-    // 6. Fechar (Voltar) e reabrir o editor — tudo continua vinculado e visível.
-    await user.click(screen.getByRole("button", { name: /^Voltar$/i }))
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    expect(await screen.findByText(/Briefing inicial/)).toBeInTheDocument()
-    expect(screen.getByText(/Coletar briefing completo/)).toBeInTheDocument()
-    expect(screen.getByText(/questionário: Briefing de conteúdo/)).toBeInTheDocument()
-  })
-
-  it("selecionar tarefa existente (de outro produto) IMPORTA uma cópia pra esta versão, sem alterar a tarefa de origem", async () => {
+  // No editor novo a tarefa nasce pelo botão "Adicionar tarefa" → "Criar nova tarefa" (só o nome; ela entra no catálogo
+  // global de modelos). Etapas e questionário são editados nos modais próprios, cobertos nos testes do editor
+  // (step-row-*, catalog2-questionnaire-builder.test.tsx); aqui fica o caminho de ponta a ponta da tarefa.
+  it("criar tarefa nova no rascunho — continua visível ao fechar e reabrir", async () => {
     const user = userEvent.setup()
     const db = statefulDraftProduct()
     api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
-    api.searchCatalog2Tasks.mockResolvedValue({
-      data: [{ id: "t-other", key: "revisao-seo", name: "Revisão de SEO", execution_mode: "humano", estimated_minutes: 30, specialty_name: "SEO", step_count: 2, questionnaire: null, product_name: "Outro Produto", version_label: "v1 (publicada)" }],
-    })
-    api.importCatalog2Task.mockImplementation(async (versionId: string, sourceTaskId: string) => {
+    api.addCatalog2Task.mockImplementation(async (versionId: string, body: any) => {
       const v = db.versions.find((x: any) => x.id === versionId)
-      v.tasks.push({ id: "t-imported-1", key: "revisao-seo", name: "Revisão de SEO", sort_order: 99, execution_mode: "humano", estimated_minutes: 30, is_conditional: false, requires_review: false, specialty: null, questionnaire: null, ai: null, depends_on: [], steps: [] } as any)
-      return { ok: true, task_id: "t-imported-1" }
+      const task = { id: "t-new-1", key: "briefing-inicial", name: body.name, sort_order: 1, execution_mode: "humano", estimated_minutes: null, is_conditional: false, requires_review: false, specialty: null, questionnaire: null, ai: null, depends_on: [], steps: [] }
+      v.tasks.push(task)
+      return task
     })
 
     renderPage()
     await screen.findByText("[TESTE LOCAL] Demo")
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    await user.click(screen.getByRole("button", { name: /Selecionar existente/i }))
-    await user.type(screen.getByPlaceholderText(/Buscar tarefa por nome ou key/i), "seo")
+    let panel = await openEditorPanel(user)
+    await editDraft(user, panel)
+    await startNewTask(user, panel, "Briefing inicial")
+    await user.click(within(panel).getByRole("button", { name: "Criar tarefa" }))
+    await waitFor(() => expect(api.addCatalog2Task).toHaveBeenCalledWith("v2", expect.objectContaining({ name: "Briefing inicial" })))
+    expect(await within(panel).findByRole("button", { name: /Ver tarefa 1: Briefing inicial/ })).toBeInTheDocument()
+    expect(api.addCatalog2Task).toHaveBeenCalledTimes(1)
+
+    // em edição, sair pede confirmação ("Deseja salvar antes de sair?"); a tarefa já foi gravada no servidor
+    await user.click(within(panel).getByRole("button", { name: /^Fechar$/ }))
+    await user.click(await screen.findByRole("button", { name: "Salvar rascunho e sair" }))
+    await waitFor(() => expect(screen.queryByTestId("product-editor-panel")).not.toBeInTheDocument())
+    panel = await openEditorPanel(user)
+    await chooseVersion(user, panel, "v2 — Rascunho")
+    expect(await within(panel).findByRole("button", { name: /Ver tarefa 1: Briefing inicial/ })).toBeInTheDocument()
+  // Monta o editor completo duas vezes (criar e reabrir): ~10s medidos com só 2 arquivos rodando (04/11), então os 15s
+  // padrão estouram na suíte completa. Folga só neste teste.
+  }, 45_000)
+
+  // Desde 30/09 ("catálogo global de modelos") a tarefa existente vem do catálogo de modelos, e não mais copiada de
+  // outro produto: "Selecionar modelo existente" → "Usar" adiciona a tarefa nesta versão sem mexer no modelo.
+  // A parte "adicionar etapa" do antigo teste integrado (setembro): no editor atual a etapa nasce por "Ver tarefa" →
+  // "Adicionar etapa" → "Criar nova etapa" → pergunta se é em ciclos. A edição da etapa abre o modal de 6 blocos, coberto
+  // em step-row-*.test.tsx e catalog2-questionnaire-builder.test.tsx ("modal da etapa preserva seis formulários").
+  it("adicionar etapa a uma tarefa do rascunho grava a etapa nessa tarefa, uma única vez", async () => {
+    const user = userEvent.setup()
+    const db = productDetail()
+    ;(db.versions[0] as any).tasks = [{ id: "t-draft", key: "t-draft", name: "Tarefa do rascunho", sort_order: 1, execution_mode: "humano", estimated_minutes: null, is_conditional: false, requires_review: false, specialty: null, questionnaire: null, ai: null, depends_on: [], steps: [] }]
+    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
+    api.addCatalog2Step.mockImplementation(async (taskId: string, body: any) => {
+      const step = { id: "s-new-1", key: "nova-etapa", name: body.name, sort_order: 1, estimated_minutes: null, is_conditional: false }
+      ;((db.versions[0] as any).tasks.find((t: any) => t.id === taskId).steps as any[]).push(step)
+      return step
+    })
+
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    const panel = await openEditorPanel(user)
+    await editDraft(user, panel)
+    await user.click(within(panel).getByRole("button", { name: /Ver tarefa 1: Tarefa do rascunho/ }))
+    await user.click(await within(panel).findByRole("tab", { name: "Etapas e fluxo" }))
+    await user.click(await within(panel).findByRole("button", { name: /Adicionar etapa/ }))
+    await user.click(await screen.findByTestId("create-new-step"))
+    await user.click(await screen.findByTestId("step-ask-cycles-no"))
+
+    await waitFor(() => expect(api.addCatalog2Step).toHaveBeenCalledWith("t-draft", expect.objectContaining({ name: "Nova etapa" })))
+    expect(api.addCatalog2Step).toHaveBeenCalledTimes(1)
+    expect((await within(panel).findAllByText("Nova etapa")).length).toBeGreaterThan(0)
+    // 700 ms depois de criar, o editor abre sozinho o modal da etapa nova (OPEN_STEP_EVENT); ele precisa abrir sem erro
+    expect(await screen.findByTestId("step-edit-panel", {}, { timeout: 3000 })).toBeInTheDocument()
+  // editor completo + painel da tarefa: ~5,6s sozinho (04/11); folga só neste teste para a suíte completa
+  }, 45_000)
+
+  it("selecionar modelo de tarefa existente adiciona a tarefa nesta versão, sem alterar o modelo de origem", async () => {
+    const user = userEvent.setup()
+    const db = statefulDraftProduct()
+    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
+    api.getCatalog2TaskModels.mockResolvedValue({
+      data: [{ id: 12, name: "Revisão de SEO", is_active: true, execution_mode: "humano", specialty: { name: "SEO" }, estimated_minutes: 30, cycle_type: "avulso", step_count: 2, product_count: 1 }],
+      total: 1,
+    })
+    api.addCatalog2TaskFromModel.mockImplementation(async (versionId: string) => {
+      (db.versions.find((x: any) => x.id === versionId).tasks as any[]).push({ id: "t-from-model", key: "revisao-seo", name: "Revisão de SEO", sort_order: 1, execution_mode: "humano", estimated_minutes: 30, is_conditional: false, requires_review: false, specialty: null, questionnaire: null, ai: null, depends_on: [], steps: [] })
+      return { ok: true }
+    })
+
+    renderPage()
+    await screen.findByText("[TESTE LOCAL] Demo")
+    const panel = await openEditorPanel(user)
+    await editDraft(user, panel)
+    await user.click(within(panel).getByRole("button", { name: "Adicionar tarefa" }))
+    await user.click(await screen.findByRole("menuitem", { name: /Selecionar modelo existente/ }))
     expect(await screen.findByText("Revisão de SEO")).toBeInTheDocument()
-    expect(screen.getByText(/Outro Produto/)).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Importar cópia" }))
-    await waitFor(() => expect(api.importCatalog2Task).toHaveBeenCalledWith("v2", "t-other"))
-    // "Revisão de SEO" aparece 2x agora (resultado da busca + a tarefa
-    // recém-importada na lista) — confirma a cópia sem depender de o
-    // painel de busca ainda estar aberto ou não.
-    expect(await screen.findByText("#99 Revisão de SEO")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Usar" }))
+
+    await waitFor(() => expect(api.addCatalog2TaskFromModel).toHaveBeenCalledWith("v2", 12))
+    expect(await within(panel).findByRole("button", { name: /Ver tarefa 1: Revisão de SEO/ })).toBeInTheDocument()
+    // o modelo de origem não é alterado nem duplicado
+    expect(api.updateCatalog2Task).not.toHaveBeenCalled()
+    expect(api.addCatalog2Task).not.toHaveBeenCalled()
   })
 
-  it("cancelar a criação (fechar sem salvar) preserva o produto e as tarefas já existentes", async () => {
+  it("cancelar a criação da tarefa preserva o produto e as tarefas já existentes", async () => {
     const user = userEvent.setup()
+    const db = productDetail()
+    db.versions[0].tasks = [{ id: "t-existing", key: "existente", name: "Tarefa existente", sort_order: 1, execution_mode: "humano", estimated_minutes: null, is_conditional: false, requires_review: false, specialty: null, questionnaire: null, ai: null, depends_on: [], steps: [] }]
+    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
+
     renderPage()
     await screen.findByText("[TESTE LOCAL] Demo")
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    await user.click(screen.getByRole("button", { name: /Criar nova/i }))
-    await user.type(screen.getByLabelText("key"), "rascunho-abandonado")
-    // Fecha sem clicar em "Criar tarefa".
-    await user.click(screen.getByRole("button", { name: /^Voltar$/i }))
+    const panel = await openEditorPanel(user)
+    await editDraft(user, panel)
+    await startNewTask(user, panel, "Não deveria existir")
+    await user.click(within(panel).getByRole("button", { name: "Cancelar" }))
+    expect(newTaskInput(panel)).not.toBeInTheDocument()
     expect(api.addCatalog2Task).not.toHaveBeenCalled()
-    // Produto continua acessível e intacto (nenhuma chamada de escrita disparada).
-    expect(await screen.findByText("[TESTE LOCAL] Demo")).toBeInTheDocument()
+    expect(within(panel).getByRole("button", { name: /Ver tarefa 1: Tarefa existente/ })).toBeInTheDocument()
+    expect(within(panel).queryByText("Não deveria existir")).not.toBeInTheDocument()
   })
 
   it("erro ao salvar a tarefa mostra mensagem visível e não fecha o formulário de criação", async () => {
     const user = userEvent.setup()
-    api.addCatalog2Task.mockRejectedValueOnce(new Error("Situação inválida."))
+    api.addCatalog2Task.mockRejectedValue(new Error("Falha simulada ao criar a tarefa."))
     renderPage()
     await screen.findByText("[TESTE LOCAL] Demo")
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    await user.click(screen.getByRole("button", { name: /Criar nova/i }))
-    await user.type(screen.getByLabelText("key"), "tarefa-com-erro")
-    await user.type(screen.getByLabelText("nome"), "Tarefa com erro")
-    await user.click(screen.getByRole("button", { name: "Criar tarefa" }))
-    expect(await screen.findByText("Situação inválida.")).toBeInTheDocument()
-    expect(screen.queryByText(/Tarefa com erro/)).not.toBeInTheDocument()
+    const panel = await openEditorPanel(user)
+    await editDraft(user, panel)
+    await startNewTask(user, panel, "Tarefa com erro")
+    await user.click(within(panel).getByRole("button", { name: "Criar tarefa" }))
+    expect((await screen.findAllByText(/Falha simulada ao criar a tarefa\./)).length).toBeGreaterThan(0)
+    expect(newTaskInput(panel)).toHaveValue("Tarefa com erro")
+    expect(within(panel).getByRole("button", { name: "Criar tarefa" })).toBeInTheDocument()
   })
 
-  it("clique repetido em 'Criar e vincular' (questionário) não dispara duas criações — botão fica desabilitado enquanto salva", async () => {
-    const user = userEvent.setup()
-    const db = statefulDraftProduct()
-    db.versions.find((v: any) => v.id === "v2").tasks = [{ id: "t1", key: "t1", name: "Tarefa 1", sort_order: 1, execution_mode: "humano", estimated_minutes: 60, is_conditional: false, requires_review: false, steps: [], specialty: null, questionnaire: null, ai: null, depends_on: [] }]
-    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
-    let createCalls = 0
-    let resolveCreate: (v: any) => void = () => {}
-    api.addCatalog2Questionnaire.mockImplementation(() => {
-      createCalls++
-      return new Promise((resolve) => { resolveCreate = resolve })
-    })
-
-    renderPage()
-    await screen.findByText("[TESTE LOCAL] Demo")
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    await user.click(screen.getByRole("button", { name: /Criar novo questionário/i }))
-    await user.type(screen.getByLabelText("nome do questionário"), "Briefing X")
-    await user.type(screen.getByLabelText("nova pergunta"), "Pergunta 1")
-    await user.click(screen.getByRole("button", { name: "Adicionar pergunta" }))
-    const saveBtn = screen.getByRole("button", { name: "Criar e vincular" })
-    await user.click(saveBtn)
-    // Segundo clique enquanto a primeira chamada ainda não resolveu.
-    await user.click(screen.getByRole("button", { name: /Salvando/i }))
-    expect(createCalls).toBe(1)
-    resolveCreate({ id: "q-x", name: "Briefing X", description: null, questions: [] })
-  })
 
   // Item 3.1 (reunião 2026-09-14, "Edição e preservação dos questionários").
-  it("editar título, perguntas e reordenar um questionário já vinculado pela interface — avisa quando cria cópia, e persiste ao fechar e reabrir", async () => {
-    const user = userEvent.setup()
-    const db = statefulDraftProduct()
-    const draftV = db.versions.find((v: any) => v.id === "v2")
-    draftV.tasks = [{
-      id: "t1", key: "t1", name: "Tarefa 1", sort_order: 1, execution_mode: "humano", estimated_minutes: 60,
-      is_conditional: false, requires_review: false, specialty: null, ai: null, depends_on: [], steps: [],
-      questionnaire: { id: "q1", name: "Briefing original", description: "desc original", questions: [
-        { id: "qq1", key: "objetivo", label: "Qual o objetivo?", is_required: true, sort_order: 1 },
-        { id: "qq2", key: "publico", label: "Qual o público?", is_required: false, sort_order: 2 },
-      ] },
-    }]
-    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
-    api.updateCatalog2TaskQuestionnaireContent.mockImplementation(async (taskId: string, body: any) => {
-      const task = draftV.tasks.find((t: any) => t.id === taskId)
-      const forked = true // simula que era compartilhado — backend decidiu copiar
-      const newQuestionnaire = { id: "q1-copy", name: body.name, description: body.description, questions: body.questions.map((q: any, i: number) => ({ id: `qq-copy-${i + 1}`, ...q, sort_order: i + 1 })) }
-      task.questionnaire = newQuestionnaire
-      return { ok: true, forked, questionnaire: newQuestionnaire }
-    })
 
-    renderPage()
-    await screen.findByText("[TESTE LOCAL] Demo")
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    expect(await screen.findByText(/Questionário: Briefing original/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole("button", { name: "Editar" }))
-    const nameInput = screen.getByDisplayValue("Briefing original")
-    await user.clear(nameInput)
-    await user.type(nameInput, "Briefing revisado")
-    // edita a 2ª pergunta e reordena pra 1º lugar
-    const labelInputs = screen.getAllByDisplayValue(/Qual o (objetivo|público)\?/)
-    await user.clear(labelInputs[1])
-    await user.type(labelInputs[1], "Qual é o público-alvo?")
-    const upButtons = screen.getAllByRole("button").filter((b) => b.querySelector(".lucide-chevron-up"))
-    await user.click(upButtons[upButtons.length - 1]) // sobe a última pergunta editável (a 2ª)
-    // adiciona uma pergunta nova
-    await user.type(screen.getByLabelText("nova pergunta"), "Prazo desejado?")
-    await user.click(screen.getByRole("button", { name: "Adicionar pergunta" }))
-
-    await user.click(screen.getByRole("button", { name: "Salvar" }))
-    await waitFor(() => expect(api.updateCatalog2TaskQuestionnaireContent).toHaveBeenCalledTimes(1))
-    const [, savedBody] = api.updateCatalog2TaskQuestionnaireContent.mock.calls[0]
-    expect(savedBody.name).toBe("Briefing revisado")
-    expect(savedBody.questions.map((q: any) => q.label)).toEqual(["Qual é o público-alvo?", "Qual o objetivo?", "Prazo desejado?"])
-
-    // avisa que uma cópia foi criada (era compartilhado)
-    expect(await screen.findByText(/uma cópia própria foi criada/i)).toBeInTheDocument()
-    expect(await screen.findByText(/Questionário: Briefing revisado/)).toBeInTheDocument()
-
-    // fecha e reabre — continua persistido
-    await user.click(screen.getByRole("button", { name: /^Voltar$/i }))
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    expect(await screen.findByText(/Questionário: Briefing revisado/)).toBeInTheDocument()
-    expect(screen.getByText(/Qual é o público-alvo\?/)).toBeInTheDocument()
-    expect(screen.getByText(/Prazo desejado\?/)).toBeInTheDocument()
-  })
-
-  it("cancelar a edição do questionário preserva o conteúdo anterior (nenhuma chamada à API, nada muda)", async () => {
-    const user = userEvent.setup()
-    const db = statefulDraftProduct()
-    const draftV = db.versions.find((v: any) => v.id === "v2")
-    draftV.tasks = [{
-      id: "t1", key: "t1", name: "Tarefa 1", sort_order: 1, execution_mode: "humano", estimated_minutes: 60,
-      is_conditional: false, requires_review: false, specialty: null, ai: null, depends_on: [], steps: [],
-      questionnaire: { id: "q1", name: "Briefing original", description: null, questions: [{ id: "qq1", key: "objetivo", label: "Qual o objetivo?", is_required: true, sort_order: 1 }] },
-    }]
-    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
-
-    renderPage()
-    await screen.findByText("[TESTE LOCAL] Demo")
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    await user.click(screen.getByRole("button", { name: "Editar" }))
-    const nameInput = screen.getByDisplayValue("Briefing original")
-    await user.clear(nameInput)
-    await user.type(nameInput, "Alteração que será descartada")
-    await user.click(screen.getByRole("button", { name: "Cancelar" }))
-
-    expect(api.updateCatalog2TaskQuestionnaireContent).not.toHaveBeenCalled()
-    expect(await screen.findByText(/Questionário: Briefing original/)).toBeInTheDocument()
-    expect(screen.queryByText(/Alteração que será descartada/)).not.toBeInTheDocument()
-  })
-
-  it("erro ao salvar a edição do questionário mostra mensagem visível e preserva o conteúdo anterior", async () => {
-    const user = userEvent.setup()
-    const db = statefulDraftProduct()
-    const draftV = db.versions.find((v: any) => v.id === "v2")
-    draftV.tasks = [{
-      id: "t1", key: "t1", name: "Tarefa 1", sort_order: 1, execution_mode: "humano", estimated_minutes: 60,
-      is_conditional: false, requires_review: false, specialty: null, ai: null, depends_on: [], steps: [],
-      questionnaire: { id: "q1", name: "Briefing original", description: null, questions: [{ id: "qq1", key: "objetivo", label: "Qual o objetivo?", is_required: true, sort_order: 1 }] },
-    }]
-    api.getCatalog2Product.mockImplementation(async () => JSON.parse(JSON.stringify(db)))
-    api.updateCatalog2TaskQuestionnaireContent.mockRejectedValueOnce(new Error("Este questionário é usado por mais de uma tarefa — edite pelo formulário da tarefa."))
-
-    renderPage()
-    await screen.findByText("[TESTE LOCAL] Demo")
-    await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-    await user.click(await screen.findByRole("tab", { name: "Entrega: tarefas, etapas e prazos" }))
-    await user.click(await screen.findByRole("tab", { name: /^Tarefas e etapas$/ }))
-    await user.click(screen.getByRole("button", { name: "Editar" }))
-    const nameInput = screen.getByDisplayValue("Briefing original")
-    await user.clear(nameInput)
-    await user.type(nameInput, "Tentativa com erro")
-    await user.click(screen.getByRole("button", { name: "Salvar" }))
-
-    expect(await screen.findByText(/usado por mais de uma tarefa/i)).toBeInTheDocument()
-    // formulário de edição continua aberto, com o texto digitado preservado (não fechou nem reverteu).
-    expect(screen.getByDisplayValue("Tentativa com erro")).toBeInTheDocument()
-    // o card read-only (fora de edição) não voltou a aparecer com o nome antigo por cima do form.
-    expect(screen.queryByText(/^Questionário: Briefing original$/)).not.toBeInTheDocument()
-  })
 })
 
 it("versão publicada é somente leitura (a UI bloqueia edição)", async () => {
@@ -995,89 +851,90 @@ it("versão publicada é somente leitura (a UI bloqueia edição)", async () => 
   const user = userEvent.setup()
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  expect(await screen.findByText(/Versão publicada — somente leitura/i)).toBeInTheDocument()
+  const panel = await openEditorPanel(user)
+  expect(within(panel).getAllByText("v1 — Publicada").length).toBeGreaterThan(0)
+  expect(within(panel).getByLabelText("Título comercial")).toBeDisabled()
+  // em leitura não há o que salvar nem como criar tarefa
+  expect(within(panel).queryByRole("button", { name: "Travar edição" })).not.toBeInTheDocument()
+  expect(within(panel).queryByRole("button", { name: "Adicionar tarefa" })).not.toBeInTheDocument()
+  expect(api.updateCatalog2VersionInfo).not.toHaveBeenCalled()
 })
 
-it("etapa Custos e preço: simulador usa o cálculo do backend e mostra o resumo detalhado", async () => {
+it("passo Conferência: o preço usa o cálculo do backend e mostra a composição detalhada", async () => {
   const user = userEvent.setup()
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
+  const panel = await openEditorPanel(user)
+  await goToEditorStep(user, panel, /Conferência, preço e publicação/)
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
-  expect(await screen.findByText("Custo humano")).toBeInTheDocument()
-  expect(screen.getByText("Preço comercial final")).toBeInTheDocument()
-  // esforço interno e prazo comercial aparecem separados (reparo 2.1)
-  expect(screen.getByText(/Esforço interno estimado/)).toBeInTheDocument()
-  expect(screen.getByText(/Prazo comercial/)).toBeInTheDocument()
+  const composition = await openCostCard(user, panel, "Composição do preço")
+  expect(within(composition).getByText("Preço comercial final")).toBeInTheDocument()
+  expect(within(composition).getAllByText(/BRL 90,00/).length).toBeGreaterThan(0)
+  expect(within(composition).getByText("Custo humano")).toBeInTheDocument()
 })
 
-it("etapa Revisão: Pré-visualização usa o mesmo endpoint do backend (não recalcula no front)", async () => {
+// A "Pré-visualização" saiu; quem confere é a "Conferência final", que pede a validação ao backend (a mesma usada para
+// publicar) em vez de recalcular no navegador.
+it("Conferência final usa a validação do backend (não recalcula no front)", async () => {
+  const user = userEvent.setup()
+  api.validateCatalog2Version.mockResolvedValue({ ok: false, issues: ["Custo de IA não definido."], pricing_pending: true })
+  renderPage()
+  await screen.findByText("[TESTE LOCAL] Demo")
+  const panel = await openEditorPanel(user)
+  await goToEditorStep(user, panel, /Conferência, preço e publicação/)
+  await user.click(editorSubTab(panel, "Conferência final"))
+  expect(await within(panel).findByText("Pronto para publicar?")).toBeInTheDocument()
+  expect(within(panel).getAllByText("1 bloqueio").length).toBeGreaterThan(0)
+  expect(api.validateCatalog2Version).toHaveBeenCalledWith("v1")
+})
+
+it("Publicação e versões mostra as pendências de validação antes de publicar", async () => {
   const user = userEvent.setup()
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  await user.click(await screen.findByRole("tab", { name: "Revisão e publicação" }))
-  await user.click(await screen.findByRole("tab", { name: /^Pré-visualização$/ }))
-  await waitFor(() => expect(api.previewCatalog2Version).toHaveBeenCalledWith("v2"))
-  expect(await screen.findByText(/mesmo cálculo do backend/i)).toBeInTheDocument()
-})
-
-it("etapa Revisão: Publicação e versões mostra as pendências de validação antes de publicar", async () => {
-  const user = userEvent.setup()
-  renderPage()
-  await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  await user.click(await screen.findByRole("tab", { name: "Revisão e publicação" }))
-  await user.click(await screen.findByRole("tab", { name: /^Publicação e versões$/ }))
-  expect(await screen.findByText("Selecione um pilar.")).toBeInTheDocument()
-  expect(screen.getByText(/Validação para publicar/i)).toBeInTheDocument()
-  expect(screen.getByText(/Histórico da versão/i)).toBeInTheDocument()
+  const panel = await openEditorPanel(user)
+  await editDraft(user, panel)
+  await goToEditorStep(user, panel, /Conferência, preço e publicação/)
+  await user.click(editorSubTab(panel, "Publicação e versões"))
+  expect(await within(panel).findByText("1 bloqueio(s)")).toBeInTheDocument()
+  expect(within(panel).getByText("1 pendência(s) a revisar")).toBeInTheDocument()
+  expect(within(panel).getByRole("button", { name: "Publicar versão" })).toBeDisabled()
+  await user.click(editorSubTab(panel, "Histórico"))
+  expect(await within(panel).findByText(/Histórico da versão/i)).toBeInTheDocument()
 })
 
 // ── Importação dos 36 (sprint de produtos, bloco 4/6) ────────────────
-
-it("painel de importação: resumo, checksum da planilha e contagem real (sem '36' fixo)", async () => {
-  renderPage()
-  expect(await screen.findByRole("heading", { name: "Importação de produtos definitivos" })).toBeInTheDocument()
-  // total/esperado vêm do importSummary (36/36 aqui), não de literal
-  expect(screen.getByText(/36\/36 importados/)).toBeInTheDocument()
-  // entre os IMPORTADOS, nenhum publicado (o demo não é importado)
-  expect(screen.getByText(/0 publicado\(s\)/)).toBeInTheDocument()
-  expect(screen.getByText(/importado\(s\) para preparação\. Aguardando tarefas, prazos, precificação e revisão/i)).toBeInTheDocument()
-  expect(screen.getByText(/Allka_Proposta_Catalogo_Produtos_v9\.xlsx/)).toBeInTheDocument()
-  expect(screen.getByText(/Os 162 produtos operacionais seguem intactos/i)).toBeInTheDocument()
-})
+// O painel de importação (resumo, checksum da planilha, 36/36) saiu da tela em 24/09; o usuário aceitou o estado atual
+// em 04/11. Os dados continuam no backend (getCatalog2ImportSummary); a tela não os mostra mais.
 
 // ── Bloco 2 (10/09/2026): transparência e prontidão ─────────────────
 
-it("contagens do resumo vêm de overview.counts (dados reais), não de literal", async () => {
+// Os cartões "Importados (finais)/Tarefas/Etapas (nos importados)" saíram com o painel de importação (aceito em 04/11).
+// O que continua: os números das abas vêm de overview.counts, nunca de um número fixo.
+it("contagens das abas vêm de overview.counts (dados reais), não de literal", async () => {
+  api.getCatalog2Overview.mockResolvedValue({
+    ...OVERVIEW,
+    counts: { ...OVERVIEW.counts, products: 9, products_in_preparation: 7, products_published: 2, products_with_pendencies: 5 },
+    products_by_status: { em_preparacao: 7, disponivel: 2 },
+  })
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  // rótulo do Stat = <div class="text-xs">…</div> (distingue do <option> do filtro)
-  const card = (label: string) => screen.getByText(label, { selector: "div.text-xs" }).parentElement as HTMLElement
-  // produtos importados finais = 36 (o demo NÃO infla)
-  expect(within(card("Importados (finais)")).getByText("36")).toBeInTheDocument()
-  expect(within(card("Importados (finais)")).getByText(/de demonstração, fora da contagem/i)).toBeInTheDocument()
-  // tarefas/etapas cadastradas NOS importados = 0 (não fingir completo)
-  expect(within(card("Tarefas (nos importados)")).getByText("0")).toBeInTheDocument()
-  expect(within(card("Etapas (nos importados)")).getByText("0")).toBeInTheDocument()
-  // "Em preparação"/"Ativos"/"Com pendências" viraram abas de filtro
-  // rápido (layout restaurado) — o número vem no <span> badge da aba.
-  const tab = (label: string) => screen.getByText(label).closest("button") as HTMLElement
-  expect(within(tab("Em preparação")).getByText("36")).toBeInTheDocument()
-  expect(within(tab("Ativos")).getByText("1")).toBeInTheDocument()
-  expect(within(tab("Com pendências")).getByText("36")).toBeInTheDocument()
+  expect(within(screen.getByRole("button", { name: "Em preparação" })).getByText("7")).toBeInTheDocument()
+  expect(within(screen.getByRole("button", { name: "Ativos" })).getByText("2")).toBeInTheDocument()
+  expect(within(screen.getByRole("button", { name: "Com pendências" })).getByText("5")).toBeInTheDocument()
+  for (const tab of ["Em preparação", "Ativos", "Com pendências"]) {
+    expect(within(screen.getByRole("button", { name: tab })).queryByText("36")).not.toBeInTheDocument()
+  }
 })
 
 it("não usa mensagem falsa 'ainda não foram importados' quando há importação", async () => {
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
   expect(screen.queryByText(/ainda não foram importados/i)).not.toBeInTheDocument()
-  expect(screen.getByText(/catálogo antigo, com 162 produtos, não aparece mais aqui/i)).toBeInTheDocument()
 })
 
+// Regressão 04/11 (erro real): a composição do preço do editor novo voltou a mostrar "Preço comercial final BRL 0,00"
+// e "Sem pendências" para produto sem nenhuma tarefa.
 it("aba Custos: produto SEM tarefas ativas mostra 'base de custo indefinida', nunca R$ 0,00 como preço válido", async () => {
   api.getCatalog2Product.mockResolvedValue(
     productDetail({
@@ -1103,52 +960,33 @@ it("aba Custos: produto SEM tarefas ativas mostra 'base de custo indefinida', nu
   const user = userEvent.setup()
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
+  const panel = await openEditorPanel(user)
+  await goToEditorStep(user, panel, /Conferência, preço e publicação/)
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
-  expect(await screen.findByText(/base de custo indefinida/i)).toBeInTheDocument()
-  expect(screen.getByText(/Cadastre tarefas, especialidades, tempos e prazo/i)).toBeInTheDocument()
-  // NÃO apresenta "Preço comercial final" com valor
-  expect(screen.queryByText("Preço comercial final")).not.toBeInTheDocument()
-  expect(screen.queryByText(/BRL 0\.00/)).not.toBeInTheDocument()
+  const composition = await openCostCard(user, panel, "Composição do preço")
+  expect(within(composition).getByText("Sem tarefas cadastradas — base de custo indefinida")).toBeInTheDocument()
+  expect(within(composition).getByText(/Cadastre tarefas, especialidades, tempos e prazo/i)).toBeInTheDocument()
+  expect(within(composition).queryByText("Preço comercial final")).not.toBeInTheDocument()
+  expect(within(composition).queryByText("Sem pendências")).not.toBeInTheDocument()
+  expect(within(composition).getByText("Sem tarefas ativas — base de custo indefinida")).toBeInTheDocument()
 })
 
-it("etapa Custos e preço: produto COM tarefas válidas mantém a composição detalhada normal", async () => {
+it("passo Conferência: produto COM tarefas válidas mantém a composição detalhada normal", async () => {
   const user = userEvent.setup()
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
+  const panel = await openEditorPanel(user)
+  await goToEditorStep(user, panel, /Conferência, preço e publicação/)
   await waitFor(() => expect(api.simulateCatalog2).toHaveBeenCalled())
-  expect(await screen.findByText("Custo humano")).toBeInTheDocument()
-  expect(screen.getByText("Preço comercial final")).toBeInTheDocument()
-  expect(screen.queryByText(/base de custo indefinida/i)).not.toBeInTheDocument()
+  const composition = await openCostCard(user, panel, "Composição do preço")
+  expect(within(composition).getByText("Preço comercial final")).toBeInTheDocument()
+  expect(within(composition).getByText("Sem pendências")).toBeInTheDocument()
+  expect(within(composition).queryByText(/base de custo indefinida/i)).not.toBeInTheDocument()
 })
 
-it("etapa Custos e preço: avisos de configuração provisória/seed e valor/hora de teste", async () => {
-  api.getCatalog2PricingSettings.mockResolvedValue({
-    id: "default", tax_percent: 6, commission_percent: 10, operational_fee_percent: 5, profit_margin_percent: 30,
-    human_review_percent: 15, currency: "BRL",
-    updated_by_user_id: null, component_base_json: null, component_order_json: '["tax","commission","operational","margin"]',
-  })
-  api.getCatalog2Specialties.mockResolvedValue({
-    data: [
-      { id: "s1", name: "Redator", max_hourly_rate: 70, hourly_rate_note: "[TESTE LOCAL]" },
-      { id: "s2", name: "Editor de Vídeo", max_hourly_rate: null, hourly_rate_note: null },
-    ],
-  })
-  const user = userEvent.setup()
-  renderPage()
-  await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  await user.click(await screen.findByRole("tab", { name: "Custos e preço" }))
-  expect(await screen.findByText(/sem responsável comercial registrado/i)).toBeInTheDocument()
-  expect(screen.getByText(/Base de incidência dos componentes ainda não definida/i)).toBeInTheDocument()
-  expect(screen.getByText(/valor de teste — não é decisão comercial/i)).toBeInTheDocument()
-  expect(screen.getAllByText(/aguardando definição comercial/i).length).toBeGreaterThan(0)
-})
 
-it("prontidão por produto: atalho abre e mostra os itens reais do backend", async () => {
+// O atalho de prontidão virou o indicador "Preenchimento" do cabeçalho do editor (25/09).
+it("prontidão por produto: o indicador de preenchimento abre e mostra os itens reais do backend", async () => {
   api.getCatalog2ProductReadiness.mockResolvedValue({
     id: "prod1", name: "Produto X", is_test_local: false, imported: true, task_count: 0, step_count: 0, has_active_tasks: false,
     items: {
@@ -1163,12 +1001,11 @@ it("prontidão por produto: atalho abre e mostra os itens reais do backend", asy
   const user = userEvent.setup()
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  await user.click(await screen.findByRole("button", { name: /Prontidão deste produto/i }))
-  expect(await screen.findByText(/Sem tarefas cadastradas — base de custo indefinida/i)).toBeInTheDocument()
-  expect(screen.getByText("Prazo comercial base não definido.")).toBeInTheDocument()
-  expect(screen.getByText(/3 bloqueador\(es\) · 1 pendência\(s\)/)).toBeInTheDocument()
-  expect(api.getCatalog2ProductReadiness).toHaveBeenCalledWith("prod1")
+  const panel = await openEditorPanel(user)
+  await user.click(within(panel).getByRole("button", { name: "Ver preenchimento do produto" }))
+  expect((await screen.findAllByText(/Sem tarefas cadastradas — base de custo indefinida/i)).length).toBeGreaterThan(0)
+  expect(screen.getAllByText("Prazo comercial base não definido.").length).toBeGreaterThan(0)
+  expect(api.getCatalog2ProductReadiness).toHaveBeenCalledWith("prod1", expect.anything())
 })
 
 it("listagem: filtros avançados vão ao backend; linha da tabela fica limpa (sem slug/origem crus)", async () => {
@@ -1182,32 +1019,13 @@ it("listagem: filtros avançados vão ao backend; linha da tabela fica limpa (se
   await waitFor(() => expect(api.getCatalog2Products).toHaveBeenCalledWith(expect.objectContaining({ pendency: "price_pending" })))
   // pendências aparecem como badge na linha (texto de negócio, não código)
   expect(screen.getAllByText("preço").length).toBeGreaterThan(0)
-  // slug/origem/#index crus não poluem a leitura principal da linha —
-  // ficam atrás do toggle "Detalhes técnicos" (ver teste dedicado abaixo).
+  // slug/origem/#index crus não poluem a leitura principal da linha.
   expect(screen.queryByText(/slug demo/)).not.toBeInTheDocument()
 })
 
-// Auditoria forense 2026-09-11 (trabalho de 10/09/2026, commits
-// 9539f94/823b18c): "Detalhes técnicos" por linha e o badge "editado por
-// humano" existiam na reformulação do construtor/lista e tinham sumido
-// quando a lista virou tabela no reparo de layout — recuperados.
-it("Detalhes técnicos: toggle por linha revela slug/origem/versão/datas, escondido por padrão", async () => {
-  renderPage()
-  await screen.findByText("[TESTE LOCAL] Demo")
-  expect(screen.queryByText(/slug demo/)).not.toBeInTheDocument()
-  await userEvent.click(screen.getByRole("button", { name: "Detalhes técnicos" }))
-  expect(screen.getByText(/slug demo · origem #3/)).toBeInTheDocument()
-})
-
-it("badge 'editado por humano' aparece na linha quando o produto foi editado manualmente", async () => {
-  api.getCatalog2Products.mockResolvedValue({
-    ...LIST,
-    data: [{ ...LIST.data[0], human_edited: true }],
-  })
-  renderPage()
-  await screen.findByText("[TESTE LOCAL] Demo")
-  expect(screen.getByText("editado por humano")).toBeInTheDocument()
-})
+// Auditoria forense 2026-09-11 (trabalho de 10/09/2026, commits 9539f94/823b18c) recuperou "Detalhes técnicos" por
+// linha e o selo "editado por humano"; os dois saíram de novo em 24/09 e o usuário aceitou o estado atual em 04/11 —
+// por isso os testes deles foram retirados. O slug cru continua fora da linha (teste acima).
 
 it("banner: link 'Pré-visualizar como cliente' existe e aponta pro preview do catalog2", async () => {
   renderPage()
@@ -1216,17 +1034,14 @@ it("banner: link 'Pré-visualizar como cliente' existe e aponta pro preview do c
   expect(link).toHaveAttribute("href", "/admin/catalog2?preview=1")
 })
 
-it("aba Origem e importação: planilha, Rose, divergência, preço histórico e resolver pendência", async () => {
-  const user = userEvent.setup()
+// A aba "Origem e importação" foi removida do editor em 25/09 (deploy-log: os produtos são novos, sem vínculo com a
+// plataforma antiga). Ela não pode voltar escondida em nenhum passo.
+it("editor não tem mais a aba Origem e importação (removida em 25/09)", async () => {
   renderPage()
   await screen.findByText("[TESTE LOCAL] Demo")
-  await user.click(await screen.findByRole("button", { name: /editar produto|continuar configuração/i }))
-  await user.click(await screen.findByRole("tab", { name: "Origem e importação" }))
-  expect(await screen.findByRole("heading", { name: /Planilha principal/i })).toBeInTheDocument()
-  expect(screen.getByRole("heading", { name: /Referência histórica de preço/i })).toBeInTheDocument()
-  expect(screen.getAllByText(/preço final/i).length).toBeGreaterThan(0)
-  expect(screen.getByText(/name_updated_seo_geo/)).toBeInTheDocument()
-  // P-12 (08/10): a resolução de pendências da importação antiga saiu — a lista é só leitura
-  expect(screen.queryByPlaceholderText(/Descreva a decisão tomada/i)).not.toBeInTheDocument()
-  expect(screen.queryByRole("button", { name: /Concluir pendência/i })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole("button", { name: /editar produto|continuar configuração/i }))
+  await screen.findByLabelText("Título comercial")
+  expect(screen.queryByRole("tab", { name: /Origem e importação/i })).not.toBeInTheDocument()
+  expect(screen.queryByText(/Planilha principal/i)).not.toBeInTheDocument()
+  expect(api.getCatalog2ProductOrigin).not.toHaveBeenCalled()
 })

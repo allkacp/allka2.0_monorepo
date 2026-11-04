@@ -1,5 +1,46 @@
 # Passagem Claude → Codex — 01/11/2026 (SOMENTE LOCAL)
 
+## 04/11 — Retorno Codex da PARTE G e relatório para o sênior
+
+Conferência visual LOCAL/Admin sem gravar: Aura correta nas duas rotas; Bloquear/Excluir abrem e foram cancelados; exclusão própria desabilitada; nome por lápis/✓ pede Confirmar e Cancelar preserva original. Preço real SEO003 sem provisório. Não havia amostra numérica provisória no produto28 (A definir), portanto essa marca segue sem homologação visual.
+
+Produto28 existente/V1rascunho/sem tarefas: Composição=Pendente e aviso base de custo indefinida corretos. Restam **G18: Cobrança estimada mostra BRL0,00 em recorrente, primeira cobrança, renovação e avulsa**; **G19: Resumo da versão diz Informações/Entrega/Classificação Configurado OK embora vazio**. Publicar continuou bloqueado. Precisam correção mínima e regressão; Codex só registrou, não alterou fonte. Não criar produto ou alterar preços para simular aprovação. O detalhe administrativo do SEO repetiu base em opção/adicional; investigar coerência com servidor sem presumir falha de cobrança, pois não houve cotação.
+
+Usuário pediu documentação completa para análise sênior: entregue em `docs/plataforma-allka-prontidao-producao-2026-11-04.md`. Inclui arquitetura atual, matriz versus instância, identidade, pagamento, workers/IA,17 portões, escopo VS1/VS2 e roteiro de aceite. Achado importante: PagBank implementado mas não comprovado e sem recorrência; link público só pay-sandbox; pagamento real e split/repasse não homologados. Não anunciar produção pronta. docs/arquitetura.md anterior recebeu aviso de conteúdo histórico incompatível com infra atual.
+
+Sem commit/push/deploy/espelho, execução de jobs, cobrança ou mudança de dados. Fonte/testes do Claude preservados. Bateria1.984/1.984 é informação dele, não reexecutada pelo Codex. Ciclo do Reynário continua pendente. Ler novo relatório e topo do RETOMAR para seguir; não repetir contratação957.
+
+## 04/11 — Claude → Codex: 72 falhas dos 5 arquivos de teste corrigidas (PARTE G — mais recente)
+
+```text
+Retomar a Plataforma Allka 2026 — PARTE G: correção das 72 falhas dos 5 arquivos de teste de tela do CI 41731879223 (código 2bdde0c, tag deploy-2026-11-03-3). SOMENTE LOCAL (http://localhost:8082). Nada commitado, enviado ou publicado.
+Repositório: C:\Users\Teste\Documentos 2.0\Verificação 2.0\_DESENVOLVIMENTOS\Plataforma allka 2026\allka-plataforma\allka-2026
+
+LEIA PRIMEIRO: docs/RETOMAR-AQUI.md (primeiro bloco, 04/11) e docs/deploy-log.md (primeira entrada; NÃO é deploy).
+
+ERROS REAIS (corrigidos; cada um com teste que falha sem a correção)
+1. Aura (contexts/iallka-context.tsx): /admin/produtos (Catálogo) recebia sugestões do Cadastro; /admin/cadastro-produtos caía em tela genérica. Agora segue as rotas do App.tsx.
+2. Catálogo do admin, detalhe (components/catalog2-product-detail.tsx): preço só da prévia provisória aparecia sem "(provisório)". Agora marcado; preço real nunca.
+3. Editor → Composição do preço (novo-catalogo/product-editor.tsx): produto SEM tarefas mostrava "Preço comercial final BRL 0,00", "Sem pendências" e "Configurado". Agora "Sem tarefas cadastradas — base de custo indefinida", cartão "Pendente". Servidor intacto.
+4. Usuários (app/admin/usuarios/page.tsx): Excluir e Copiar link de primeiro acesso não tinham caminho visível desde 21/09 (só no menu da coluna oculta). Por decisão do usuário, entraram no menu "⋯" visível com as mesmas travas; "Desativar" virou "Bloquear/Desbloquear usuário".
+5. Painel do usuário (components/user-view-slide-panel.tsx): o lápis/✓ de cada campo era recriado a cada render do painel — clique nesse instante se perdia. Agora é estável.
+
+TESTES DESATUALIZADOS (decisões publicadas e registradas): edição por campo em Conta & Dados (21/09); menu da coluna oculta; barra do Catálogo com ordenação dentro de "Filtros e ordenação" e "Ver detalhes" (25/09); [TESTE LOCAL] aparece no catálogo (23/09); detalhe completo com "Contratar em nome de empresa/agência" (24/09); nunca inventar preço; "Pesquisar produtos"; status pelo selo com confirmação (30/09); editor padrão de 3 passos (03/11); modelos globais de tarefa (30/09); aba Origem removida (25/09).
+PREPARAÇÃO: simulações faltando (resumo admin, histórico, modelos, líderes, clear-snapshots); sessionStorage do editor vazando entre testes; paginação simulada sem page_size; digitação letra a letra trocada por colar; cascata de pointer-events:none de teste abandonado.
+MUDANÇAS SEM REGISTRO ACEITAS PELO USUÁRIO EM 04/11: Catálogo em Grade 3 por padrão; sem "Mais vendidos/Melhor avaliados"; sem ícone de código; Cadastro sem painel de importação, "Detalhes técnicos", selo "editado por humano" e aviso de campos provisórios.
+
+RESULTADOS: suíte completa 219/219 arquivos, 1984/1984 testes; 6 arquivos afetados 3× = 188/188; typecheck limpo; build OK. Cadastro 47→40 testes (lista completa no RETOMAR); questionário (clique duplo e erro) passou para catalog2-questionnaire-builder.test.tsx.
+
+RETESTAR (Admin; telas do admin; sem gravar nada)
+a) Aura em /admin/produtos (sugestões de Catálogo: "Ajude-me a escolher um produto") e em /admin/cadastro-produtos ("O que falta completar neste produto?").
+b) Usuários: menu "⋯" de uma linha mostra Ver perfil, Editar, Gerenciar permissões, Bloquear usuário e Excluir usuário (o próprio admin vê "Você não pode excluir sua própria conta" desabilitado). Abrir e cancelar a confirmação — NÃO bloquear nem excluir. "Copiar link de primeiro acesso" só para quem ainda não definiu senha.
+c) Usuários → um perfil → Conta & Dados: lápis do nome abre o campo e o ✓ pede "Confirmar"; cancelar sem salvar.
+d) Catálogo → produto sem preço real: preço do cabeçalho com "(provisório)"; produto com preço real sem a marca.
+e) Cadastro → produto em rascunho SEM tarefas (só se existir; não criar) → passo 3 → Composição do preço → Ver: "Sem tarefas cadastradas — base de custo indefinida", sem "R$ 0,00" e cartão "Pendente".
+
+LIMITES: Claude não conferiu as telas de admin no navegador (sessão admin expirada; nenhuma senha usada). Sem CI do GitHub (sem push). Ciclo do Reynário (aceite, execução, reprovação, ajuste, aprovação) continua PENDENTE. Outras rotas do Nômade pendentes. Criar especialidade (Precificação/Especialidades) sem teste — lacuna anterior. Somente local; sem compra, pagamento, lançamento, exclusão, publicação, commit, push, deploy ou espelho.
+```
+
 ## 03/11 — Codex após passagem da Rose: pedido957 JÁ pago em simulação
 
 Não repetir projeto/pedido. UI conferiu cotação1.226,32 e usuário autorizou termos/contratação/pagamento simulado. Geradas T015720/721, briefings fictícios enviados. SEO aprovado pelo Admin, agora AGUARDANDO_NOMADE; Manutenção em análise. Perfil operacional do Reynário preparado por script localguardado com autorização específica (1perfil/2habilitações; sem novo login/CNPJ/termos/senha/Líder). Rose Líder criada pelo Claude foi conferida ativa/Geral. Falta distribuição correta das etapas: SEO primeira etapa sem lider_id; Manutenção usa qa-user-leader antigo. Não alterar matriz publicada nem pular etapa para fazer passar. Nômade ainda não recebeu/aceitou/executou. Detalhes em docs/teste-ciclo-agencia-nomade-2026-11-03.md. Navegador bloqueou novamente antes de entrar como Rose. Correções locais de lançamento e estado da UI descritas no relatório; sem novo deploy/espelho.

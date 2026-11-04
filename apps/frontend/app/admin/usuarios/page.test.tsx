@@ -84,8 +84,14 @@ function renderPage() {
   );
 }
 
+// A linha tem dois menus "Mais ações": um na coluna fixa de ações, que está oculta (`hidden`) na tabela atual, e
+// o da última coluna, que é o que a pessoa vê e cuja célula barra o clique de chegar na linha (senão abriria o perfil).
+// O jsdom não aplica CSS, então escolhe-se explicitamente o menu visível.
 async function openRowMenu(user: ReturnType<typeof userEvent.setup>, name: string) {
-  await user.click((await screen.findAllByRole("button", { name: `Mais ações — ${name}` }))[0]);
+  const buttons = await screen.findAllByRole("button", { name: `Mais ações — ${name}` });
+  const visible = buttons.find((button) => !button.closest(".hidden"));
+  if (!visible) throw new Error(`menu visível de "${name}" não encontrado`);
+  await user.click(visible);
 }
 
 // Esta página é pesada (tabela grande + vários providers) — `user.type()`
@@ -136,6 +142,30 @@ describe("admin/usuarios — bloquear/desbloquear (ação reversível)", () => {
     await screen.findByText("Fulano de Tal");
     await openRowMenu(user, "Fulano de Tal");
     expect(await screen.findByText("Bloquear usuário")).toBeInTheDocument();
+  });
+
+  // 04/11: excluir e copiar o link de primeiro acesso só existiam no menu da coluna oculta — sem caminho na tela.
+  it("1b. o menu visível tem Excluir usuário e, só para quem ainda não definiu senha, Copiar link de primeiro acesso", async () => {
+    apiMock.getAdminUsers.mockResolvedValue({
+      data: [
+        adminUser({ id: "user-novo", name: "Pessoa Sem Senha", email: "nova@example.com", must_set_password: true }),
+        adminUser({ id: "user-antigo", name: "Pessoa Com Senha", email: "antiga@example.com", must_set_password: false }),
+      ],
+      total: 2,
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Pessoa Sem Senha");
+    await openRowMenu(user, "Pessoa Sem Senha");
+    expect(await screen.findByText("Copiar link de primeiro acesso")).toBeInTheDocument();
+    expect(screen.getByText("Excluir usuário")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByText("Excluir usuário")).not.toBeInTheDocument());
+
+    await openRowMenu(user, "Pessoa Com Senha");
+    expect(await screen.findByText("Excluir usuário")).toBeInTheDocument();
+    expect(screen.queryByText("Copiar link de primeiro acesso")).not.toBeInTheDocument();
   });
 
   it("2. abrir a confirmação de bloqueio mostra nome, e-mail mascarado, tipo de conta e a consequência", async () => {
@@ -213,7 +243,7 @@ describe("admin/usuarios — excluir usuário (confirmação em duas etapas)", (
 
     await screen.findByText("Alvo Dois");
     await openRowMenu(user, "Alvo Dois");
-    await user.click(await screen.findByText("Deletar usuário"));
+    await user.click(await screen.findByText("Excluir usuário"));
 
     await fillByPaste(user, screen.getByPlaceholderText(/motivo da exclusão/i), "Motivo de teste com mais de dez caracteres");
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
@@ -233,7 +263,7 @@ describe("admin/usuarios — excluir usuário (confirmação em duas etapas)", (
 
     await screen.findByText("Alvo Tres");
     await openRowMenu(user, "Alvo Tres");
-    await user.click(await screen.findByText("Deletar usuário"));
+    await user.click(await screen.findByText("Excluir usuário"));
     await fillByPaste(user, screen.getByPlaceholderText(/motivo da exclusão/i), "Motivo de teste com mais de dez caracteres");
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
 
@@ -252,7 +282,7 @@ describe("admin/usuarios — excluir usuário (confirmação em duas etapas)", (
 
     await screen.findByText("Alvo Quatro");
     await openRowMenu(user, "Alvo Quatro");
-    await user.click(await screen.findByText("Deletar usuário"));
+    await user.click(await screen.findByText("Excluir usuário"));
     await fillByPaste(user, screen.getByPlaceholderText(/motivo da exclusão/i), "Motivo de teste com mais de dez caracteres");
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
     await user.click(screen.getByRole("button", { name: "Excluir usuário definitivamente" }));
@@ -412,7 +442,7 @@ describe("admin/usuarios — busca, filtro, ordenação e página são preservad
     await screen.findByText("Usuário Página 10");
 
     await openRowMenu(user, "Usuário Página 10");
-    await user.click(await screen.findByText("Deletar usuário"));
+    await user.click(await screen.findByText("Excluir usuário"));
     await fillByPaste(user, screen.getByPlaceholderText(/motivo da exclusão/i), "Motivo de teste com mais de dez caracteres");
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
     await user.click(screen.getByRole("button", { name: "Excluir usuário definitivamente" }));
@@ -486,7 +516,7 @@ describe("admin/usuarios — exclusão só remove após confirmação do servido
 
     await screen.findByText("Alvo Lento");
     await openRowMenu(user, "Alvo Lento");
-    await user.click(await screen.findByText("Deletar usuário"));
+    await user.click(await screen.findByText("Excluir usuário"));
     await fillByPaste(user, screen.getByPlaceholderText(/motivo da exclusão/i), "Motivo de teste com mais de dez caracteres");
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
     await user.click(screen.getByRole("button", { name: "Excluir usuário definitivamente" }));
@@ -620,7 +650,7 @@ describe("admin/usuarios — autoexclusão usa a sessão real, não mais um id f
 
     await screen.findByText("Usuário Um");
     await openRowMenu(user, "Usuário Um");
-    const deleteItem = await screen.findByText("Deletar usuário");
+    const deleteItem = await screen.findByText("Excluir usuário");
     expect(deleteItem.closest('[role="menuitem"]')).not.toHaveAttribute("data-disabled");
   });
 
@@ -646,7 +676,7 @@ describe("admin/usuarios — autoexclusão usa a sessão real, não mais um id f
 
     await screen.findByText("Fulano de Tal");
     await openRowMenu(user, "Fulano de Tal");
-    const deleteItem = await screen.findByText("Deletar usuário");
+    const deleteItem = await screen.findByText("Excluir usuário");
     expect(deleteItem.closest('[role="menuitem"]')).not.toHaveAttribute("data-disabled");
   });
 
@@ -660,7 +690,7 @@ describe("admin/usuarios — autoexclusão usa a sessão real, não mais um id f
 
     await screen.findByText("Fulano de Tal");
     await openRowMenu(user, "Fulano de Tal");
-    const deleteItem = await screen.findByText("Deletar usuário");
+    const deleteItem = await screen.findByText("Excluir usuário");
     expect(deleteItem.closest('[role="menuitem"]')).not.toHaveAttribute("data-disabled");
   });
 
@@ -675,7 +705,7 @@ describe("admin/usuarios — autoexclusão usa a sessão real, não mais um id f
 
     await screen.findByText("Alvo Protegido");
     await openRowMenu(user, "Alvo Protegido");
-    await user.click(await screen.findByText("Deletar usuário"));
+    await user.click(await screen.findByText("Excluir usuário"));
     await fillByPaste(user, screen.getByPlaceholderText(/motivo da exclusão/i), "Motivo de teste com mais de dez caracteres");
     await user.click(screen.getByRole("button", { name: /continuar para confirmação/i }));
     await user.click(screen.getByRole("button", { name: "Excluir usuário definitivamente" }));
@@ -707,6 +737,17 @@ function renderPageForUserCode(userCode: string) {
   );
 }
 
+// "Conta & Dados" edita campo a campo desde a padronização das telas administrativas (b5a771e, 21/09): o lápis
+// "Editar nome completo" abre só o campo; o ✓ "Concluir edição de nome completo" pede a confirmação da conta.
+// (O botão geral "Editar"/"Salvar" que estes testes usavam não existe mais.) O primeiro lápis é o da Conta.
+async function startEditingContaName(user: ReturnType<typeof userEvent.setup>) {
+  await user.click((await screen.findAllByRole("button", { name: "Editar nome completo" }))[0]);
+}
+async function finishEditingContaName(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Concluir edição de nome completo" }));
+  await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+}
+
 describe("admin/usuarios — editar (painel lateral) atualiza só a linha correspondente", () => {
   it("7/9/12/13. salvar o nome via 'Conta & Dados' atualiza só esse usuário, sem refetch completo, preservando busca", async () => {
     apiMock.getAdminUsers.mockResolvedValue({
@@ -731,14 +772,13 @@ describe("admin/usuarios — editar (painel lateral) atualiza só a linha corres
 
     // O painel abre na aba "Visão Geral" — muda pra "Conta & Dados".
     await user.click(await screen.findByRole("tab", { name: "Conta & Dados" }));
-    await user.click(await screen.findByRole("button", { name: "Editar" }));
+    await startEditingContaName(user);
 
     const nameInput = await screen.findByDisplayValue("Fulano de Tal");
     await user.clear(nameInput);
-    await user.type(nameInput, "Fulano Editado");
+    await fillByPaste(user, nameInput, "Fulano Editado");
 
-    await user.click(screen.getByRole("button", { name: "Salvar" }));
-    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+    await finishEditingContaName(user);
 
     await waitFor(() => expect(apiMock.updateUser).toHaveBeenCalledWith("user-1", expect.objectContaining({ name: "Fulano Editado" })));
     // Nenhum novo GET /api/admin/users — atualização localizada.
@@ -754,12 +794,11 @@ describe("admin/usuarios — editar (painel lateral) atualiza só a linha corres
 
     await waitFor(() => expect(screen.getAllByText("Fulano de Tal").length).toBeGreaterThan(0));
     await user.click(await screen.findByRole("tab", { name: "Conta & Dados" }));
-    await user.click(await screen.findByRole("button", { name: "Editar" }));
+    await startEditingContaName(user);
     const nameInput = await screen.findByDisplayValue("Fulano de Tal");
     await user.clear(nameInput);
-    await user.type(nameInput, "Nome Que Não Deveria Persistir");
-    await user.click(screen.getByRole("button", { name: "Salvar" }));
-    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+    await fillByPaste(user, nameInput, "Nome Que Não Deveria Persistir");
+    await finishEditingContaName(user);
 
     await waitFor(() => expect(apiMock.updateUser).toHaveBeenCalledTimes(1));
     // A tabela (fora do painel) nunca chegou a receber o nome novo.
@@ -780,12 +819,11 @@ describe("admin/usuarios — editar (painel lateral) atualiza só a linha corres
 
     await waitFor(() => expect(screen.getAllByText("Ana Paula Silva").length).toBeGreaterThan(0));
     await user.click(await screen.findByRole("tab", { name: "Conta & Dados" }));
-    await user.click(await screen.findByRole("button", { name: "Editar" }));
+    await startEditingContaName(user);
     const nameInput = await screen.findByDisplayValue("Ana Paula Silva");
     await user.clear(nameInput);
-    await user.type(nameInput, "Ana Paula Editada");
-    await user.click(screen.getByRole("button", { name: "Salvar" }));
-    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
+    await fillByPaste(user, nameInput, "Ana Paula Editada");
+    await finishEditingContaName(user);
 
     await waitFor(() => expect(apiMock.updateUser).toHaveBeenCalledWith("user-ana-1", expect.anything()));
     await waitFor(() => expect(screen.getAllByText("Ana Paula Editada").length).toBeGreaterThan(0));
@@ -817,7 +855,7 @@ describe("admin/usuarios — troca de vínculo atualiza só a linha afetada", ()
     const fetchCallsBefore = apiMock.getAdminUsers.mock.calls.length;
 
     await openRowMenu(user, "Fulano de Tal");
-    await user.click(await screen.findByText("Ver todas as informações"));
+    await user.click(await screen.findByText("Gerenciar permissões"));
     await user.click(await screen.findByRole("button", { name: "Alterar vínculo" }));
 
     await user.click(findComboboxShowing("Sem empresa vinculada"));
@@ -845,7 +883,7 @@ describe("admin/usuarios — troca de vínculo atualiza só a linha afetada", ()
 
     await screen.findByText("Fulano de Tal");
     await openRowMenu(user, "Fulano de Tal");
-    await user.click(await screen.findByText("Ver todas as informações"));
+    await user.click(await screen.findByText("Gerenciar permissões"));
     await user.click(await screen.findByRole("button", { name: "Alterar vínculo" }));
     await user.click(findComboboxShowing("Sem empresa vinculada"));
     await user.click(await screen.findByText("Empresa Nova LTDA"));
