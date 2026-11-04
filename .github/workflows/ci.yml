@@ -140,6 +140,10 @@ jobs:
         run: npm run test --workspace apps/frontend
 
       - name: Frontend build
+        # The job uses test for Vitest/DB suites. A production artifact must
+        # not inherit it: Vite otherwise keeps development-only branches.
+        env:
+          NODE_ENV: production
         run: npm run build:frontend
 
       - name: Scan production build for leaked dev credentials
